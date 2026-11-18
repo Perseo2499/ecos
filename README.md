@@ -76,3 +76,6 @@ Con las capturas, la IA (Claude) lee el texto y recorta las fotos de la captura.
 ## Notas
 - El token de Meta dura unos 60 días; cuando caduque, pulsa otra vez **Conectar con Facebook**.
 - Si Meta deja obsoleta la versión de la API, cámbiala en *Configuración → Versión de Graph API*.
+
+## Licencia
+© 2026 Asociación Elín. **Todos los derechos reservados.** El código es visible, pero no se puede copiar, modificar ni redistribuir sin permiso. Ver [LICENSE](LICENSE).
