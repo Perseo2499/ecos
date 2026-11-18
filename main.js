@@ -1,11 +1,44 @@
 const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
-const store = require('./src/store');
-const meta = require('./src/meta');
-const wp = require('./src/wpcom');
-const { buildDraft, mediaKey } = require('./src/transform');
-const importers = require('./src/importers');
-const updater = require('./src/updater');
+const fs = require('fs');
+
+// Registro de errores en %APPDATA%\Ecos\ecos.log y aviso visible si algo falla al arrancar
+const logFile = () => path.join(app.getPath('userData'), 'ecos.log');
+function log(...args) {
+  const line = `[${new Date().toISOString()}] ${args.map((a) => (a instanceof Error ? a.stack : String(a))).join(' ')}\n`;
+  try { fs.mkdirSync(path.dirname(logFile()), { recursive: true }); fs.appendFileSync(logFile(), line); } catch { /* sin registro */ }
+}
+function fatal(err) {
+  log('ERROR FATAL', err);
+  try {
+    dialog.showErrorBox('Ecos no ha podido arrancar',
+      `${err && err.message ? err.message : err}\n\nDetalles en: ${logFile()}\nEnvía ese archivo para que lo revisen.`);
+  } catch { /* nada */ }
+  app.exit(1);
+}
+process.on('uncaughtException', fatal);
+process.on('unhandledRejection', (e) => log('Promesa rechazada sin gestionar', e));
+
+// Una sola copia abierta: si ya hay una, se trae al frente
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWin) { if (mainWin.isMinimized()) mainWin.restore(); mainWin.show(); mainWin.focus(); }
+  });
+}
+
+let store, meta, wp, buildDraft, mediaKey, importers, updater;
+try {
+  store = require('./src/store');
+  meta = require('./src/meta');
+  wp = require('./src/wpcom');
+  ({ buildDraft, mediaKey } = require('./src/transform'));
+  importers = require('./src/importers');
+  updater = require('./src/updater');
+} catch (err) {
+  app.whenReady().then(() => fatal(err));
+}
 
 let cfg = {};
 let accounts = [];
@@ -125,10 +158,17 @@ handle('update:check', () => { updater.check(); return updater.current(); });
 handle('update:install', () => updater.install());
 
 app.whenReady().then(() => {
+  if (!updater) return; // fallo al cargar módulos: ya se ha mostrado el aviso
+  log(`Arrancando Ecos ${app.getVersion()} (${process.platform} ${process.arch}, Electron ${process.versions.electron})`);
   cfg = { wpSite: 'asociacionelin.com', graphVersion: 'v23.0', ...store.load() };
   createWindow();
+  mainWin.webContents.on('render-process-gone', (_e, d) => log('La ventana se ha cerrado inesperadamente:', d.reason));
   mainWin.webContents.once('did-finish-load', () => {
-    updater.init((st) => { if (!mainWin.isDestroyed()) mainWin.webContents.send('update:status', { version: app.getVersion(), ...st }); });
+    log('Ventana cargada');
+    updater.init((st) => {
+      if (st.state === 'error') log('Actualizador:', st.message);
+      if (!mainWin.isDestroyed()) mainWin.webContents.send('update:status', { version: app.getVersion(), ...st });
+    });
   });
-});
+}).catch(fatal);
 app.on('window-all-closed', () => app.quit());

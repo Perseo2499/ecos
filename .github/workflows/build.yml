@@ -19,6 +19,18 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx electron-builder --win --x64 --publish never
+      - name: Prueba de arranque en Windows
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "dist\win-unpacked\Ecos.exe" -PassThru
+          Start-Sleep -Seconds 20
+          $vivo = -not $p.HasExited
+          Write-Host "¿Sigue abierta tras 20 s?: $vivo"
+          $log = Join-Path $env:APPDATA "Ecos\ecos.log"
+          if (Test-Path $log) { Write-Host "--- ecos.log ---"; Get-Content $log }
+          else { Write-Host "No se ha creado ecos.log" }
+          Get-Process Ecos -ErrorAction SilentlyContinue | Stop-Process -Force
+          if (-not $vivo) { Write-Error "Ecos se ha cerrado al arrancar (código $($p.ExitCode))"; exit 1 }
       - name: Versión
         id: v
         shell: bash
