@@ -1,7 +1,9 @@
 // Facebook (Páginas) e Instagram (cuenta profesional) vía Graph API.
 const { openAuthWindow } = require('./oauth');
 
-const REDIRECT = 'https://www.facebook.com/connect/login_success.html';
+const DEFAULT_REDIRECT = 'https://www.facebook.com/connect/login_success.html';
+// Las apps de tipo Empresa no aceptan URLs de Facebook: se usa una de tu web (Ecos la intercepta antes de cargarla)
+const redirectOf = (cfg) => (cfg.metaRedirect || '').trim() || DEFAULT_REDIRECT;
 const SCOPES = ['pages_show_list', 'pages_read_engagement', 'instagram_basic', 'business_management'];
 
 const gv = (cfg) => cfg.graphVersion || 'v23.0';
@@ -18,11 +20,11 @@ async function login(cfg) {
   if (!cfg.metaAppId || !cfg.metaAppSecret) throw new Error('Falta el App ID o el App Secret de Meta');
   // Apps de tipo Empresa usan «Inicio de sesión con Facebook para empresas»: los permisos van en una
   // configuración (config_id) en lugar de en el parámetro scope.
-  const params = { client_id: cfg.metaAppId, redirect_uri: REDIRECT, response_type: 'token' };
+  const params = { client_id: cfg.metaAppId, redirect_uri: redirectOf(cfg), response_type: 'token' };
   if (cfg.metaConfigId) params.config_id = cfg.metaConfigId.trim();
   else params.scope = SCOPES.join(',');
   const auth = `https://www.facebook.com/${gv(cfg)}/dialog/oauth?` + new URLSearchParams(params);
-  const result = await openAuthWindow(auth, REDIRECT);
+  const result = await openAuthWindow(auth, redirectOf(cfg));
   const shortToken = result.get('access_token');
   if (!shortToken) throw new Error('Meta no devolvió un token. Revisa la configuración de inicio de sesión de la app.');
   // Cambia el token corto (1-2 h) por uno largo (~60 días)

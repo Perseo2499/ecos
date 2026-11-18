@@ -1,6 +1,6 @@
 {
   "name": "ecos",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Convierte publicaciones de Instagram y Facebook en entradas de WordPress.com",
   "main": "main.js",
   "scripts": {

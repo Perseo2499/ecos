@@ -30,6 +30,7 @@ Para generar el instalador `.exe`: `npm run dist` (queda en `dist/`).
 
 ### Si Meta no te deja añadir los permisos
 Las apps creadas con el caso de uso «Inicio de sesión con Facebook» (consumidores) no admiten los permisos de páginas ni de Instagram. Crea otra app eligiendo **Otro → Empresa**, añade el producto **Inicio de sesión con Facebook para empresas**, crea una **configuración** con el tipo de token *Token de acceso de usuario* y los permisos de arriba, y pega su **ID de configuración** en Ecos.
+Estas apps no aceptan la URL de Facebook como redireccionamiento: pon `https://www.asociacionelin.com/` en *URI de redireccionamiento de OAuth válidos* y la misma URL en el campo **URL de redireccionamiento** de Ecos (Ecos la intercepta; la página no llega a cargarse).
 
 ## 4. Crear la app de WordPress.com (una sola vez)
 1. Entra en https://developer.wordpress.com/apps/ → **Create New Application**.
