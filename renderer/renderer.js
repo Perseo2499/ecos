@@ -27,10 +27,10 @@ function renderStatus(cfg) {
 }
 
 function fillForms(cfg) {
-  for (const f of ['#f-meta', '#f-wp']) for (const el of $(f).elements) if (el.name) el.value = cfg[el.name] || '';
+  for (const f of ['#f-meta', '#f-wp', '#f-ai']) for (const el of $(f).elements) if (el.name) el.value = cfg[el.name] || '';
 }
 
-for (const f of ['#f-meta', '#f-wp']) $(f).onsubmit = async (e) => {
+for (const f of ['#f-meta', '#f-wp', '#f-ai']) $(f).onsubmit = async (e) => {
   e.preventDefault();
   const data = Object.fromEntries(new FormData(e.target));
   const cfg = await window.api.setConfig(data); renderStatus(cfg); toast('Guardado');
@@ -59,6 +59,7 @@ async function loadCategories() {
 }
 
 // Listado de publicaciones
+const fileUrl = (p) => p && 'file:///' + encodeURI(p.replace(/\\/g, '/')).replace(/#/g, '%23');
 const fmtDate = (d) => new Date(d).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' });
 function renderFeed() {
   if (!posts.length) { $('#feed').innerHTML = '<p class="hint">No hay publicaciones.</p>'; return; }
@@ -67,7 +68,8 @@ function renderFeed() {
     const key = p.source + ':' + p.id;
     const card = document.createElement('div');
     card.className = 'post' + (selected.has(key) ? ' sel' : '');
-    const thumb = p.media[0]?.url;
+    const first = p.media.find((m) => m.type === 'image') || p.media[0];
+    const thumb = first && (first.url || (first.type === 'image' ? fileUrl(first.path) : null));
     card.innerHTML = `
       ${thumb ? `<img src="${thumb}">` : '<div class="noimg">Sin imagen</div>'}
       <div class="meta"><span class="badge ${p.source}">${p.source === 'instagram' ? 'IG' : 'FB'}</span>
@@ -88,9 +90,61 @@ function updateCount() {
 
 $('#load').onclick = (e) => busy(e.target, async () => {
   const sources = [$('#src-ig').checked && 'instagram', $('#src-fb').checked && 'facebook'].filter(Boolean);
-  posts = await window.api.metaPosts($('#page').value, sources);
-  selected.clear(); updateCount(); renderFeed();
+  addPosts(await window.api.metaPosts($('#page').value, sources));
 });
+
+// Añade publicaciones a la lista sin duplicar
+function addPosts(list, select = false) {
+  const have = new Set(posts.map((p) => p.source + ':' + p.id));
+  for (const p of list) {
+    const key = p.source + ':' + p.id;
+    if (!have.has(key)) posts.push(p);
+    if (select) selected.add(key);
+  }
+  posts.sort((a, b) => new Date(b.date) - new Date(a.date));
+  updateCount(); renderFeed();
+}
+$('#clear').onclick = () => { posts = []; selected.clear(); updateCount(); $('#feed').innerHTML = '<p class="hint">Lista vacía.</p>'; };
+
+// Selector de origen
+document.querySelectorAll('.sources button').forEach((b) => b.onclick = () => {
+  document.querySelectorAll('.sources button').forEach((x) => x.classList.toggle('active', x === b));
+  document.querySelectorAll('.src-panel').forEach((p) => p.classList.toggle('hidden', p.id !== 'src-' + b.dataset.src));
+});
+
+// ZIP de Meta
+const importZip = (kind) => (e) => busy(e.target, async () => {
+  const list = await window.api.importMetaExport(kind);
+  if (list) { addPosts(list); toast(`${list.length} publicaciones importadas`); }
+});
+$('#zip-file').onclick = importZip('file');
+$('#zip-folder').onclick = importZip('folder');
+
+// Capturas con IA
+$('#shots-pick').onclick = (e) => busy(e.target, async () => {
+  const files = await window.api.pickImages(false);
+  if (!files) return;
+  const post = await window.api.importScreenshots(files);
+  addPosts([post], true);
+  toast(post.warning || `Publicación leída: ${post.media.length} foto(s). Ya está seleccionada.`, !!post.warning);
+});
+
+// Manual
+let manualFiles = [];
+$('#m-files').onclick = async () => {
+  const files = await window.api.pickImages(true);
+  if (files) { manualFiles = manualFiles.concat(files); $('#m-count').textContent = `${manualFiles.length} archivo(s)`; }
+};
+$('#m-add').onclick = async () => {
+  if (!$('#m-text').value.trim() && !manualFiles.length) return toast('Escribe un texto o añade fotos', true);
+  const post = await window.api.manualPost({
+    text: $('#m-text').value, date: $('#m-date').value || null, source: $('#m-source').value,
+    permalink: $('#m-link').value.trim() || null, files: manualFiles,
+  });
+  addPosts([post], true);
+  $('#m-text').value = ''; $('#m-link').value = ''; manualFiles = []; $('#m-count').textContent = '0 archivos';
+  toast('Añadida a la lista y seleccionada');
+};
 
 // Borrador
 $('#make').onclick = (e) => busy(e.target, async () => {
@@ -101,7 +155,7 @@ $('#make').onclick = (e) => busy(e.target, async () => {
   $('#d-content').value = draft.content;
   $('#d-preview').innerHTML = draft.content;
   $('#editor').classList.remove('hidden');
-  toast('Imágenes subidas a la biblioteca de medios. Revisa la entrada.');
+  toast(draft.failed?.length ? `No se pudieron subir ${draft.failed.length} archivo(s): ${draft.failed[0]}` : 'Medios subidos a la biblioteca. Revisa la entrada.', !!draft.failed?.length);
 });
 
 $('#d-content').oninput = () => ($('#d-preview').innerHTML = $('#d-content').value);

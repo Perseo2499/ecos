@@ -2,13 +2,13 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data:; style-src 'self' 'unsafe-inline'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data: file:; style-src 'self' 'unsafe-inline'">
 <title>Ecos</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <header>
-  <h1>Redes → Blog</h1>
+  <h1>Ecos</h1>
   <nav>
     <button data-tab="posts" class="active">Publicaciones</button>
     <button data-tab="settings">Configuración</button>
@@ -18,11 +18,46 @@
 
 <main>
   <section id="tab-posts" class="tab active">
-    <div class="toolbar">
+    <div class="sources">
+      <span class="label">Origen:</span>
+      <button data-src="api" class="active">Conectar con Meta</button>
+      <button data-src="zip">ZIP de Meta</button>
+      <button data-src="shots">Capturas (IA)</button>
+      <button data-src="manual">Manual</button>
+    </div>
+
+    <div class="toolbar src-panel" id="src-api">
       <select id="page"></select>
       <label><input type="checkbox" id="src-ig" checked> Instagram</label>
       <label><input type="checkbox" id="src-fb" checked> Facebook</label>
       <button id="load">Cargar publicaciones</button>
+    </div>
+
+    <div class="toolbar src-panel hidden" id="src-zip">
+      <span class="hint">Funciona con cualquier cuenta, también personal. En Instagram o Facebook: <b>Centro de cuentas → Tu información y permisos → Descargar tu información</b>, formato <b>JSON</b>.</span>
+      <button id="zip-file">Elegir ZIP</button>
+      <button id="zip-folder">Elegir carpeta descomprimida</button>
+    </div>
+
+    <div class="toolbar src-panel hidden" id="src-shots">
+      <span class="hint">Elige una o varias capturas de <b>una misma publicación</b> (despliega antes el texto «… más»). La IA lee el texto y recorta las fotos.</span>
+      <button id="shots-pick">Elegir capturas</button>
+    </div>
+
+    <div class="src-panel hidden manual" id="src-manual">
+      <textarea id="m-text" placeholder="Pega aquí el texto de la publicación, con sus #hashtags"></textarea>
+      <div class="toolbar">
+        <select id="m-source"><option value="instagram">Instagram</option><option value="facebook">Facebook</option></select>
+        <input id="m-date" type="date" title="Fecha de la publicación">
+        <input id="m-link" placeholder="Enlace a la publicación (opcional)">
+        <button id="m-files">Añadir fotos…</button>
+        <span id="m-count" class="hint">0 archivos</span>
+        <button id="m-add">Añadir a la lista</button>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <button id="clear">Vaciar lista</button>
       <span class="spacer"></span>
       <span id="sel-count">0 seleccionadas</span>
       <button id="make" class="primary" disabled>Crear entrada con la selección</button>
@@ -68,6 +103,12 @@
         <label>Redirect URL <input name="wpRedirect" placeholder="https://www.asociacionelin.com/"></label>
         <button type="submit">Guardar</button>
         <button type="button" id="wp-login" class="primary">Conectar con WordPress.com</button>
+      </form>
+      <form class="card" id="f-ai">
+        <h2>IA (para capturas de pantalla)</h2>
+        <p class="hint">Solo hace falta para el origen «Capturas (IA)». Crea una clave en console.anthropic.com → API Keys. Cada captura cuesta unos céntimos.</p>
+        <label>Clave de la API de Anthropic <input name="anthropicKey" type="password" placeholder="sk-ant-…"></label>
+        <button type="submit">Guardar</button>
       </form>
     </div>
   </section>

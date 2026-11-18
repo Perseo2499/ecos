@@ -1,15 +1,17 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const store = require('./src/store');
 const meta = require('./src/meta');
 const wp = require('./src/wpcom');
-const { buildDraft } = require('./src/transform');
+const { buildDraft, mediaKey } = require('./src/transform');
+const importers = require('./src/importers');
 
 let cfg = {};
 let accounts = [];
+let mainWin;
 
 function createWindow() {
-  const win = new BrowserWindow({
+  const win = mainWin = new BrowserWindow({
     width: 1280, height: 860, title: 'Ecos', autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false },
   });
@@ -20,6 +22,7 @@ function createWindow() {
 const publicCfg = () => ({
   ...cfg,
   metaAppSecret: cfg.metaAppSecret ? '••••••' : '', wpClientSecret: cfg.wpClientSecret ? '••••••' : '',
+  anthropicKey: cfg.anthropicKey ? '••••••' : '',
   metaUserToken: undefined, wpToken: undefined,
   metaConnected: !!cfg.metaUserToken, wpConnected: !!cfg.wpToken,
 });
@@ -66,16 +69,42 @@ handle('wp:login', async () => {
 });
 handle('wp:categories', () => wp.categories(cfg));
 
-// Sube las imágenes y genera el borrador para revisar
+// Sube los medios (remotos o locales) y genera el borrador para revisar
 handle('draft:build', async (posts) => {
-  const urls = [...new Set(posts.flatMap((p) => p.media.filter((m) => m.type === 'image' && m.url).map((m) => m.url)))];
-  const uploadedList = [];
-  for (const url of urls) {
-    // una a una, para que un fallo no tumbe el resto
-    try { uploadedList.push([url, (await wp.uploadFromUrls(cfg, [url]))[0]]); } catch (e) { console.warn(url, e.message); }
+  const items = new Map();
+  for (const p of posts) for (const m of p.media) {
+    if ((m.type === 'image' && (m.url || m.path)) || (m.type === 'video' && m.path)) items.set(mediaKey(m), m);
   }
-  return buildDraft(posts, new Map(uploadedList.filter(([, v]) => v)));
+  const uploaded = new Map();
+  const failed = [];
+  for (const [key, m] of items) {
+    // uno a uno, para que un fallo no tumbe el resto
+    try {
+      uploaded.set(key, m.path ? await wp.uploadFile(cfg, m.path) : (await wp.uploadFromUrls(cfg, [m.url]))[0]);
+    } catch (e) { failed.push(e.message); }
+  }
+  return { ...buildDraft(posts, uploaded), failed };
 });
+
+// --- Importaciones alternativas ---
+const pick = async (opts) => {
+  const r = await dialog.showOpenDialog(mainWin, opts);
+  return r.canceled ? null : r.filePaths;
+};
+const IMAGES = { name: 'Imágenes', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'] };
+
+handle('import:metaExport', async (kind) => {
+  const files = await pick(kind === 'folder'
+    ? { title: 'Carpeta descomprimida de Meta', properties: ['openDirectory'] }
+    : { title: 'ZIP de «Descargar tu información»', filters: [{ name: 'ZIP', extensions: ['zip'] }], properties: ['openFile'] });
+  return files ? importers.importMetaExport(files[0]) : null;
+});
+handle('import:pickImages', (withVideo) => pick({
+  title: 'Elige las imágenes', properties: ['openFile', 'multiSelections'],
+  filters: withVideo ? [{ name: 'Fotos y vídeos', extensions: [...IMAGES.extensions, 'mp4', 'mov'] }] : [IMAGES],
+}));
+handle('import:screenshots', (paths) => importers.importScreenshots(paths, cfg.anthropicKey));
+handle('import:manual', (data) => importers.manualPost(data));
 
 handle('draft:publish', async (d) => {
   const post = await wp.createPost(cfg, {

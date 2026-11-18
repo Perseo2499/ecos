@@ -49,6 +49,21 @@ async function uploadFromUrls(cfg, urls) {
   return json.media.map((m) => ({ id: m.ID, url: m.URL }));
 }
 
+// Sube un archivo del disco (ZIP de Meta, capturas recortadas, fotos manuales)
+async function uploadFile(cfg, filePath) {
+  const fs = require('fs');
+  const path = require('path');
+  const form = new FormData();
+  form.append('media[]', new Blob([fs.readFileSync(filePath)]), path.basename(filePath));
+  const res = await fetch(`${API}/sites/${encodeURIComponent(cfg.wpSite)}/media/new`, {
+    method: 'POST', headers: { Authorization: `Bearer ${cfg.wpToken}` }, body: form,
+  });
+  const json = await res.json();
+  if (!res.ok || json.error) throw new Error('WordPress.com: ' + (json.message || json.error));
+  if (!json.media?.length) throw new Error('WordPress.com: ' + (json.errors?.[0]?.message || 'no se pudo subir ' + path.basename(filePath)));
+  return { id: json.media[0].ID, url: json.media[0].URL };
+}
+
 const createPost = (cfg, post) => call(cfg, '/posts/new', post);
 
-module.exports = { login, siteInfo, categories, uploadFromUrls, createPost };
+module.exports = { login, siteInfo, categories, uploadFromUrls, uploadFile, createPost };

@@ -17,4 +17,8 @@ contextBridge.exposeInMainWorld('api', {
   buildDraft: (posts) => call('draft:build', posts),
   publish: (d) => call('draft:publish', d),
   open: (url) => call('open', url),
+  importMetaExport: (kind) => call('import:metaExport', kind),
+  pickImages: (withVideo) => call('import:pickImages', withVideo),
+  importScreenshots: (paths) => call('import:screenshots', paths),
+  manualPost: (data) => call('import:manual', data),
 });

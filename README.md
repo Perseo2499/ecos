@@ -29,7 +29,17 @@ Para generar el instalador `.exe`: `npm run dist` (queda en `dist/`).
 2. *Website URL* y *Redirect URLs*: `https://www.asociacionelin.com/` (o la que quieras, pero tiene que ser **la misma** que pongas en la app).
 3. Tipo: **Web**. Copia el **Client ID** y el **Client Secret**.
 
-## 5. Uso
+## 5. Cuatro formas de traer publicaciones
+| Origen | Cuándo usarlo | Requisitos |
+|---|---|---|
+| **Conectar con Meta** | Día a día, automático | Instagram profesional (gratis) vinculado a una Página, y app de Meta |
+| **ZIP de Meta** | Cuentas personales o importar el histórico completo | Ninguno. Pídelo en *Centro de cuentas → Tu información y permisos → Descargar tu información*, en formato **JSON** |
+| **Capturas (IA)** | Publicaciones sueltas de cualquier cuenta | Clave de la API de Anthropic (unos céntimos por captura) |
+| **Manual** | Siempre funciona | Ninguno: pegas el texto y añades las fotos |
+
+Con las capturas, la IA (Claude) lee el texto y recorta las fotos de la captura. La calidad de la foto es la de la pantalla; si el texto termina en «… más», despliégalo antes de hacer la captura.
+
+## 6. Uso
 1. En **Configuración**, pega las claves, guarda y pulsa **Conectar** en cada tarjeta.
 2. En **Publicaciones**, elige la página, marca Instagram y/o Facebook y pulsa **Cargar publicaciones**.
 3. Selecciona una publicación (o varias, para hacer una entrada de resumen) y pulsa **Crear entrada**.
@@ -49,6 +59,7 @@ Para generar el instalador `.exe`: `npm run dist` (queda en `dist/`).
 | `main.js` | Proceso principal y comunicación con la interfaz |
 | `src/meta.js` | Inicio de sesión y lectura de publicaciones en Graph API |
 | `src/wpcom.js` | Inicio de sesión, subida de medios y creación de entradas en WordPress.com |
+| `src/importers.js` | Importar ZIP de Meta, capturas con IA y entrada manual |
 | `src/transform.js` | Publicación → bloques de Gutenberg |
 | `src/store.js` | Configuración; los tokens se guardan cifrados con DPAPI de Windows |
 | `renderer/` | Interfaz |

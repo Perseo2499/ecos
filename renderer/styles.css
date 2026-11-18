@@ -47,3 +47,12 @@ textarea { min-height:360px; font-family:Consolas, monospace; font-size:12px; ma
 .card button { margin-right:8px; }
 #toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff; padding:10px 16px; border-radius:8px; opacity:0; transition:.2s; pointer-events:none; }
 #toast.show { opacity:1; } #toast.error { background:var(--err); }
+.sources { display:flex; align-items:center; gap:6px; margin-bottom:12px; }
+.sources .label { color:var(--muted); margin-right:4px; }
+.sources button.active { background:var(--ink); color:#fff; border-color:var(--ink); }
+.src-panel .hint { max-width:640px; }
+.manual { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+.manual textarea { min-height:110px; font-family:inherit; font-size:14px; }
+.manual .toolbar { margin:0; flex-wrap:wrap; }
+.manual input { width:auto; }
+.cards { grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); max-width:1200px; }
