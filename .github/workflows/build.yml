@@ -26,12 +26,6 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           mv "dist/Ecos $VERSION.exe" "dist/Ecos-$VERSION.exe"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Ecos-windows
-          path: |
-            dist/*.exe
-            dist/*.zip
       - name: Publicar Release
         uses: softprops/action-gh-release@v2
         with:
