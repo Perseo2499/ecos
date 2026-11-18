@@ -31,20 +31,6 @@ jobs:
           else { Write-Host "No se ha creado ecos.log" }
           Get-Process Ecos -ErrorAction SilentlyContinue | Stop-Process -Force
           if (-not $vivo) { Write-Error "Ecos se ha cerrado al arrancar (código $($p.ExitCode))"; exit 1 }
-      - name: Prueba en carpeta con tilde (diagnóstico)
-        shell: pwsh
-        continue-on-error: true
-        run: |
-          $dst = "C:\Prueba\Ramsés\Ecos"
-          New-Item -ItemType Directory -Force $dst | Out-Null
-          Copy-Item -Recurse -Force "dist\win-unpacked\*" $dst
-          foreach ($args in @(@(), @('--no-sandbox'), @('--disable-gpu'))) {
-            $p = Start-Process -FilePath "$dst\Ecos.exe" -ArgumentList $args -PassThru
-            Start-Sleep -Seconds 15
-            Write-Host "Carpeta con tilde, argumentos [$($args -join ' ')]: sigue abierta = $(-not $p.HasExited)  código = $($p.ExitCode)"
-            Get-Process Ecos -ErrorAction SilentlyContinue | Stop-Process -Force
-            Start-Sleep -Seconds 2
-          }
       - name: Versión
         id: v
         shell: bash

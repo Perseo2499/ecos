@@ -20,13 +20,53 @@ process.on('uncaughtException', fatal);
 process.on('unhandledRejection', (e) => log('Promesa rechazada sin gestionar', e));
 
 // Una sola copia abierta: si ya hay una, se trae al frente
-if (!app.requestSingleInstanceLock()) {
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
     if (mainWin) { if (mainWin.isMinimized()) mainWin.restore(); mainWin.show(); mainWin.focus(); }
   });
 }
+
+// --- Modo gráfico a prueba de fallos ---------------------------------------------
+// En algunos equipos el proceso gráfico de Chromium no arranca (p. ej. «DLL no encontrada»
+// dentro de su sandbox) y la app se cierra al instante. Ecos no necesita aceleración gráfica:
+// se desactiva siempre y, si aun así el proceso gráfico falla, se reinicia en un modo más
+// compatible y lo recuerda para la próxima vez.
+const GPU_MODES = [
+  { name: 'sin aceleración', switches: [] },
+  { name: 'sin aceleración ni sandbox gráfico', switches: ['disable-gpu-sandbox'] },
+  { name: 'gráficos dentro del proceso principal', switches: ['disable-gpu-sandbox', 'in-process-gpu'] },
+  { name: 'sin sandbox', switches: ['disable-gpu-sandbox', 'no-sandbox'] },
+];
+const gpuModeFile = () => path.join(app.getPath('userData'), 'modo-grafico.json');
+let gpuMode = 0;
+try { gpuMode = Math.min(GPU_MODES.length - 1, JSON.parse(fs.readFileSync(gpuModeFile(), 'utf8')).nivel || 0); } catch { /* primera vez */ }
+// Si el arranque anterior no llegó a mostrar la ventana (la app entera se cerró), sube de nivel
+const pendingFile = () => path.join(app.getPath('userData'), 'arranque-pendiente');
+const saveGpuMode = (n) => { try { fs.writeFileSync(gpuModeFile(), JSON.stringify({ nivel: n, fecha: new Date().toISOString() })); } catch { /* nada */ } };
+if (gotLock && fs.existsSync(pendingFile()) && gpuMode < GPU_MODES.length - 1) {
+  gpuMode += 1;
+  saveGpuMode(gpuMode);
+  log(`El arranque anterior no llegó a abrir la ventana; se usa el modo ${gpuMode}: ${GPU_MODES[gpuMode].name}`);
+}
+if (gotLock) { try { fs.mkdirSync(path.dirname(pendingFile()), { recursive: true }); fs.writeFileSync(pendingFile(), new Date().toISOString()); } catch { /* nada */ } }
+app.disableHardwareAcceleration();
+for (const sw of GPU_MODES[gpuMode].switches) app.commandLine.appendSwitch(sw);
+
+let relaunching = false;
+app.on('child-process-gone', (_e, d) => {
+  if (d.type !== 'GPU' || relaunching) return;
+  log(`El proceso gráfico ha fallado (modo ${gpuMode}: ${GPU_MODES[gpuMode].name}; motivo ${d.reason}, código ${d.exitCode})`);
+  if (gpuMode >= GPU_MODES.length - 1) return; // ya en el modo más compatible
+  relaunching = true;
+  saveGpuMode(gpuMode + 1);
+  try { fs.unlinkSync(pendingFile()); } catch { /* nada */ } // ya se ha subido de nivel; no subir dos veces
+  log(`Reiniciando en modo ${gpuMode + 1}: ${GPU_MODES[gpuMode + 1].name}`);
+  app.relaunch();
+  app.exit(0);
+});
 
 let store, meta, wp, buildDraft, mediaKey, importers, updater;
 try {
@@ -158,13 +198,18 @@ handle('update:check', () => { updater.check(); return updater.current(); });
 handle('update:install', () => updater.install());
 
 app.whenReady().then(() => {
-  if (!updater) return; // fallo al cargar módulos: ya se ha mostrado el aviso
-  log(`Arrancando Ecos ${app.getVersion()} (${process.platform} ${process.arch}, Electron ${process.versions.electron})`);
+  if (!gotLock || !updater) return; // otra copia abierta, o fallo al cargar módulos (ya avisado)
+  log(`Arrancando Ecos ${app.getVersion()} (${process.platform} ${process.arch}, Electron ${process.versions.electron}, modo gráfico ${gpuMode}: ${GPU_MODES[gpuMode].name})`);
   cfg = { wpSite: 'asociacionelin.com', graphVersion: 'v23.0', ...store.load() };
   createWindow();
   mainWin.webContents.on('render-process-gone', (_e, d) => log('La ventana se ha cerrado inesperadamente:', d.reason));
   mainWin.webContents.once('did-finish-load', () => {
     log('Ventana cargada');
+    try { fs.unlinkSync(pendingFile()); } catch { /* nada */ }
+    if (process.env.ECOS_PRUEBA_FALLO_GPU) {
+      const gpu = app.getAppMetrics().find((m) => m.type === 'GPU');
+      if (gpu) process.kill(gpu.pid);
+    }
     updater.init((st) => {
       if (st.state === 'error') log('Actualizador:', st.message);
       if (!mainWin.isDestroyed()) mainWin.webContents.send('update:status', { version: app.getVersion(), ...st });
