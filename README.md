@@ -3,6 +3,10 @@
 Aplicación de escritorio (Electron) que lee las publicaciones de Instagram y Facebook de la
 Asociación ELIN y las convierte en entradas del blog de **asociacionelin.com** (WordPress.com).
 
+## Descargar
+Última versión para Windows: **[Releases](https://github.com/Perseo2499/ecos/releases/latest)** → `Ecos-x.y.z.exe` (portable).
+Cada cambio subido a `main` compila una versión nueva automáticamente; para publicar otra versión, sube el número en `package.json`.
+
 ## 1. Requisitos
 - Windows 10/11 con [Node.js 20 o superior](https://nodejs.org).
 - Instagram como **cuenta profesional** (Empresa o Creador) **vinculada a una Página de Facebook**.
