@@ -15,8 +15,19 @@
     "appId": "com.asociacionelin.redesablog",
     "productName": "Ecos",
     "win": {
-      "target": "nsis"
-    }
+      "target": [
+        "portable",
+        "zip"
+      ],
+      "signAndEditExecutable": false
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**",
+      "renderer/**",
+      "package.json"
+    ]
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.10.0",
