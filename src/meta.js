@@ -16,11 +16,15 @@ async function get(url) {
 
 async function login(cfg) {
   if (!cfg.metaAppId || !cfg.metaAppSecret) throw new Error('Falta el App ID o el App Secret de Meta');
-  const auth = `https://www.facebook.com/${gv(cfg)}/dialog/oauth?` + new URLSearchParams({
-    client_id: cfg.metaAppId, redirect_uri: REDIRECT, response_type: 'token', scope: SCOPES.join(','),
-  });
-  const params = await openAuthWindow(auth, REDIRECT);
-  const shortToken = params.get('access_token');
+  // Apps de tipo Empresa usan «Inicio de sesión con Facebook para empresas»: los permisos van en una
+  // configuración (config_id) en lugar de en el parámetro scope.
+  const params = { client_id: cfg.metaAppId, redirect_uri: REDIRECT, response_type: 'token' };
+  if (cfg.metaConfigId) params.config_id = cfg.metaConfigId.trim();
+  else params.scope = SCOPES.join(',');
+  const auth = `https://www.facebook.com/${gv(cfg)}/dialog/oauth?` + new URLSearchParams(params);
+  const result = await openAuthWindow(auth, REDIRECT);
+  const shortToken = result.get('access_token');
+  if (!shortToken) throw new Error('Meta no devolvió un token. Revisa la configuración de inicio de sesión de la app.');
   // Cambia el token corto (1-2 h) por uno largo (~60 días)
   const long = await get(`${graph(cfg)}/oauth/access_token?` + new URLSearchParams({
     grant_type: 'fb_exchange_token', client_id: cfg.metaAppId,

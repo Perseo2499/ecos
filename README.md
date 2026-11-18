@@ -28,6 +28,9 @@ Para generar el instalador `.exe`: `npm run dist` (queda en `dist/`).
 5. Mantén la app en **modo desarrollo**: así funciona con tu cuenta sin pasar la revisión de Meta.
    Los permisos que pide son `pages_show_list`, `pages_read_engagement`, `instagram_basic` y `business_management`.
 
+### Si Meta no te deja añadir los permisos
+Las apps creadas con el caso de uso «Inicio de sesión con Facebook» (consumidores) no admiten los permisos de páginas ni de Instagram. Crea otra app eligiendo **Otro → Empresa**, añade el producto **Inicio de sesión con Facebook para empresas**, crea una **configuración** con el tipo de token *Token de acceso de usuario* y los permisos de arriba, y pega su **ID de configuración** en Ecos.
+
 ## 4. Crear la app de WordPress.com (una sola vez)
 1. Entra en https://developer.wordpress.com/apps/ → **Create New Application**.
 2. *Website URL* y *Redirect URLs*: `https://www.asociacionelin.com/` (o la que quieras, pero tiene que ser **la misma** que pongas en la app).
