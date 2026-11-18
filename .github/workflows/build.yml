@@ -1,0 +1,42 @@
+name: Compilar para Windows
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx electron-builder --win --x64 --publish never
+      - name: Renombrar ejecutable
+        shell: bash
+        run: mv "dist/Ecos ${GITHUB_REF_NAME#v}.exe" "dist/Ecos-${GITHUB_REF_NAME#v}.exe" || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ecos-windows
+          path: |
+            dist/*.exe
+            dist/*.zip
+      - name: Publicar Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          name: Ecos ${{ github.ref_name }} (prueba)
+          body: |
+            **Descarga `Ecos-…exe`** (portable, no necesita instalación).
+            Windows SmartScreen avisará porque no está firmado: *Más información → Ejecutar de todas formas*.
+          files: |
+            dist/Ecos-*.exe
+            dist/*.zip
