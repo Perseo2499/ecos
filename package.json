@@ -1,0 +1,19 @@
+{
+  "name": "ecos",
+  "version": "0.1.0",
+  "description": "Convierte publicaciones de Instagram y Facebook en entradas de WordPress.com",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.asociacionelin.redesablog",
+    "productName": "Ecos",
+    "win": { "target": "nsis" }
+  }
+}

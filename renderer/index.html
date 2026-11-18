@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data:; style-src 'self' 'unsafe-inline'">
+<title>Ecos</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <h1>Redes → Blog</h1>
+  <nav>
+    <button data-tab="posts" class="active">Publicaciones</button>
+    <button data-tab="settings">Configuración</button>
+  </nav>
+  <div class="status"><span id="st-meta" class="pill">Meta: no conectado</span><span id="st-wp" class="pill">WordPress: no conectado</span></div>
+</header>
+
+<main>
+  <section id="tab-posts" class="tab active">
+    <div class="toolbar">
+      <select id="page"></select>
+      <label><input type="checkbox" id="src-ig" checked> Instagram</label>
+      <label><input type="checkbox" id="src-fb" checked> Facebook</label>
+      <button id="load">Cargar publicaciones</button>
+      <span class="spacer"></span>
+      <span id="sel-count">0 seleccionadas</span>
+      <button id="make" class="primary" disabled>Crear entrada con la selección</button>
+    </div>
+    <div class="split">
+      <div id="feed" class="feed"><p class="hint">Conecta tu cuenta en «Configuración» y pulsa «Cargar publicaciones».</p></div>
+      <aside id="editor" class="editor hidden">
+        <h2>Vista previa de la entrada</h2>
+        <label>Título <input id="d-title"></label>
+        <label>Etiquetas (separadas por comas) <input id="d-tags"></label>
+        <label>Categorías <select id="d-cats" multiple size="4"></select></label>
+        <div class="row">
+          <label>Estado
+            <select id="d-status"><option value="draft">Borrador</option><option value="publish">Publicar ya</option></select>
+          </label>
+          <label class="inline"><input type="checkbox" id="d-keepdate"> Mantener la fecha original</label>
+        </div>
+        <div class="tabs-mini"><button id="v-preview" class="active">Vista previa</button><button id="v-code">HTML</button></div>
+        <div id="d-preview" class="preview"></div>
+        <textarea id="d-content" class="hidden"></textarea>
+        <button id="send" class="primary">Enviar a WordPress</button>
+      </aside>
+    </div>
+  </section>
+
+  <section id="tab-settings" class="tab">
+    <div class="cards">
+      <form class="card" id="f-meta">
+        <h2>Meta (Instagram y Facebook)</h2>
+        <p class="hint">Crea una app en developers.facebook.com, añade «Inicio de sesión con Facebook» y pega aquí sus claves.</p>
+        <label>App ID <input name="metaAppId"></label>
+        <label>App Secret <input name="metaAppSecret" type="password"></label>
+        <label>Versión de Graph API <input name="graphVersion" placeholder="v23.0"></label>
+        <button type="submit">Guardar</button>
+        <button type="button" id="meta-login" class="primary">Conectar con Facebook</button>
+      </form>
+      <form class="card" id="f-wp">
+        <h2>WordPress.com</h2>
+        <p class="hint">Crea una app en developer.wordpress.com/apps. Pon como «Redirect URL» la misma que escribas aquí.</p>
+        <label>Sitio <input name="wpSite" placeholder="asociacionelin.com"></label>
+        <label>Client ID <input name="wpClientId"></label>
+        <label>Client Secret <input name="wpClientSecret" type="password"></label>
+        <label>Redirect URL <input name="wpRedirect" placeholder="https://www.asociacionelin.com/"></label>
+        <button type="submit">Guardar</button>
+        <button type="button" id="wp-login" class="primary">Conectar con WordPress.com</button>
+      </form>
+    </div>
+  </section>
+</main>
+<div id="toast"></div>
+<script src="renderer.js"></script>
+</body>
+</html>
