@@ -19,23 +19,24 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx electron-builder --win --x64 --publish never
-      - name: Versión y nombre del ejecutable
+      - name: Versión
         id: v
         shell: bash
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          mv "dist/Ecos $VERSION.exe" "dist/Ecos-$VERSION.exe"
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
       - name: Publicar Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.v.outputs.version }}
           target_commitish: ${{ github.sha }}
-          prerelease: true
-          name: Ecos ${{ steps.v.outputs.version }} (prueba)
+          prerelease: false
+          make_latest: true
+          name: Ecos ${{ steps.v.outputs.version }}
           body: |
-            **Descarga `Ecos-…exe`** (portable, no necesita instalación).
+            **Recomendado: `Ecos-Setup-${{ steps.v.outputs.version }}.exe`** (instalador, se actualiza solo).
+            Alternativa sin instalar: `Ecos-${{ steps.v.outputs.version }}-portable.exe` (no se actualiza sola).
             Windows SmartScreen avisará porque no está firmado: *Más información → Ejecutar de todas formas*.
           files: |
-            dist/Ecos-*.exe
-            dist/*.zip
+            dist/Ecos-Setup-*.exe
+            dist/Ecos-Setup-*.exe.blockmap
+            dist/Ecos-*-portable.exe
+            dist/latest.yml

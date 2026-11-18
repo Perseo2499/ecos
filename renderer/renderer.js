@@ -13,6 +13,10 @@ async function busy(btn, fn) {
   try { return await fn(); } catch (e) { toast(e.message, true); } finally { btn.disabled = false; btn.textContent = label; }
 }
 
+document.querySelectorAll('[data-copy]').forEach((b) => b.onclick = () => {
+  navigator.clipboard.writeText($(b.dataset.copy).value); toast('Copiado');
+});
+
 // Pestañas
 document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
   document.querySelectorAll('nav button, .tab').forEach((x) => x.classList.remove('active'));
@@ -27,6 +31,7 @@ function renderStatus(cfg) {
 }
 
 function fillForms(cfg) {
+  $('#meta-redirect').value = cfg.metaRedirectUri; $('#wp-redirect').value = cfg.wpRedirectUri;
   for (const f of ['#f-meta', '#f-wp', '#f-ai']) for (const el of $(f).elements) if (el.name) el.value = cfg[el.name] || '';
 }
 
@@ -42,11 +47,13 @@ function renderPages(accs) {
 
 $('#meta-login').onclick = (e) => busy(e.target, async () => {
   await window.api.setConfig(Object.fromEntries(new FormData($('#f-meta'))));
+  toast('Termina el inicio de sesión en tu navegador…');
   renderPages(await window.api.metaLogin());
   renderStatus(await window.api.getConfig()); toast('Conectado con Meta');
 });
 $('#wp-login').onclick = (e) => busy(e.target, async () => {
   await window.api.setConfig(Object.fromEntries(new FormData($('#f-wp'))));
+  toast('Termina el inicio de sesión en tu navegador…');
   const name = await window.api.wpLogin();
   renderStatus(await window.api.getConfig()); toast('Conectado a ' + name); loadCategories();
 });
@@ -176,7 +183,31 @@ $('#send').onclick = (e) => busy(e.target, async () => {
   window.api.open(res.editUrl);
 });
 
+// Actualizaciones
+function renderUpdate(st) {
+  $('#app-version').textContent = st.version || '–';
+  const texts = {
+    checking: 'Buscando actualizaciones…',
+    latest: 'Tienes la última versión.',
+    downloading: `Descargando la versión ${st.version}… ${st.percent || 0} %`,
+    ready: `La versión ${st.version} está lista. Se instalará al cerrar Ecos, o ahora mismo si reinicias.`,
+    error: `No se pudo comprobar si hay actualizaciones: ${st.message}`,
+    unsupported: st.reason === 'portable'
+      ? 'La versión portable no se actualiza sola. Instala Ecos con el instalador (Ecos-Setup) para recibir actualizaciones automáticas.'
+      : 'Las actualizaciones solo funcionan en la versión instalada.',
+  };
+  $('#update-detail').textContent = texts[st.state] || '';
+  const bar = ['downloading', 'ready'].includes(st.state);
+  $('#update-bar').classList.toggle('hidden', !bar);
+  $('#update-text').textContent = texts[st.state] || '';
+  $('#update-install').classList.toggle('hidden', st.state !== 'ready');
+}
+window.api.onUpdate(renderUpdate);
+$('#update-install').onclick = () => window.api.installUpdate();
+$('#update-check').onclick = async () => renderUpdate(await window.api.checkUpdate());
+
 (async () => {
+  window.api.updateStatus().then(renderUpdate).catch(() => {});
   const cfg = await window.api.getConfig();
   fillForms(cfg); renderStatus(cfg);
   if (cfg.metaConnected) window.api.metaAccounts().then(renderPages).catch((e) => toast(e.message, true));

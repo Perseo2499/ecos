@@ -5,6 +5,7 @@ const meta = require('./src/meta');
 const wp = require('./src/wpcom');
 const { buildDraft, mediaKey } = require('./src/transform');
 const importers = require('./src/importers');
+const updater = require('./src/updater');
 
 let cfg = {};
 let accounts = [];
@@ -25,6 +26,7 @@ const publicCfg = () => ({
   anthropicKey: cfg.anthropicKey ? '••••••' : '',
   metaUserToken: undefined, wpToken: undefined,
   metaConnected: !!cfg.metaUserToken, wpConnected: !!cfg.wpToken,
+  metaRedirectUri: meta.REDIRECT, wpRedirectUri: wp.REDIRECT,
 });
 
 // Envuelve los manejadores para devolver errores legibles al renderer
@@ -118,8 +120,15 @@ handle('draft:publish', async (d) => {
 
 handle('open', (url) => shell.openExternal(url));
 
+handle('update:status', () => updater.current());
+handle('update:check', () => { updater.check(); return updater.current(); });
+handle('update:install', () => updater.install());
+
 app.whenReady().then(() => {
   cfg = { wpSite: 'asociacionelin.com', graphVersion: 'v23.0', ...store.load() };
   createWindow();
+  mainWin.webContents.once('did-finish-load', () => {
+    updater.init((st) => { if (!mainWin.isDestroyed()) mainWin.webContents.send('update:status', { version: app.getVersion(), ...st }); });
+  });
 });
 app.on('window-all-closed', () => app.quit());

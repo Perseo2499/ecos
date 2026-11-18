@@ -1,9 +1,7 @@
 // Facebook (Páginas) e Instagram (cuenta profesional) vía Graph API.
-const { openAuthWindow } = require('./oauth');
+const { loginInBrowser, redirectUri } = require('./oauth');
 
-const DEFAULT_REDIRECT = 'https://www.facebook.com/connect/login_success.html';
-// Las apps de tipo Empresa no aceptan URLs de Facebook: se usa una de tu web (Ecos la intercepta antes de cargarla)
-const redirectOf = (cfg) => (cfg.metaRedirect || '').trim() || DEFAULT_REDIRECT;
+const REDIRECT = redirectUri('meta');
 const SCOPES = ['pages_show_list', 'pages_read_engagement', 'instagram_basic', 'business_management'];
 
 const gv = (cfg) => cfg.graphVersion || 'v23.0';
@@ -18,19 +16,20 @@ async function get(url) {
 
 async function login(cfg) {
   if (!cfg.metaAppId || !cfg.metaAppSecret) throw new Error('Falta el App ID o el App Secret de Meta');
-  // Apps de tipo Empresa usan «Inicio de sesión con Facebook para empresas»: los permisos van en una
-  // configuración (config_id) en lugar de en el parámetro scope.
-  const params = { client_id: cfg.metaAppId, redirect_uri: redirectOf(cfg), response_type: 'token' };
-  if (cfg.metaConfigId) params.config_id = cfg.metaConfigId.trim();
-  else params.scope = SCOPES.join(',');
-  const auth = `https://www.facebook.com/${gv(cfg)}/dialog/oauth?` + new URLSearchParams(params);
-  const result = await openAuthWindow(auth, redirectOf(cfg));
-  const shortToken = result.get('access_token');
-  if (!shortToken) throw new Error('Meta no devolvió un token. Revisa la configuración de inicio de sesión de la app.');
-  // Cambia el token corto (1-2 h) por uno largo (~60 días)
+  const result = await loginInBrowser('meta', (state) => {
+    // Apps de tipo Empresa: los permisos van en una configuración (config_id) en lugar de en scope
+    const params = { client_id: cfg.metaAppId, redirect_uri: REDIRECT, response_type: 'code', state };
+    if (cfg.metaConfigId) params.config_id = cfg.metaConfigId.trim();
+    else params.scope = SCOPES.join(',');
+    return `https://www.facebook.com/${gv(cfg)}/dialog/oauth?` + new URLSearchParams(params);
+  });
+  // Código → token corto → token largo (~60 días)
+  const short = await get(`${graph(cfg)}/oauth/access_token?` + new URLSearchParams({
+    client_id: cfg.metaAppId, client_secret: cfg.metaAppSecret, redirect_uri: REDIRECT, code: result.get('code'),
+  }));
   const long = await get(`${graph(cfg)}/oauth/access_token?` + new URLSearchParams({
     grant_type: 'fb_exchange_token', client_id: cfg.metaAppId,
-    client_secret: cfg.metaAppSecret, fb_exchange_token: shortToken,
+    client_secret: cfg.metaAppSecret, fb_exchange_token: short.access_token,
   }));
   return long.access_token;
 }
@@ -80,4 +79,4 @@ async function instagramPosts(cfg, account, limit = 25) {
   }));
 }
 
-module.exports = { login, listAccounts, facebookPosts, instagramPosts };
+module.exports = { REDIRECT, login, listAccounts, facebookPosts, instagramPosts };

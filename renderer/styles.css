@@ -56,3 +56,6 @@ textarea { min-height:360px; font-family:Consolas, monospace; font-size:12px; ma
 .manual .toolbar { margin:0; flex-wrap:wrap; }
 .manual input { width:auto; }
 .cards { grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); max-width:1200px; }
+.copy { display:flex; gap:6px; margin-top:4px; } .copy input { margin:0; background:var(--bg); } .card .copy button { margin:0; }
+.update-bar { display:flex; align-items:center; gap:12px; padding:8px 20px; background:#dcefe8; color:var(--accent); border-bottom:1px solid var(--line); }
+.update-bar span { flex:1; }

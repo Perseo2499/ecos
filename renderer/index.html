@@ -16,6 +16,7 @@
   <div class="status"><span id="st-meta" class="pill">Meta: no conectado</span><span id="st-wp" class="pill">WordPress: no conectado</span></div>
 </header>
 
+<div id="update-bar" class="update-bar hidden"><span id="update-text"></span><button id="update-install" class="primary hidden">Reiniciar y actualizar</button></div>
 <main>
   <section id="tab-posts" class="tab active">
     <div class="sources">
@@ -87,10 +88,10 @@
     <div class="cards">
       <form class="card" id="f-meta">
         <h2>Meta (Instagram y Facebook)</h2>
-        <p class="hint">Crea una app en developers.facebook.com, añade «Inicio de sesión con Facebook» y pega aquí sus claves.</p>
+        <p class="hint">Crea una app en developers.facebook.com, pega aquí sus claves y añade la URI de abajo en «URI de redireccionamiento de OAuth válidos». El inicio de sesión se abre en tu navegador.</p>
         <label>App ID <input name="metaAppId"></label>
         <label>App Secret <input name="metaAppSecret" type="password"></label>
-        <label>URL de redireccionamiento <input name="metaRedirect" placeholder="https://www.asociacionelin.com/ (vacío = la de Facebook)"></label>
+        <label>URI de redireccionamiento (cópiala en Meta) <span class="copy"><input id="meta-redirect" readonly><button type="button" data-copy="#meta-redirect">Copiar</button></span></label>
         <label>ID de configuración (solo apps de tipo Empresa) <input name="metaConfigId" placeholder="Déjalo vacío si tu app no lo pide"></label>
         <label>Versión de Graph API <input name="graphVersion" placeholder="v23.0"></label>
         <button type="submit">Guardar</button>
@@ -98,14 +99,20 @@
       </form>
       <form class="card" id="f-wp">
         <h2>WordPress.com</h2>
-        <p class="hint">Crea una app en developer.wordpress.com/apps. Pon como «Redirect URL» la misma que escribas aquí.</p>
+        <p class="hint">Crea una app en developer.wordpress.com/apps, tipo «Web», y pon como «Redirect URLs» la dirección de abajo.</p>
         <label>Sitio <input name="wpSite" placeholder="asociacionelin.com"></label>
         <label>Client ID <input name="wpClientId"></label>
         <label>Client Secret <input name="wpClientSecret" type="password"></label>
-        <label>Redirect URL <input name="wpRedirect" placeholder="https://www.asociacionelin.com/"></label>
+        <label>Redirect URL (cópiala en WordPress.com) <span class="copy"><input id="wp-redirect" readonly><button type="button" data-copy="#wp-redirect">Copiar</button></span></label>
         <button type="submit">Guardar</button>
         <button type="button" id="wp-login" class="primary">Conectar con WordPress.com</button>
       </form>
+      <div class="card">
+        <h2>Actualizaciones</h2>
+        <p>Versión instalada: <b id="app-version">–</b></p>
+        <p id="update-detail" class="hint"></p>
+        <button type="button" id="update-check">Buscar actualizaciones</button>
+      </div>
       <form class="card" id="f-ai">
         <h2>IA (para capturas de pantalla)</h2>
         <p class="hint">Solo hace falta para el origen «Capturas (IA)». Crea una clave en console.anthropic.com → API Keys. Cada captura cuesta unos céntimos.</p>

@@ -1,20 +1,19 @@
 // WordPress.com REST API (public-api.wordpress.com) con OAuth2.
-const { openAuthWindow } = require('./oauth');
+const { loginInBrowser, redirectUri } = require('./oauth');
+
+const REDIRECT = redirectUri('wordpress');
 
 const API = 'https://public-api.wordpress.com/rest/v1.1';
 
 async function login(cfg) {
-  if (!cfg.wpClientId || !cfg.wpClientSecret || !cfg.wpRedirect) {
-    throw new Error('Faltan Client ID, Client Secret o Redirect URL de WordPress.com');
-  }
-  const auth = 'https://public-api.wordpress.com/oauth2/authorize?' + new URLSearchParams({
-    client_id: cfg.wpClientId, redirect_uri: cfg.wpRedirect, response_type: 'code', blog: cfg.wpSite,
-  });
-  const params = await openAuthWindow(auth, cfg.wpRedirect);
+  if (!cfg.wpClientId || !cfg.wpClientSecret) throw new Error('Faltan el Client ID o el Client Secret de WordPress.com');
+  const params = await loginInBrowser('wordpress', (state) => 'https://public-api.wordpress.com/oauth2/authorize?' + new URLSearchParams({
+    client_id: cfg.wpClientId, redirect_uri: REDIRECT, response_type: 'code', blog: cfg.wpSite, state,
+  }));
   const res = await fetch('https://public-api.wordpress.com/oauth2/token', {
     method: 'POST',
     body: new URLSearchParams({
-      client_id: cfg.wpClientId, client_secret: cfg.wpClientSecret, redirect_uri: cfg.wpRedirect,
+      client_id: cfg.wpClientId, client_secret: cfg.wpClientSecret, redirect_uri: REDIRECT,
       code: params.get('code'), grant_type: 'authorization_code',
     }),
   });
@@ -66,4 +65,4 @@ async function uploadFile(cfg, filePath) {
 
 const createPost = (cfg, post) => call(cfg, '/posts/new', post);
 
-module.exports = { login, siteInfo, categories, uploadFromUrls, uploadFile, createPost };
+module.exports = { REDIRECT, login, siteInfo, categories, uploadFromUrls, uploadFile, createPost };

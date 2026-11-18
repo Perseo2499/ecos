@@ -4,7 +4,7 @@ Aplicación de escritorio (Electron) que lee las publicaciones de Instagram y Fa
 Asociación ELIN y las convierte en entradas del blog de **asociacionelin.com** (WordPress.com).
 
 ## Descargar
-Última versión para Windows: **[Releases](https://github.com/Perseo2499/ecos/releases/latest)** → `Ecos-x.y.z.exe` (portable).
+Última versión para Windows: **[Releases](https://github.com/Perseo2499/ecos/releases/latest)** → `Ecos-Setup-x.y.z.exe` (instalador; se actualiza solo). También hay una versión portable, que no se actualiza.
 Cada cambio subido a `main` compila una versión nueva automáticamente; para publicar otra versión, sube el número en `package.json`.
 
 ## 1. Requisitos
@@ -23,18 +23,17 @@ Para generar el instalador `.exe`: `npm run dist` (queda en `dist/`).
 1. Entra en https://developers.facebook.com/apps y pulsa **Crear app** → tipo **Empresa**.
 2. Añade el producto **Inicio de sesión con Facebook**.
 3. En *Configuración → Básica* copia el **App ID** y el **App Secret**.
-4. En *Inicio de sesión con Facebook → Configuración*, activa **Inicio de sesión de OAuth en el navegador integrado** y
-   añade `https://www.facebook.com/connect/login_success.html` en *URI de redireccionamiento de OAuth válidos*.
+4. En *Inicio de sesión con Facebook → Configuración*, añade `http://localhost:53682/meta` en *URI de redireccionamiento de OAuth válidos*.
+   El inicio de sesión se abre en tu **navegador predeterminado**, donde ya tienes tus cuentas abiertas.
 5. Mantén la app en **modo desarrollo**: así funciona con tu cuenta sin pasar la revisión de Meta.
    Los permisos que pide son `pages_show_list`, `pages_read_engagement`, `instagram_basic` y `business_management`.
 
 ### Si Meta no te deja añadir los permisos
 Las apps creadas con el caso de uso «Inicio de sesión con Facebook» (consumidores) no admiten los permisos de páginas ni de Instagram. Crea otra app eligiendo **Otro → Empresa**, añade el producto **Inicio de sesión con Facebook para empresas**, crea una **configuración** con el tipo de token *Token de acceso de usuario* y los permisos de arriba, y pega su **ID de configuración** en Ecos.
-Estas apps no aceptan la URL de Facebook como redireccionamiento: pon `https://www.asociacionelin.com/` en *URI de redireccionamiento de OAuth válidos* y la misma URL en el campo **URL de redireccionamiento** de Ecos (Ecos la intercepta; la página no llega a cargarse).
 
 ## 4. Crear la app de WordPress.com (una sola vez)
 1. Entra en https://developer.wordpress.com/apps/ → **Create New Application**.
-2. *Website URL* y *Redirect URLs*: `https://www.asociacionelin.com/` (o la que quieras, pero tiene que ser **la misma** que pongas en la app).
+2. *Website URL*: `https://www.asociacionelin.com/`. *Redirect URLs*: `http://localhost:53682/wordpress`.
 3. Tipo: **Web**. Copia el **Client ID** y el **Client Secret**.
 
 ## 5. Cuatro formas de traer publicaciones
@@ -69,6 +68,8 @@ Con las capturas, la IA (Claude) lee el texto y recorta las fotos de la captura.
 | `src/wpcom.js` | Inicio de sesión, subida de medios y creación de entradas en WordPress.com |
 | `src/importers.js` | Importar ZIP de Meta, capturas con IA y entrada manual |
 | `src/transform.js` | Publicación → bloques de Gutenberg |
+| `src/oauth.js` | Inicio de sesión en el navegador del sistema (servidor local en el puerto 53682) |
+| `src/updater.js` | Actualizaciones automáticas desde GitHub Releases |
 | `src/store.js` | Configuración; los tokens se guardan cifrados con DPAPI de Windows |
 | `renderer/` | Interfaz |
 
