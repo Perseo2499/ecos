@@ -24,7 +24,9 @@ const prefs = () => ({ theme: 'system', zoom: 1, cards: 230, accent: '#3c6e5f', 
 function toast(msg, isError) {
   const el = $('#toast');
   el.textContent = msg; el.className = 'show' + (isError ? ' error' : '');
-  clearTimeout(el._h); el._h = setTimeout(() => (el.className = ''), isError ? 8000 : 4500);
+  // Los errores largos se quedan más tiempo (se cierran también al pulsarlos)
+  clearTimeout(el._h); el._h = setTimeout(() => (el.className = ''), isError ? Math.min(30000, 6000 + msg.length * 60) : 4500);
+  el.onclick = () => (el.className = '');
 }
 async function busy(btn, fn) {
   const label = btn.innerHTML; btn.disabled = true; btn.textContent = t('Trabajando…');

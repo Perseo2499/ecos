@@ -29,9 +29,9 @@ async function req(cfg, route, { method = 'GET', json, body, headers = {}, raw =
     const code = data?.code || '';
     const msg = data?.message ? data.message.replace(/<[^>]+>/g, '') : `HTTP ${res.status}`;
     if (res.status === 401 || code === 'invalid_username' || code === 'incorrect_password' || code === 'rest_not_logged_in') {
-      throw new AuthError(`WordPress: no acepta el usuario o la contraseña de aplicación (${msg}). Si son correctos, puede que un plugin de seguridad o el servidor bloqueen las contraseñas de aplicación.`);
+      throw Object.assign(new AuthError(`WordPress: no acepta el usuario o la contraseña de aplicación (${msg}).`), { code });
     }
-    if (res.status === 403) throw new AuthError(`WordPress: tu usuario no tiene permiso para esto (${msg})`);
+    if (res.status === 403) throw Object.assign(new AuthError(`WordPress: tu usuario no tiene permiso para esto (${msg})`), { code });
     if (res.status === 404 && code === 'rest_no_route') throw new Error('Esta web no tiene activada la API de WordPress (wp-json)');
     throw new Error(`WordPress: ${msg}`);
   }
@@ -42,12 +42,35 @@ async function req(cfg, route, { method = 'GET', json, body, headers = {}, raw =
 // Comprueba la conexión: usuario, permisos y nombre de la web
 async function login(cfg) {
   if (!cfg.wpUser || !cfg.wpAppPassword) throw new Error('Escribe tu usuario y la contraseña de aplicación');
-  const me = await req(cfg, '/wp/v2/users/me?context=edit');
+  // Las contraseñas de aplicación de WordPress tienen siempre 24 letras y números (6 grupos de 4)
+  const pass = cfg.wpAppPassword.replace(/\s+/g, '');
+  if (!/^[A-Za-z0-9]{24}$/.test(pass)) {
+    throw new AuthError(`Eso no parece una contraseña de aplicación: tiene ${pass.length} caracteres y las de aplicación tienen 24 (como «abcd efgh ijkl mnop qrst uvwx»). Tu contraseña normal de wp-admin no sirve: crea una en wp-admin → Usuarios → Perfil → Contraseñas de aplicación.`);
+  }
+  let me;
+  try {
+    me = await req(cfg, '/wp/v2/users/me?context=edit');
+  } catch (err) {
+    if (err.code === 'rest_not_logged_in') throw await diagnose(cfg, err);
+    throw err;
+  }
   const caps = me.capabilities || {};
   if (!caps.edit_posts) throw new AuthError('WordPress: tu usuario no puede crear entradas');
   if (!caps.upload_files) throw new AuthError('WordPress: tu usuario no puede subir archivos');
   const site = await req(cfg, '/').catch(() => ({}));
   return { siteName: site.name || base(cfg), userName: me.name, canPublish: !!caps.publish_posts };
+}
+
+// «No estás conectado»: WordPress no ha visto ninguna credencial. Se averigua por qué consultando
+// la parte pública de la API, que indica si las contraseñas de aplicación están disponibles.
+async function diagnose(cfg, original) {
+  let info = null;
+  try { info = await (await fetch(`${base(cfg)}/wp-json/`)).json(); } catch { /* sin datos */ }
+  const available = !!info?.authentication?.['application-passwords'];
+  if (info && !available) {
+    return Object.assign(new AuthError('Tu web tiene desactivadas las contraseñas de aplicación. Suele hacerlo un plugin de seguridad (Wordfence, iThemes/Solid Security, All-In-One Security…) o el hosting. Actívalas en los ajustes de ese plugin y vuelve a pulsar «Conectar».'), { code: 'app_passwords_disabled' });
+  }
+  return Object.assign(new AuthError('Tu servidor no deja pasar la autorización de Ecos (la cabecera «Authorization» se pierde por el camino). Se arregla añadiendo al principio del archivo .htaccess de tu web, en el hosting:\n\nSetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1\n\nSi no sabes cómo, el soporte de tu hosting lo puede hacer en un minuto («activar la cabecera Authorization para la API REST de WordPress»).'), { code: 'auth_header_stripped', original: original.message });
 }
 
 const siteInfo = async (cfg) => { const s = await req(cfg, '/'); return { name: s.name, ID: null, URL: s.home || base(cfg) }; };

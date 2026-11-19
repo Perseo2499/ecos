@@ -519,3 +519,5 @@ body:has(.selbar.show) #toast { bottom: 96px; }
 .seg.full { display: flex; width: 100%; margin-bottom: 16px; }
 .seg.full button { flex: 1; justify-content: center; }
 .wp-mode-panel { animation: enter .3s var(--ease); }
+
+#toast { white-space: pre-line; } #toast.show { pointer-events: auto; cursor: pointer; }
