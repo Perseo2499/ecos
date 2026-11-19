@@ -226,6 +226,25 @@
     'Texto junto a la imagen…': 'Text next to the image…', 'Cambiar de lado': 'Switch sides', 'Arrastra aquí un vídeo de la bandeja': 'Drag a video from the tray here',
     'Vídeo de {r}': '{r} video', 'Se insertará la publicación original con su vídeo.': 'The original post with its video will be embedded.',
     '{n} foto': '{n} photo', '{n} fotos': '{n} photos', '{n} vídeo': '{n} video', '{n} vídeos': '{n} videos',
+    // 0.9 (restaurar copia de seguridad)
+    'Restaurar entradas': 'Restore posts', 'Restaurar entradas desde copia de seguridad': 'Restore posts from a backup',
+    'Recupera entradas, páginas y fotos de una copia de seguridad de WordPress (UpdraftPlus, Duplicator, All-in-One WP Migration, BackWPup o exportación XML) y súbelas a tu web.': 'Recover posts, pages and photos from a WordPress backup (UpdraftPlus, Duplicator, All-in-One WP Migration, BackWPup or XML export) and upload them to your site.',
+    'Abrir copia de seguridad': 'Open backup', 'Restaurar desde copia de seguridad': 'Restore from backup', 'Elige tu copia de seguridad': 'Choose your backup',
+    'Puedes elegir varios archivos a la vez (por ejemplo, la base de datos y el ZIP de «uploads» de UpdraftPlus) o arrastrarlos aquí.': 'You can choose several files at once (for example, the database and the UpdraftPlus "uploads" ZIP) or drag them here.',
+    'Elegir archivos': 'Choose files', 'Analizando la copia…': 'Analysing the backup…', 'Todo': 'All', 'Seleccionar todo': 'Select all',
+    'Restaurar como borradores': 'Restore as drafts', 'Mantener su estado original': 'Keep their original status',
+    'Si ya hay una entrada con la misma dirección, no se duplica': 'If a post with the same address already exists, it is not duplicated',
+    'Saltar las que ya existen': 'Skip existing ones', 'Abriendo {f}…': 'Opening {f}…', 'Leyendo la base de datos {f}…': 'Reading the database {f}…',
+    'Buscando entradas, fotos y categorías…': 'Looking for posts, photos and categories…', 'Copia': 'Backup', 'Base de datos': 'Database', 'Web original': 'Original site',
+    'entradas': 'posts', 'páginas': 'pages', 'publicadas': 'published', 'borradores': 'drafts', 'archivos multimedia en la copia': 'media files in the backup',
+    'fotos usadas que no están en la copia': 'photos used that are not in the backup', 'categorías': 'categories', 'etiquetas': 'tags',
+    'Restaurando…': 'Restoring…', 'Restaurada': 'Restored', 'Ya existe en tu web': 'Already on your site', 'Página': 'Page', 'Entrada': 'Post',
+    'Se intentarán descargar de la web antigua': 'They will be downloaded from the old site if possible', '{n} sin archivo': '{n} missing', '{n} palabras': '{n} words',
+    'Restaurar {n} entrada': 'Restore {n} post', 'Restaurar {n} entradas': 'Restore {n} posts',
+    'Primero conecta tu WordPress en «Conexiones».': 'First connect your WordPress in "Connections".',
+    'Se crearán {n} entradas como borrador en tu web, con sus fotos. ¿Continuar?': '{n} posts will be created as drafts on your site, with their photos. Continue?',
+    'Se crearán {n} entradas en tu web con su estado original (las publicadas serán visibles). ¿Continuar?': '{n} posts will be created on your site with their original status (published ones will be visible). Continue?',
+    '{ok} restauradas · {ex} ya existían · {err} con error': '{ok} restored · {ex} already existed · {err} with errors', '{n} fotos no se encontraron': '{n} photos were not found',
   };
   const DICTS = { es: {}, en: EN };
   const norm = (s) => s.trim().replace(/\s+/g, ' ');

@@ -52,6 +52,15 @@ contextBridge.exposeInMainWorld('api', {
   blogTrash: (id, type) => call('blog:trash', id, type),
   blogEditUrl: (id, type) => call('blog:editUrl', id, type),
 
+  // Restaurar desde copia de seguridad
+  backupPick: (kind) => call('backup:pick', kind),
+  backupAnalyze: (paths) => call('backup:analyze', paths),
+  backupThumb: (key) => call('backup:thumb', key),
+  backupContent: (key) => call('backup:content', key),
+  backupRestore: (keys, opts) => call('backup:restore', keys, opts),
+  backupClose: () => call('backup:close'),
+  onBackupProgress: on('backup:progress'),
+
   // Ajustes
   exportConfig: (withSecrets) => call('config:export', withSecrets),
   importConfig: () => call('config:import'),

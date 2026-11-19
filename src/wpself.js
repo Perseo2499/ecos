@@ -87,10 +87,20 @@ async function categories(cfg) {
   catCache = out;
   return out;
 }
-async function categoryIds(cfg, names) {
+// create: las categorías que no existan se crean (al restaurar una copia de seguridad)
+async function categoryIds(cfg, names, create = false) {
   if (!names.length) return [];
   const cats = catCache || (await categories(cfg));
-  return names.map((n) => cats.find((c) => c.name.toLowerCase() === n.toLowerCase())?.id).filter(Boolean);
+  const ids = [];
+  for (const n of names) {
+    let hit = cats.find((c) => c.name.toLowerCase() === n.toLowerCase());
+    if (!hit && create) {
+      try { const c = await req(cfg, '/wp/v2/categories', { method: 'POST', json: { name: n } }); hit = { id: c.id, name: decode(c.name) }; cats.push(hit); }
+      catch (e) { const m = /"term_id":(\d+)/.exec(e.message); if (m) hit = { id: Number(m[1]), name: n }; }
+    }
+    if (hit) ids.push(hit.id);
+  }
+  return ids;
 }
 async function tagIds(cfg, names) {
   const ids = [];
@@ -137,16 +147,16 @@ const updateMedia = (cfg, id, fields) => req(cfg, `/wp/v2/media/${id}`, { method
 // Recibe los campos en el formato de WordPress.com (nombres separados por comas) y los adapta
 async function toRest(cfg, f) {
   const split = (s) => String(s || '').split(',').map((x) => x.trim()).filter(Boolean);
+  const isPage = f.type === 'page'; // las páginas no tienen categorías ni etiquetas
   return {
     title: f.title, content: f.content, status: f.status, excerpt: f.excerpt || '',
     ...(f.featured_image ? { featured_media: f.featured_image } : {}),
     ...(f.date ? { date_gmt: new Date(f.date).toISOString().slice(0, 19) } : {}),
-    categories: await categoryIds(cfg, split(f.categories)),
-    tags: await tagIds(cfg, split(f.tags)),
+    ...(isPage ? {} : { categories: await categoryIds(cfg, split(f.categories), !!f.createCategories), tags: await tagIds(cfg, split(f.tags)) }),
   };
 }
 const fromRest = (p) => ({ ID: p.id, URL: p.link, status: p.status, date: p.date_gmt ? p.date_gmt + 'Z' : p.date });
-const createPost = async (cfg, f) => fromRest(await req(cfg, '/wp/v2/posts', { method: 'POST', json: await toRest(cfg, f) }));
+const createPost = async (cfg, f) => fromRest(await req(cfg, `/wp/v2/${f.type === 'page' ? 'pages' : 'posts'}`, { method: 'POST', json: await toRest(cfg, f) }));
 const updatePost = async (cfg, id, f) => fromRest(await req(cfg, `/wp/v2/posts/${id}`, { method: 'POST', json: await toRest(cfg, f) }));
 
 async function listPosts(cfg, { type = 'post', status = 'any', search = '', page = 1, number = 20 } = {}) {
@@ -187,7 +197,18 @@ async function postStatuses(cfg, ids) {
   return out;
 }
 
+// ¿Existe ya una entrada o página con ese «slug» (o, si no hay, ese título)? → id o null
+async function findExisting(cfg, type, slug, title) {
+  const coll = type === 'page' ? 'pages' : 'posts';
+  const q = new URLSearchParams({ status: 'publish,future,draft,pending,private', context: 'edit', _fields: 'id,title,slug', per_page: '10',
+    ...(slug ? { slug } : { search: title }) });
+  const found = await req(cfg, `/wp/v2/${coll}?${q}`);
+  const hit = found.find((p) => (slug ? p.slug === slug : (p.title?.raw || '').trim().toLowerCase() === String(title).trim().toLowerCase()));
+  return hit ? hit.id : null;
+}
+const uploadNamed = (cfg, buf, name) => uploadBuffer(cfg, buf, name, MIME[path.extname(name).slice(1).toLowerCase()] || 'application/octet-stream');
+
 const publicBase = (cfg) => { try { return base(cfg); } catch { return null; } };
 const publicUrl = (_cfg, url) => url;
 
-module.exports = { postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, publicBase, publicUrl };
+module.exports = { findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, publicBase, publicUrl };

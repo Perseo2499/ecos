@@ -111,7 +111,21 @@ async function uploadFile(cfg, filePath) {
   return { id: json.media[0].ID, url: json.media[0].URL };
 }
 
-const createPost = (cfg, post) => call(cfg, '/posts/new', post);
+const createPost = (cfg, post) => call(cfg, '/posts/new', post); // admite type: 'page'
+// ¿Existe ya una entrada o página con ese «slug»? → id o null
+async function findExisting(cfg, type, slug) {
+  if (!slug) return null;
+  try { return (await call(cfg, `/posts/slug:${encodeURIComponent(slug)}?fields=ID,type`)).ID || null; }
+  catch (e) { if (e instanceof AuthError) throw e; return null; }
+}
+// Subir un archivo que está en memoria (se escribe un momento en la carpeta temporal)
+async function uploadNamed(cfg, buf, name) {
+  const os = require('os'); const fs = require('fs'); const path = require('path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ecos-'));
+  const file = path.join(dir, path.basename(name));
+  fs.writeFileSync(file, buf);
+  try { return await uploadFile(cfg, file); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+}
 const updatePost = (cfg, id, post) => call(cfg, `/posts/${id}`, post);
 
 // --- Gestión del blog (pestaña «Blog») ------------------------------------------
@@ -144,4 +158,4 @@ async function postStatuses(cfg, ids) {
 const setPostStatus = (cfg, id, status) => call(cfg, `/posts/${id}`, { status });
 const trashPost = (cfg, id) => call(cfg, `/posts/${id}/delete`, {});
 
-module.exports = { postStatuses, REDIRECT, AuthError, login, siteInfo, publicUrl, publicBase, updatePost, categories, uploadFromUrls, uploadFile, createPost, updateMedia, listPosts, setPostStatus, trashPost };
+module.exports = { findExisting, uploadNamed, postStatuses, REDIRECT, AuthError, login, siteInfo, publicUrl, publicBase, updatePost, categories, uploadFromUrls, uploadFile, createPost, updateMedia, listPosts, setPostStatus, trashPost };

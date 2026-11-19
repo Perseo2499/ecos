@@ -438,6 +438,71 @@ handle('exported:refresh', async () => {
 });
 handle('blog:editUrl', (id, type) => editUrlFor(id, type));
 
+// --- Restaurar entradas desde una copia de seguridad (src/backup.js) ---
+let backupAn = null;
+const backupMod = () => require('./src/backup');
+const sendProgress = (p) => { if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('backup:progress', p); };
+const restoredKey = (k) => `${backupAn?.siteUrl || ''}|${k}`;
+handle('backup:pick', async (kind) => {
+  const r = await dialog.showOpenDialog(mainWin, kind === 'folder'
+    ? { title: 'Carpeta de la copia de seguridad', properties: ['openDirectory'] }
+    : { title: 'Archivos de la copia de seguridad', properties: ['openFile', 'multiSelections'],
+        filters: [{ name: 'Copias de WordPress', extensions: ['zip', 'wpress', 'sql', 'gz', 'xml'] }, { name: 'Todos', extensions: ['*'] }] });
+  return r.canceled ? null : r.filePaths;
+});
+handle('backup:analyze', async (paths) => {
+  if (backupAn) { backupAn.sources.forEach((x) => x.close()); backupAn = null; }
+  backupAn = await backupMod().analyze(paths, sendProgress);
+  log(`Copia de seguridad analizada: ${backupAn.kinds.join(', ')} · ${backupAn.posts.length} entradas/páginas`);
+  const done = cfg.restored || {};
+  return {
+    kinds: backupAn.kinds, dbFile: backupAn.dbFile, siteUrl: backupAn.siteUrl, siteName: backupAn.siteName, stats: backupAn.stats,
+    posts: backupAn.posts.map((x) => ({
+      key: x.key, id: x.id, type: x.type, status: x.status, title: x.title, date: x.date, slug: x.slug,
+      categories: x.categories, tags: x.tags, words: x.words, media: x.media.length, mediaFound: x.mediaFound, mediaMissing: x.mediaMissing,
+      excerpt: (x.excerpt || x.content).replace(/<[^>]+>|\[[^\]]+\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180),
+      restored: done[restoredKey(x.key)] || null,
+    })),
+  };
+});
+handle('backup:thumb', async (key) => {
+  const x = backupAn?.posts.find((q) => q.key === key);
+  return x?.thumbRel ? backupMod().thumbnail(backupAn, x.thumbRel, require('electron').nativeImage) : null;
+});
+handle('backup:content', (key) => backupAn?.posts.find((q) => q.key === key)?.content || '');
+// opts: { status: 'draft' | 'original', createCategories, skipExisting, download }
+handle('backup:restore', async (keys, opts = {}) => {
+  if (!backupAn) throw new Error('Primero abre una copia de seguridad');
+  if (!wpIsConnected()) throw new Error('Primero conecta tu WordPress en «Conexiones».');
+  const results = [];
+  cfg.restored = cfg.restored || {};
+  for (const key of keys) {
+    const x = backupAn.posts.find((q) => q.key === key);
+    if (!x) continue;
+    sendProgress({ key, state: 'working' });
+    try {
+      if (opts.skipExisting !== false) {
+        const existing = await wpCall(() => WP().findExisting(cfg, x.type, x.slug, x.title));
+        if (existing) { results.push({ key, state: 'exists', postId: existing }); sendProgress({ key, state: 'exists', postId: existing }); continue; }
+      }
+      const prep = await backupMod().prepare(backupAn, x, (buf, name) => wpCall(() => WP().uploadNamed(cfg, buf, name)), { download: opts.download !== false });
+      const status = opts.status === 'original' ? (['publish', 'future', 'private', 'pending', 'draft'].includes(x.status) ? x.status : 'draft') : 'draft';
+      const post = await wpCall(() => WP().createPost(cfg, { ...prep.fields, status, type: x.type, createCategories: opts.createCategories !== false }));
+      const url = WP().publicUrl(cfg, post.URL);
+      cfg.restored[restoredKey(key)] = { postId: post.ID, url, editUrl: editUrlFor(post.ID, x.type), at: new Date().toISOString() };
+      store.save(cfg);
+      const r = { key, state: 'ok', postId: post.ID, url, editUrl: editUrlFor(post.ID, x.type), uploaded: prep.uploaded, problems: prep.problems };
+      results.push(r); sendProgress(r);
+    } catch (e) {
+      log('Restaurar', key, e.message);
+      const r = { key, state: 'error', message: e.message }; results.push(r); sendProgress(r);
+      if (e instanceof wp.AuthError || /rechazado la conexión/.test(e.message)) break;
+    }
+  }
+  return results;
+});
+handle('backup:close', () => { if (backupAn) { backupAn.sources.forEach((x) => x.close()); backupAn = null; } });
+
 // --- Ajustes: información, registros y restablecer ---
 handle('app:info', () => ({
   version: app.getVersion(), electron: process.versions.electron, chrome: process.versions.chrome,

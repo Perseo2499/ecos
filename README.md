@@ -54,6 +54,9 @@ Con las capturas, la IA (Claude) lee el texto y recorta las fotos de la captura.
 4. Revisa el título, las etiquetas (salen de los hashtags), la categoría y el contenido, y pulsa **Enviar a WordPress**.
    Por defecto se crea como **borrador** y se abre el editor de WordPress.com.
 
+## Novedades de la 0.9
+- **Restaurar entradas desde copia de seguridad** (Ajustes): analiza ZIP de UpdraftPlus / Duplicator / BackWPup, `.wpress` de All-in-One WP Migration, exportación XML de WordPress y `.sql`/`.sql.gz` (cualquier prefijo de tablas), o una carpeta descomprimida. Muestra entradas, páginas, fotos encontradas y perdidas, categorías y fechas; restaura las elegidas con su fecha original, sus fotos (de la copia o descargadas de la web antigua), categorías y etiquetas, sin duplicar las que ya existen.
+
 ## Novedades de la 0.8
 - **Editor de bloques** a pantalla completa: párrafos, títulos, citas, listas, imagen, galería, carrusel, imagen y texto, vídeo y separador; mover bloques arrastrando o con ↑↓, «+» entre bloques, bandeja de fotos para arrastrar al texto, deshacer/rehacer (Ctrl+Z/Ctrl+Y) y Ctrl+S para enviar. Se guarda como bloques estándar de WordPress.
 - Vista previa con los **estilos reales de tu web**.
@@ -107,6 +110,8 @@ Con las capturas, la IA (Claude) lee el texto y recorta las fotos de la captura.
 | `src/wpcom.js` | Inicio de sesión, subida de medios y creación de entradas en WordPress.com |
 | `src/importers.js` | Importar ZIP de Meta, capturas con IA y entrada manual |
 | `src/transform.js` | Publicación → bloques de Gutenberg |
+| `src/backup.js` | Análisis y restauración de copias de seguridad de WordPress |
+| `renderer/blocks.js` | Editor de bloques |
 | `src/ai.js` | Proveedores de IA (Claude, OpenAI, Gemini, DeepSeek, Mistral, Qwen, Ollama, OpenRouter) |
 | `renderer/i18n.js` | Textos de la interfaz en español e inglés |
 | `src/oauth.js` | Inicio de sesión en el navegador del sistema (servidor local en el puerto 53682) |

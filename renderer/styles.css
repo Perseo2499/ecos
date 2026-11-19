@@ -691,3 +691,46 @@ body.dragging-block .ins::before, body.dragging-media .ins::before { opacity: .2
 .ed-side .seg.when .ms { font-size: 18px; }
 .btn.small { white-space: normal; height: auto; min-height: 34px; padding: 6px 12px; }
 .g-grid { grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); } .g-grid .ph, .g-grid .drop-zone { min-width: 0; }
+
+/* =====================================================================
+   0.9 — Restaurar desde copia de seguridad
+   ===================================================================== */
+.restore { position: fixed; inset: 0; z-index: 45; display: flex; flex-direction: column; background: var(--surface); animation: edIn .4s var(--spring); }
+.rs-body { flex: 1; overflow: auto; padding: 24px; }
+.rs-pick { max-width: 620px; margin: 8vh auto; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 14px;
+  padding: 44px 32px; border-radius: var(--r-xxl); background: var(--surface-c-low); box-shadow: var(--e2); border: 2px dashed transparent; transition: border-color .2s; }
+.rs-pick.over { border-color: var(--primary); }
+.rs-big { font-size: 64px; color: var(--primary); }
+.row.center, .chips.center { justify-content: center; }
+.rs-formats .chip { height: 28px; font-size: 12px; pointer-events: none; }
+.spinner { width: 54px; height: 54px; border-radius: 50%; border: 5px solid var(--surface-c-highest); border-top-color: var(--primary); animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.rs-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.rs-stat { padding: 16px 18px; border-radius: var(--r-xl); background: var(--surface-c-low); box-shadow: var(--e1); }
+.rs-stat .ms { color: var(--primary); }
+.rs-stat b { display: block; font-size: 28px; font-weight: 700; font-variation-settings: 'wdth' 110; margin-top: 4px; }
+.rs-stat span { color: var(--on-surface-var); font-size: 12.5px; }
+.rs-stat.warn .ms, .rs-stat.warn b { color: #c27a00; }
+.rs-source { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 13px; color: var(--on-surface-var);
+  padding: 12px 18px; border-radius: var(--r-l); background: var(--surface-c-low); }
+.rs-source b { color: var(--on-surface); }
+.rs-filters { position: sticky; top: -24px; }
+.rs-list { display: flex; flex-direction: column; gap: 8px; }
+.rs-row { display: grid; grid-template-columns: auto 64px 1fr auto; gap: 14px; align-items: center; padding: 8px 14px 8px 12px; border-radius: var(--r-l);
+  background: var(--surface-c-lowest); box-shadow: var(--e1); cursor: pointer; transition: box-shadow .2s, transform .3s var(--spring); }
+.rs-row:hover { box-shadow: var(--e2); }
+.rs-row.sel { box-shadow: 0 0 0 2px var(--primary), var(--e2); }
+.rs-row input { width: 20px; height: 20px; accent-color: var(--primary); }
+.rs-row .th { width: 64px; height: 64px; border-radius: var(--r-m); object-fit: cover; background: var(--surface-c-high); display: grid; place-items: center; color: var(--on-surface-var); }
+.rs-row .t { font-weight: 600; }
+.rs-row .m { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; color: var(--on-surface-var); margin-top: 3px; }
+.rs-row .m .ms { font-size: 15px; vertical-align: -3px; }
+.rs-row .ex { font-size: 12.5px; color: var(--on-surface-var); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 720px; }
+.rs-row .miss { color: #c27a00; font-weight: 600; }
+.rs-state { min-width: 130px; text-align: right; font-size: 12.5px; font-weight: 600; }
+.rs-state .ms { vertical-align: -4px; }
+.rs-state.ok { color: #2fa36b; } .rs-state.error { color: var(--error); } .rs-state.exists { color: var(--on-surface-var); }
+.rs-state a { color: inherit; }
+.rs-state .spin { display: inline-block; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--surface-c-highest); border-top-color: var(--primary); animation: spin .8s linear infinite; vertical-align: -3px; }
+
+.rs-stat .ms { font-size: 22px; }

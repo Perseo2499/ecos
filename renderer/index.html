@@ -281,6 +281,7 @@
         <a href="#set-templates"><span class="ms">bookmarks</span><span data-i18n>Plantillas</span></a>
         <a href="#set-notify"><span class="ms">notifications</span><span data-i18n>Avisos</span></a>
         <a href="#set-backup"><span class="ms">backup</span><span data-i18n>Copia de seguridad</span></a>
+        <a href="#set-restore"><span class="ms">settings_backup_restore</span><span data-i18n>Restaurar entradas</span></a>
         <a href="#set-updates"><span class="ms">system_update</span><span data-i18n>Actualizaciones</span></a>
         <a href="#set-advanced"><span class="ms">build</span><span data-i18n>Avanzado</span></a>
         <a href="#set-about"><span class="ms">info</span><span data-i18n>Acerca de</span></a>
@@ -353,6 +354,12 @@
             <button id="bk-import" class="btn outlined"><span class="ms">upload</span><span data-i18n>Importar</span></button>
             <button id="bk-export" class="btn filled"><span class="ms">download</span><span data-i18n>Exportar</span></button>
           </div>
+        </div>
+
+        <div class="card restore-card" id="set-restore">
+          <div class="card-head"><span class="ms fill ic">settings_backup_restore</span><h2 data-i18n>Restaurar entradas desde copia de seguridad</h2></div>
+          <p class="hint" data-i18n>Recupera entradas, páginas y fotos de una copia de seguridad de WordPress (UpdraftPlus, Duplicator, All-in-One WP Migration, BackWPup o exportación XML) y súbelas a tu web.</p>
+          <div class="card-actions"><button id="rs-open" class="btn filled"><span class="ms">folder_open</span><span data-i18n>Abrir copia de seguridad</span></button></div>
         </div>
 
         <div class="card" id="set-updates">
@@ -468,6 +475,47 @@
       <button id="pv-close" class="btn text icon-only" data-i18n-title title="Cerrar"><span class="ms">close</span></button>
     </div>
     <div class="pv-frame-wrap"><iframe id="pv-frame" sandbox="allow-same-origin"></iframe></div>
+  </div>
+</div>
+
+<div id="restore" class="restore hidden">
+  <div class="ed-bar">
+    <button id="rs-close" class="btn text icon-only" data-i18n-title title="Cerrar"><span class="ms">arrow_back</span></button>
+    <b class="ed-bar-title" data-i18n>Restaurar desde copia de seguridad</b>
+    <span class="spacer"></span>
+    <button id="rs-go" class="btn filled hidden"><span class="ms">cloud_upload</span><span id="rs-go-label"></span></button>
+  </div>
+  <div class="rs-body">
+    <!-- 1. Elegir la copia -->
+    <div id="rs-pick" class="rs-pick">
+      <span class="ms fill rs-big">settings_backup_restore</span>
+      <h2 data-i18n>Elige tu copia de seguridad</h2>
+      <p class="hint" data-i18n>Puedes elegir varios archivos a la vez (por ejemplo, la base de datos y el ZIP de «uploads» de UpdraftPlus) o arrastrarlos aquí.</p>
+      <div class="row center">
+        <button id="rs-files" class="btn filled"><span class="ms">upload_file</span><span data-i18n>Elegir archivos</span></button>
+        <button id="rs-folder" class="btn outlined"><span class="ms">folder_open</span><span data-i18n>Elegir carpeta descomprimida</span></button>
+      </div>
+      <div class="chips center rs-formats"><span class="chip">.zip</span><span class="chip">.wpress</span><span class="chip">.sql / .sql.gz</span><span class="chip">.xml</span></div>
+    </div>
+    <!-- 2. Analizando -->
+    <div id="rs-working" class="rs-pick hidden">
+      <div class="spinner"></div>
+      <h2 data-i18n>Analizando la copia…</h2>
+      <p class="hint" id="rs-step"></p>
+    </div>
+    <!-- 3. Resultado -->
+    <div id="rs-result" class="hidden">
+      <div class="rs-summary" id="rs-summary"></div>
+      <div class="row filters rs-filters">
+        <div class="seg" id="rs-type"><button data-v="all" class="active" data-i18n>Todo</button><button data-v="post" data-i18n>Entradas</button><button data-v="page" data-i18n>Páginas</button></div>
+        <div class="field search"><span class="ms">search</span><input id="rs-search" type="search" data-i18n-ph placeholder="Buscar…"></div>
+        <label class="switch"><input type="checkbox" id="rs-all"><span data-i18n>Seleccionar todo</span></label>
+        <span class="spacer"></span>
+        <select id="rs-status"><option value="draft" data-i18n>Restaurar como borradores</option><option value="original" data-i18n>Mantener su estado original</option></select>
+        <label class="switch small" data-i18n-title title="Si ya hay una entrada con la misma dirección, no se duplica"><input type="checkbox" id="rs-skip" checked><span data-i18n>Saltar las que ya existen</span></label>
+      </div>
+      <div id="rs-list" class="rs-list"></div>
+    </div>
   </div>
 </div>
 
