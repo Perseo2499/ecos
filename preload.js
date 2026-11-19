@@ -45,8 +45,8 @@ contextBridge.exposeInMainWorld('api', {
 
   // Blog
   blogList: (opts) => call('blog:list', opts),
-  blogSetStatus: (id, status) => call('blog:setStatus', id, status),
-  blogTrash: (id) => call('blog:trash', id),
+  blogSetStatus: (id, status, type) => call('blog:setStatus', id, status, type),
+  blogTrash: (id, type) => call('blog:trash', id, type),
   blogEditUrl: (id, type) => call('blog:editUrl', id, type),
 
   // Ajustes

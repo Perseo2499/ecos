@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 const file = () => path.join(app.getPath('userData'), 'config.json');
-const SECRET_KEYS = ['metaAppSecret', 'metaUserToken', 'wpClientSecret', 'wpToken', 'anthropicKey'];
+const SECRET_KEYS = ['metaAppSecret', 'metaUserToken', 'wpClientSecret', 'wpToken', 'wpAppPassword', 'anthropicKey'];
 
 function load() {
   try {

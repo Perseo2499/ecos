@@ -54,6 +54,10 @@ Con las capturas, la IA (Claude) lee el texto y recorta las fotos de la captura.
 4. Revisa el título, las etiquetas (salen de los hashtags), la categoría y el contenido, y pulsa **Enviar a WordPress**.
    Por defecto se crea como **borrador** y se abre el editor de WordPress.com.
 
+## Novedades de la 0.7
+- **WordPress propio (wp-admin)**: conexión directa con la web mediante usuario + *contraseña de aplicación* (wp-admin → Usuarios → Perfil → Contraseñas de aplicación), sin WordPress.com. Para webs alojadas en un hosting propio.
+- Se mantiene la opción WordPress.com para blogs alojados allí.
+
 ## Novedades de la 0.6
 - Logo propio (app, ventana e instalador).
 - Visor a pantalla completa de fotos y vídeos (tarjetas y editor), con flechas y teclado.
@@ -93,6 +97,7 @@ Con las capturas, la IA (Claude) lee el texto y recorta las fotos de la captura.
 |---|---|
 | `main.js` | Proceso principal y comunicación con la interfaz |
 | `src/meta.js` | Inicio de sesión y lectura de publicaciones en Graph API |
+| `src/wpself.js` | WordPress propio: API REST /wp-json con contraseña de aplicación |
 | `src/wpcom.js` | Inicio de sesión, subida de medios y creación de entradas en WordPress.com |
 | `src/importers.js` | Importar ZIP de Meta, capturas con IA y entrada manual |
 | `src/transform.js` | Publicación → bloques de Gutenberg |

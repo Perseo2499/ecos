@@ -69,11 +69,12 @@ app.on('child-process-gone', (_e, d) => {
   if (d.type === 'GPU' || d.type === 'Utility') escalate(`proceso ${d.type} cerrado (${d.reason}, código ${d.exitCode})`);
 });
 
-let store, meta, wp, buildDraft, composeContent, mediaKey, DEFAULT_FOOTER, mergeDuplicates, importers, updater, ai;
+let store, meta, wp, wpself, buildDraft, composeContent, mediaKey, DEFAULT_FOOTER, mergeDuplicates, importers, updater, ai;
 try {
   store = require('./src/store');
   meta = require('./src/meta');
   wp = require('./src/wpcom');
+  wpself = require('./src/wpself');
   ({ buildDraft, composeContent, mediaKey, DEFAULT_FOOTER, mergeDuplicates } = require('./src/transform'));
   ai = require('./src/ai');
   importers = require('./src/importers');
@@ -100,14 +101,15 @@ const publicCfg = () => ({
   metaAppSecret: cfg.metaAppSecret ? '••••••' : '', wpClientSecret: cfg.wpClientSecret ? '••••••' : '',
   anthropicKey: cfg.anthropicKey ? '••••••' : '',
   metaUserToken: undefined, wpToken: undefined,
-  metaConnected: !!cfg.metaUserToken, wpConnected: !!cfg.wpToken,
+  metaConnected: !!cfg.metaUserToken, wpConnected: wpIsConnected(),
+  wpMode: cfg.wpMode || 'wpcom', wpAppPassword: cfg.wpAppPassword ? '••••••' : '', wpSiteLabel: wpLabel(),
   metaRedirectUri: meta.REDIRECT, wpRedirectUri: wp.REDIRECT, wpBlogId: undefined,
   format: { cleanTitle: true, footer: DEFAULT_FOOTER, extraTags: '', categories: '', status: 'draft', mergeDuplicates: true, ...(cfg.format || {}) },
   exported: cfg.exported || {},
   templates: cfg.templates || [],
   metaTokenExpires: cfg.metaTokenExpires || null,
   lastSeenAt: cfg.lastSeenAt || null,
-  wizardDone: !!cfg.wizardDone || (!!cfg.metaUserToken && !!cfg.wpToken),
+  wizardDone: !!cfg.wizardDone || (!!cfg.metaUserToken && wpIsConnected()),
   ai: aiPublic(),
   aiConfigured: (() => { try { ai.PROVIDERS && aiReady(); return true; } catch { return false; } })(),
   startMode: { level: mode, name: MODES[mode].name },
@@ -130,6 +132,12 @@ function aiReady() {
   if ((d.needsKey && !p.key) || !(p.model || d.defaultModel)) throw new Error('IA sin configurar');
 }
 
+// WordPress: «wpcom» (WordPress.com con OAuth) o «selfhosted» (web propia con wp-admin y contraseña de aplicación)
+const isSelf = () => cfg.wpMode === 'selfhosted';
+const WP = () => (isSelf() ? wpself : wp);
+const wpIsConnected = () => (isSelf() ? !!cfg.wpAppPassword && !!cfg.wpSelfOk : !!cfg.wpToken);
+const wpLabel = () => (isSelf() ? (cfg.wpUrl || '').replace(/^https?:\/\//, '').replace(/\/$/, '') : cfg.wpSite);
+
 // Envuelve llamadas a WordPress: si rechaza el permiso, se desconecta y se avisa
 const wpCall = async (fn) => { try { return await fn(); } catch (e) { throw e instanceof wp.AuthError ? wpAuthFailed(e) : e; } };
 
@@ -140,6 +148,10 @@ const handle = (name, fn) => ipcMain.handle(name, async (_e, ...args) => {
 
 handle('config:get', () => publicCfg());
 handle('config:set', (changes) => {
+  // Si cambian los datos de la web propia, hay que volver a pulsar «Conectar»
+  for (const k of ['wpMode', 'wpUrl', 'wpUser', 'wpAppPassword']) {
+    if (k in changes && changes[k] !== '••••••' && String(changes[k] ?? '').trim() !== String(cfg[k] ?? '')) cfg.wpSelfOk = false;
+  }
   for (const [k, v] of Object.entries(changes)) {
     if (v === '••••••') continue; // secreto sin cambios
     cfg[k] = typeof v === 'string' ? v.trim() : v; // sin espacios sobrantes al pegar claves
@@ -178,6 +190,13 @@ handle('meta:posts', async (pageId, sources, cursors) => {
 // Conecta con WordPress.com y solo guarda el permiso si funciona de verdad.
 // Si el permiso limitado al blog no sirve, lo intenta una vez con acceso a toda la cuenta.
 handle('wp:login', async () => {
+  if (isSelf()) {
+    // Web propia: se comprueban el usuario y la contraseña de aplicación
+    const r = await wpself.login(cfg);
+    cfg.wpSelfOk = true; store.save(cfg);
+    log(`WordPress propio: conectado como ${r.userName} a ${r.siteName}`);
+    return r.siteName;
+  }
   let r;
   try {
     r = await wp.login(cfg, { log });
@@ -195,18 +214,18 @@ handle('wp:login', async () => {
 // Si WordPress rechaza el permiso guardado, se borra para que la app muestre «no conectado»
 function wpAuthFailed(err) {
   log('WordPress: permiso rechazado', err.message);
-  cfg.wpToken = ''; cfg.wpBlogId = '';
+  if (isSelf()) cfg.wpSelfOk = false; else { cfg.wpToken = ''; cfg.wpBlogId = ''; }
   store.save(cfg);
   if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('config:changed', publicCfg());
-  return new Error('WordPress ha rechazado la conexión (caducada o no válida). Ve a Configuración y pulsa «Conectar con WordPress.com».');
+  return new Error(`${err.message.replace(/^WordPress(\.com)?: /, 'WordPress: ')} — Revisa la conexión en «Conexiones» y pulsa «Conectar».`);
 }
 handle('wp:categories', async () => {
-  try { return await wp.categories(cfg); } catch (e) { throw e instanceof wp.AuthError ? wpAuthFailed(e) : e; }
+  try { return await WP().categories(cfg); } catch (e) { throw e instanceof wp.AuthError ? wpAuthFailed(e) : e; }
 });
 
 // Sube los medios (remotos o locales) y genera el borrador para revisar
 handle('draft:build', async (posts) => {
-  if (!cfg.wpToken) throw new Error('Primero conecta WordPress.com en Configuración.');
+  if (!wpIsConnected()) throw new Error('Primero conecta tu WordPress en «Conexiones».');
   const items = new Map();
   for (const p of posts) for (const m of p.media) {
     if ((m.type === 'image' && (m.url || m.path)) || (m.type === 'video' && (m.path || m.videoUrl))) items.set(mediaKey(m), m);
@@ -218,7 +237,7 @@ handle('draft:build', async (posts) => {
     // uno a uno, para que un fallo no tumbe el resto
     try {
       const src = m.type === 'video' ? m.path || m.videoUrl : m.path || m.url;
-      uploaded.set(key, m.path ? await wp.uploadFile(cfg, src) : (await wp.uploadFromUrls(cfg, [src]))[0]);
+      uploaded.set(key, m.path ? await WP().uploadFile(cfg, src) : (await WP().uploadFromUrls(cfg, [src]))[0]);
     } catch (e) {
       if (e instanceof wp.AuthError) throw wpAuthFailed(e); // no tiene sentido seguir con el resto
       // Un vídeo que no se puede subir (p. ej. el plan no admite vídeo) se inserta desde la red social
@@ -252,11 +271,12 @@ handle('import:manual', (data) => importers.manualPost(data));
 // d.keys: claves de las publicaciones de origen, para marcarlas como «ya en el blog»
 // Dirección para editar una entrada con el editor elegido en Conexiones → WordPress
 function editUrlFor(id, type = 'post') {
-  const base = wp.publicBase(cfg) || `https://${cfg.wpSite}`;
-  switch (cfg.wpEditor) {
+  const base = WP().publicBase(cfg) || `https://${cfg.wpSite}`;
+  switch (cfg.wpEditor || (isSelf() ? 'wpadmin' : 'wpcom')) {
     case 'wpadmin': return `${base}/wp-admin/post.php?post=${id}&action=edit`;
     case 'elementor': return `${base}/wp-admin/post.php?post=${id}&action=elementor`;
-    default: return `https://wordpress.com/${type === 'page' ? 'page' : 'post'}/${cfg.wpSite}/${id}`;
+    default: if (isSelf()) return `${base}/wp-admin/post.php?post=${id}&action=edit`;
+      return `https://wordpress.com/${type === 'page' ? 'page' : 'post'}/${cfg.wpSite}/${id}`;
   }
 }
 
@@ -275,8 +295,8 @@ function postFields(d, status) {
 // Vista previa real: guarda (o actualiza) la entrada como borrador y devuelve su dirección de vista previa
 handle('draft:preview', async (d) => {
   const fields = postFields(d, 'draft');
-  const post = await wpCall(() => (d.postId ? wp.updatePost(cfg, d.postId, fields) : wp.createPost(cfg, fields)));
-  const base = wp.publicBase(cfg) || `https://${cfg.wpSite}`;
+  const post = await wpCall(() => (d.postId ? WP().updatePost(cfg, d.postId, fields) : WP().createPost(cfg, fields)));
+  const base = WP().publicBase(cfg) || `https://${cfg.wpSite}`;
   return { postId: post.ID, previewUrl: `${base}/?p=${post.ID}&preview=true` };
 });
 handle('draft:compose', (sections) => composeContent(sections));
@@ -286,14 +306,14 @@ handle('draft:compose', (sections) => composeContent(sections));
 handle('draft:publish', async (d) => {
   // Texto alternativo: se guarda también en la biblioteca de medios
   for (const img of d.sections.flatMap((x) => x.images)) {
-    if (img.alt) await wpCall(() => wp.updateMedia(cfg, img.id, { alt: img.alt })).catch((e) => log('No se pudo guardar el alt', img.id, e.message));
+    if (img.alt) await wpCall(() => WP().updateMedia(cfg, img.id, { alt: img.alt })).catch((e) => log('No se pudo guardar el alt', img.id, e.message));
   }
   if (d.status === 'future' && (!d.scheduleAt || new Date(d.scheduleAt) <= new Date())) throw new Error('Elige una fecha y hora futuras para programar la entrada.');
   // Si ya se guardó como borrador para la vista previa, se actualiza esa misma entrada
   const fields = postFields(d, d.status || 'draft');
-  const post = await wpCall(() => (d.postId ? wp.updatePost(cfg, d.postId, fields) : wp.createPost(cfg, fields)));
+  const post = await wpCall(() => (d.postId ? WP().updatePost(cfg, d.postId, fields) : WP().createPost(cfg, fields)));
   const editUrl = editUrlFor(post.ID);
-  const url = wp.publicUrl(cfg, post.URL);
+  const url = WP().publicUrl(cfg, post.URL);
   cfg.exported = cfg.exported || {};
   for (const k of d.keys || []) cfg.exported[k] = { postId: post.ID, url, editUrl, title: d.title, status: post.status, at: new Date().toISOString() };
   store.save(cfg);
@@ -322,13 +342,13 @@ handle('ai:models', (id, draftKey, draftUrl) => {
 handle('ai:test', async () => { const c = await ai.testConnection(cfg.ai); return `${ai.PROVIDERS[c.id].name} · ${c.model}`; });
 
 // --- Copia de seguridad de la configuración ---
-const BACKUP_KEYS = ['metaAppId', 'metaAppSecret', 'metaConfigId', 'graphVersion', 'wpSite', 'wpPublicUrl', 'wpEditor', 'wpClientId', 'wpClientSecret', 'ai', 'aiInstructions', 'format', 'templates', 'exported', 'prefs'];
+const BACKUP_KEYS = ['metaAppId', 'metaAppSecret', 'metaConfigId', 'graphVersion', 'wpMode', 'wpUrl', 'wpUser', 'wpAppPassword', 'wpSite', 'wpPublicUrl', 'wpEditor', 'wpClientId', 'wpClientSecret', 'ai', 'aiInstructions', 'format', 'templates', 'exported', 'prefs'];
 handle('config:export', async (withSecrets) => {
   const r = await dialog.showSaveDialog(mainWin, { title: 'Guardar copia de la configuración', defaultPath: `ecos-configuracion-${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] });
   if (r.canceled) return false;
   const out = { ecos: app.getVersion(), exportedAt: new Date().toISOString() };
   for (const k of BACKUP_KEYS) {
-    if (!withSecrets && /Secret$/.test(k)) continue;
+    if (!withSecrets && /Secret$|AppPassword$/.test(k)) continue;
     if (cfg[k] !== undefined) out[k] = JSON.parse(JSON.stringify(cfg[k]));
   }
   if (!withSecrets && out.ai?.providers) for (const p of Object.values(out.ai.providers)) delete p.key;
@@ -355,9 +375,9 @@ handle('posts:merge', (list) => mergeDuplicates(list));
 handle('exported:forget', (keys) => { for (const k of keys) delete cfg.exported?.[k]; store.save(cfg); return cfg.exported || {}; });
 
 // --- Pestaña «Blog»: gestión de entradas y páginas ---
-handle('blog:list', (opts) => wpCall(() => wp.listPosts(cfg, opts)));
-handle('blog:setStatus', (id, status) => wpCall(() => wp.setPostStatus(cfg, id, status)));
-handle('blog:trash', (id) => wpCall(() => wp.trashPost(cfg, id)));
+handle('blog:list', (opts) => wpCall(() => WP().listPosts(cfg, opts)));
+handle('blog:setStatus', (id, status, type) => wpCall(() => WP().setPostStatus(cfg, id, status, type)));
+handle('blog:trash', (id, type) => wpCall(() => WP().trashPost(cfg, id, type)));
 handle('blog:editUrl', (id, type) => editUrlFor(id, type));
 
 // --- Ajustes: información, registros y restablecer ---
@@ -391,6 +411,7 @@ app.whenReady().then(() => {
   log(`Arrancando Ecos ${app.getVersion()} (${process.platform} ${process.arch}, Electron ${process.versions.electron}, modo ${mode}: ${MODES[mode].name})`);
   cfg = { wpSite: 'asociacionelin.com', wpPublicUrl: 'https://www.asociacionelin.com/', graphVersion: 'v23.0', ...store.load() };
   if (!cfg.wpPublicUrl) cfg.wpPublicUrl = 'https://www.asociacionelin.com/';
+  if (!cfg.wpUrl) cfg.wpUrl = 'https://www.asociacionelin.com';
   // Migración: la clave de Claude de versiones anteriores pasa al nuevo selector de IA
   if (!cfg.ai) {
     cfg.ai = { active: 'anthropic', providers: cfg.anthropicKey ? { anthropic: { key: cfg.anthropicKey, model: 'claude-opus-5-5' } } : {} };

@@ -1,0 +1,157 @@
+// WordPress propio (instalado en tu hosting, con wp-admin): API REST estándar /wp-json/wp/v2
+// con una «contraseña de aplicación» (wp-admin → Usuarios → Perfil → Contraseñas de aplicación).
+// Ofrece las mismas funciones que src/wpcom.js para que el resto de Ecos no note la diferencia.
+const fs = require('fs');
+const path = require('path');
+const { AuthError } = require('./wpcom');
+
+const base = (cfg) => {
+  const raw = (cfg.wpUrl || '').trim();
+  if (!raw) throw new Error('Escribe la dirección de tu web (Conexiones → WordPress)');
+  try { return new URL(/^https?:\/\//i.test(raw) ? raw : 'https://' + raw).origin; } catch { throw new Error('La dirección de la web no es válida'); }
+};
+const authHeader = (cfg) => 'Basic ' + Buffer.from(`${(cfg.wpUser || '').trim()}:${(cfg.wpAppPassword || '').replace(/\s+/g, '')}`).toString('base64');
+
+async function req(cfg, route, { method = 'GET', json, body, headers = {}, raw = false } = {}) {
+  const url = `${base(cfg)}/wp-json${route}`;
+  let res;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: { Authorization: authHeader(cfg), ...(json ? { 'Content-Type': 'application/json' } : {}), ...headers },
+      body: json ? JSON.stringify(json) : body,
+    });
+  } catch (e) {
+    throw new Error(`No se puede conectar con ${base(cfg)}: ${e.message}`);
+  }
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    const code = data?.code || '';
+    const msg = data?.message ? data.message.replace(/<[^>]+>/g, '') : `HTTP ${res.status}`;
+    if (res.status === 401 || code === 'invalid_username' || code === 'incorrect_password' || code === 'rest_not_logged_in') {
+      throw new AuthError(`WordPress: no acepta el usuario o la contraseña de aplicación (${msg}). Si son correctos, puede que un plugin de seguridad o el servidor bloqueen las contraseñas de aplicación.`);
+    }
+    if (res.status === 403) throw new AuthError(`WordPress: tu usuario no tiene permiso para esto (${msg})`);
+    if (res.status === 404 && code === 'rest_no_route') throw new Error('Esta web no tiene activada la API de WordPress (wp-json)');
+    throw new Error(`WordPress: ${msg}`);
+  }
+  if (data === null && !raw) throw new Error(`WordPress: respuesta inesperada de ${url}. ¿Es la dirección correcta?`);
+  return raw ? { data, res } : data;
+}
+
+// Comprueba la conexión: usuario, permisos y nombre de la web
+async function login(cfg) {
+  if (!cfg.wpUser || !cfg.wpAppPassword) throw new Error('Escribe tu usuario y la contraseña de aplicación');
+  const me = await req(cfg, '/wp/v2/users/me?context=edit');
+  const caps = me.capabilities || {};
+  if (!caps.edit_posts) throw new AuthError('WordPress: tu usuario no puede crear entradas');
+  if (!caps.upload_files) throw new AuthError('WordPress: tu usuario no puede subir archivos');
+  const site = await req(cfg, '/').catch(() => ({}));
+  return { siteName: site.name || base(cfg), userName: me.name, canPublish: !!caps.publish_posts };
+}
+
+const siteInfo = async (cfg) => { const s = await req(cfg, '/'); return { name: s.name, ID: null, URL: s.home || base(cfg) }; };
+
+// --- Categorías y etiquetas (la API trabaja con IDs, Ecos con nombres) ---------
+let catCache = null;
+async function categories(cfg) {
+  const out = [];
+  for (let page = 1; page < 10; page++) {
+    const { data, res } = await req(cfg, `/wp/v2/categories?per_page=100&page=${page}&_fields=id,name,slug`, { raw: true });
+    out.push(...data.map((c) => ({ id: c.id, name: decode(c.name), slug: c.slug })));
+    if (page >= Number(res.headers.get('x-wp-totalpages') || 1)) break;
+  }
+  catCache = out;
+  return out;
+}
+async function categoryIds(cfg, names) {
+  if (!names.length) return [];
+  const cats = catCache || (await categories(cfg));
+  return names.map((n) => cats.find((c) => c.name.toLowerCase() === n.toLowerCase())?.id).filter(Boolean);
+}
+async function tagIds(cfg, names) {
+  const ids = [];
+  for (const name of names) {
+    const found = await req(cfg, `/wp/v2/tags?search=${encodeURIComponent(name)}&per_page=20&_fields=id,name`);
+    const hit = found.find((t) => decode(t.name).toLowerCase() === name.toLowerCase());
+    if (hit) { ids.push(hit.id); continue; }
+    try { ids.push((await req(cfg, '/wp/v2/tags', { method: 'POST', json: { name } })).id); }
+    catch (e) { if (!/term_exists/.test(e.message)) throw e; }
+  }
+  return ids;
+}
+const decode = (s) => String(s || '').replace(/&amp;/g, '&').replace(/&#8217;/g, '’').replace(/&#8211;/g, '–').replace(/&quot;/g, '"').replace(/&#0?39;/g, "'");
+
+// --- Medios -----------------------------------------------------------------------
+const MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm' };
+async function uploadBuffer(cfg, buf, filename, type) {
+  const m = await req(cfg, '/wp/v2/media', {
+    method: 'POST', body: buf,
+    headers: { 'Content-Type': type, 'Content-Disposition': `attachment; filename="${filename.replace(/["\r\n]/g, '')}"` },
+  });
+  return { id: m.id, url: m.source_url };
+}
+async function uploadFile(cfg, filePath) {
+  const ext = path.extname(filePath).slice(1).toLowerCase();
+  return uploadBuffer(cfg, fs.readFileSync(filePath), path.basename(filePath), MIME[ext] || 'application/octet-stream');
+}
+// Los archivos de Meta se descargan en el ordenador y se suben (WordPress propio no los descarga por URL)
+async function uploadFromUrls(cfg, urls) {
+  const out = [];
+  for (const url of urls) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`No se pudo descargar un archivo de la red social (${res.status})`);
+    const type = (res.headers.get('content-type') || 'image/jpeg').split(';')[0];
+    const ext = Object.entries(MIME).find(([, v]) => v === type)?.[0] || 'jpg';
+    const name = (new URL(url).pathname.split('/').pop() || 'archivo').replace(/\.[^.]*$/, '').slice(0, 60) + '.' + ext;
+    out.push(await uploadBuffer(cfg, Buffer.from(await res.arrayBuffer()), name, type));
+  }
+  return out;
+}
+const updateMedia = (cfg, id, fields) => req(cfg, `/wp/v2/media/${id}`, { method: 'POST', json: { alt_text: fields.alt ?? fields.alt_text } });
+
+// --- Entradas ----------------------------------------------------------------------
+// Recibe los campos en el formato de WordPress.com (nombres separados por comas) y los adapta
+async function toRest(cfg, f) {
+  const split = (s) => String(s || '').split(',').map((x) => x.trim()).filter(Boolean);
+  return {
+    title: f.title, content: f.content, status: f.status, excerpt: f.excerpt || '',
+    ...(f.featured_image ? { featured_media: f.featured_image } : {}),
+    ...(f.date ? { date_gmt: new Date(f.date).toISOString().slice(0, 19) } : {}),
+    categories: await categoryIds(cfg, split(f.categories)),
+    tags: await tagIds(cfg, split(f.tags)),
+  };
+}
+const fromRest = (p) => ({ ID: p.id, URL: p.link, status: p.status, date: p.date_gmt ? p.date_gmt + 'Z' : p.date });
+const createPost = async (cfg, f) => fromRest(await req(cfg, '/wp/v2/posts', { method: 'POST', json: await toRest(cfg, f) }));
+const updatePost = async (cfg, id, f) => fromRest(await req(cfg, `/wp/v2/posts/${id}`, { method: 'POST', json: await toRest(cfg, f) }));
+
+async function listPosts(cfg, { type = 'post', status = 'any', search = '', page = 1, number = 20 } = {}) {
+  const coll = type === 'page' ? 'pages' : 'posts';
+  const q = new URLSearchParams({
+    status: status === 'any' ? 'publish,future,draft,pending,private' : status, per_page: String(number), page: String(page),
+    orderby: 'modified', order: 'desc', context: 'edit', _embed: 'wp:featuredmedia',
+    ...(search ? { search } : {}),
+  });
+  const { data, res } = await req(cfg, `/wp/v2/${coll}?${q}`, { raw: true });
+  const cats = catCache || (await categories(cfg).catch(() => []));
+  return {
+    found: Number(res.headers.get('x-wp-total') || data.length),
+    items: data.map((p) => ({
+      id: p.id, type, status: p.status, date: p.date_gmt ? p.date_gmt + 'Z' : p.date, modified: p.modified_gmt ? p.modified_gmt + 'Z' : p.modified,
+      title: p.title?.raw || p.title?.rendered || '(sin título)', url: p.link,
+      image: p._embedded?.['wp:featuredmedia']?.[0]?.source_url || '',
+      categories: (p.categories || []).map((id) => cats.find((c) => c.id === id)?.name).filter(Boolean),
+      excerpt: (p.excerpt?.raw || p.excerpt?.rendered || '').replace(/<[^>]+>/g, '').trim().slice(0, 160),
+    })),
+  };
+}
+// type: la pestaña Blog indica si es entrada o página
+const coll = (type) => (type === 'page' ? 'pages' : 'posts');
+const setPostStatus = (cfg, id, status, type) => req(cfg, `/wp/v2/${coll(type)}/${id}`, { method: 'POST', json: { status } });
+const trashPost = (cfg, id, type) => req(cfg, `/wp/v2/${coll(type)}/${id}`, { method: 'DELETE' });
+
+const publicBase = (cfg) => { try { return base(cfg); } catch { return null; } };
+const publicUrl = (_cfg, url) => url;
+
+module.exports = { login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, publicBase, publicUrl };

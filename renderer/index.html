@@ -178,21 +178,45 @@
         </div>
       </form>
       <form class="card" id="f-wp">
-        <div class="card-head"><span class="ms fill ic wp">language</span><h2>WordPress.com</h2></div>
-        <div class="field"><label data-i18n>Sitio</label><input name="wpSite" placeholder="asociacionelin.com"></div>
-        <div class="field"><label data-i18n>Dirección pública de la web</label><input name="wpPublicUrl" placeholder="https://www.asociacionelin.com/"></div>
+        <div class="card-head"><span class="ms fill ic wp">language</span><h2>WordPress</h2></div>
+        <input type="hidden" name="wpMode">
+        <div class="seg full" id="wp-mode">
+          <button type="button" data-v="selfhosted"><span class="ms">dns</span><span data-i18n>Mi web (wp-admin)</span></button>
+          <button type="button" data-v="wpcom"><span class="ms">cloud</span>WordPress.com</button>
+        </div>
+
+        <div class="wp-mode-panel" data-mode="selfhosted">
+          <div class="field"><label data-i18n>Dirección de la web</label><input name="wpUrl" placeholder="https://www.asociacionelin.com"></div>
+          <div class="field"><label data-i18n>Usuario de wp-admin</label><input name="wpUser" autocomplete="off"></div>
+          <div class="field"><label data-i18n>Contraseña de aplicación</label><input name="wpAppPassword" type="password" autocomplete="off" placeholder="xxxx xxxx xxxx xxxx xxxx xxxx"></div>
+          <details class="help"><summary><span class="ms">key</span><span data-i18n>¿Cómo creo la contraseña de aplicación?</span></summary>
+            <ol class="wz-list">
+              <li data-i18n>Entra en tu web/wp-admin con tu usuario.</li>
+              <li data-i18n>Usuarios → Perfil → baja hasta «Contraseñas de aplicación».</li>
+              <li data-i18n>Escribe «Ecos» como nombre y pulsa «Añadir nueva contraseña de aplicación».</li>
+              <li data-i18n>Copia la contraseña que aparece (solo se muestra una vez) y pégala aquí.</li>
+            </ol>
+          </details>
+        </div>
+
+        <div class="wp-mode-panel" data-mode="wpcom">
+          <div class="field"><label data-i18n>Sitio</label><input name="wpSite" placeholder="asociacionelin.com"></div>
+          <div class="field"><label data-i18n>Dirección pública de la web</label><input name="wpPublicUrl" placeholder="https://www.asociacionelin.com/"></div>
+          <div class="field"><label>Client ID</label><input name="wpClientId"></div>
+          <div class="field"><label>Client Secret</label><input name="wpClientSecret" type="password"></div>
+          <div class="field copy"><label>Redirect URL</label><input id="wp-redirect" readonly><button type="button" class="btn text icon-only" data-copy="#wp-redirect" data-i18n-title title="Copiar"><span class="ms">content_copy</span></button></div>
+          <details class="help"><summary><span class="ms">info</span><span data-i18n>¿Cómo se configura?</span></summary>
+            <p data-i18n>Crea una app tipo «Web» en developer.wordpress.com/apps y pega la Redirect URL de arriba.</p>
+          </details>
+        </div>
+
         <div class="field"><label data-i18n>Editar con</label>
           <select name="wpEditor">
-            <option value="wpcom" data-i18n>Editor de WordPress.com</option>
+            <option value="" data-i18n>Automático</option>
             <option value="wpadmin" data-i18n>Escritorio de WordPress (wp-admin)</option>
             <option value="elementor">Elementor</option>
+            <option value="wpcom" data-i18n>Editor de WordPress.com</option>
           </select></div>
-        <div class="field"><label>Client ID</label><input name="wpClientId"></div>
-        <div class="field"><label>Client Secret</label><input name="wpClientSecret" type="password"></div>
-        <div class="field copy"><label>Redirect URL</label><input id="wp-redirect" readonly><button type="button" class="btn text icon-only" data-copy="#wp-redirect" data-i18n-title title="Copiar"><span class="ms">content_copy</span></button></div>
-        <details class="help"><summary><span class="ms">info</span><span data-i18n>¿Cómo se configura?</span></summary>
-          <p data-i18n>Crea una app tipo «Web» en developer.wordpress.com/apps y pega la Redirect URL de arriba.</p>
-        </details>
         <div class="card-actions">
           <button type="submit" class="btn text" data-i18n>Guardar</button>
           <button type="button" id="wp-login" class="btn filled"><span class="ms">login</span><span data-i18n>Conectar</span></button>
@@ -379,10 +403,10 @@
     </div>
     <div class="wz-page" data-page="2">
       <h2><span class="ms fill">language</span> <span data-i18n>Tu blog</span></h2>
-      <details class="help" open><summary><span class="ms">info</span><span data-i18n>Pasos en WordPress.com</span></summary>
+      <details class="help" open><summary><span class="ms">info</span><span data-i18n>Pasos</span></summary>
         <ol class="wz-list">
-          <li data-i18n>developer.wordpress.com/apps → Create New Application (tipo Web).</li>
-          <li data-i18n>Pega la Redirect URL de abajo y copia aquí el Client ID y el Secret.</li>
+          <li data-i18n>Si tu web tiene wp-admin propio, elige «Mi web» y crea una contraseña de aplicación en Usuarios → Perfil.</li>
+          <li data-i18n>Si está en WordPress.com, elige «WordPress.com» y crea una app en developer.wordpress.com/apps.</li>
         </ol>
       </details>
       <div class="wz-slot" data-slot="wp"></div>

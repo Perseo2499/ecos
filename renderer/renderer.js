@@ -51,7 +51,7 @@ $$('header nav button').forEach((b) => b.onclick = () => showTab(b.dataset.tab))
 function renderStatus() {
   $('#st-meta').textContent = 'Meta: ' + (CFG.metaConnected ? t('conectado') : t('no conectado'));
   $('#st-meta').classList.toggle('ok', !!CFG.metaConnected);
-  $('#st-wp').textContent = 'WordPress: ' + (CFG.wpConnected ? CFG.wpSite : t('no conectado'));
+  $('#st-wp').textContent = 'WordPress: ' + (CFG.wpConnected ? CFG.wpSiteLabel || CFG.wpSite : t('no conectado'));
   $('#st-wp').classList.toggle('ok', !!CFG.wpConnected);
   const exp = CFG.metaTokenExpires && new Date(CFG.metaTokenExpires);
   $('#meta-expiry').textContent = CFG.metaConnected && exp ? t('La conexión con Meta caduca el {d}.', { d: fmtDay(exp) }) : '';
@@ -102,7 +102,15 @@ async function checkPending() {
 function fillConnections() {
   $('#meta-redirect').value = CFG.metaRedirectUri; $('#wp-redirect').value = CFG.wpRedirectUri;
   for (const f of ['#f-meta', '#f-wp']) for (const el of $(f).elements) if (el.name) el.value = CFG[el.name] || '';
+  setWpMode(CFG.wpMode || 'selfhosted');
 }
+// Modo de WordPress: web propia (wp-admin) o WordPress.com
+function setWpMode(m) {
+  $('#f-wp').wpMode.value = m;
+  $$('#wp-mode button').forEach((b) => b.classList.toggle('active', b.dataset.v === m));
+  $$('.wp-mode-panel').forEach((p) => p.classList.toggle('hidden', p.dataset.mode !== m));
+}
+$$('#wp-mode button').forEach((b) => b.onclick = () => setWpMode(b.dataset.v));
 for (const f of ['#f-meta', '#f-wp']) $(f).onsubmit = async (e) => {
   e.preventDefault();
   CFG = await window.api.setConfig(Object.fromEntries(new FormData(e.target))); renderStatus(); toast(t('Guardado'));
@@ -680,16 +688,16 @@ function renderBlog(items) {
     if (it.status === 'publish') btn(t('Ver'), async () => window.api.open(it.url));
     if (['draft', 'pending', 'private'].includes(it.status)) btn(t('Publicar'), async () => {
       if (!confirm(t('¿Publicar «{x}»? Será visible en la web.', { x: title }))) return;
-      await window.api.blogSetStatus(it.id, 'publish'); toast(t('Publicada')); loadBlog();
+      await window.api.blogSetStatus(it.id, 'publish', it.type); toast(t('Publicada')); loadBlog();
     }, 'primary');
     if (it.status === 'publish') btn(t('Pasar a borrador'), async () => {
       if (!confirm(t('¿Retirar «{x}» de la web y dejarla como borrador?', { x: title }))) return;
-      await window.api.blogSetStatus(it.id, 'draft'); toast(t('Ahora es un borrador')); loadBlog();
+      await window.api.blogSetStatus(it.id, 'draft', it.type); toast(t('Ahora es un borrador')); loadBlog();
     });
-    if (it.status === 'trash') btn(t('Restaurar como borrador'), async () => { await window.api.blogSetStatus(it.id, 'draft'); toast(t('Restaurada como borrador')); loadBlog(); });
+    if (it.status === 'trash') btn(t('Restaurar como borrador'), async () => { await window.api.blogSetStatus(it.id, 'draft', it.type); toast(t('Restaurada como borrador')); loadBlog(); });
     else btn(t('Papelera'), async () => {
       if (!confirm(t('¿Mover «{x}» a la papelera? Podrás recuperarla durante 30 días.', { x: title }))) return;
-      await window.api.blogTrash(it.id); toast(t('Movida a la papelera')); loadBlog();
+      await window.api.blogTrash(it.id, it.type); toast(t('Movida a la papelera')); loadBlog();
     }, 'danger');
     list.appendChild(row);
   }
@@ -700,7 +708,13 @@ let bTimer; $('#b-search').oninput = () => { clearTimeout(bTimer); bTimer = setT
 $('#b-refresh').onclick = loadBlog;
 $('#b-prev').onclick = () => { blog.page--; loadBlog(); };
 $('#b-next').onclick = () => { blog.page++; loadBlog(); };
-$('#b-new').onclick = () => window.api.open(`https://wordpress.com/${blog.type === 'page' ? 'page' : 'post'}/${CFG.wpSite}`);
+$('#b-new').onclick = () => {
+  if (CFG.wpMode === 'selfhosted') {
+    const base = (CFG.wpUrl || '').replace(/\/$/, '');
+    return window.api.open(`${/^https?:/.test(base) ? base : 'https://' + base}/wp-admin/post-new.php${blog.type === 'page' ? '?post_type=page' : ''}`);
+  }
+  window.api.open(`https://wordpress.com/${blog.type === 'page' ? 'page' : 'post'}/${CFG.wpSite}`);
+};
 
 // ---------------------------------------------------------------- Ajustes
 function applyPrefs() {
@@ -860,7 +874,7 @@ function renderWizard() {
   $('#wz-next').textContent = wzStep === 3 ? t('Empezar') : wzStep === 0 ? t('Comenzar') : t('Siguiente');
   if (wzStep === 3) $('#wz-summary').textContent = [
     CFG.metaConnected ? '✓ ' + t('Instagram y Facebook conectados') : '• ' + t('Instagram y Facebook sin conectar (puedes usar el ZIP de Meta o el modo manual)'),
-    CFG.wpConnected ? '✓ ' + t('Blog conectado: {s}', { s: CFG.wpSite }) : '• ' + t('Blog sin conectar'),
+    CFG.wpConnected ? '✓ ' + t('Blog conectado: {s}', { s: CFG.wpSiteLabel || CFG.wpSite }) : '• ' + t('Blog sin conectar'),
   ].join('  ');
 }
 $('#wz-next').onclick = () => {
