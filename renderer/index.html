@@ -2,119 +2,122 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data: file:; style-src 'self' 'unsafe-inline'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data: file:; style-src 'self' 'unsafe-inline'; font-src 'self'">
 <title>Ecos</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header>
-  <h1>Ecos</h1>
-  <nav>
-    <button data-tab="posts" class="active" data-i18n>Publicaciones</button>
-    <button data-tab="blog" data-i18n>Blog</button>
-    <button data-tab="connections" data-i18n>Conexiones</button>
-    <button data-tab="settings" data-i18n>Ajustes</button>
+<header class="appbar">
+  <div class="brand"><span class="logo"><span class="ms fill">graphic_eq</span></span><b>Ecos</b></div>
+  <nav class="tabs">
+    <button data-tab="posts" class="active"><span class="ms">dynamic_feed</span><span data-i18n>Publicaciones</span></button>
+    <button data-tab="blog"><span class="ms">article</span><span data-i18n>Blog</span></button>
+    <button data-tab="connections"><span class="ms">hub</span><span data-i18n>Conexiones</span></button>
+    <button data-tab="settings"><span class="ms">settings</span><span data-i18n>Ajustes</span></button>
   </nav>
-  <div class="status"><span id="st-meta" class="pill">Meta</span><span id="st-wp" class="pill">WordPress</span></div>
+  <div class="status"><span id="st-meta" class="pill"></span><span id="st-wp" class="pill"></span></div>
 </header>
 
-<div id="update-bar" class="update-bar hidden"><span id="update-text"></span><button id="update-install" class="primary hidden" data-i18n>Reiniciar y actualizar</button></div>
+<div id="update-bar" class="update-bar hidden"><span class="ms">system_update</span><span id="update-text"></span><button id="update-install" class="btn filled hidden" data-i18n>Reiniciar y actualizar</button></div>
 <div id="banners"></div>
 
 <main>
   <!-- ============================ PUBLICACIONES ============================ -->
   <section id="tab-posts" class="tab active">
-    <div class="sources">
-      <span class="label" data-i18n>Origen:</span>
-      <button data-src="api" class="active" data-i18n>Conectar con Meta</button>
-      <button data-src="zip" data-i18n>ZIP de Meta</button>
-      <button data-src="shots" data-i18n>Capturas (IA)</button>
-      <button data-src="manual" data-i18n>Manual</button>
-      <span class="spacer"></span>
-      <span class="hint" data-i18n>También puedes arrastrar aquí fotos, capturas o el ZIP de Meta.</span>
-    </div>
+    <div class="surface toolbar-card">
+      <div class="sources chips">
+        <button data-src="api" class="chip active"><span class="ms">link</span><span data-i18n>Conectar con Meta</span></button>
+        <button data-src="zip" class="chip"><span class="ms">folder_zip</span><span data-i18n>ZIP de Meta</span></button>
+        <button data-src="shots" class="chip"><span class="ms">screenshot_monitor</span><span data-i18n>Capturas (IA)</span></button>
+        <button data-src="manual" class="chip"><span class="ms">edit_note</span><span data-i18n>Manual</span></button>
+        <span class="spacer"></span>
+        <span class="hint subtle"><span class="ms">drag_pan</span><span data-i18n>Arrastra archivos aquí</span></span>
+      </div>
 
-    <div class="toolbar src-panel" id="src-api">
-      <select id="page"></select>
-      <label><input type="checkbox" id="src-ig" checked> Instagram</label>
-      <label><input type="checkbox" id="src-fb" checked> Facebook</label>
-      <button id="load" data-i18n>Cargar publicaciones</button>
-    </div>
+      <div class="row src-panel" id="src-api">
+        <select id="page"></select>
+        <label class="switch"><input type="checkbox" id="src-ig" checked><span>Instagram</span></label>
+        <label class="switch"><input type="checkbox" id="src-fb" checked><span>Facebook</span></label>
+        <button id="load" class="btn filled"><span class="ms">download</span><span data-i18n>Cargar publicaciones</span></button>
+      </div>
 
-    <div class="toolbar src-panel hidden" id="src-zip">
-      <span class="hint" data-i18n>Funciona con cualquier cuenta, también personal. En Instagram o Facebook: Centro de cuentas → Tu información y permisos → Descargar tu información, en formato JSON.</span>
-      <button id="zip-file" data-i18n>Elegir ZIP</button>
-      <button id="zip-folder" data-i18n>Elegir carpeta descomprimida</button>
-    </div>
+      <div class="row src-panel hidden" id="src-zip">
+        <button id="zip-file" class="btn tonal"><span class="ms">folder_zip</span><span data-i18n>Elegir ZIP</span></button>
+        <button id="zip-folder" class="btn outlined"><span class="ms">folder_open</span><span data-i18n>Elegir carpeta</span></button>
+        <details class="help"><summary><span class="ms">info</span><span data-i18n>¿Cómo lo consigo?</span></summary>
+          <p data-i18n>En Instagram o Facebook: Centro de cuentas → Tu información y permisos → Descargar tu información, en formato JSON. Sirve cualquier cuenta.</p>
+        </details>
+      </div>
 
-    <div class="toolbar src-panel hidden" id="src-shots">
-      <span class="hint" data-i18n>Elige una o varias capturas de una misma publicación (despliega antes el texto «… más»). La IA lee el texto y recorta las fotos.</span>
-      <button id="shots-pick" data-i18n>Elegir capturas</button>
-    </div>
+      <div class="row src-panel hidden" id="src-shots">
+        <button id="shots-pick" class="btn tonal"><span class="ms">add_photo_alternate</span><span data-i18n>Elegir capturas</span></button>
+        <span class="hint" data-i18n>De una misma publicación, con el texto desplegado.</span>
+      </div>
 
-    <div class="src-panel hidden manual" id="src-manual">
-      <textarea id="m-text" data-i18n-ph placeholder="Pega aquí el texto de la publicación, con sus #hashtags"></textarea>
-      <div class="toolbar">
-        <select id="m-source"><option value="instagram">Instagram</option><option value="facebook">Facebook</option></select>
-        <input id="m-date" type="date">
-        <input id="m-link" data-i18n-ph placeholder="Enlace a la publicación (opcional)">
-        <button id="m-files" data-i18n>Añadir fotos…</button>
-        <span id="m-count" class="hint">0</span>
-        <button id="m-add" data-i18n>Añadir a la lista</button>
+      <div class="src-panel hidden manual" id="src-manual">
+        <textarea id="m-text" rows="3" data-i18n-ph placeholder="Pega aquí el texto de la publicación, con sus #hashtags"></textarea>
+        <div class="row">
+          <select id="m-source"><option value="instagram">Instagram</option><option value="facebook">Facebook</option></select>
+          <input id="m-date" type="date">
+          <input id="m-link" data-i18n-ph placeholder="Enlace (opcional)">
+          <button id="m-files" class="btn outlined"><span class="ms">add_photo_alternate</span><span id="m-count">0</span></button>
+          <button id="m-add" class="btn tonal"><span class="ms">add</span><span data-i18n>Añadir</span></button>
+        </div>
       </div>
     </div>
 
-    <div class="toolbar">
-      <input id="f-search" type="search" class="search" data-i18n-ph placeholder="Buscar en el texto…">
+    <div class="row filters">
+      <div class="field search"><span class="ms">search</span><input id="f-search" type="search" data-i18n-ph placeholder="Buscar…"></div>
       <select id="f-show">
         <option value="all" data-i18n>Todas</option>
         <option value="pending" data-i18n>Sin pasar al blog</option>
         <option value="done" data-i18n>Ya en el blog</option>
       </select>
-      <label><input type="checkbox" id="f-merge" checked> <span data-i18n>Juntar duplicados</span></label>
-      <button id="summary" data-i18n>Resumen de un periodo…</button>
-      <button id="clear" data-i18n>Vaciar lista</button>
-      <span class="spacer"></span>
-      <span id="sel-count"></span>
-      <button id="make" class="primary" disabled data-i18n>Crear entrada con la selección</button>
+      <label class="switch" data-i18n-title title="Juntar la misma publicación de Instagram y Facebook"><input type="checkbox" id="f-merge" checked><span data-i18n>Juntar duplicados</span></label>
+      <button id="summary" class="btn text"><span class="ms">date_range</span><span data-i18n>Resumen</span></button>
+      <button id="clear" class="btn text icon-only" data-i18n-title title="Vaciar lista"><span class="ms">delete_sweep</span></button>
     </div>
 
     <div class="split">
       <div class="feed-col">
-        <div id="feed" class="feed"><p class="hint" data-i18n>Conecta tu cuenta en «Conexiones» y pulsa «Cargar publicaciones».</p></div>
-        <div class="more"><button id="more" class="hidden" data-i18n>Cargar más publicaciones</button></div>
+        <div id="feed" class="feed"></div>
+        <div class="more"><button id="more" class="btn tonal hidden"><span class="ms">expand_more</span><span data-i18n>Cargar más</span></button></div>
       </div>
 
       <!-- Editor visual -->
       <aside id="editor" class="editor hidden">
         <div class="ed-head">
           <h2 data-i18n>Entrada</h2>
-          <select id="d-template" title="Plantilla"><option value="" data-i18n>Sin plantilla</option></select>
+          <select id="d-template" data-i18n-title title="Plantilla"><option value="" data-i18n>Sin plantilla</option></select>
+          <button id="ed-close" class="btn text icon-only" data-i18n-title title="Cerrar"><span class="ms">close</span></button>
         </div>
-        <label><span data-i18n>Título</span> <input id="d-title"></label>
-        <label><span data-i18n>Extracto (opcional)</span> <textarea id="d-excerpt" rows="2" data-i18n-ph placeholder="Resumen corto que se ve en la portada y en buscadores"></textarea></label>
+        <input id="d-title" class="title-input" data-i18n-ph placeholder="Título">
+        <textarea id="d-excerpt" rows="2" data-i18n-ph placeholder="Extracto (opcional)"></textarea>
         <div class="ai-row">
-          <button id="ai-article" class="ai" data-i18n>✨ Convertir en artículo</button>
-          <button id="ai-alts" class="ai" data-i18n>✨ Describir las fotos</button>
-          <span class="hint" id="ai-hint"></span>
+          <button id="ai-article" class="btn ai"><span class="ms">auto_awesome</span><span data-i18n>Convertir en artículo</span></button>
+          <button id="ai-alts" class="btn ai"><span class="ms">image_search</span><span data-i18n>Describir fotos</span></button>
         </div>
         <div id="d-sections"></div>
-        <label><span data-i18n>Etiquetas (separadas por comas)</span> <input id="d-tags"></label>
-        <div class="lbl" data-i18n>Categorías</div>
+        <div class="field"><span class="ms">sell</span><input id="d-tags" data-i18n-ph placeholder="Etiquetas"></div>
         <div id="d-cats" class="cat-list"></div>
-        <div class="lbl" data-i18n>Publicación</div>
-        <div class="when">
-          <label class="inline"><input type="radio" name="d-when" value="draft" checked> <span data-i18n>Guardar como borrador</span></label>
-          <label class="inline"><input type="radio" name="d-when" value="publish"> <span data-i18n>Publicar ahora</span></label>
-          <label class="inline"><input type="radio" name="d-when" value="future"> <span data-i18n>Programar</span> <input type="datetime-local" id="d-schedule"></label>
-          <label class="inline"><input type="checkbox" id="d-keepdate"> <span data-i18n>Mantener la fecha original de la publicación</span></label>
+        <div class="seg when" id="d-when-seg">
+          <label><input type="radio" name="d-when" value="draft" checked><span class="ms">draft</span><span data-i18n>Borrador</span></label>
+          <label><input type="radio" name="d-when" value="publish"><span class="ms">public</span><span data-i18n>Publicar</span></label>
+          <label><input type="radio" name="d-when" value="future"><span class="ms">schedule</span><span data-i18n>Programar</span></label>
         </div>
-        <button id="send" class="primary big" data-i18n>Enviar a WordPress</button>
+        <div class="row when-extra">
+          <input type="datetime-local" id="d-schedule" class="hidden">
+          <label class="switch small"><input type="checkbox" id="d-keepdate"><span data-i18n>Fecha original</span></label>
+        </div>
+        <button id="send" class="btn filled big"><span class="ms">send</span><span data-i18n>Enviar a WordPress</span></button>
         <div id="sent" class="sent hidden">
-          <p>✓ <b id="sent-text"></b></p>
-          <button id="sent-edit" class="primary" data-i18n>Abrir en el editor de WordPress</button>
-          <button id="sent-view" data-i18n>Ver en la web</button>
-          <button id="sent-close" data-i18n>Cerrar</button>
+          <span class="ms fill big-icon">check_circle</span>
+          <b id="sent-text"></b>
+          <div class="row">
+            <button id="sent-edit" class="btn filled"><span class="ms">edit</span><span data-i18n>Editar en WordPress</span></button>
+            <button id="sent-view" class="btn outlined"><span class="ms">open_in_new</span><span data-i18n>Ver</span></button>
+            <button id="sent-close" class="btn text" data-i18n>Cerrar</button>
+          </div>
         </div>
       </aside>
     </div>
@@ -122,10 +125,10 @@
 
   <!-- ================================ BLOG ================================ -->
   <section id="tab-blog" class="tab">
-    <div class="toolbar">
+    <div class="row filters">
       <div class="seg" id="b-type">
-        <button data-type="post" class="active" data-i18n>Entradas</button>
-        <button data-type="page" data-i18n>Páginas</button>
+        <button data-type="post" class="active"><span class="ms">article</span><span data-i18n>Entradas</span></button>
+        <button data-type="page"><span class="ms">description</span><span data-i18n>Páginas</span></button>
       </div>
       <select id="b-status">
         <option value="any" data-i18n>Todos los estados</option>
@@ -136,60 +139,79 @@
         <option value="private" data-i18n>Privadas</option>
         <option value="trash" data-i18n>Papelera</option>
       </select>
-      <input id="b-search" type="search" class="search" data-i18n-ph placeholder="Buscar por título o texto…">
-      <button id="b-refresh" data-i18n>Actualizar</button>
+      <div class="field search"><span class="ms">search</span><input id="b-search" type="search" data-i18n-ph placeholder="Buscar…"></div>
+      <button id="b-refresh" class="btn text icon-only" data-i18n-title title="Actualizar"><span class="ms">refresh</span></button>
       <span class="spacer"></span>
-      <button id="b-new" class="primary" data-i18n>Nueva en WordPress</button>
+      <button id="b-new" class="btn filled"><span class="ms">add</span><span data-i18n>Nueva</span></button>
     </div>
-    <div id="b-list" class="blog-list"><p class="hint pad" data-i18n>Conecta WordPress.com en «Conexiones».</p></div>
-    <div class="pager"><button id="b-prev" data-i18n>← Anteriores</button><span id="b-info" class="hint"></span><button id="b-next" data-i18n>Siguientes →</button></div>
+    <div id="b-list" class="blog-list"></div>
+    <div class="pager"><button id="b-prev" class="btn text icon-only"><span class="ms">chevron_left</span></button><span id="b-info" class="hint"></span><button id="b-next" class="btn text icon-only"><span class="ms">chevron_right</span></button></div>
   </section>
 
   <!-- ============================= CONEXIONES ============================= -->
   <section id="tab-connections" class="tab">
-    <div class="toolbar"><span class="hint" data-i18n>¿Primera vez? El asistente te guía paso a paso.</span><button id="open-wizard" data-i18n>Abrir el asistente</button></div>
+    <div class="hero surface">
+      <span class="ms fill hero-icon">rocket_launch</span>
+      <div><b data-i18n>¿Primera vez?</b><div class="hint" data-i18n>El asistente te guía paso a paso.</div></div>
+      <button id="open-wizard" class="btn tonal" data-i18n>Abrir el asistente</button>
+    </div>
     <div class="cards" id="conn-cards">
       <form class="card" id="f-meta">
-        <h2>Meta (Instagram y Facebook)</h2>
-        <p class="hint" data-i18n>Crea una app en developers.facebook.com, pega aquí sus claves y añade la URI de abajo en «URI de redireccionamiento de OAuth válidos». El inicio de sesión se abre en tu navegador.</p>
-        <label>App ID <input name="metaAppId"></label>
-        <label>App Secret <input name="metaAppSecret" type="password"></label>
-        <label><span data-i18n>URI de redireccionamiento (cópiala en Meta)</span> <span class="copy"><input id="meta-redirect" readonly><button type="button" data-copy="#meta-redirect" data-i18n>Copiar</button></span></label>
-        <label><span data-i18n>ID de configuración (solo apps de tipo Empresa)</span> <input name="metaConfigId" data-i18n-ph placeholder="Déjalo vacío si tu app no lo pide"></label>
-        <label><span data-i18n>Versión de Graph API</span> <input name="graphVersion" placeholder="v23.0"></label>
+        <div class="card-head"><span class="ms fill ic meta">share</span><h2>Meta</h2><span class="hint">Instagram · Facebook</span></div>
+        <div class="field"><label>App ID</label><input name="metaAppId"></div>
+        <div class="field"><label>App Secret</label><input name="metaAppSecret" type="password"></div>
+        <div class="field copy"><label data-i18n>URI de redireccionamiento</label><input id="meta-redirect" readonly><button type="button" class="btn text icon-only" data-copy="#meta-redirect" data-i18n-title title="Copiar"><span class="ms">content_copy</span></button></div>
+        <details class="help"><summary><span class="ms">tune</span><span data-i18n>Opciones avanzadas</span></summary>
+          <div class="field"><label data-i18n>ID de configuración</label><input name="metaConfigId" data-i18n-ph placeholder="Solo apps de tipo Empresa"></div>
+          <div class="field"><label data-i18n>Versión de Graph API</label><input name="graphVersion" placeholder="v23.0"></div>
+        </details>
+        <details class="help"><summary><span class="ms">info</span><span data-i18n>¿Cómo se configura?</span></summary>
+          <p data-i18n>Crea una app en developers.facebook.com con los casos de uso de Página e Instagram, copia aquí sus claves y pega la URI de arriba en «URI de redireccionamiento de OAuth válidos».</p>
+        </details>
         <p class="hint" id="meta-expiry"></p>
-        <button type="submit" data-i18n>Guardar</button>
-        <button type="button" id="meta-login" class="primary" data-i18n>Conectar con Facebook</button>
+        <div class="card-actions">
+          <button type="submit" class="btn text" data-i18n>Guardar</button>
+          <button type="button" id="meta-login" class="btn filled"><span class="ms">login</span><span data-i18n>Conectar</span></button>
+        </div>
       </form>
       <form class="card" id="f-wp">
-        <h2>WordPress.com</h2>
-        <p class="hint" data-i18n>Crea una app en developer.wordpress.com/apps, tipo «Web», y pon como «Redirect URLs» la dirección de abajo.</p>
-        <label><span data-i18n>Sitio</span> <input name="wpSite" placeholder="asociacionelin.com"></label>
-        <label>Client ID <input name="wpClientId"></label>
-        <label>Client Secret <input name="wpClientSecret" type="password"></label>
-        <label><span data-i18n>Redirect URL (cópiala en WordPress.com)</span> <span class="copy"><input id="wp-redirect" readonly><button type="button" data-copy="#wp-redirect" data-i18n>Copiar</button></span></label>
-        <button type="submit" data-i18n>Guardar</button>
-        <button type="button" id="wp-login" class="primary" data-i18n>Conectar con WordPress.com</button>
+        <div class="card-head"><span class="ms fill ic wp">language</span><h2>WordPress.com</h2></div>
+        <div class="field"><label data-i18n>Sitio</label><input name="wpSite" placeholder="asociacionelin.com"></div>
+        <div class="field"><label>Client ID</label><input name="wpClientId"></div>
+        <div class="field"><label>Client Secret</label><input name="wpClientSecret" type="password"></div>
+        <div class="field copy"><label>Redirect URL</label><input id="wp-redirect" readonly><button type="button" class="btn text icon-only" data-copy="#wp-redirect" data-i18n-title title="Copiar"><span class="ms">content_copy</span></button></div>
+        <details class="help"><summary><span class="ms">info</span><span data-i18n>¿Cómo se configura?</span></summary>
+          <p data-i18n>Crea una app tipo «Web» en developer.wordpress.com/apps y pega la Redirect URL de arriba.</p>
+        </details>
+        <div class="card-actions">
+          <button type="submit" class="btn text" data-i18n>Guardar</button>
+          <button type="button" id="wp-login" class="btn filled"><span class="ms">login</span><span data-i18n>Conectar</span></button>
+        </div>
       </form>
+
       <div class="card ai-card" id="ai-card">
-        <h2 data-i18n>Inteligencia artificial</h2>
-        <p class="hint" data-i18n>Opcional. Sirve para leer capturas, convertir publicaciones en artículos y describir las fotos. Elige un proveedor, pega su clave y elige un modelo.</p>
+        <div class="card-head"><span class="ms fill ic ai">auto_awesome</span><h2 data-i18n>Inteligencia artificial</h2><span class="hint" data-i18n>Opcional</span></div>
         <div class="ai-test">
           <div><b data-i18n>Probar conexión</b><div class="hint" id="ai-test-status"></div></div>
-          <button id="ai-test" class="link-btn" data-i18n>Probar</button>
+          <button id="ai-test" class="btn text accent" data-i18n>Probar</button>
         </div>
-        <div class="lbl" data-i18n>Proveedor y clave</div>
-        <div class="ai-summary"><span class="ai-spark">✦</span><div><b data-i18n>Proveedor y clave</b><div class="hint" id="ai-current"></div></div></div>
-        <div id="ai-providers" class="ai-providers"></div>
-        <input id="ai-url" data-i18n-ph placeholder="URL personalizada (opcional)">
-        <input id="ai-key" type="password">
-        <div class="ai-key-actions"><a href="#" id="ai-getkey" class="hint" data-i18n>¿Dónde consigo la clave?</a><span class="spacer"></span><button id="ai-remove" class="link-btn danger" data-i18n>Quitar</button><button id="ai-save" class="link-btn" data-i18n>Guardar</button></div>
-        <div class="lbl" data-i18n>Modelo</div>
-        <div class="copy"><input id="ai-model" list="ai-model-list" data-i18n-ph placeholder="Nombre del modelo"><button id="ai-list-models" data-i18n>Ver modelos disponibles</button></div>
-        <datalist id="ai-model-list"></datalist>
-        <div class="lbl" data-i18n>Indicaciones para los artículos (opcional)</div>
-        <textarea id="ai-instructions" rows="3" data-i18n-ph placeholder="p. ej. Usa lenguaje inclusivo. Termina invitando a participar en la asociación."></textarea>
-        <button id="ai-instr-save" data-i18n>Guardar indicaciones</button>
+        <div class="section-label" data-i18n>Proveedor y clave</div>
+        <div class="ai-box">
+          <div class="ai-summary"><span class="ai-spark"><span class="ms fill">auto_awesome</span></span><div><b data-i18n>Proveedor y clave</b><div class="hint" id="ai-current"></div></div></div>
+          <div id="ai-providers" class="ai-providers"></div>
+          <input id="ai-url" class="pill-input" data-i18n-ph placeholder="URL personalizada (opcional)">
+          <input id="ai-key" class="pill-input" type="password">
+          <div class="ai-key-actions"><a href="#" id="ai-getkey" class="hint" data-i18n>¿Dónde consigo la clave?</a><span class="spacer"></span><button id="ai-remove" class="btn text danger" data-i18n>Quitar</button><button id="ai-save" class="btn text" data-i18n>Guardar</button></div>
+        </div>
+        <div class="section-label" data-i18n>Modelo</div>
+        <div class="ai-box">
+          <div class="field copy"><input id="ai-model" list="ai-model-list" data-i18n-ph placeholder="Nombre del modelo"><button id="ai-list-models" class="btn text icon-only" data-i18n-title title="Ver modelos disponibles"><span class="ms">list</span></button></div>
+          <datalist id="ai-model-list"></datalist>
+        </div>
+        <details class="help"><summary><span class="ms">edit_note</span><span data-i18n>Indicaciones para los artículos</span></summary>
+          <textarea id="ai-instructions" rows="3" data-i18n-ph placeholder="p. ej. Usa lenguaje inclusivo."></textarea>
+          <button id="ai-instr-save" class="btn tonal" data-i18n>Guardar</button>
+        </details>
       </div>
     </div>
   </section>
@@ -198,117 +220,112 @@
   <section id="tab-settings" class="tab">
     <div class="settings">
       <nav class="set-nav">
-        <a href="#set-look" data-i18n>Personalización</a>
-        <a href="#set-lang" data-i18n>Idioma</a>
-        <a href="#set-format" data-i18n>Formato de las entradas</a>
-        <a href="#set-templates" data-i18n>Plantillas</a>
-        <a href="#set-notify" data-i18n>Avisos</a>
-        <a href="#set-backup" data-i18n>Copia de seguridad</a>
-        <a href="#set-updates" data-i18n>Versión y actualizaciones</a>
-        <a href="#set-advanced" data-i18n>Avanzado</a>
-        <a href="#set-about" data-i18n>Acerca de</a>
+        <a href="#set-look"><span class="ms">palette</span><span data-i18n>Personalización</span></a>
+        <a href="#set-lang"><span class="ms">translate</span><span data-i18n>Idioma</span></a>
+        <a href="#set-format"><span class="ms">format_paint</span><span data-i18n>Formato</span></a>
+        <a href="#set-templates"><span class="ms">bookmarks</span><span data-i18n>Plantillas</span></a>
+        <a href="#set-notify"><span class="ms">notifications</span><span data-i18n>Avisos</span></a>
+        <a href="#set-backup"><span class="ms">backup</span><span data-i18n>Copia de seguridad</span></a>
+        <a href="#set-updates"><span class="ms">system_update</span><span data-i18n>Actualizaciones</span></a>
+        <a href="#set-advanced"><span class="ms">build</span><span data-i18n>Avanzado</span></a>
+        <a href="#set-about"><span class="ms">info</span><span data-i18n>Acerca de</span></a>
       </nav>
       <div class="set-body">
         <div class="card" id="set-look">
-          <h2 data-i18n>Personalización</h2>
-          <div class="lbl" data-i18n>Tema</div>
-          <div class="seg" id="s-theme">
-            <button data-v="system" data-i18n>Del sistema</button>
-            <button data-v="light" data-i18n>Claro</button>
-            <button data-v="dark" data-i18n>Oscuro</button>
-          </div>
-          <div class="lbl" data-i18n>Tamaño del texto</div>
-          <div class="seg" id="s-zoom">
-            <button data-v="0.9">A−</button>
-            <button data-v="1">A</button>
-            <button data-v="1.15">A+</button>
-            <button data-v="1.3">A++</button>
-          </div>
-          <div class="lbl" data-i18n>Tamaño de las tarjetas</div>
-          <div class="seg" id="s-cards">
-            <button data-v="160" data-i18n>Pequeñas</button>
-            <button data-v="220" data-i18n>Medianas</button>
-            <button data-v="300" data-i18n>Grandes</button>
-          </div>
-          <div class="lbl" data-i18n>Color principal</div>
-          <div class="swatches" id="s-accent">
-            <button data-v="#2f6f5e" style="background:#2f6f5e" title="Verde"></button>
-            <button data-v="#8e1c2b" style="background:#8e1c2b" title="Granate"></button>
-            <button data-v="#2b55a3" style="background:#2b55a3" title="Azul"></button>
-            <button data-v="#6b3fa0" style="background:#6b3fa0" title="Morado"></button>
-            <button data-v="#b5541c" style="background:#b5541c" title="Naranja"></button>
-          </div>
+          <div class="card-head"><span class="ms fill ic">palette</span><h2 data-i18n>Personalización</h2></div>
+          <div class="set-row"><span data-i18n>Tema</span>
+            <div class="seg" id="s-theme">
+              <button data-v="system"><span class="ms">brightness_auto</span></button>
+              <button data-v="light"><span class="ms">light_mode</span></button>
+              <button data-v="dark"><span class="ms">dark_mode</span></button>
+            </div></div>
+          <div class="set-row"><span data-i18n>Tamaño del texto</span>
+            <div class="seg" id="s-zoom"><button data-v="0.9">A−</button><button data-v="1">A</button><button data-v="1.15">A+</button><button data-v="1.3">A++</button></div></div>
+          <div class="set-row"><span data-i18n>Tarjetas</span>
+            <div class="seg" id="s-cards">
+              <button data-v="170"><span class="ms">grid_view</span></button>
+              <button data-v="230"><span class="ms">view_module</span></button>
+              <button data-v="310"><span class="ms">view_agenda</span></button>
+            </div></div>
+          <div class="set-row column"><span data-i18n>Color</span>
+            <div class="swatches" id="s-accent">
+              <button data-v="#3c6e5f" style="--c:#3c6e5f"></button>
+              <button data-v="#8e1c3b" style="--c:#8e1c3b"></button>
+              <button data-v="#b3261e" style="--c:#b3261e"></button>
+              <button data-v="#c0561f" style="--c:#c0561f"></button>
+              <button data-v="#7d5800" style="--c:#7d5800"></button>
+              <button data-v="#386a20" style="--c:#386a20"></button>
+              <button data-v="#006a6a" style="--c:#006a6a"></button>
+              <button data-v="#3b5ba9" style="--c:#3b5ba9"></button>
+              <button data-v="#6750a4" style="--c:#6750a4"></button>
+              <button data-v="#984061" style="--c:#984061"></button>
+              <label class="custom-color" data-i18n-title title="Otro color"><input type="color" id="s-accent-custom"><span class="ms">colorize</span></label>
+            </div></div>
         </div>
 
         <div class="card" id="set-lang">
-          <h2 data-i18n>Idioma</h2>
-          <select id="s-lang"><option value="es">Español</option><option value="en">English</option></select>
-          <p class="hint" data-i18n>Cambia el idioma de la aplicación. El contenido de tus entradas no se traduce.</p>
+          <div class="card-head"><span class="ms fill ic">translate</span><h2 data-i18n>Idioma</h2></div>
+          <div class="seg" id="s-lang-seg"><button data-v="es">Español</button><button data-v="en">English</button></div>
+          <select id="s-lang" class="hidden"><option value="es">Español</option><option value="en">English</option></select>
         </div>
 
         <form class="card" id="f-format">
-          <h2 data-i18n>Formato de las entradas</h2>
-          <label class="inline"><input type="checkbox" name="cleanTitle"> <span data-i18n>Limpiar el título (quitar emojis y signos sueltos)</span></label>
-          <label><span data-i18n>Pie de cada entrada</span> <input name="footer" data-i18n-ph placeholder="Vacío = sin pie"></label>
-          <p class="hint" data-i18n>{redes} se cambia por los enlaces a Instagram y/o Facebook.</p>
-          <label><span data-i18n>Etiquetas que se añaden siempre</span> <input name="extraTags" data-i18n-ph placeholder="p. ej. asociación, ceuta"></label>
-          <label><span data-i18n>Categorías por defecto</span> <input name="categories" data-i18n-ph placeholder="Nombres separados por comas"></label>
-          <label><span data-i18n>Al enviar, por defecto</span>
-            <select name="status"><option value="draft" data-i18n>Guardar como borrador</option><option value="publish" data-i18n>Publicar ahora</option></select>
-          </label>
-          <button type="submit" data-i18n>Guardar</button>
+          <div class="card-head"><span class="ms fill ic">format_paint</span><h2 data-i18n>Formato de las entradas</h2></div>
+          <label class="switch"><input type="checkbox" name="cleanTitle"><span data-i18n>Limpiar el título</span></label>
+          <div class="field"><label data-i18n>Pie de cada entrada</label><input name="footer" data-i18n-ph placeholder="Vacío = sin pie"></div>
+          <div class="field"><label data-i18n>Etiquetas fijas</label><input name="extraTags" data-i18n-ph placeholder="p. ej. asociación, ceuta"></div>
+          <div class="field"><label data-i18n>Categorías por defecto</label><input name="categories" data-i18n-ph placeholder="Separadas por comas"></div>
+          <div class="field"><label data-i18n>Al enviar</label><select name="status"><option value="draft" data-i18n>Guardar como borrador</option><option value="publish" data-i18n>Publicar ahora</option></select></div>
+          <div class="card-actions"><button type="submit" class="btn tonal" data-i18n>Guardar</button></div>
         </form>
 
         <div class="card" id="set-templates">
-          <h2 data-i18n>Plantillas</h2>
-          <p class="hint" data-i18n>Cada plantilla rellena categorías, etiquetas y pie con un clic en el editor (p. ej. «Comunicado», «Actividad», «Campaña»).</p>
+          <div class="card-head"><span class="ms fill ic">bookmarks</span><h2 data-i18n>Plantillas</h2></div>
           <div id="tpl-list"></div>
-          <button id="tpl-add" data-i18n>Añadir plantilla</button>
+          <div class="card-actions"><button id="tpl-add" class="btn tonal"><span class="ms">add</span><span data-i18n>Añadir plantilla</span></button></div>
         </div>
 
         <div class="card" id="set-notify">
-          <h2 data-i18n>Avisos</h2>
-          <label class="inline"><input type="checkbox" id="s-check-new"> <span data-i18n>Al abrir Ecos, avisar de publicaciones nuevas en redes que no están en el blog</span></label>
-          <label class="inline"><input type="checkbox" id="s-check-token"> <span data-i18n>Avisar cuando la conexión con Meta esté a punto de caducar</span></label>
+          <div class="card-head"><span class="ms fill ic">notifications</span><h2 data-i18n>Avisos</h2></div>
+          <label class="switch"><input type="checkbox" id="s-check-new"><span data-i18n>Publicaciones nuevas sin pasar al blog</span></label>
+          <label class="switch"><input type="checkbox" id="s-check-token"><span data-i18n>La conexión con Meta va a caducar</span></label>
         </div>
 
         <div class="card" id="set-backup">
-          <h2 data-i18n>Copia de seguridad</h2>
-          <p class="hint" data-i18n>Guarda en un archivo tus ajustes, plantillas y el registro de lo que ya está en el blog, para pasarlo a otro ordenador o recuperarlo.</p>
-          <label class="inline"><input type="checkbox" id="bk-secrets"> <span data-i18n>Incluir las claves (App Secret, Client Secret, clave de IA). Guarda el archivo en un sitio seguro.</span></label>
-          <button id="bk-export" class="primary" data-i18n>Exportar…</button>
-          <button id="bk-import" data-i18n>Importar…</button>
-          <p class="hint" data-i18n>Las conexiones no se copian: después de importar, pulsa «Conectar» en Meta y WordPress.</p>
+          <div class="card-head"><span class="ms fill ic">backup</span><h2 data-i18n>Copia de seguridad</h2></div>
+          <label class="switch"><input type="checkbox" id="bk-secrets"><span data-i18n>Incluir las claves</span></label>
+          <div class="card-actions">
+            <button id="bk-import" class="btn outlined"><span class="ms">upload</span><span data-i18n>Importar</span></button>
+            <button id="bk-export" class="btn filled"><span class="ms">download</span><span data-i18n>Exportar</span></button>
+          </div>
         </div>
 
         <div class="card" id="set-updates">
-          <h2 data-i18n>Versión y actualizaciones</h2>
-          <p><span data-i18n>Versión instalada:</span> <b id="app-version">–</b></p>
-          <p id="update-detail" class="hint"></p>
-          <button id="update-check" data-i18n>Buscar actualizaciones</button>
-          <button id="open-releases" data-i18n>Ver novedades</button>
+          <div class="card-head"><span class="ms fill ic">system_update</span><h2 data-i18n>Actualizaciones</h2></div>
+          <div class="version-row"><span class="version" id="app-version">–</span><span id="update-detail" class="hint"></span></div>
+          <div class="card-actions">
+            <button id="open-releases" class="btn text" data-i18n>Novedades</button>
+            <button id="update-check" class="btn tonal"><span class="ms">refresh</span><span data-i18n>Buscar actualizaciones</span></button>
+          </div>
         </div>
 
         <div class="card" id="set-advanced">
-          <h2 data-i18n>Avanzado</h2>
-          <div class="lbl" data-i18n>Modo de arranque</div>
-          <p><b id="mode-name">–</b></p>
+          <div class="card-head"><span class="ms fill ic">build</span><h2 data-i18n>Avanzado</h2></div>
+          <div class="set-row"><span data-i18n>Modo de arranque</span><b id="mode-name">–</b></div>
           <p class="hint" id="mode-hint"></p>
-          <button id="mode-normal" class="hidden" data-i18n>Probar el modo normal</button>
-          <div class="lbl" data-i18n>Diagnóstico</div>
-          <button id="open-logs" data-i18n>Abrir la carpeta de datos y registros</button>
-          <button id="wizard-again" data-i18n>Volver a abrir el asistente</button>
-          <div class="lbl" data-i18n>Restablecer</div>
-          <button id="forget-exported" data-i18n>Olvidar qué publicaciones están en el blog</button>
-          <button id="reset-all" class="danger" data-i18n>Borrar todos los datos de Ecos…</button>
+          <div class="card-actions wrap">
+            <button id="mode-normal" class="btn outlined hidden" data-i18n>Probar el modo normal</button>
+            <button id="open-logs" class="btn outlined"><span class="ms">folder_open</span><span data-i18n>Datos y registros</span></button>
+            <button id="wizard-again" class="btn outlined"><span class="ms">rocket_launch</span><span data-i18n>Asistente</span></button>
+            <button id="forget-exported" class="btn outlined" data-i18n>Olvidar «En el blog»</button>
+            <button id="reset-all" class="btn outlined danger"><span class="ms">delete_forever</span><span data-i18n>Borrar todo</span></button>
+          </div>
         </div>
 
-        <div class="card" id="set-about">
-          <h2 data-i18n>Acerca de</h2>
-          <p><b>Ecos</b> — <span data-i18n>de tus redes a tu blog.</span></p>
-          <p class="hint" id="about-info"></p>
-          <p class="hint">© 2026 Asociación Elín. <span data-i18n>Todos los derechos reservados.</span></p>
-          <button id="open-repo" data-i18n>Página del proyecto</button>
+        <div class="card about" id="set-about">
+          <span class="logo big"><span class="ms fill">graphic_eq</span></span>
+          <div><h2>Ecos</h2><div class="hint" data-i18n>De tus redes a tu blog.</div><div class="hint" id="about-info"></div><div class="hint">© 2026 Asociación Elín</div></div>
+          <button id="open-repo" class="btn text icon-only" data-i18n-title title="Página del proyecto"><span class="ms">open_in_new</span></button>
         </div>
       </div>
     </div>
@@ -318,60 +335,64 @@
 <!-- Resumen de un periodo -->
 <div id="summary-modal" class="modal hidden">
   <div class="modal-box">
+    <span class="ms fill modal-icon">date_range</span>
     <h2 data-i18n>Resumen de un periodo</h2>
-    <p class="hint" data-i18n>Ecos reúne todas las publicaciones entre esas fechas en una sola entrada.</p>
     <div class="row">
-      <label><span data-i18n>Desde</span> <input type="date" id="sum-from"></label>
-      <label><span data-i18n>Hasta</span> <input type="date" id="sum-to"></label>
+      <div class="field"><label data-i18n>Desde</label><input type="date" id="sum-from"></div>
+      <div class="field"><label data-i18n>Hasta</label><input type="date" id="sum-to"></div>
     </div>
-    <label class="inline"><input type="checkbox" id="sum-pending" checked> <span data-i18n>Solo las que no están ya en el blog</span></label>
-    <div class="modal-actions"><button id="sum-cancel" data-i18n>Cancelar</button><button id="sum-go" class="primary" data-i18n>Seleccionar y crear el resumen</button></div>
+    <label class="switch"><input type="checkbox" id="sum-pending" checked><span data-i18n>Solo las que no están en el blog</span></label>
+    <div class="modal-actions"><button id="sum-cancel" class="btn text" data-i18n>Cancelar</button><button id="sum-go" class="btn filled" data-i18n>Crear resumen</button></div>
   </div>
 </div>
 
 <!-- Asistente de primera configuración -->
 <div id="wizard" class="modal hidden">
   <div class="modal-box wide">
-    <div class="wz-steps"><span data-step="0" data-i18n>Bienvenida</span><span data-step="1">Meta</span><span data-step="2">WordPress</span><span data-step="3" data-i18n>Listo</span></div>
+    <div class="wz-steps"><span data-step="0"></span><span data-step="1"></span><span data-step="2"></span><span data-step="3"></span></div>
     <div class="wz-page" data-page="0">
+      <span class="ms fill modal-icon">waving_hand</span>
       <h2 data-i18n>¡Hola! Vamos a dejar Ecos listo</h2>
-      <p data-i18n>Ecos lee tus publicaciones de Instagram y Facebook y las convierte en entradas de tu blog de WordPress.com. Necesita permiso para leer tus redes y para escribir en tu blog. Te guiamos en dos pasos; cada uno lleva unos 5 minutos.</p>
-      <p class="hint" data-i18n>Si ya tienes una copia de seguridad de Ecos, puedes importarla y saltarte casi todo.</p>
-      <button id="wz-import" data-i18n>Importar copia de seguridad</button>
+      <p class="lead" data-i18n>Dos pasos: conectar tus redes y conectar tu blog.</p>
+      <button id="wz-import" class="btn outlined"><span class="ms">upload</span><span data-i18n>Tengo una copia de seguridad</span></button>
     </div>
     <div class="wz-page" data-page="1">
-      <h2 data-i18n>Paso 1: conectar Instagram y Facebook</h2>
-      <ol class="wz-list">
-        <li data-i18n>Entra en developers.facebook.com → Mis apps → Crear app. Elige los casos de uso «Administra todo en tu página» y «Administrar mensajes y contenido en Instagram».</li>
-        <li data-i18n>En el caso de uso, Personalizar → Permisos: añade pages_show_list, pages_read_engagement, business_management e instagram_basic.</li>
-        <li data-i18n>En la configuración de inicio de sesión, pega esta dirección en «URI de redireccionamiento de OAuth válidos»:</li>
-      </ol>
+      <h2><span class="ms fill">share</span> <span data-i18n>Instagram y Facebook</span></h2>
+      <details class="help" open><summary><span class="ms">info</span><span data-i18n>Pasos en Meta</span></summary>
+        <ol class="wz-list">
+          <li data-i18n>developers.facebook.com → Crear app → casos de uso de Página e Instagram.</li>
+          <li data-i18n>Permisos: pages_show_list, pages_read_engagement, business_management, instagram_basic.</li>
+          <li data-i18n>Pega la URI de abajo en «URI de redireccionamiento de OAuth válidos».</li>
+        </ol>
+      </details>
       <div class="wz-slot" data-slot="meta"></div>
     </div>
     <div class="wz-page" data-page="2">
-      <h2 data-i18n>Paso 2: conectar tu blog de WordPress.com</h2>
-      <ol class="wz-list">
-        <li data-i18n>Entra en developer.wordpress.com/apps → Create New Application. Tipo: Web.</li>
-        <li data-i18n>En «Redirect URLs» pega la dirección de abajo y guarda.</li>
-        <li data-i18n>Copia aquí el Client ID y el Client Secret y pulsa «Conectar con WordPress.com».</li>
-      </ol>
+      <h2><span class="ms fill">language</span> <span data-i18n>Tu blog</span></h2>
+      <details class="help" open><summary><span class="ms">info</span><span data-i18n>Pasos en WordPress.com</span></summary>
+        <ol class="wz-list">
+          <li data-i18n>developer.wordpress.com/apps → Create New Application (tipo Web).</li>
+          <li data-i18n>Pega la Redirect URL de abajo y copia aquí el Client ID y el Secret.</li>
+        </ol>
+      </details>
       <div class="wz-slot" data-slot="wp"></div>
     </div>
     <div class="wz-page" data-page="3">
+      <span class="ms fill modal-icon">celebration</span>
       <h2 data-i18n>¡Todo listo!</h2>
-      <p id="wz-summary"></p>
-      <p data-i18n>Ve a «Publicaciones», pulsa «Cargar publicaciones», elige una y pulsa «Crear entrada con la selección».</p>
+      <p id="wz-summary" class="lead"></p>
     </div>
     <div class="modal-actions">
-      <button id="wz-skip" class="link" data-i18n>Saltar el asistente</button>
+      <button id="wz-skip" class="btn text" data-i18n>Saltar</button>
       <span class="spacer"></span>
-      <button id="wz-back" data-i18n>Atrás</button>
-      <button id="wz-next" class="primary" data-i18n>Siguiente</button>
+      <button id="wz-back" class="btn outlined" data-i18n>Atrás</button>
+      <button id="wz-next" class="btn filled" data-i18n>Siguiente</button>
     </div>
   </div>
 </div>
 
-<div id="drop" class="drop hidden"><div data-i18n>Suelta aquí las fotos, capturas o el ZIP de Meta</div></div>
+<div id="selbar" class="selbar"><span id="sel-count"></span><button id="sel-clear" class="btn text" data-i18n>Quitar selección</button><button id="make" class="btn filled" disabled><span class="ms">post_add</span><span data-i18n>Crear entrada</span></button></div>
+<div id="drop" class="drop hidden"><div><span class="ms fill">file_download</span><span data-i18n>Suelta aquí</span></div></div>
 <div id="toast"></div>
 <script src="i18n.js"></script>
 <script src="renderer.js"></script>

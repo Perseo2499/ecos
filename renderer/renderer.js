@@ -18,7 +18,7 @@ const selected = new Set();
 const keyOf = (p) => p.source + ':' + p.id;
 const keysOf = (p) => [keyOf(p), ...(p.alsoOn || []).map((a) => a.source + ':' + a.id)];
 const exportOf = (p) => keysOf(p).map((k) => exported[k]).find(Boolean);
-const prefs = () => ({ theme: 'system', zoom: 1, cards: 220, accent: '#2f6f5e', lang: 'es', checkNew: true, checkToken: true, ...(CFG.prefs || {}) });
+const prefs = () => ({ theme: 'system', zoom: 1, cards: 230, accent: '#3c6e5f', lang: 'es', checkNew: true, checkToken: true, ...(CFG.prefs || {}) });
 
 // ---------------------------------------------------------------- utilidades
 function toast(msg, isError) {
@@ -43,6 +43,7 @@ function showTab(name) {
   $$('header nav button, .tab').forEach((x) => x.classList.remove('active'));
   $(`header nav button[data-tab="${name}"]`).classList.add('active'); $('#tab-' + name).classList.add('active');
   if (name === 'blog' && !blog.loaded) loadBlog();
+  updateCount();
 }
 $$('header nav button').forEach((b) => b.onclick = () => showTab(b.dataset.tab));
 
@@ -62,10 +63,10 @@ function banner(id, html, actions = []) {
   el.className = 'banner'; el.id = 'bn-' + id;
   el.innerHTML = `<span>${html}</span>`;
   for (const [label, fn, cls] of actions) {
-    const b = document.createElement('button'); b.textContent = label; if (cls) b.className = cls;
+    const b = document.createElement('button'); b.textContent = label; b.className = 'btn ' + (cls === 'primary' ? 'filled' : 'text');
     b.onclick = () => fn(el); el.appendChild(b);
   }
-  const x = document.createElement('button'); x.className = 'x'; x.textContent = '×'; x.title = t('Cerrar'); x.onclick = () => el.remove();
+  const x = document.createElement('button'); x.className = 'x'; x.innerHTML = '<span class="ms">close</span>'; x.title = t('Cerrar'); x.onclick = () => el.remove();
   el.appendChild(x);
   $('#banners').appendChild(el);
 }
@@ -129,27 +130,27 @@ async function loadCategories() {
 }
 
 // ---------------------------------------------------------------- Conexiones: selector de IA
-let aiSel = null; // proveedor que se está viendo en la lista
-const AI_COLORS = { openai: '#10a37f', gemini: '#4285f4', anthropic: '#d97757', deepseek: '#4d6bfe', mistral: '#fa520f', alibaba: '#ff6a00', ollama: '#555', openrouter: '#6467f2' };
+let aiSel = null; // proveedor activo (el que se ve y se usa)
+const logoOf = (id) => `assets/ai/${id}-${document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'}.png`;
 function renderAi() {
   const A = CFG.ai; if (!A) return;
-  aiSel = aiSel || A.active;
+  aiSel = A.active;
   const act = A.providers[A.active];
   $('#ai-current').textContent = act ? `${act.name} · ${act.model || act.defaultModel || t('sin modelo')}${act.needsKey && !act.hasKey ? ' · ' + t('sin clave') : ''}` : '';
   $('#ai-providers').innerHTML = '';
   for (const [id, p] of Object.entries(A.providers)) {
     const row = document.createElement('label');
-    row.className = 'ai-prov' + (id === aiSel ? ' sel' : '');
-    row.innerHTML = `<input type="radio" name="ai-prov" ${id === A.active ? 'checked' : ''}>
-      <span class="ai-logo" style="background:${AI_COLORS[id]}">${escHtml(p.name[0])}</span>
-      <span class="ai-name">${escHtml(p.name)} <span class="hint">${escHtml(p.label)}</span></span>
-      ${p.hasKey || !p.needsKey ? '<span class="ai-ok" title="' + t('Clave guardada') + '">●</span>' : ''}`;
-    row.querySelector('input').onchange = async () => { aiSel = id; CFG.ai = await window.api.aiSetActive(id); renderAi(); };
-    row.onclick = (e) => { if (e.target.tagName !== 'INPUT') { aiSel = id; renderAi(); } };
+    row.className = 'ai-prov' + (id === aiSel ? ' sel active' : '');
+    row.innerHTML = `<input type="radio" name="ai-prov" ${id === aiSel ? 'checked' : ''}>
+      <img class="ai-logo" src="${logoOf(id)}" alt="">
+      <span class="ai-name">${escHtml(p.name)}</span>
+      ${p.hasKey || !p.needsKey ? `<span class="ai-ok" title="${t('Clave guardada')}"></span>` : ''}`;
+    row.querySelector('input').onchange = async () => { CFG.ai = await window.api.aiSetActive(id); renderAi(); };
     $('#ai-providers').appendChild(row);
   }
   const p = A.providers[aiSel];
-  $('#ai-url').value = p.url; $('#ai-url').placeholder = t('URL personalizada (opcional)') + (p.defaultBase ? ' — ' + p.defaultBase : '');
+  $('#ai-url').value = p.url; $('#ai-url').placeholder = t('URL personalizada (opcional)');
+  $('#ai-url').title = p.defaultBase || '';
   $('#ai-key').value = '';
   $('#ai-key').placeholder = !p.needsKey ? t('No hace falta clave') : p.hasKey ? '•••••• ' + t('(guardada) — pega otra para cambiarla') : t('Pega aquí la clave de {p}', { p: p.name });
   $('#ai-key').disabled = !p.needsKey;
@@ -196,8 +197,9 @@ function visiblePosts() {
 function renderFeed() {
   const list = visiblePosts();
   const feed = $('#feed');
-  if (!rawPosts.length) { feed.innerHTML = `<p class="hint">${t('Elige un origen arriba para traer publicaciones.')}</p>`; return; }
-  if (!list.length) { feed.innerHTML = `<p class="hint">${t('Ninguna publicación coincide con el filtro.')}</p>`; return; }
+  feed.classList.toggle('selecting', selected.size > 0);
+  if (!rawPosts.length) { feed.innerHTML = `<div class="empty"><span class="ms fill">photo_library</span><b>${t('Aún no hay publicaciones')}</b><span>${t('Elige un origen arriba o arrastra archivos aquí.')}</span></div>`; return; }
+  if (!list.length) { feed.innerHTML = `<div class="empty"><span class="ms">filter_alt_off</span><span>${t('Ninguna publicación coincide con el filtro.')}</span></div>`; return; }
   feed.innerHTML = '';
   for (const p of list) {
     const key = keyOf(p);
@@ -210,13 +212,13 @@ function renderFeed() {
     const badges = [p, ...(p.alsoOn || [])].map((x) => `<span class="badge ${x.source}">${x.source === 'instagram' ? 'IG' : 'FB'}</span>`).join(' ');
     card.innerHTML = `
       ${thumb ? `<img src="${escHtml(thumb)}" loading="lazy" alt="">` : `<div class="noimg">${t('Sin imagen')}</div>`}
-      ${ex ? `<span class="done-badge" title="${t('Abrir la entrada en WordPress')}">✓ ${t('En el blog')}</span>` : ''}
-      <span class="check">✓</span>
+      ${ex ? `<span class="done-badge" title="${t('Abrir la entrada en WordPress')}"><span class="ms fill">check_circle</span>${t('En el blog')}</span>` : ''}
+      <span class="check"><span class="ms">check</span></span>
       <div class="meta">${badges} ${fmtDate(p.date)}${p.media.length > 1 ? ' · ' + t('{n} archivos', { n: p.media.length }) : ''}${p.media.some((m) => m.type === 'video') ? ' · ' + t('vídeo') : ''}</div>
       <p></p>`;
     card.querySelector('p').textContent = p.text.slice(0, 220) + (p.text.length > 220 ? '…' : '');
     if (ex) card.querySelector('.done-badge').onclick = (e) => { e.stopPropagation(); window.api.open(ex.editUrl); };
-    const toggle = () => { selected.has(key) ? selected.delete(key) : selected.add(key); card.classList.toggle('sel'); updateCount(); };
+    const toggle = () => { selected.has(key) ? selected.delete(key) : selected.add(key); card.classList.toggle('sel'); updateCount(); feed.classList.toggle('selecting', selected.size > 0); };
     card.onclick = toggle;
     card.onkeydown = (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(); } };
     feed.appendChild(card);
@@ -225,7 +227,10 @@ function renderFeed() {
 function updateCount() {
   $('#sel-count').textContent = t(selected.size === 1 ? '{n} seleccionada' : '{n} seleccionadas', { n: selected.size });
   $('#make').disabled = selected.size === 0;
+  // La barra flotante aparece al seleccionar algo (y se oculta mientras el editor está abierto)
+  $('#selbar').classList.toggle('show', selected.size > 0 && $('#editor').classList.contains('hidden') && $('#tab-posts').classList.contains('active'));
 }
+$('#sel-clear').onclick = () => { selected.clear(); updateCount(); renderFeed(); };
 async function addPosts(list, select = false) {
   const have = new Set(rawPosts.map(keyOf));
   for (const p of list) {
@@ -366,17 +371,23 @@ function openEditor() {
   $$('input[name="d-when"]').forEach((r) => (r.checked = r.value === (f.status || 'draft')));
   $('#d-schedule').value = '';
   $('#d-template').innerHTML = `<option value="">${t('Sin plantilla')}</option>` + (CFG.templates || []).map((tp, i) => `<option value="${i}">${escHtml(tp.name)}</option>`).join('');
-  $('#ai-hint').textContent = CFG.aiConfigured ? '' : t('Configura una IA en «Conexiones» para usar estos botones.');
-  $$('#ai-article, #ai-alts').forEach((b) => (b.disabled = !CFG.aiConfigured));
+  // Sin IA configurada, los botones se muestran desactivados y explican por qué al pasar el ratón
+  $$('#ai-article, #ai-alts').forEach((b) => { b.disabled = !CFG.aiConfigured; b.parentElement.title = CFG.aiConfigured ? '' : t('Configura una IA en «Conexiones» para usar estos botones.'); });
+  toggleSchedule();
   renderSections();
   $('#editor').classList.remove('hidden');
   $('#editor').scrollTop = 0;
+  updateCount();
 }
+const closeEditor = () => { $('#editor').classList.add('hidden'); updateCount(); };
+$('#ed-close').onclick = closeEditor;
+const toggleSchedule = () => $('#d-schedule').classList.toggle('hidden', $('input[name="d-when"]:checked')?.value !== 'future');
+$$('input[name="d-when"]').forEach((r) => (r.onchange = () => { toggleSchedule(); if (r.value === 'future') $('#d-schedule').focus(); }));
 
 function renderCats(checkedNames) {
   const box = $('#d-cats');
   if (!categories.length) { box.innerHTML = `<span class="hint">${t('No se han podido cargar las categorías del blog.')}</span>`; return; }
-  box.innerHTML = categories.map((c, i) => `<label class="chip"><input type="checkbox" value="${escHtml(c.name)}" ${checkedNames.includes(c.name.toLowerCase()) ? 'checked' : ''}> ${escHtml(c.name)}</label>`).join('');
+  box.innerHTML = categories.map((c) => `<label class="chip"><input type="checkbox" value="${escHtml(c.name)}" ${checkedNames.includes(c.name.toLowerCase()) ? 'checked' : ''}>${escHtml(c.name)}</label>`).join('');
 }
 
 function renderSections() {
@@ -388,10 +399,10 @@ function renderSections() {
     box.innerHTML = `
       ${draft.sections.length > 1 ? `<div class="sec-title">${t('Publicación {n}', { n: si + 1 })}</div>` : ''}
       <div class="rt-bar">
-        <button data-cmd="bold" title="${t('Negrita')}"><b>B</b></button>
-        <button data-cmd="italic" title="${t('Cursiva')}"><i>I</i></button>
-        <button data-cmd="link" title="${t('Enlace')}">🔗</button>
-        <button data-cmd="unlink" title="${t('Quitar enlace')}">⛓️‍💥</button>
+        <button data-cmd="bold" title="${t('Negrita')}"><span class="ms">format_bold</span></button>
+        <button data-cmd="italic" title="${t('Cursiva')}"><span class="ms">format_italic</span></button>
+        <button data-cmd="link" title="${t('Enlace')}"><span class="ms">link</span></button>
+        <button data-cmd="unlink" title="${t('Quitar enlace')}"><span class="ms">link_off</span></button>
       </div>
       <div class="rt" contenteditable="true" spellcheck="true"></div>
       <div class="imgs"></div>
@@ -422,8 +433,8 @@ function renderImages(el, sec) {
     fig.className = 'img' + (draft.featuredImageId === img.id ? ' featured' : '');
     fig.draggable = true;
     fig.innerHTML = `<img src="${escHtml(img.url)}" alt="">
-      <button class="star" title="${t('Usar como imagen destacada')}">★</button>
-      <button class="del" title="${t('Quitar de la entrada')}">×</button>
+      <button class="star" title="${t('Usar como imagen destacada')}"><span class="ms fill">star</span></button>
+      <button class="del" title="${t('Quitar de la entrada')}"><span class="ms">close</span></button>
       <input class="alt" placeholder="${t('Descripción (alt)')}">`;
     fig.querySelector('.alt').value = img.alt || '';
     fig.querySelector('.alt').oninput = (e) => (img.alt = e.target.value);
@@ -444,8 +455,9 @@ function renderImages(el, sec) {
     };
     el.appendChild(fig);
   });
-  for (const v of sec.videos) { const d = document.createElement('div'); d.className = 'img vid'; d.textContent = '🎬 ' + t('Vídeo'); el.appendChild(d); }
-  if (sec.embed) { const d = document.createElement('div'); d.className = 'img vid'; d.textContent = '🎬 ' + t('Vídeo de {r} (se inserta el original)', { r: sec.embed.provider === 'instagram' ? 'Instagram' : 'Facebook' }); el.appendChild(d); }
+  const vid = (txt) => { const d = document.createElement('div'); d.className = 'img vid'; d.innerHTML = '<span class="ms">movie</span>'; d.append(txt); el.appendChild(d); };
+  for (const v of sec.videos) vid(t('Vídeo'));
+  if (sec.embed) vid(t('Vídeo de {r} (se inserta el original)', { r: sec.embed.provider === 'instagram' ? 'Instagram' : 'Facebook' }));
 }
 
 // Plantillas
@@ -457,7 +469,7 @@ $('#d-template').onchange = () => {
     const cur = $('#d-tags').value.split(',').map((x) => x.trim()).filter(Boolean);
     $('#d-tags').value = [...new Set([...cur, ...tp.tags.split(',').map((x) => x.trim().replace(/^#/, '')).filter(Boolean)])].join(', ');
   }
-  if (tp.status) $$('input[name="d-when"]').forEach((r) => (r.checked = r.value === tp.status));
+  if (tp.status) { $$('input[name="d-when"]').forEach((r) => (r.checked = r.value === tp.status)); toggleSchedule(); }
   if (tp.footer !== undefined && tp.footer !== '') {
     for (const sec of draft.sections) if (sec.footer !== null) sec.footer = escHtml(tp.footer).replace('{redes}', (sec.footer.match(/<a [\s\S]*<\/a>|Instagram|Facebook/) || [''])[0]);
     renderSections();
@@ -510,10 +522,10 @@ $('#send').onclick = (e) => busy(e.target, async () => {
   $('#send').classList.add('hidden'); $('#sent').classList.remove('hidden');
   selected.clear(); updateCount(); renderFeed(); blog.loaded = false;
 });
-$('#d-schedule').onfocus = () => ($('input[name="d-when"][value="future"]').checked = true);
+
 $('#sent-edit').onclick = () => lastSent && window.api.open(lastSent.editUrl);
 $('#sent-view').onclick = () => lastSent && window.api.open(lastSent.url);
-$('#sent-close').onclick = () => $('#editor').classList.add('hidden');
+$('#sent-close').onclick = closeEditor;
 
 // ---------------------------------------------------------------- Pestaña Blog
 const blog = { loaded: false, type: 'post', page: 1, per: 20, found: 0 };
@@ -525,21 +537,21 @@ async function loadBlog() {
     const r = await window.api.blogList({ type: blog.type, status: $('#b-status').value, search: $('#b-search').value.trim(), page: blog.page, number: blog.per });
     blog.loaded = true; blog.found = r.found;
     renderBlog(r.items);
-  } catch (e) { list.innerHTML = `<p class="hint pad">${escHtml(e.message)}</p>`; }
+  } catch (e) { list.innerHTML = `<div class="empty"><span class="ms">cloud_off</span><span>${escHtml(e.message)}</span></div>`; }
 }
 function renderBlog(items) {
   const list = $('#b-list');
   const pages = Math.max(1, Math.ceil(blog.found / blog.per));
   $('#b-info').textContent = t(blog.type === 'page' ? '{n} páginas · página {p} de {t}' : '{n} entradas · página {p} de {t}', { n: blog.found, p: blog.page, t: pages });
   $('#b-prev').disabled = blog.page <= 1; $('#b-next').disabled = blog.page >= pages;
-  if (!items.length) { list.innerHTML = `<p class="hint pad">${t('No hay nada con estos filtros.')}</p>`; return; }
+  if (!items.length) { list.innerHTML = `<div class="empty"><span class="ms">inbox</span><span>${t('No hay nada con estos filtros.')}</span></div>`; return; }
   list.innerHTML = '';
   for (const it of items) {
     const row = document.createElement('div');
     row.className = 'b-row';
     const when = fmtDay(it.status === 'publish' || it.status === 'future' ? it.date : it.modified);
     row.innerHTML = `
-      ${it.image ? `<img src="${escHtml(it.image)}" loading="lazy" alt="">` : `<div class="noimg">${t('Sin imagen')}</div>`}
+      ${it.image ? `<img src="${escHtml(it.image)}" loading="lazy" alt="">` : `<div class="noimg"><span class="ms">image</span></div>`}
       <div><div class="b-title"></div>
         <div class="b-meta"><span class="st ${escHtml(it.status)}">${STATUS()[it.status] || escHtml(it.status)}</span>${when}${it.categories.length ? ' · ' + escHtml(it.categories.join(', ')) : ''}</div>
         <div class="b-ex"></div></div>
@@ -548,7 +560,11 @@ function renderBlog(items) {
     row.querySelector('.b-title').textContent = title;
     row.querySelector('.b-ex').textContent = decodeEntities(it.excerpt);
     const actions = row.querySelector('.b-actions');
-    const btn = (label, fn, cls = '') => { const b = document.createElement('button'); b.textContent = label; if (cls) b.className = cls; b.onclick = () => busy(b, fn); actions.appendChild(b); };
+    const btn = (label, fn, cls = '') => {
+      const b = document.createElement('button');
+      b.className = 'btn ' + (cls === 'primary' ? 'tonal' : cls === 'danger' ? 'text danger' : 'text');
+      b.textContent = label; b.onclick = () => busy(b, fn); actions.appendChild(b);
+    };
     if (it.status !== 'trash') btn(t('Editar'), async () => window.api.open(await window.api.blogEditUrl(it.id, it.type)));
     if (it.status === 'publish') btn(t('Ver'), async () => window.api.open(it.url));
     if (['draft', 'pending', 'private'].includes(it.status)) btn(t('Publicar'), async () => {
@@ -585,6 +601,11 @@ function applyPrefs() {
   window.api.setZoom(Number(p.zoom) || 1);
   for (const [id, v] of [['#s-theme', p.theme], ['#s-zoom', String(p.zoom)], ['#s-cards', String(p.cards)], ['#s-accent', p.accent]]) $$(id + ' button').forEach((b) => b.classList.toggle('active', b.dataset.v === v));
   $('#s-lang').value = p.lang;
+  $$('#s-lang-seg button').forEach((b) => b.classList.toggle('active', b.dataset.v === p.lang));
+  const preset = $$('#s-accent button').some((b) => b.dataset.v === p.accent);
+  $('.custom-color').classList.toggle('active', !preset);
+  $('#s-accent-custom').value = p.accent;
+  if ($('#ai-providers').children.length) renderAi(); // logos claros/oscuros
   $('#s-check-new').checked = p.checkNew; $('#s-check-token').checked = p.checkToken;
   if (window.I18N.lang !== p.lang) { window.I18N.setLang(p.lang); refreshTexts(); }
 }
@@ -594,6 +615,14 @@ $$('#s-zoom button').forEach((b) => b.onclick = () => savePrefs({ zoom: Number(b
 $$('#s-cards button').forEach((b) => b.onclick = () => savePrefs({ cards: Number(b.dataset.v) }));
 $$('#s-accent button').forEach((b) => b.onclick = () => savePrefs({ accent: b.dataset.v }));
 $('#s-lang').onchange = () => savePrefs({ lang: $('#s-lang').value });
+$$('#s-lang-seg button').forEach((b) => b.onclick = () => savePrefs({ lang: b.dataset.v }));
+$('#s-accent-custom').oninput = (e) => document.documentElement.style.setProperty('--accent', e.target.value); // vista previa
+$('#s-accent-custom').onchange = (e) => savePrefs({ accent: e.target.value });
+// Índice de Ajustes: resalta la sección visible
+const setObs = new IntersectionObserver((entries) => {
+  for (const en of entries) if (en.isIntersecting) $$('.set-nav a').forEach((a) => a.classList.toggle('active', a.getAttribute('href') === '#' + en.target.id));
+}, { rootMargin: '-90px 0px -60% 0px' });
+$$('.set-body .card').forEach((c) => setObs.observe(c));
 $('#s-check-new').onchange = () => savePrefs({ checkNew: $('#s-check-new').checked });
 $('#s-check-token').onchange = () => savePrefs({ checkToken: $('#s-check-token').checked });
 $$('.set-nav a').forEach((a) => a.onclick = (e) => { e.preventDefault(); $(a.getAttribute('href')).scrollIntoView({ behavior: 'smooth', block: 'start' }); });
@@ -625,7 +654,7 @@ function renderTemplates() {
       <input data-k="tags" placeholder="${t('Etiquetas')}">
       <input data-k="footer" placeholder="${t('Pie (vacío = el de por defecto)')}">
       <select data-k="status"><option value="">${t('Estado: por defecto')}</option><option value="draft">${t('Guardar como borrador')}</option><option value="publish">${t('Publicar ahora')}</option></select>
-      <button class="danger" title="${t('Borrar plantilla')}">×</button>`;
+      <button class="btn text icon-only danger" title="${t('Borrar plantilla')}"><span class="ms">delete</span></button>`;
     row.querySelectorAll('[data-k]').forEach((inp) => { inp.value = tp[inp.dataset.k] || ''; inp.onchange = saveTemplates; });
     row.querySelector('button').onclick = async () => { tpls.splice(i, 1); CFG = await window.api.setConfig({ templates: tpls }); renderTemplates(); };
     list.appendChild(row);

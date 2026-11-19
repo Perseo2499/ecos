@@ -1,0 +1,3 @@
+Logos de los proveedores de IA: LobeHub Icons (https://github.com/lobehub/lobe-icons), licencia MIT.
+Copyright (c) 2023 LobeHub. Los logotipos son marcas de sus respectivos propietarios y se usan
+únicamente para identificar a cada proveedor en el selector de IA.

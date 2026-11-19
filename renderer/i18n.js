@@ -164,6 +164,35 @@
     'Blog conectado: {s}': 'Blog connected: {s}', 'Blog sin conectar': 'Blog not connected',
     'Todavía no has conectado Meta. ¿Seguir de todos modos?': 'You have not connected Meta yet. Continue anyway?',
     'Todavía no has conectado WordPress. Sin él no se pueden crear entradas. ¿Seguir de todos modos?': 'You have not connected WordPress yet. Without it, posts cannot be created. Continue anyway?',
+    // 0.5 (diseño Expressive)
+    'Arrastra archivos aquí': 'Drag files here', 'Elegir carpeta': 'Choose folder', '¿Cómo lo consigo?': 'How do I get it?',
+    'En Instagram o Facebook: Centro de cuentas → Tu información y permisos → Descargar tu información, en formato JSON. Sirve cualquier cuenta.': 'In Instagram or Facebook: Accounts Center → Your information and permissions → Download your information, in JSON format. Any account works.',
+    'De una misma publicación, con el texto desplegado.': 'From a single post, with the text expanded.',
+    'Añadir': 'Add', 'Resumen': 'Summary', 'Cargar más': 'Load more', 'Convertir en artículo': 'Turn into article', 'Describir fotos': 'Describe photos',
+    'Fecha original': 'Original date', 'Editar en WordPress': 'Edit in WordPress', 'Nueva': 'New', '¿Primera vez?': 'First time?',
+    'El asistente te guía paso a paso.': 'The assistant guides you step by step.', 'URI de redireccionamiento': 'Redirect URI',
+    'Opciones avanzadas': 'Advanced options', 'ID de configuración': 'Configuration ID', '¿Cómo se configura?': 'How do I set it up?',
+    'Crea una app en developers.facebook.com con los casos de uso de Página e Instagram, copia aquí sus claves y pega la URI de arriba en «URI de redireccionamiento de OAuth válidos».': 'Create an app at developers.facebook.com with the Page and Instagram use cases, copy its keys here and paste the URI above into "Valid OAuth Redirect URIs".',
+    'Conectar': 'Connect', 'Crea una app tipo «Web» en developer.wordpress.com/apps y pega la Redirect URL de arriba.': 'Create a "Web" app at developer.wordpress.com/apps and paste the Redirect URL above.',
+    'Opcional': 'Optional', 'Indicaciones para los artículos': 'Guidelines for articles', 'Formato': 'Format', 'Actualizaciones': 'Updates',
+    'Tarjetas': 'Cards', 'Color': 'Colour', 'Limpiar el título': 'Clean up the title', 'Etiquetas fijas': 'Fixed tags', 'Al enviar': 'When sending',
+    'Publicaciones nuevas sin pasar al blog': 'New posts not on the blog yet', 'La conexión con Meta va a caducar': 'The Meta connection is about to expire',
+    'Incluir las claves': 'Include the keys', 'Importar': 'Import', 'Exportar': 'Export', 'Novedades': "What's new", 'Datos y registros': 'Data and logs',
+    'Asistente': 'Assistant', 'Olvidar «En el blog»': 'Forget "On the blog"', 'Borrar todo': 'Delete everything', 'De tus redes a tu blog.': 'From your social media to your blog.',
+    'Solo las que no están en el blog': 'Only those not on the blog', 'Crear resumen': 'Create summary',
+    'Dos pasos: conectar tus redes y conectar tu blog.': 'Two steps: connect your social accounts and connect your blog.',
+    'Tengo una copia de seguridad': 'I have a backup', 'Instagram y Facebook': 'Instagram and Facebook', 'Pasos en Meta': 'Steps in Meta',
+    'developers.facebook.com → Crear app → casos de uso de Página e Instagram.': 'developers.facebook.com → Create app → Page and Instagram use cases.',
+    'Permisos: pages_show_list, pages_read_engagement, business_management, instagram_basic.': 'Permissions: pages_show_list, pages_read_engagement, business_management, instagram_basic.',
+    'Pega la URI de abajo en «URI de redireccionamiento de OAuth válidos».': 'Paste the URI below into "Valid OAuth Redirect URIs".',
+    'Tu blog': 'Your blog', 'Pasos en WordPress.com': 'Steps in WordPress.com',
+    'developer.wordpress.com/apps → Create New Application (tipo Web).': 'developer.wordpress.com/apps → Create New Application (type Web).',
+    'Pega la Redirect URL de abajo y copia aquí el Client ID y el Secret.': 'Paste the Redirect URL below and copy the Client ID and Secret here.',
+    'Saltar': 'Skip', 'Quitar selección': 'Clear selection', 'Crear entrada': 'Create post', 'Suelta aquí': 'Drop here', 'Enlace (opcional)': 'Link (optional)',
+    'Buscar…': 'Search…', 'Solo apps de tipo Empresa': 'Business apps only', 'p. ej. Usa lenguaje inclusivo.': 'e.g. Use inclusive language.',
+    'Separadas por comas': 'Comma separated', 'Juntar la misma publicación de Instagram y Facebook': 'Merge the same post from Instagram and Facebook',
+    'Plantilla': 'Template', 'Otro color': 'Other colour', 'Aún no hay publicaciones': 'No posts yet',
+    'Elige un origen arriba o arrastra archivos aquí.': 'Choose a source above or drag files here.',
   };
   const DICTS = { es: {}, en: EN };
   const norm = (s) => s.trim().replace(/\s+/g, ' ');
@@ -179,6 +208,10 @@
       root.querySelectorAll('[data-i18n]').forEach((el) => {
         if (el.dataset.i18nKey === undefined) el.dataset.i18nKey = norm(el.textContent);
         el.textContent = this.t(el.dataset.i18nKey);
+      });
+      root.querySelectorAll('[data-i18n-title]').forEach((el) => {
+        if (el.dataset.i18nTitleKey === undefined) el.dataset.i18nTitleKey = el.getAttribute('title') || '';
+        el.setAttribute('title', this.t(el.dataset.i18nTitleKey));
       });
       root.querySelectorAll('[data-i18n-ph]').forEach((el) => {
         if (el.dataset.i18nPhKey === undefined) el.dataset.i18nPhKey = el.getAttribute('placeholder') || '';
