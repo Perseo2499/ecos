@@ -69,13 +69,13 @@ app.on('child-process-gone', (_e, d) => {
   if (d.type === 'GPU' || d.type === 'Utility') escalate(`proceso ${d.type} cerrado (${d.reason}, código ${d.exitCode})`);
 });
 
-let store, meta, wp, wpself, buildDraft, composeContent, mediaKey, DEFAULT_FOOTER, mergeDuplicates, importers, updater, ai;
+let store, meta, wp, wpself, buildDraft, composeContent, composeBlocks, blockImages, mediaKey, DEFAULT_FOOTER, mergeDuplicates, importers, updater, ai;
 try {
   store = require('./src/store');
   meta = require('./src/meta');
   wp = require('./src/wpcom');
   wpself = require('./src/wpself');
-  ({ buildDraft, composeContent, mediaKey, DEFAULT_FOOTER, mergeDuplicates } = require('./src/transform'));
+  ({ buildDraft, composeContent, composeBlocks, blockImages, mediaKey, DEFAULT_FOOTER, mergeDuplicates } = require('./src/transform'));
   ai = require('./src/ai');
   importers = require('./src/importers');
   updater = require('./src/updater');
@@ -284,7 +284,7 @@ function editUrlFor(id, type = 'post') {
 function postFields(d, status) {
   const scheduled = status === 'future' && d.scheduleAt;
   return {
-    title: d.title, content: composeContent(d.sections), status: scheduled ? 'future' : status,
+    title: d.title, content: d.blocks ? composeBlocks(d.blocks) : composeContent(d.sections), status: scheduled ? 'future' : status,
     tags: d.tags.join(','), categories: d.categories.join(','),
     excerpt: d.excerpt || '',
     ...(d.featuredImageId ? { featured_image: d.featuredImageId } : {}),
@@ -299,13 +299,53 @@ handle('draft:preview', async (d) => {
   const base = WP().publicBase(cfg) || `https://${cfg.wpSite}`;
   return { postId: post.ID, previewUrl: `${base}/?p=${post.ID}&preview=true` };
 });
-handle('draft:compose', (sections) => composeContent(sections));
+handle('draft:compose', (blocks) => composeBlocks(blocks));
 
-// d: { title, sections, tags, categories, status ('draft'|'publish'|'future'), date, scheduleAt, excerpt,
+// Bandeja del editor: subir fotos o vídeos del ordenador a la biblioteca de WordPress
+handle('media:upload', async () => {
+  const r = await dialog.showOpenDialog(mainWin, {
+    title: 'Fotos y vídeos para la entrada', properties: ['openFile', 'multiSelections'],
+    filters: [{ name: 'Fotos y vídeos', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'mov', 'webm'] }],
+  });
+  if (r.canceled) return [];
+  const out = [];
+  for (const f of r.filePaths) {
+    const up = await wpCall(() => WP().uploadFile(cfg, f));
+    out.push({ ...up, alt: '', type: /\.(mp4|mov|webm)$/i.test(f) ? 'video' : 'image' });
+  }
+  return out;
+});
+
+// Estilos reales de la web (para que la vista previa se vea como en el blog). Se leen de la portada:
+// hojas de estilo enlazadas y estilos en línea, con sus url() convertidas en absolutas. Caché de 1 hora.
+let siteCss = { at: 0, base: '', css: '', bodyClass: '' };
+handle('site:styles', async () => {
+  const base = WP().publicBase(cfg);
+  if (!base) return { css: '', bodyClass: '' };
+  if (siteCss.base === base && Date.now() - siteCss.at < 3600e3) return siteCss;
+  const html = await (await fetch(base + '/', { headers: { 'User-Agent': 'Mozilla/5.0 Ecos' } })).text();
+  const abs = (u, from) => { try { return new URL(u, from).href; } catch { return u; } };
+  const fixUrls = (css, from) => css.replace(/url\(\s*(['"]?)(?!data:|#)([^'")]+)\1\s*\)/g, (_m, q, u) => `url("${abs(u, from)}")`);
+  const parts = [];
+  const re = /<link\b[^>]*rel=["']?stylesheet["']?[^>]*>|<style\b[^>]*>([\s\S]*?)<\/style>/gi;
+  let m, total = 0;
+  while ((m = re.exec(html)) && total < 3e6) {
+    if (m[0].startsWith('<style')) { parts.push(fixUrls(m[1], base + '/')); total += m[1].length; continue; }
+    const href = /href=["']([^"']+)["']/i.exec(m[0])?.[1];
+    if (!href || /media=["']print["']/i.test(m[0])) continue;
+    const url = abs(href.replace(/&#038;|&amp;/g, '&'), base + '/');
+    try { const css = await (await fetch(url)).text(); parts.push(fixUrls(css, url)); total += css.length; } catch { /* hoja inaccesible */ }
+  }
+  const bodyClass = /<body\b[^>]*class=["']([^"']*)["']/i.exec(html)?.[1] || '';
+  siteCss = { at: Date.now(), base, css: parts.join('\n'), bodyClass };
+  return siteCss;
+});
+
+// d: { title, blocks, tags, categories, status ('draft'|'publish'|'future'), date, scheduleAt, excerpt,
 //      featuredImageId, keepDate, keys }. El contenido se genera aquí a partir de las secciones del editor.
 handle('draft:publish', async (d) => {
   // Texto alternativo: se guarda también en la biblioteca de medios
-  for (const img of d.sections.flatMap((x) => x.images)) {
+  for (const img of d.blocks ? blockImages(d.blocks) : d.sections.flatMap((x) => x.images)) {
     if (img.alt) await wpCall(() => WP().updateMedia(cfg, img.id, { alt: img.alt })).catch((e) => log('No se pudo guardar el alt', img.id, e.message));
   }
   if (d.status === 'future' && (!d.scheduleAt || new Date(d.scheduleAt) <= new Date())) throw new Error('Elige una fecha y hora futuras para programar la entrada.');
@@ -317,7 +357,7 @@ handle('draft:publish', async (d) => {
   cfg.exported = cfg.exported || {};
   for (const k of d.keys || []) cfg.exported[k] = { postId: post.ID, url, editUrl, title: d.title, status: post.status, at: new Date().toISOString() };
   store.save(cfg);
-  return { url, editUrl, status: post.status, date: post.date, exported: cfg.exported };
+  return { postId: post.ID, url, editUrl, status: post.status, date: post.date, exported: cfg.exported };
 });
 
 // --- IA ---

@@ -84,42 +84,63 @@
         <div class="more"><button id="more" class="btn tonal hidden"><span class="ms">expand_more</span><span data-i18n>Cargar más</span></button></div>
       </div>
 
-      <!-- Editor visual -->
+      <!-- Editor de bloques (pantalla completa) -->
       <aside id="editor" class="editor hidden">
-        <div class="ed-head">
-          <h2 data-i18n>Entrada</h2>
-          <select id="d-template" data-i18n-title title="Plantilla"><option value="" data-i18n>Sin plantilla</option></select>
-          <button id="ed-close" class="btn text icon-only" data-i18n-title title="Cerrar"><span class="ms">close</span></button>
+        <div class="ed-bar">
+          <button id="ed-close" class="btn text icon-only" data-i18n-title title="Cerrar"><span class="ms">arrow_back</span></button>
+          <b class="ed-bar-title" data-i18n>Entrada</b>
+          <span class="hint" id="ed-count"></span>
+          <span class="spacer"></span>
+          <button id="ed-undo" class="btn text icon-only" data-i18n-title title="Deshacer"><span class="ms">undo</span></button>
+          <button id="ed-redo" class="btn text icon-only" data-i18n-title title="Rehacer"><span class="ms">redo</span></button>
+          <button id="preview" class="btn outlined"><span class="ms">preview</span><span data-i18n>Vista previa</span></button>
+          <button id="send" class="btn filled"><span class="ms">send</span><span data-i18n>Enviar a WordPress</span></button>
         </div>
-        <input id="d-title" class="title-input" data-i18n-ph placeholder="Título">
-        <textarea id="d-excerpt" rows="2" data-i18n-ph placeholder="Extracto (opcional)"></textarea>
-        <div class="ai-row">
-          <button id="ai-article" class="btn ai"><span class="ms">auto_awesome</span><span data-i18n>Convertir en artículo</span></button>
-          <button id="ai-alts" class="btn ai"><span class="ms">image_search</span><span data-i18n>Describir fotos</span></button>
-        </div>
-        <div id="d-sections"></div>
-        <div class="field"><span class="ms">sell</span><input id="d-tags" data-i18n-ph placeholder="Etiquetas"></div>
-        <div id="d-cats" class="cat-list"></div>
-        <div class="seg when" id="d-when-seg">
-          <label><input type="radio" name="d-when" value="draft" checked><span class="ms">draft</span><span data-i18n>Borrador</span></label>
-          <label><input type="radio" name="d-when" value="publish"><span class="ms">public</span><span data-i18n>Publicar</span></label>
-          <label><input type="radio" name="d-when" value="future"><span class="ms">schedule</span><span data-i18n>Programar</span></label>
-        </div>
-        <div class="row when-extra">
-          <input type="datetime-local" id="d-schedule" class="hidden">
-          <label class="switch small"><input type="checkbox" id="d-keepdate"><span data-i18n>Fecha original</span></label>
-        </div>
-        <div class="send-row">
-          <button id="preview" class="btn outlined big"><span class="ms">preview</span><span data-i18n>Vista previa</span></button>
-          <button id="send" class="btn filled big"><span class="ms">send</span><span data-i18n>Enviar a WordPress</span></button>
-        </div>
-        <div id="sent" class="sent hidden">
-          <span class="ms fill big-icon">check_circle</span>
-          <b id="sent-text"></b>
-          <div class="row">
-            <button id="sent-edit" class="btn filled"><span class="ms">edit</span><span data-i18n>Editar en WordPress</span></button>
-            <button id="sent-view" class="btn outlined"><span class="ms">open_in_new</span><span data-i18n>Ver</span></button>
-            <button id="sent-close" class="btn text" data-i18n>Cerrar</button>
+        <div class="ed-body">
+          <!-- Bandeja de fotos y vídeos: se arrastran al lienzo -->
+          <div class="ed-media">
+            <div class="section-label" data-i18n>Fotos y vídeos</div>
+            <div id="d-media" class="media-tray"></div>
+            <button id="d-media-add" class="btn tonal small"><span class="ms">upload</span><span data-i18n>Subir fotos</span></button>
+            <p class="hint tiny" data-i18n>Arrástralas al texto, a una galería o a un carrusel.</p>
+          </div>
+          <!-- Lienzo -->
+          <div class="ed-canvas" id="ed-canvas">
+            <div class="ed-page">
+              <textarea id="d-title" class="title-input" rows="1" data-i18n-ph placeholder="Título"></textarea>
+              <div id="d-blocks" class="blocks"></div>
+            </div>
+          </div>
+          <!-- Ajustes de la entrada -->
+          <div class="ed-side">
+            <div class="field"><label data-i18n>Plantilla</label><select id="d-template"><option value="" data-i18n>Sin plantilla</option></select></div>
+            <div class="field"><label data-i18n>Extracto</label><textarea id="d-excerpt" rows="3" data-i18n-ph placeholder="Resumen corto (opcional)"></textarea></div>
+            <div class="ai-row">
+              <button id="ai-article" class="btn ai"><span class="ms">auto_awesome</span><span data-i18n>Convertir en artículo</span></button>
+              <button id="ai-alts" class="btn ai"><span class="ms">image_search</span><span data-i18n>Describir fotos</span></button>
+            </div>
+            <div class="field"><span class="ms">sell</span><input id="d-tags" data-i18n-ph placeholder="Etiquetas"></div>
+            <div class="section-label" data-i18n>Categorías</div>
+            <div id="d-cats" class="cat-list"></div>
+            <div class="section-label" data-i18n>Publicación</div>
+            <div class="seg when" id="d-when-seg">
+              <label><input type="radio" name="d-when" value="draft" checked><span class="ms">draft</span><span data-i18n>Borrador</span></label>
+              <label><input type="radio" name="d-when" value="publish"><span class="ms">public</span><span data-i18n>Publicar</span></label>
+              <label><input type="radio" name="d-when" value="future"><span class="ms">schedule</span><span data-i18n>Programar</span></label>
+            </div>
+            <div class="when-extra">
+              <input type="datetime-local" id="d-schedule" class="hidden">
+              <label class="switch small"><input type="checkbox" id="d-keepdate"><span id="d-keepdate-label" data-i18n>Fecha original</span></label>
+            </div>
+            <div id="sent" class="sent hidden">
+              <span class="ms fill big-icon">check_circle</span>
+              <b id="sent-text"></b>
+              <div class="row">
+                <button id="sent-edit" class="btn filled"><span class="ms">edit</span><span data-i18n>Editar en WordPress</span></button>
+                <button id="sent-view" class="btn outlined"><span class="ms">open_in_new</span><span data-i18n>Ver</span></button>
+              </div>
+              <button id="sent-close" class="btn text" data-i18n>Cerrar el editor</button>
+            </div>
           </div>
         </div>
       </aside>
@@ -450,10 +471,23 @@
   </div>
 </div>
 
+<div id="ins-menu" class="ins-menu hidden">
+  <button data-type="paragraph"><span class="ms">notes</span><span data-i18n>Párrafo</span></button>
+  <button data-type="heading"><span class="ms">title</span><span data-i18n>Título</span></button>
+  <button data-type="image"><span class="ms">image</span><span data-i18n>Imagen</span></button>
+  <button data-type="gallery"><span class="ms">grid_view</span><span data-i18n>Galería</span></button>
+  <button data-type="carousel"><span class="ms">view_carousel</span><span data-i18n>Carrusel</span></button>
+  <button data-type="mediatext"><span class="ms">vertical_split</span><span data-i18n>Imagen y texto</span></button>
+  <button data-type="quote"><span class="ms">format_quote</span><span data-i18n>Cita</span></button>
+  <button data-type="list"><span class="ms">format_list_bulleted</span><span data-i18n>Lista</span></button>
+  <button data-type="video"><span class="ms">movie</span><span data-i18n>Vídeo</span></button>
+  <button data-type="separator"><span class="ms">horizontal_rule</span><span data-i18n>Separador</span></button>
+</div>
 <div id="selbar" class="selbar"><span id="sel-count"></span><button id="sel-clear" class="btn text" data-i18n>Quitar selección</button><button id="make" class="btn filled" disabled><span class="ms">post_add</span><span data-i18n>Crear entrada</span></button></div>
 <div id="drop" class="drop hidden"><div><span class="ms fill">file_download</span><span data-i18n>Suelta aquí</span></div></div>
 <div id="toast"></div>
 <script src="i18n.js"></script>
+<script src="blocks.js"></script>
 <script src="renderer.js"></script>
 </body>
 </html>

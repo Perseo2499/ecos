@@ -142,8 +142,104 @@ function buildDraft(posts, uploaded, opts = {}) {
     }
   }
   const firstImg = sections.flatMap((s) => s.images)[0];
-  return { title, tags, sections, featuredImageId: firstImg?.id, date: sorted[sorted.length - 1].date, sourceText: sorted.map((p) => p.text).join('\n\n---\n\n') };
+  return {
+    title, tags, sections, blocks: sectionsToBlocks(sections), featuredImageId: firstImg?.id,
+    date: sorted[sorted.length - 1].date, sourceText: sorted.map((p) => p.text).join('\n\n---\n\n'),
+  };
 }
+
+// --- Editor de bloques -----------------------------------------------------------
+// Un bloque es un objeto { id, type, ... } que el editor de Ecos modifica y composeBlocks() convierte en
+// bloques estándar de WordPress (Gutenberg), así la web los pinta con su propio tema:
+//   paragraph {html} · heading {level, html} · quote {html, cite} · list {ordered, items[]}
+//   image {img{id,url,alt}, caption} · gallery {images[], columns} · carousel {images[]}
+//   mediatext {img, html, right} · video {video{id,url}} · embed {url, provider} · separator {}
+let seq = 0;
+const bid = () => 'b' + Date.now().toString(36) + (seq++).toString(36);
+
+function sectionsToBlocks(sections) {
+  const out = [];
+  sections.forEach((sec, i) => {
+    if (i > 0) out.push({ id: bid(), type: 'separator' });
+    for (const p of sanitizeParagraphs(sec.html)) out.push({ id: bid(), type: 'paragraph', html: p });
+    if (sec.images.length === 1) out.push({ id: bid(), type: 'image', img: sec.images[0], caption: '' });
+    else if (sec.images.length > 1) out.push({ id: bid(), type: 'gallery', images: sec.images, columns: Math.min(sec.images.length, 3) });
+    for (const v of sec.videos) out.push({ id: bid(), type: 'video', video: v });
+    if (sec.embed) out.push({ id: bid(), type: 'embed', url: sec.embed.url, provider: sec.embed.provider });
+    if (sec.footer) out.push({ id: bid(), type: 'paragraph', html: sec.footer });
+  });
+  return out;
+}
+
+// Texto de una línea (título, cita, elemento de lista): negrita, cursiva, enlaces y saltos de línea
+const inline = (html) => sanitizeParagraphs(html).join('<br><br>');
+const caption = (c) => (c && inline(c) ? `<figcaption class="wp-element-caption">${inline(c)}</figcaption>` : '');
+
+function imageBlockFull(img, cap = '') {
+  const alt = img.alt ? ` alt="${esc(img.alt)}"` : ' alt=""';
+  return `<!-- wp:image {"id":${img.id},"sizeSlug":"large","linkDestination":"none"} -->\n<figure class="wp-block-image size-large"><img src="${esc(img.url)}"${alt} class="wp-image-${img.id}"/>${caption(cap)}</figure>\n<!-- /wp:image -->`;
+}
+
+// Carrusel sin JavaScript (desplazamiento con «scroll-snap»): se ve igual en cualquier tema.
+// Usa un bloque HTML, que WordPress conserva si el usuario puede publicar HTML (administradores).
+function carouselBlock(b) {
+  const id = 'ecos-c-' + b.id.replace(/[^a-z0-9]/gi, '');
+  const css = `#${id}{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:8px;margin:1.5em 0}`
+    + `#${id} figure{flex:0 0 88%;margin:0;scroll-snap-align:center}`
+    + `#${id} img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:14px;display:block}`
+    + `#${id} figcaption{font-size:.85em;opacity:.75;margin-top:6px}`;
+  const figs = b.images.map((i) => `<figure><img src="${esc(i.url)}" alt="${esc(i.alt || '')}" loading="lazy"/></figure>`).join('');
+  return `<!-- wp:html -->\n<div class="ecos-carrusel" id="${id}"><style>${css}</style>${figs}</div>\n<!-- /wp:html -->`;
+}
+
+function composeBlocks(blocks) {
+  const out = [];
+  for (const b of blocks) {
+    switch (b.type) {
+      case 'paragraph': for (const p of sanitizeParagraphs(b.html)) out.push(para(p)); break;
+      case 'heading': {
+        const l = [2, 3, 4].includes(b.level) ? b.level : 2;
+        if (inline(b.html)) out.push(`<!-- wp:heading${l === 2 ? '' : ` {"level":${l}}`} -->\n<h${l} class="wp-block-heading">${inline(b.html)}</h${l}>\n<!-- /wp:heading -->`);
+        break;
+      }
+      case 'quote':
+        if (!inline(b.html)) break;
+        out.push(`<!-- wp:quote -->\n<blockquote class="wp-block-quote">${sanitizeParagraphs(b.html).map(para).join('\n')}${b.cite ? `<cite>${inline(b.cite)}</cite>` : ''}</blockquote>\n<!-- /wp:quote -->`);
+        break;
+      case 'list': {
+        const items = (b.items || []).map(inline).filter(Boolean);
+        if (!items.length) break;
+        const tag = b.ordered ? 'ol' : 'ul';
+        out.push(`<!-- wp:list${b.ordered ? ' {"ordered":true}' : ''} -->\n<${tag} class="wp-block-list">${items.map((i) => `<!-- wp:list-item -->\n<li>${i}</li>\n<!-- /wp:list-item -->`).join('\n')}</${tag}>\n<!-- /wp:list -->`);
+        break;
+      }
+      case 'image': if (b.img) out.push(imageBlockFull(b.img, b.caption)); break;
+      case 'gallery': {
+        if (!b.images?.length) break;
+        if (b.images.length === 1) { out.push(imageBlockFull(b.images[0])); break; }
+        const cols = Math.max(1, Math.min(6, b.columns || 3));
+        out.push(`<!-- wp:gallery {"columns":${cols},"linkTo":"none"} -->\n<figure class="wp-block-gallery has-nested-images columns-${cols} is-cropped">\n${b.images.map((i) => imageBlockFull(i)).join('\n')}\n</figure>\n<!-- /wp:gallery -->`);
+        break;
+      }
+      case 'carousel': if (b.images?.length) out.push(carouselBlock(b)); break;
+      case 'mediatext': {
+        if (!b.img) break;
+        const right = b.right ? ' has-media-on-the-right' : '';
+        const text = sanitizeParagraphs(b.html).map(para).join('\n');
+        out.push(`<!-- wp:media-text {${b.right ? '"mediaPosition":"right",' : ''}"mediaId":${b.img.id},"mediaLink":"${esc(b.img.url)}","mediaType":"image"} -->\n<div class="wp-block-media-text${right} is-stacked-on-mobile"><figure class="wp-block-media-text__media"><img src="${esc(b.img.url)}" alt="${esc(b.img.alt || '')}" class="wp-image-${b.img.id} size-full"/></figure><div class="wp-block-media-text__content">${text}</div></div>\n<!-- /wp:media-text -->`);
+        break;
+      }
+      case 'video': if (b.video) out.push(videoBlock(b.video)); break;
+      case 'embed': if (b.url) out.push(embedBlock(b.url, b.provider || 'instagram')); break;
+      case 'separator': out.push('<!-- wp:separator -->\n<hr class="wp-block-separator has-alpha-channel-opacity"/>\n<!-- /wp:separator -->'); break;
+      default: break;
+    }
+  }
+  return out.join('\n\n');
+}
+
+// Todas las imágenes de los bloques (para el texto alternativo y la imagen destacada)
+const blockImages = (blocks) => blocks.flatMap((b) => (b.img ? [b.img] : b.images || []));
 
 // «Resumen de noviembre de 2026» / «Resumen del 3 al 16 de noviembre» / «Resumen de octubre y noviembre de 2026»
 function summaryTitle(from, to) {
@@ -179,4 +275,4 @@ function mergeDuplicates(posts) {
 // Claves de todas las versiones de una publicación (para marcarla como exportada)
 const postKeys = (p) => [p.source + ':' + p.id, ...(p.alsoOn || []).map((a) => a.source + ':' + a.id)];
 
-module.exports = { buildDraft, composeContent, sanitizeParagraphs, summaryTitle, extractTags, mediaKey, makeTitle, tidyTitle, mergeDuplicates, postKeys, DEFAULT_FOOTER };
+module.exports = { composeBlocks, sectionsToBlocks, blockImages, buildDraft, composeContent, sanitizeParagraphs, summaryTitle, extractTags, mediaKey, makeTitle, tidyTitle, mergeDuplicates, postKeys, DEFAULT_FOOTER };

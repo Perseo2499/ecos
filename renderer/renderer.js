@@ -220,6 +220,12 @@ function visiblePosts() {
     return show === 'all' || (show === 'done' ? done : !done);
   });
 }
+// «3 fotos · 1 vídeo» con iconos
+function mediaCount(p) {
+  const ph = p.media.filter((m) => m.type !== 'video').length, vi = p.media.filter((m) => m.type === 'video').length;
+  const part = (n, icon, one, many) => (n ? `<span class="mc" title="${t(n === 1 ? one : many, { n })}"><span class="ms">${icon}</span>${n}</span>` : '');
+  return ph || vi ? `<span class="mcount">${part(ph, 'photo', '{n} foto', '{n} fotos')}${part(vi, 'videocam', '{n} vídeo', '{n} vídeos')}</span>` : '';
+}
 function renderFeed() {
   const list = visiblePosts();
   const feed = $('#feed');
@@ -245,7 +251,7 @@ function renderFeed() {
         ${p.media.some((m) => m.type === 'video') ? `<span class="vid-badge"><span class="ms fill">play_circle</span>${t('Vídeo')}</span>` : ''}
         ${p.media.length ? `<button class="zoom" title="${t('Ver en grande')}"><span class="ms">open_in_full</span></button>` : ''}
       </div>
-      <div class="meta">${badges} ${fmtDate(p.date)}${p.media.length > 1 ? ' · ' + t('{n} archivos', { n: p.media.length }) : ''}${p.media.some((m) => m.type === 'video') ? ' · ' + t('vídeo') : ''}</div>
+      <div class="meta">${badges} ${fmtDate(p.date)}${mediaCount(p)}</div>
       <p></p>`;
     card.querySelector('p').textContent = p.text.slice(0, 220) + (p.text.length > 220 ? '…' : '');
     if (ex) card.querySelector('.done-badge').onclick = (e) => { e.stopPropagation(); window.api.open(ex.editUrl); };
@@ -386,7 +392,7 @@ async function makeDraft() {
   if (already.length && !confirm(t('{n} de las publicaciones elegidas ya están en el blog. ¿Crear otra entrada de todos modos?', { n: already.length }))) return;
   toast(t('Subiendo fotos a WordPress…'));
   draft = await window.api.buildDraft(chosen);
-  draft.excerpt = ''; draft.postId = null; // postId: borrador ya guardado en WordPress (vista previa)
+  draft.excerpt = ''; draft.postId = null; draft.extraMedia = []; // postId: borrador ya guardado en WordPress
   draftKeys = chosen.flatMap(keysOf);
   openEditor();
   if (draft.failed?.length) toast(t('No se pudieron subir {n} archivo(s): {e}', { n: draft.failed.length, e: draft.failed[0] }), true);
@@ -394,9 +400,19 @@ async function makeDraft() {
 }
 $('#make').onclick = (e) => busy(e.target, makeDraft);
 
+// Fotos y vídeos disponibles para la entrada (subidos a WordPress): alimentan la bandeja del editor
+function mediaPool() {
+  const seen = new Set(), out = [];
+  const add = (m) => { if (m && m.id && !seen.has(m.id)) { seen.add(m.id); out.push(m); } };
+  for (const s of draft.sections || []) { s.images.forEach((i) => add({ ...i, type: 'image' })); s.videos.forEach((v) => add({ ...v, type: 'video' })); }
+  for (const m of draft.extraMedia || []) add(m);
+  return out;
+}
+
 function openEditor() {
   $('#sent').classList.add('hidden'); $('#send').classList.remove('hidden');
   $('#d-title').value = draft.title;
+  requestAnimationFrame(autoTitle);
   $('#d-excerpt').value = draft.excerpt || '';
   $('#d-tags').value = draft.tags.join(', ');
   const f = CFG.format || {};
@@ -404,101 +420,64 @@ function openEditor() {
   renderCats(defCats);
   $$('input[name="d-when"]').forEach((r) => (r.checked = r.value === (f.status || 'draft')));
   $('#d-schedule').value = '';
+  // Fecha original: activada por defecto y con la fecha a la vista
+  $('#d-keepdate').checked = prefs().keepDate !== false;
+  $('#d-keepdate-label').textContent = t('Fecha original ({d})', { d: fmtDay(draft.date) });
   $('#d-template').innerHTML = `<option value="">${t('Sin plantilla')}</option>` + (CFG.templates || []).map((tp, i) => `<option value="${i}">${escHtml(tp.name)}</option>`).join('');
   // Sin IA configurada, los botones se muestran desactivados y explican por qué al pasar el ratón
   $$('#ai-article, #ai-alts').forEach((b) => { b.disabled = !CFG.aiConfigured; b.parentElement.title = CFG.aiConfigured ? '' : t('Configura una IA en «Conexiones» para usar estos botones.'); });
   toggleSchedule();
-  renderSections();
+  if (!draft.blocks) draft.blocks = [];
+  window.BlockEditor.mount(draft, {
+    media: mediaPool(),
+    onChange: () => window.BlockEditor.renderMedia(),
+    onOpenMedia: (m) => {
+      const pool = mediaPool();
+      openLightbox(pool.map((x) => ({ type: x.type, src: x.url, poster: x.poster })), Math.max(0, pool.findIndex((x) => x.id === m.id)));
+    },
+  });
   $('#editor').classList.remove('hidden');
-  $('#editor').scrollTop = 0;
+  document.body.classList.add('editing');
+  $('#ed-canvas').scrollTop = 0;
   updateCount();
 }
-const closeEditor = () => { $('#editor').classList.add('hidden'); updateCount(); };
+// El título crece en varias líneas (y no admite saltos de línea)
+const autoTitle = () => { const el = $('#d-title'); el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; };
+$('#d-title').oninput = autoTitle;
+$('#d-title').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); const first = $('#d-blocks [contenteditable]'); first?.focus(); } };
+const closeEditor = () => {
+  if (!$('#sent').classList.contains('hidden') || confirm(t('¿Cerrar el editor? Lo que no hayas enviado se perderá.'))) {
+    $('#editor').classList.add('hidden'); document.body.classList.remove('editing'); updateCount();
+  }
+};
 $('#ed-close').onclick = closeEditor;
+$('#ed-undo').onclick = () => window.BlockEditor.doUndo();
+$('#ed-redo').onclick = () => window.BlockEditor.doRedo();
+document.addEventListener('keydown', (e) => {
+  if ($('#editor').classList.contains('hidden') || !(e.ctrlKey || e.metaKey)) return;
+  const k = e.key.toLowerCase();
+  // Deshacer/rehacer de bloques fuera de los textos (dentro del texto actúa el del navegador)
+  if (k === 'z' && !e.target.isContentEditable && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') { e.preventDefault(); e.shiftKey ? window.BlockEditor.doRedo() : window.BlockEditor.doUndo(); }
+  if (k === 'y' && !e.target.isContentEditable) { e.preventDefault(); window.BlockEditor.doRedo(); }
+  if (k === 's') { e.preventDefault(); $('#send').click(); }
+});
+$('#d-keepdate').onchange = () => savePrefs({ keepDate: $('#d-keepdate').checked });
 const toggleSchedule = () => $('#d-schedule').classList.toggle('hidden', $('input[name="d-when"]:checked')?.value !== 'future');
 $$('input[name="d-when"]').forEach((r) => (r.onchange = () => { toggleSchedule(); if (r.value === 'future') $('#d-schedule').focus(); }));
+
+// Subir más fotos desde el ordenador a la bandeja
+$('#d-media-add').onclick = (e) => busy(e.target, async () => {
+  const added = await window.api.uploadMedia();
+  if (!added?.length) return;
+  draft.extraMedia = [...(draft.extraMedia || []), ...added];
+  window.BlockEditor.media = mediaPool(); window.BlockEditor.renderMedia();
+  toast(t('{n} archivo(s) añadidos a la bandeja', { n: added.length }));
+});
 
 function renderCats(checkedNames) {
   const box = $('#d-cats');
   if (!categories.length) { box.innerHTML = `<span class="hint">${t('No se han podido cargar las categorías del blog.')}</span>`; return; }
   box.innerHTML = categories.map((c) => `<label class="chip"><input type="checkbox" value="${escHtml(c.name)}" ${checkedNames.includes(c.name.toLowerCase()) ? 'checked' : ''}>${escHtml(c.name)}</label>`).join('');
-}
-
-function renderSections() {
-  const wrap = $('#d-sections');
-  wrap.innerHTML = '';
-  draft.sections.forEach((sec, si) => {
-    const box = document.createElement('div');
-    box.className = 'section';
-    box.innerHTML = `
-      ${draft.sections.length > 1 ? `<div class="sec-title">${t('Publicación {n}', { n: si + 1 })}</div>` : ''}
-      <div class="rt-bar">
-        <button data-cmd="bold" title="${t('Negrita')}"><span class="ms">format_bold</span></button>
-        <button data-cmd="italic" title="${t('Cursiva')}"><span class="ms">format_italic</span></button>
-        <button data-cmd="link" title="${t('Enlace')}"><span class="ms">link</span></button>
-        <button data-cmd="unlink" title="${t('Quitar enlace')}"><span class="ms">link_off</span></button>
-      </div>
-      <div class="rt" contenteditable="true" spellcheck="true"></div>
-      <div class="imgs"></div>
-      ${sec.footer ? `<div class="foot hint"></div>` : ''}`;
-    const rt = box.querySelector('.rt');
-    rt.innerHTML = sec.html;
-    rt.oninput = () => (sec.html = rt.innerHTML);
-    rt.onpaste = (e) => { e.preventDefault(); document.execCommand('insertText', false, e.clipboardData.getData('text/plain')); };
-    box.querySelectorAll('.rt-bar button').forEach((b) => b.onmousedown = (e) => {
-      e.preventDefault();
-      if (b.dataset.cmd === 'link') { const url = prompt(t('Dirección del enlace (https://…)')); if (url) document.execCommand('createLink', false, url); }
-      else document.execCommand(b.dataset.cmd);
-      sec.html = rt.innerHTML;
-    });
-    if (sec.footer) box.querySelector('.foot').innerHTML = sec.footer;
-    renderImages(box.querySelector('.imgs'), sec);
-    wrap.appendChild(box);
-  });
-}
-
-// Fotos: arrastrar para ordenar, ★ imagen destacada, × quitar, texto alternativo
-let dragImg = null;
-function renderImages(el, sec) {
-  el.innerHTML = '';
-  if (!sec.images.length && !sec.videos.length && !sec.embed) { el.innerHTML = `<span class="hint">${t('Sin fotos')}</span>`; return; }
-  sec.images.forEach((img, i) => {
-    const fig = document.createElement('div');
-    fig.className = 'img' + (draft.featuredImageId === img.id ? ' featured' : '');
-    fig.draggable = true;
-    fig.innerHTML = `<img src="${escHtml(img.url)}" alt="">
-      <button class="star" title="${t('Usar como imagen destacada')}"><span class="ms fill">star</span></button>
-      <button class="del" title="${t('Quitar de la entrada')}"><span class="ms">close</span></button>
-      <input class="alt" placeholder="${t('Descripción (alt)')}">`;
-    fig.querySelector('img').onclick = () => openLightbox(sectionItems(sec), i);
-    fig.querySelector('.alt').value = img.alt || '';
-    fig.querySelector('.alt').oninput = (e) => (img.alt = e.target.value);
-    fig.querySelector('.star').onclick = () => { draft.featuredImageId = img.id; renderSections(); };
-    fig.querySelector('.del').onclick = () => {
-      sec.images.splice(i, 1);
-      if (draft.featuredImageId === img.id) draft.featuredImageId = draft.sections.flatMap((s) => s.images)[0]?.id;
-      renderSections();
-    };
-    fig.ondragstart = (e) => { dragImg = { sec, i }; e.dataTransfer.effectAllowed = 'move'; fig.classList.add('dragging'); };
-    fig.ondragend = () => fig.classList.remove('dragging');
-    fig.ondragover = (e) => { if (dragImg?.sec === sec) { e.preventDefault(); e.stopPropagation(); } };
-    fig.ondrop = (e) => {
-      if (dragImg?.sec !== sec) return;
-      e.preventDefault(); e.stopPropagation();
-      const [moved] = sec.images.splice(dragImg.i, 1);
-      sec.images.splice(i, 0, moved); dragImg = null; renderSections();
-    };
-    el.appendChild(fig);
-  });
-  const vid = (txt) => { const d = document.createElement('div'); d.className = 'img vid'; d.innerHTML = '<span class="ms">movie</span>'; d.append(txt); el.appendChild(d); };
-  sec.videos.forEach((v, k) => {
-    const d = document.createElement('div');
-    d.className = 'img';
-    d.innerHTML = `${v.poster ? `<img src="${escHtml(v.poster)}" alt="">` : `<video src="${escHtml(v.url)}" preload="metadata" muted style="width:116px;height:116px;object-fit:cover;border-radius:var(--r-l)"></video>`}<span class="play"><span class="ms fill">play_arrow</span></span>`;
-    d.onclick = () => openLightbox(sectionItems(sec), sec.images.length + k);
-    el.appendChild(d);
-  });
-  if (sec.embed) vid(t('Vídeo de {r} (se inserta el original)', { r: sec.embed.provider === 'instagram' ? 'Instagram' : 'Facebook' }));
 }
 
 // Plantillas
@@ -511,69 +490,65 @@ $('#d-template').onchange = () => {
     $('#d-tags').value = [...new Set([...cur, ...tp.tags.split(',').map((x) => x.trim().replace(/^#/, '')).filter(Boolean)])].join(', ');
   }
   if (tp.status) { $$('input[name="d-when"]').forEach((r) => (r.checked = r.value === tp.status)); toggleSchedule(); }
-  if (tp.footer !== undefined && tp.footer !== '') {
-    for (const sec of draft.sections) if (sec.footer !== null) sec.footer = escHtml(tp.footer).replace('{redes}', (sec.footer.match(/<a [\s\S]*<\/a>|Instagram|Facebook/) || [''])[0]);
-    renderSections();
-  }
   toast(t('Plantilla «{p}» aplicada', { p: tp.name }));
 };
 
-// IA en el editor
+// IA en el editor: el texto se reescribe y las fotos, vídeos y su orden se conservan
 $('#ai-article').onclick = (e) => busy(e.target, async () => {
-  if (draft.sections.length > 1 && !confirm(t('La IA reescribirá el texto como un único artículo. ¿Continuar?'))) return;
-  const text = draft.sourceText || draft.sections.map((s) => s.html.replace(/<[^>]+>/g, ' ')).join('\n\n');
+  const TEXT = ['paragraph', 'heading', 'quote', 'list'];
+  if (draft.blocks.some((b) => TEXT.includes(b.type)) && !confirm(t('La IA reescribirá los textos de la entrada (las fotos y vídeos se quedan). ¿Continuar?'))) return;
+  const text = draft.sourceText || window.BlockEditor.plainText();
   const r = await window.api.aiArticle({ title: $('#d-title').value, text });
   $('#d-title').value = r.title;
   $('#d-excerpt').value = r.excerpt;
-  draft.sections[0].html = r.paragraphs.map((p) => `<p>${escHtml(p)}</p>`).join('');
-  for (const s of draft.sections.slice(1)) s.html = '';
+  window.BlockEditor.change(() => {
+    const media = draft.blocks.filter((b) => !TEXT.includes(b.type));
+    const paras = r.paragraphs.map((p) => window.BlockEditor.create('paragraph', { html: escHtml(p) }));
+    // primero el texto; las fotos se reparten tras el primer párrafo para que no queden todas al final
+    draft.blocks = paras.length ? [paras[0], ...media.slice(0, 1), ...paras.slice(1), ...media.slice(1)] : media;
+  });
   const cur = $('#d-tags').value.split(',').map((x) => x.trim()).filter(Boolean);
   $('#d-tags').value = [...new Set([...cur, ...r.tags])].join(', ');
-  renderSections();
   toast(t('Listo. Revisa el texto antes de enviarlo.'));
 });
 $('#ai-alts').onclick = (e) => busy(e.target, async () => {
-  const imgs = draft.sections.flatMap((s) => s.images);
+  const imgs = draft.blocks.flatMap((b) => (b.img ? [b.img] : b.images || []));
   if (!imgs.length) throw new Error(t('Esta entrada no tiene fotos'));
   const alts = await window.api.aiAlts(imgs.map((i) => i.url), $('#d-title').value);
-  imgs.forEach((img, i) => { if (alts[i]) img.alt = alts[i]; });
-  renderSections();
+  window.BlockEditor.change(() => imgs.forEach((img, i) => { if (alts[i]) img.alt = alts[i]; }));
   toast(t('Descripciones añadidas. Puedes corregirlas debajo de cada foto.'));
+});
+
+// Datos de la entrada para enviar o previsualizar
+const draftPayload = (status) => ({
+  postId: draft.postId,
+  title: $('#d-title').value.trim(), excerpt: $('#d-excerpt').value.trim(), blocks: draft.blocks,
+  tags: $('#d-tags').value.split(',').map((x) => x.trim()).filter(Boolean),
+  categories: $$('#d-cats input:checked').map((i) => i.value),
+  status, scheduleAt: status === 'future' ? $('#d-schedule').value : null,
+  featuredImageId: draft.featuredImageId, keepDate: $('#d-keepdate').checked, date: draft.date, keys: draftKeys,
 });
 
 // Enviar
 $('#send').onclick = (e) => busy(e.target, async () => {
   const when = $('input[name="d-when"]:checked').value;
+  if (!$('#d-title').value.trim()) throw new Error(t('Escribe un título'));
   if (when === 'publish' && !confirm(t('Se publicará ahora y será visible en la web. ¿Continuar?'))) return;
-  const res = await window.api.publish({
-    postId: draft.postId,
-    title: $('#d-title').value.trim(),
-    excerpt: $('#d-excerpt').value.trim(),
-    sections: draft.sections,
-    tags: $('#d-tags').value.split(',').map((x) => x.trim()).filter(Boolean),
-    categories: $$('#d-cats input:checked').map((i) => i.value),
-    status: when,
-    scheduleAt: when === 'future' ? $('#d-schedule').value : null,
-    featuredImageId: draft.featuredImageId,
-    keepDate: $('#d-keepdate').checked, date: draft.date,
-    keys: draftKeys,
-  });
-  exported = res.exported; lastSent = res;
+  const res = await window.api.publish(draftPayload(when));
+  exported = res.exported; lastSent = res; draft.postId = res.postId || draft.postId;
   $('#sent-text').textContent = res.status === 'publish' ? t('¡Entrada publicada!')
     : res.status === 'future' ? t('Entrada programada para el {d}.', { d: fmtDate(res.date) }) : t('Borrador creado en WordPress.');
-  $('#send').classList.add('hidden'); $('#sent').classList.remove('hidden');
+  $('#sent').classList.remove('hidden');
   selected.clear(); updateCount(); renderFeed(); blog.loaded = false;
 });
-
 $('#sent-edit').onclick = () => lastSent && window.api.open(lastSent.editUrl);
 $('#sent-view').onclick = () => lastSent && window.api.open(lastSent.url);
-$('#sent-close').onclick = closeEditor;
+$('#sent-close').onclick = () => { $('#sent').classList.add('hidden'); $('#editor').classList.add('hidden'); document.body.classList.remove('editing'); updateCount(); };
 
 // ---------------------------------------------------------------- Visor de fotos y vídeos
 const mediaItemsOf = (p) => p.media.map((m) => (m.type === 'video'
-  ? { type: 'video', src: m.videoUrl || fileUrl(m.path), poster: m.url && !m.path ? m.url : '' , fallback: m.url }
+  ? { type: 'video', src: m.videoUrl || fileUrl(m.path), poster: m.url && !m.path ? m.url : '', fallback: m.url }
   : { type: 'image', src: m.url || fileUrl(m.path) }));
-const sectionItems = (sec) => [...sec.images.map((i) => ({ type: 'image', src: i.url })), ...sec.videos.map((v) => ({ type: 'video', src: v.url, poster: v.poster }))];
 let lb = { items: [], i: 0 };
 function openLightbox(items, i) {
   if (!items.length) return;
@@ -611,47 +586,36 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ---------------------------------------------------------------- Vista previa de la entrada
-// Rápida: la entrada se dibuja dentro de Ecos con un estilo de blog sencillo.
-// Real («Ver en mi web»): se guarda como borrador y se abre la vista previa de WordPress con tu tema.
-const draftPayload = (status) => ({
-  postId: draft.postId,
-  title: $('#d-title').value.trim(), excerpt: $('#d-excerpt').value.trim(), sections: draft.sections,
-  tags: $('#d-tags').value.split(',').map((x) => x.trim()).filter(Boolean),
-  categories: $$('#d-cats input:checked').map((i) => i.value),
-  status, scheduleAt: status === 'future' ? $('#d-schedule').value : null,
-  featuredImageId: draft.featuredImageId, keepDate: $('#d-keepdate').checked, date: draft.date, keys: draftKeys,
-});
+// Dentro de Ecos con los estilos reales de tu web (leídos de su portada); «Ver en mi web» guarda un
+// borrador y abre la vista previa de WordPress.
 $('#preview').onclick = (e) => busy(e.target, async () => {
-  const html = (await window.api.composeDraft(draft.sections)).replace(/<!--[\s\S]*?-->/g, '');
-  const featured = draft.sections.flatMap((s) => s.images).find((i) => i.id === draft.featuredImageId);
+  const content = (await window.api.composeDraft(draft.blocks)).replace(/<!--[\s\S]*?-->/g, '');
+  const featured = draft.blocks.flatMap((b) => (b.img ? [b.img] : b.images || [])).find((i) => i.id === draft.featuredImageId);
   const cats = $$('#d-cats input:checked').map((i) => i.value);
-  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-  const date = new Date().toLocaleDateString(prefs().lang === 'en' ? 'en-GB' : 'es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
-  $('#pv-frame').srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>
-    body{margin:0;font:18px/1.7 Georgia,'Times New Roman',serif;color:#1d1d1f;background:#fff}
-    header.site{padding:22px 32px;border-bottom:1px solid #eee;font:600 18px system-ui,sans-serif;color:${accent}}
-    article{max-width:720px;margin:0 auto;padding:40px 24px 80px}
-    .cats{font:600 12px system-ui,sans-serif;letter-spacing:1.5px;text-transform:uppercase;color:${accent}}
-    h1{font:700 40px/1.15 system-ui,sans-serif;margin:10px 0 12px;letter-spacing:-.5px}
-    .date{font:14px system-ui,sans-serif;color:#777;margin-bottom:28px}
-    .featured{width:100%;border-radius:14px;margin-bottom:28px}
-    .excerpt{font-size:21px;color:#444;margin:0 0 24px}
-    figure{margin:28px 0}figure img,figure video{max-width:100%;border-radius:10px;display:block}
-    .wp-block-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
-    .wp-block-gallery figure{margin:0}.wp-block-gallery img{width:100%;aspect-ratio:1;object-fit:cover}
-    .wp-block-embed{padding:18px;border:1px dashed #ccc;border-radius:10px;font:14px system-ui;color:#666;word-break:break-all}
-    hr{border:0;border-top:1px solid #eee;margin:40px 0}a{color:${accent}}
-    .tags{margin-top:40px;font:13px system-ui;color:#777}.tags span{display:inline-block;background:#f2f2f2;border-radius:99px;padding:4px 12px;margin:0 6px 6px 0}
-    @media(max-width:500px){h1{font-size:30px}article{padding:24px 18px}}
-  </style></head><body><header class="site">${escHtml(CFG.wpSite || '')}</header><article>
-    ${cats.length ? `<div class="cats">${escHtml(cats.join(' · '))}</div>` : ''}
-    <h1>${escHtml($('#d-title').value)}</h1><div class="date">${date}</div>
-    ${featured ? `<img class="featured" src="${escHtml(featured.url)}" alt="">` : ''}
-    ${$('#d-excerpt').value.trim() ? `<p class="excerpt">${escHtml($('#d-excerpt').value.trim())}</p>` : ''}
-    ${html}
-    <div class="tags">${$('#d-tags').value.split(',').map((x) => x.trim()).filter(Boolean).map((x) => `<span>#${escHtml(x)}</span>`).join('')}</div>
-  </article></body></html>`;
+  const date = new Date($('#d-keepdate').checked ? draft.date : Date.now()).toLocaleDateString(prefs().lang === 'en' ? 'en-GB' : 'es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+  let site = { css: '', bodyClass: '' };
+  try { site = await window.api.siteStyles(); } catch { /* sin conexión: estilo genérico */ }
+  const generic = site.css ? '' : `body{font:18px/1.7 Georgia,serif;color:#1d1d1f}h1{font:700 40px/1.15 system-ui,sans-serif}
+    .wp-block-gallery{display:grid;grid-template-columns:repeat(var(--c,3),1fr);gap:10px}.wp-block-gallery img{width:100%;aspect-ratio:1;object-fit:cover}
+    .wp-block-media-text{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center}.wp-block-media-text.has-media-on-the-right figure{order:2}
+    blockquote{border-left:4px solid #ccc;margin:1.5em 0;padding-left:1em}`;
+  $('#pv-frame').srcdoc = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+    <style>${site.css}</style><style>${generic}
+      .ecos-pv{max-width:760px;margin:0 auto;padding:40px 24px 80px}
+      .ecos-pv img,.ecos-pv video{max-width:100%;height:auto}
+      .ecos-pv .ecos-meta{opacity:.7;font-size:.9em;margin-bottom:1.5em}
+      .ecos-pv .ecos-featured{width:100%;border-radius:12px;margin-bottom:1.5em}
+      .ecos-pv .wp-block-embed{padding:18px;border:1px dashed #bbb;border-radius:10px;font-size:14px;word-break:break-all}
+    </style></head>
+    <body class="${escHtml(site.bodyClass.replace(/\bhome\b|\bblog\b|\bpage\b/g, ''))} single single-post wp-embed-responsive">
+    <main class="site-main"><article class="post type-post status-publish hentry ecos-pv">
+      <header class="entry-header">${cats.length ? `<div class="cat-links ecos-meta">${escHtml(cats.join(' · '))}</div>` : ''}
+        <h1 class="entry-title wp-block-post-title">${escHtml($('#d-title').value)}</h1><div class="ecos-meta entry-meta">${date}</div></header>
+      ${featured ? `<img class="ecos-featured wp-post-image" src="${escHtml(featured.url)}" alt="">` : ''}
+      <div class="entry-content wp-block-post-content is-layout-constrained">${content}</div>
+    </article></main></body></html>`;
   $('#pv-modal').classList.remove('hidden');
+  if (!site.css) toast(t('No se pudieron leer los estilos de tu web; la vista previa usa un estilo genérico.'));
 });
 $$('#pv-size button').forEach((b) => b.onclick = () => {
   $$('#pv-size button').forEach((x) => x.classList.toggle('active', x === b));
@@ -687,11 +651,13 @@ function renderBlog(items) {
   for (const it of items) {
     const row = document.createElement('div');
     row.className = 'b-row';
-    const when = fmtDay(it.status === 'publish' || it.status === 'future' ? it.date : it.modified);
+    // Fecha de la entrada (también en borradores); la de última modificación queda en el texto emergente
+    const when = `<span title="${escHtml(t('Última modificación: {d}', { d: fmtDay(it.modified) }))}">${fmtDay(it.date)}</span>`;
+    const fromEcos = Object.values(exported).some((r) => r.postId === it.id);
     row.innerHTML = `
       ${it.image ? `<img src="${escHtml(it.image)}" loading="lazy" alt="">` : `<div class="noimg"><span class="ms">image</span></div>`}
       <div><div class="b-title"></div>
-        <div class="b-meta"><span class="st ${escHtml(it.status)}">${STATUS()[it.status] || escHtml(it.status)}</span>${when}${it.categories.length ? ' · ' + escHtml(it.categories.join(', ')) : ''}</div>
+        <div class="b-meta"><span class="st ${escHtml(it.status)}">${STATUS()[it.status] || escHtml(it.status)}</span>${fromEcos ? `<span class="st ecos" title="${t('Entrada creada desde Ecos')}"><img src="assets/logo.svg" alt="">${t('Creada con Ecos')}</span>` : ''}${when}${it.categories.length ? ' · ' + escHtml(it.categories.join(', ')) : ''}</div>
         <div class="b-ex"></div></div>
       <div class="b-actions"></div>`;
     const title = decodeEntities(it.title);

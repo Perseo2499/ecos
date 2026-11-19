@@ -54,6 +54,12 @@ Con las capturas, la IA (Claude) lee el texto y recorta las fotos de la captura.
 4. Revisa el título, las etiquetas (salen de los hashtags), la categoría y el contenido, y pulsa **Enviar a WordPress**.
    Por defecto se crea como **borrador** y se abre el editor de WordPress.com.
 
+## Novedades de la 0.8
+- **Editor de bloques** a pantalla completa: párrafos, títulos, citas, listas, imagen, galería, carrusel, imagen y texto, vídeo y separador; mover bloques arrastrando o con ↑↓, «+» entre bloques, bandeja de fotos para arrastrar al texto, deshacer/rehacer (Ctrl+Z/Ctrl+Y) y Ctrl+S para enviar. Se guarda como bloques estándar de WordPress.
+- Vista previa con los **estilos reales de tu web**.
+- Tarjetas con el número exacto de fotos y vídeos; etiqueta «Creada con Ecos» en la pestaña Blog.
+- La fecha de las entradas se muestra siempre (también en borradores); «Fecha original» activada por defecto y con la fecha visible.
+
 ## Novedades de la 0.7
 - **WordPress propio (wp-admin)**: conexión directa con la web mediante usuario + *contraseña de aplicación* (wp-admin → Usuarios → Perfil → Contraseñas de aplicación), sin WordPress.com. Para webs alojadas en un hosting propio.
 - Se mantiene la opción WordPress.com para blogs alojados allí.

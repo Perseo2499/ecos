@@ -207,6 +207,25 @@
     'Separadas por comas': 'Comma separated', 'Juntar la misma publicación de Instagram y Facebook': 'Merge the same post from Instagram and Facebook',
     'Plantilla': 'Template', 'Otro color': 'Other colour', 'Aún no hay publicaciones': 'No posts yet',
     'Elige un origen arriba o arrastra archivos aquí.': 'Choose a source above or drag files here.',
+    // 0.8 (editor de bloques)
+    'Fotos y vídeos': 'Photos and videos', 'Subir fotos': 'Upload photos', 'Arrástralas al texto, a una galería o a un carrusel.': 'Drag them into the text, a gallery or a carousel.',
+    'Extracto': 'Excerpt', 'Cerrar el editor': 'Close the editor', 'Párrafo': 'Paragraph', 'Imagen': 'Image', 'Galería': 'Gallery', 'Carrusel': 'Carousel',
+    'Imagen y texto': 'Image and text', 'Cita': 'Quote', 'Lista': 'List', 'Separador': 'Separator', 'Resumen corto (opcional)': 'Short summary (optional)',
+    'Deshacer': 'Undo', 'Rehacer': 'Redo', 'Fecha original ({d})': 'Original date ({d})',
+    '¿Cerrar el editor? Lo que no hayas enviado se perderá.': 'Close the editor? Anything you have not sent will be lost.',
+    '{n} archivo(s) añadidos a la bandeja': '{n} file(s) added to the tray',
+    'La IA reescribirá los textos de la entrada (las fotos y vídeos se quedan). ¿Continuar?': 'The AI will rewrite the text of the post (photos and videos stay). Continue?',
+    'Escribe un título': 'Write a title', 'No se pudieron leer los estilos de tu web; la vista previa usa un estilo genérico.': 'Could not read your site styles; the preview uses a generic style.',
+    'Última modificación: {d}': 'Last modified: {d}', 'Entrada creada desde Ecos': 'Post created from Ecos', 'Creada con Ecos': 'Made with Ecos',
+    'Vídeo de la red social': 'Social media video', 'Pulsa + para añadir un bloque o arrastra aquí una foto': 'Click + to add a block or drag a photo here',
+    '{n} bloques': '{n} blocks', 'Añadir bloque': 'Add block', 'Arrastra para mover': 'Drag to move', 'Subir': 'Move up', 'Bajar': 'Move down',
+    'Duplicar': 'Duplicate', 'Eliminar bloque': 'Delete block', 'Escribe aquí…': 'Write here…', 'Autor o fuente (opcional)': 'Author or source (optional)',
+    'Elemento': 'Item', 'Arrastra aquí una foto de la bandeja': 'Drag a photo from the tray here', 'Pie de foto (opcional)': 'Caption (optional)',
+    'Suelta más fotos aquí': 'Drop more photos here', 'Arrastra aquí fotos de la bandeja': 'Drag photos from the tray here', '{n} columnas': '{n} columns',
+    'Convertir en carrusel': 'Turn into carousel', 'Convertir en galería': 'Turn into gallery', 'Arrastra una foto': 'Drag a photo',
+    'Texto junto a la imagen…': 'Text next to the image…', 'Cambiar de lado': 'Switch sides', 'Arrastra aquí un vídeo de la bandeja': 'Drag a video from the tray here',
+    'Vídeo de {r}': '{r} video', 'Se insertará la publicación original con su vídeo.': 'The original post with its video will be embedded.',
+    '{n} foto': '{n} photo', '{n} fotos': '{n} photos', '{n} vídeo': '{n} video', '{n} vídeos': '{n} videos',
   };
   const DICTS = { es: {}, en: EN };
   const norm = (s) => s.trim().replace(/\s+/g, ' ');
