@@ -59,7 +59,10 @@ async function facebookPosts(cfg, account, after = null, limit = 25) {
     for (const a of p.attachments?.data || []) {
       const items = a.subattachments?.data?.length ? a.subattachments.data : [a];
       for (const s of items) {
-        if (s.media?.image?.src) media.push({ type: s.media_type === 'video' ? 'video' : 'image', url: s.media.image.src, link: s.url });
+        if (!s.media?.image?.src) continue;
+        // En los vídeos, media.source es el archivo de vídeo y media.image su miniatura
+        if (/video/.test(s.media_type || '')) media.push({ type: 'video', url: s.media.image.src, videoUrl: s.media.source || null, link: s.url });
+        else media.push({ type: 'image', url: s.media.image.src, link: s.url });
       }
     }
     if (!media.length && p.full_picture) media.push({ type: 'image', url: p.full_picture });

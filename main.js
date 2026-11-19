@@ -88,7 +88,7 @@ let mainWin;
 
 function createWindow() {
   const win = mainWin = new BrowserWindow({
-    width: 1280, height: 860, title: 'Ecos', autoHideMenuBar: true,
+    width: 1280, height: 860, icon: path.join(__dirname, 'renderer', 'assets', 'icon.png'), title: 'Ecos', autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false },
   });
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
@@ -209,20 +209,23 @@ handle('draft:build', async (posts) => {
   if (!cfg.wpToken) throw new Error('Primero conecta WordPress.com en Configuración.');
   const items = new Map();
   for (const p of posts) for (const m of p.media) {
-    if ((m.type === 'image' && (m.url || m.path)) || (m.type === 'video' && m.path)) items.set(mediaKey(m), m);
+    if ((m.type === 'image' && (m.url || m.path)) || (m.type === 'video' && (m.path || m.videoUrl))) items.set(mediaKey(m), m);
   }
   const uploaded = new Map();
   const failed = [];
+  const notes = [];
   for (const [key, m] of items) {
     // uno a uno, para que un fallo no tumbe el resto
     try {
-      uploaded.set(key, m.path ? await wp.uploadFile(cfg, m.path) : (await wp.uploadFromUrls(cfg, [m.url]))[0]);
+      const src = m.type === 'video' ? m.path || m.videoUrl : m.path || m.url;
+      uploaded.set(key, m.path ? await wp.uploadFile(cfg, src) : (await wp.uploadFromUrls(cfg, [src]))[0]);
     } catch (e) {
       if (e instanceof wp.AuthError) throw wpAuthFailed(e); // no tiene sentido seguir con el resto
-      failed.push(e.message);
+      // Un vídeo que no se puede subir (p. ej. el plan no admite vídeo) se inserta desde la red social
+      if (m.type === 'video') { notes.push('video'); log('Vídeo no subido; se insertará el original:', e.message); } else failed.push(e.message);
     }
   }
-  return { ...buildDraft(posts, uploaded, publicCfg().format), failed };
+  return { ...buildDraft(posts, uploaded, publicCfg().format), failed, notes };
 });
 
 // --- Importaciones alternativas ---
@@ -247,6 +250,37 @@ handle('import:screenshots', (paths) => importers.importScreenshots(paths, cfg.a
 handle('import:manual', (data) => importers.manualPost(data));
 
 // d.keys: claves de las publicaciones de origen, para marcarlas como «ya en el blog»
+// Dirección para editar una entrada con el editor elegido en Conexiones → WordPress
+function editUrlFor(id, type = 'post') {
+  const base = wp.publicBase(cfg) || `https://${cfg.wpSite}`;
+  switch (cfg.wpEditor) {
+    case 'wpadmin': return `${base}/wp-admin/post.php?post=${id}&action=edit`;
+    case 'elementor': return `${base}/wp-admin/post.php?post=${id}&action=elementor`;
+    default: return `https://wordpress.com/${type === 'page' ? 'page' : 'post'}/${cfg.wpSite}/${id}`;
+  }
+}
+
+// Campos comunes de una entrada a partir del borrador del editor
+function postFields(d, status) {
+  const scheduled = status === 'future' && d.scheduleAt;
+  return {
+    title: d.title, content: composeContent(d.sections), status: scheduled ? 'future' : status,
+    tags: d.tags.join(','), categories: d.categories.join(','),
+    excerpt: d.excerpt || '',
+    ...(d.featuredImageId ? { featured_image: d.featuredImageId } : {}),
+    ...(scheduled ? { date: new Date(d.scheduleAt).toISOString() } : d.keepDate ? { date: d.date } : {}),
+  };
+}
+
+// Vista previa real: guarda (o actualiza) la entrada como borrador y devuelve su dirección de vista previa
+handle('draft:preview', async (d) => {
+  const fields = postFields(d, 'draft');
+  const post = await wpCall(() => (d.postId ? wp.updatePost(cfg, d.postId, fields) : wp.createPost(cfg, fields)));
+  const base = wp.publicBase(cfg) || `https://${cfg.wpSite}`;
+  return { postId: post.ID, previewUrl: `${base}/?p=${post.ID}&preview=true` };
+});
+handle('draft:compose', (sections) => composeContent(sections));
+
 // d: { title, sections, tags, categories, status ('draft'|'publish'|'future'), date, scheduleAt, excerpt,
 //      featuredImageId, keepDate, keys }. El contenido se genera aquí a partir de las secciones del editor.
 handle('draft:publish', async (d) => {
@@ -254,18 +288,13 @@ handle('draft:publish', async (d) => {
   for (const img of d.sections.flatMap((x) => x.images)) {
     if (img.alt) await wpCall(() => wp.updateMedia(cfg, img.id, { alt: img.alt })).catch((e) => log('No se pudo guardar el alt', img.id, e.message));
   }
-  const scheduled = d.status === 'future' && d.scheduleAt;
   if (d.status === 'future' && (!d.scheduleAt || new Date(d.scheduleAt) <= new Date())) throw new Error('Elige una fecha y hora futuras para programar la entrada.');
-  const post = await wpCall(() => wp.createPost(cfg, {
-    title: d.title, content: composeContent(d.sections), status: scheduled ? 'future' : (d.status || 'draft'),
-    tags: d.tags.join(','), categories: d.categories.join(','),
-    ...(d.excerpt ? { excerpt: d.excerpt } : {}),
-    ...(d.featuredImageId ? { featured_image: d.featuredImageId } : {}),
-    ...(scheduled ? { date: new Date(d.scheduleAt).toISOString() } : d.keepDate ? { date: d.date } : {}),
-  }));
-  const editUrl = `https://wordpress.com/post/${cfg.wpSite}/${post.ID}`;
-  cfg.exported = cfg.exported || {};
+  // Si ya se guardó como borrador para la vista previa, se actualiza esa misma entrada
+  const fields = postFields(d, d.status || 'draft');
+  const post = await wpCall(() => (d.postId ? wp.updatePost(cfg, d.postId, fields) : wp.createPost(cfg, fields)));
+  const editUrl = editUrlFor(post.ID);
   const url = wp.publicUrl(cfg, post.URL);
+  cfg.exported = cfg.exported || {};
   for (const k of d.keys || []) cfg.exported[k] = { postId: post.ID, url, editUrl, title: d.title, status: post.status, at: new Date().toISOString() };
   store.save(cfg);
   return { url, editUrl, status: post.status, date: post.date, exported: cfg.exported };
@@ -293,7 +322,7 @@ handle('ai:models', (id, draftKey, draftUrl) => {
 handle('ai:test', async () => { const c = await ai.testConnection(cfg.ai); return `${ai.PROVIDERS[c.id].name} · ${c.model}`; });
 
 // --- Copia de seguridad de la configuración ---
-const BACKUP_KEYS = ['metaAppId', 'metaAppSecret', 'metaConfigId', 'graphVersion', 'wpSite', 'wpPublicUrl', 'wpClientId', 'wpClientSecret', 'ai', 'aiInstructions', 'format', 'templates', 'exported', 'prefs'];
+const BACKUP_KEYS = ['metaAppId', 'metaAppSecret', 'metaConfigId', 'graphVersion', 'wpSite', 'wpPublicUrl', 'wpEditor', 'wpClientId', 'wpClientSecret', 'ai', 'aiInstructions', 'format', 'templates', 'exported', 'prefs'];
 handle('config:export', async (withSecrets) => {
   const r = await dialog.showSaveDialog(mainWin, { title: 'Guardar copia de la configuración', defaultPath: `ecos-configuracion-${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] });
   if (r.canceled) return false;
@@ -329,7 +358,7 @@ handle('exported:forget', (keys) => { for (const k of keys) delete cfg.exported?
 handle('blog:list', (opts) => wpCall(() => wp.listPosts(cfg, opts)));
 handle('blog:setStatus', (id, status) => wpCall(() => wp.setPostStatus(cfg, id, status)));
 handle('blog:trash', (id) => wpCall(() => wp.trashPost(cfg, id)));
-handle('blog:editUrl', (id, type) => `https://wordpress.com/${type === 'page' ? 'page' : 'post'}/${cfg.wpSite}/${id}`);
+handle('blog:editUrl', (id, type) => editUrlFor(id, type));
 
 // --- Ajustes: información, registros y restablecer ---
 handle('app:info', () => ({

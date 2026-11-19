@@ -22,7 +22,11 @@ function init(sendToRenderer) {
   autoUpdater.on('update-available', (i) => status({ state: 'downloading', version: i.version, percent: 0 }));
   autoUpdater.on('download-progress', (p) => status({ ...lastStatus, state: 'downloading', percent: Math.round(p.percent) }));
   autoUpdater.on('update-downloaded', (i) => status({ state: 'ready', version: i.version }));
-  autoUpdater.on('error', (e) => status({ state: 'error', message: e.message.split('\n')[0] }));
+  autoUpdater.on('error', (e) => {
+    const msg = e.message.split('\n')[0];
+    // 404: GitHub no deja ver las versiones (repositorio privado) o aún no hay ninguna publicada
+    status({ state: 'error', message: /\b404\b/.test(msg) ? 'no se encuentran las versiones en GitHub (el repositorio tiene que ser público)' : msg });
+  });
   check();
   setInterval(check, 4 * 60 * 60 * 1000); // y cada 4 horas
 }

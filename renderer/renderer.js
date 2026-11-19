@@ -214,10 +214,16 @@ function renderFeed() {
       ${thumb ? `<img src="${escHtml(thumb)}" loading="lazy" alt="">` : `<div class="noimg">${t('Sin imagen')}</div>`}
       ${ex ? `<span class="done-badge" title="${t('Abrir la entrada en WordPress')}"><span class="ms fill">check_circle</span>${t('En el blog')}</span>` : ''}
       <span class="check"><span class="ms">check</span></span>
+      <div class="media-tools">
+        ${p.media.some((m) => m.type === 'video') ? `<span class="vid-badge"><span class="ms fill">play_circle</span>${t('Vídeo')}</span>` : ''}
+        ${p.media.length ? `<button class="zoom" title="${t('Ver en grande')}"><span class="ms">open_in_full</span></button>` : ''}
+      </div>
       <div class="meta">${badges} ${fmtDate(p.date)}${p.media.length > 1 ? ' · ' + t('{n} archivos', { n: p.media.length }) : ''}${p.media.some((m) => m.type === 'video') ? ' · ' + t('vídeo') : ''}</div>
       <p></p>`;
     card.querySelector('p').textContent = p.text.slice(0, 220) + (p.text.length > 220 ? '…' : '');
     if (ex) card.querySelector('.done-badge').onclick = (e) => { e.stopPropagation(); window.api.open(ex.editUrl); };
+    card.querySelector('.zoom')?.addEventListener('click', (e) => { e.stopPropagation(); openLightbox(mediaItemsOf(p), 0); });
+    card.ondblclick = (e) => { e.preventDefault(); if (p.media.length) openLightbox(mediaItemsOf(p), 0); };
     const toggle = () => { selected.has(key) ? selected.delete(key) : selected.add(key); card.classList.toggle('sel'); updateCount(); feed.classList.toggle('selecting', selected.size > 0); };
     card.onclick = toggle;
     card.onkeydown = (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(); } };
@@ -353,10 +359,11 @@ async function makeDraft() {
   if (already.length && !confirm(t('{n} de las publicaciones elegidas ya están en el blog. ¿Crear otra entrada de todos modos?', { n: already.length }))) return;
   toast(t('Subiendo fotos a WordPress…'));
   draft = await window.api.buildDraft(chosen);
-  draft.excerpt = '';
+  draft.excerpt = ''; draft.postId = null; // postId: borrador ya guardado en WordPress (vista previa)
   draftKeys = chosen.flatMap(keysOf);
   openEditor();
   if (draft.failed?.length) toast(t('No se pudieron subir {n} archivo(s): {e}', { n: draft.failed.length, e: draft.failed[0] }), true);
+  else if (draft.notes?.includes('video')) toast(t('Tu plan de WordPress no admite subir vídeos: se insertará el vídeo original de la red social.'));
 }
 $('#make').onclick = (e) => busy(e.target, makeDraft);
 
@@ -436,6 +443,7 @@ function renderImages(el, sec) {
       <button class="star" title="${t('Usar como imagen destacada')}"><span class="ms fill">star</span></button>
       <button class="del" title="${t('Quitar de la entrada')}"><span class="ms">close</span></button>
       <input class="alt" placeholder="${t('Descripción (alt)')}">`;
+    fig.querySelector('img').onclick = () => openLightbox(sectionItems(sec), i);
     fig.querySelector('.alt').value = img.alt || '';
     fig.querySelector('.alt').oninput = (e) => (img.alt = e.target.value);
     fig.querySelector('.star').onclick = () => { draft.featuredImageId = img.id; renderSections(); };
@@ -456,7 +464,13 @@ function renderImages(el, sec) {
     el.appendChild(fig);
   });
   const vid = (txt) => { const d = document.createElement('div'); d.className = 'img vid'; d.innerHTML = '<span class="ms">movie</span>'; d.append(txt); el.appendChild(d); };
-  for (const v of sec.videos) vid(t('Vídeo'));
+  sec.videos.forEach((v, k) => {
+    const d = document.createElement('div');
+    d.className = 'img';
+    d.innerHTML = `${v.poster ? `<img src="${escHtml(v.poster)}" alt="">` : `<video src="${escHtml(v.url)}" preload="metadata" muted style="width:116px;height:116px;object-fit:cover;border-radius:var(--r-l)"></video>`}<span class="play"><span class="ms fill">play_arrow</span></span>`;
+    d.onclick = () => openLightbox(sectionItems(sec), sec.images.length + k);
+    el.appendChild(d);
+  });
   if (sec.embed) vid(t('Vídeo de {r} (se inserta el original)', { r: sec.embed.provider === 'instagram' ? 'Instagram' : 'Facebook' }));
 }
 
@@ -505,6 +519,7 @@ $('#send').onclick = (e) => busy(e.target, async () => {
   const when = $('input[name="d-when"]:checked').value;
   if (when === 'publish' && !confirm(t('Se publicará ahora y será visible en la web. ¿Continuar?'))) return;
   const res = await window.api.publish({
+    postId: draft.postId,
     title: $('#d-title').value.trim(),
     excerpt: $('#d-excerpt').value.trim(),
     sections: draft.sections,
@@ -526,6 +541,102 @@ $('#send').onclick = (e) => busy(e.target, async () => {
 $('#sent-edit').onclick = () => lastSent && window.api.open(lastSent.editUrl);
 $('#sent-view').onclick = () => lastSent && window.api.open(lastSent.url);
 $('#sent-close').onclick = closeEditor;
+
+// ---------------------------------------------------------------- Visor de fotos y vídeos
+const mediaItemsOf = (p) => p.media.map((m) => (m.type === 'video'
+  ? { type: 'video', src: m.videoUrl || fileUrl(m.path), poster: m.url && !m.path ? m.url : '' , fallback: m.url }
+  : { type: 'image', src: m.url || fileUrl(m.path) }));
+const sectionItems = (sec) => [...sec.images.map((i) => ({ type: 'image', src: i.url })), ...sec.videos.map((v) => ({ type: 'video', src: v.url, poster: v.poster }))];
+let lb = { items: [], i: 0 };
+function openLightbox(items, i) {
+  if (!items.length) return;
+  lb = { items, i: Math.max(0, Math.min(i, items.length - 1)) };
+  $('#lightbox').classList.remove('hidden'); renderLightbox();
+}
+function renderLightbox() {
+  const it = lb.items[lb.i], stage = $('#lightbox .lb-stage');
+  stage.innerHTML = '';
+  if (it.type === 'video' && it.src) {
+    const v = document.createElement('video');
+    v.src = it.src; v.controls = true; v.autoplay = true; if (it.poster) v.poster = it.poster;
+    v.onerror = () => { stage.innerHTML = ''; const img = document.createElement('img'); img.src = it.poster || it.fallback || ''; stage.appendChild(img); toast(t('No se puede reproducir este vídeo aquí; se muestra su miniatura.')); };
+    stage.appendChild(v);
+  } else {
+    const img = document.createElement('img'); img.src = it.src || it.fallback || ''; img.alt = ''; stage.appendChild(img);
+  }
+  $('#lightbox .lb-count').textContent = lb.items.length > 1 ? `${lb.i + 1} / ${lb.items.length}` : '';
+  $$('#lightbox .lb-prev, #lightbox .lb-next').forEach((b) => (b.style.visibility = lb.items.length > 1 ? 'visible' : 'hidden'));
+}
+const closeLightbox = () => { $('#lightbox').classList.add('hidden'); $('#lightbox .lb-stage').innerHTML = ''; };
+const stepLightbox = (d) => { lb.i = (lb.i + d + lb.items.length) % lb.items.length; renderLightbox(); };
+$('#lightbox .lb-close').onclick = closeLightbox;
+$('#lightbox .lb-prev').onclick = () => stepLightbox(-1);
+$('#lightbox .lb-next').onclick = () => stepLightbox(1);
+$('#lightbox').onclick = (e) => { if (e.target.id === 'lightbox' || e.target.classList.contains('lb-stage')) closeLightbox(); };
+document.addEventListener('keydown', (e) => {
+  if ($('#lightbox').classList.contains('hidden')) {
+    if (e.key === 'Escape') { if (!$('#pv-modal').classList.contains('hidden')) $('#pv-modal').classList.add('hidden'); else if (!$('#summary-modal').classList.contains('hidden')) $('#summary-modal').classList.add('hidden'); }
+    return;
+  }
+  if (e.key === 'Escape') closeLightbox();
+  if (e.key === 'ArrowLeft') stepLightbox(-1);
+  if (e.key === 'ArrowRight') stepLightbox(1);
+});
+
+// ---------------------------------------------------------------- Vista previa de la entrada
+// Rápida: la entrada se dibuja dentro de Ecos con un estilo de blog sencillo.
+// Real («Ver en mi web»): se guarda como borrador y se abre la vista previa de WordPress con tu tema.
+const draftPayload = (status) => ({
+  postId: draft.postId,
+  title: $('#d-title').value.trim(), excerpt: $('#d-excerpt').value.trim(), sections: draft.sections,
+  tags: $('#d-tags').value.split(',').map((x) => x.trim()).filter(Boolean),
+  categories: $$('#d-cats input:checked').map((i) => i.value),
+  status, scheduleAt: status === 'future' ? $('#d-schedule').value : null,
+  featuredImageId: draft.featuredImageId, keepDate: $('#d-keepdate').checked, date: draft.date, keys: draftKeys,
+});
+$('#preview').onclick = (e) => busy(e.target, async () => {
+  const html = (await window.api.composeDraft(draft.sections)).replace(/<!--[\s\S]*?-->/g, '');
+  const featured = draft.sections.flatMap((s) => s.images).find((i) => i.id === draft.featuredImageId);
+  const cats = $$('#d-cats input:checked').map((i) => i.value);
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  const date = new Date().toLocaleDateString(prefs().lang === 'en' ? 'en-GB' : 'es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+  $('#pv-frame').srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>
+    body{margin:0;font:18px/1.7 Georgia,'Times New Roman',serif;color:#1d1d1f;background:#fff}
+    header.site{padding:22px 32px;border-bottom:1px solid #eee;font:600 18px system-ui,sans-serif;color:${accent}}
+    article{max-width:720px;margin:0 auto;padding:40px 24px 80px}
+    .cats{font:600 12px system-ui,sans-serif;letter-spacing:1.5px;text-transform:uppercase;color:${accent}}
+    h1{font:700 40px/1.15 system-ui,sans-serif;margin:10px 0 12px;letter-spacing:-.5px}
+    .date{font:14px system-ui,sans-serif;color:#777;margin-bottom:28px}
+    .featured{width:100%;border-radius:14px;margin-bottom:28px}
+    .excerpt{font-size:21px;color:#444;margin:0 0 24px}
+    figure{margin:28px 0}figure img,figure video{max-width:100%;border-radius:10px;display:block}
+    .wp-block-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+    .wp-block-gallery figure{margin:0}.wp-block-gallery img{width:100%;aspect-ratio:1;object-fit:cover}
+    .wp-block-embed{padding:18px;border:1px dashed #ccc;border-radius:10px;font:14px system-ui;color:#666;word-break:break-all}
+    hr{border:0;border-top:1px solid #eee;margin:40px 0}a{color:${accent}}
+    .tags{margin-top:40px;font:13px system-ui;color:#777}.tags span{display:inline-block;background:#f2f2f2;border-radius:99px;padding:4px 12px;margin:0 6px 6px 0}
+    @media(max-width:500px){h1{font-size:30px}article{padding:24px 18px}}
+  </style></head><body><header class="site">${escHtml(CFG.wpSite || '')}</header><article>
+    ${cats.length ? `<div class="cats">${escHtml(cats.join(' · '))}</div>` : ''}
+    <h1>${escHtml($('#d-title').value)}</h1><div class="date">${date}</div>
+    ${featured ? `<img class="featured" src="${escHtml(featured.url)}" alt="">` : ''}
+    ${$('#d-excerpt').value.trim() ? `<p class="excerpt">${escHtml($('#d-excerpt').value.trim())}</p>` : ''}
+    ${html}
+    <div class="tags">${$('#d-tags').value.split(',').map((x) => x.trim()).filter(Boolean).map((x) => `<span>#${escHtml(x)}</span>`).join('')}</div>
+  </article></body></html>`;
+  $('#pv-modal').classList.remove('hidden');
+});
+$$('#pv-size button').forEach((b) => b.onclick = () => {
+  $$('#pv-size button').forEach((x) => x.classList.toggle('active', x === b));
+  $('#pv-frame').style.maxWidth = b.dataset.w + 'px';
+});
+$('#pv-close').onclick = () => $('#pv-modal').classList.add('hidden');
+$('#pv-web').onclick = (e) => busy(e.target, async () => {
+  const r = await window.api.previewDraft(draftPayload('draft'));
+  draft.postId = r.postId;
+  window.api.open(r.previewUrl);
+  toast(t('Guardado como borrador. La vista previa se abre en tu navegador.'));
+});
 
 // ---------------------------------------------------------------- Pestaña Blog
 const blog = { loaded: false, type: 'post', page: 1, per: 20, found: 0 };

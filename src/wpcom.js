@@ -112,6 +112,7 @@ async function uploadFile(cfg, filePath) {
 }
 
 const createPost = (cfg, post) => call(cfg, '/posts/new', post);
+const updatePost = (cfg, id, post) => call(cfg, `/posts/${id}`, post);
 
 // --- Gestión del blog (pestaña «Blog») ------------------------------------------
 // type: 'post' | 'page'; status: 'any' | 'publish' | 'draft' | 'pending' | 'future' | 'private' | 'trash'
@@ -135,4 +136,4 @@ const updateMedia = (cfg, id, fields) => call(cfg, `/media/${id}`, fields);
 const setPostStatus = (cfg, id, status) => call(cfg, `/posts/${id}`, { status });
 const trashPost = (cfg, id) => call(cfg, `/posts/${id}/delete`, {});
 
-module.exports = { REDIRECT, AuthError, login, siteInfo, publicUrl, categories, uploadFromUrls, uploadFile, createPost, updateMedia, listPosts, setPostStatus, trashPost };
+module.exports = { REDIRECT, AuthError, login, siteInfo, publicUrl, publicBase, updatePost, categories, uploadFromUrls, uploadFile, createPost, updateMedia, listPosts, setPostStatus, trashPost };

@@ -54,6 +54,14 @@ Con las capturas, la IA (Claude) lee el texto y recorta las fotos de la captura.
 4. Revisa el título, las etiquetas (salen de los hashtags), la categoría y el contenido, y pulsa **Enviar a WordPress**.
    Por defecto se crea como **borrador** y se abre el editor de WordPress.com.
 
+## Novedades de la 0.6
+- Logo propio (app, ventana e instalador).
+- Visor a pantalla completa de fotos y vídeos (tarjetas y editor), con flechas y teclado.
+- Vídeos de Instagram y Facebook: se suben al blog si el plan de WordPress lo permite; si no, se inserta el original.
+- Vista previa de la entrada dentro de Ecos (ordenador / móvil) y «Ver en mi web»: guarda un borrador y abre la vista previa real con tu tema.
+- «Editar con»: editor de WordPress.com, escritorio wp-admin o Elementor (requiere el plugin instalado en la web).
+- Los enlaces «Ver» usan la dirección pública de la web.
+
 ## Novedades de la 0.4
 - **Editor visual**: texto con negrita, cursiva y enlaces; fotos que se reordenan arrastrando, ★ imagen destacada, × quitar y descripción (alt) de cada foto; extracto.
 - **Programar** la publicación para un día y hora.

@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('api', {
   mergeDuplicates: (list) => call('posts:merge', list),
   buildDraft: (posts) => call('draft:build', posts),
   publish: (d) => call('draft:publish', d),
+  previewDraft: (d) => call('draft:preview', d),
+  composeDraft: (sections) => call('draft:compose', sections),
   forgetExported: (keys) => call('exported:forget', keys),
   clearExported: () => call('exported:clear'),
 

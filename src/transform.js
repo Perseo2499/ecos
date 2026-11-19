@@ -46,12 +46,13 @@ function makeTitle(text, date, clean = true) {
 }
 
 // Clave única de un medio: URL remota (API) o ruta local (importaciones)
-const mediaKey = (m) => m.url || m.path;
+// En los vídeos la clave es el propio vídeo (la url es solo su miniatura)
+const mediaKey = (m) => (m.type === 'video' ? m.videoUrl || m.path || m.url : m.url || m.path);
 
 const para = (html) => `<!-- wp:paragraph -->\n<p>${html}</p>\n<!-- /wp:paragraph -->`;
 
 function videoBlock(v) {
-  return `<!-- wp:video {"id":${v.id}} -->\n<figure class="wp-block-video"><video controls src="${v.url}"></video></figure>\n<!-- /wp:video -->`;
+  return `<!-- wp:video {"id":${v.id}} -->\n<figure class="wp-block-video"><video controls preload="metadata" src="${v.url}"></video></figure>\n<!-- /wp:video -->`;
 }
 
 function embedBlock(url, provider) {
@@ -75,12 +76,14 @@ function footerHtml(post, template) {
 
 function postToSection(post, uploaded, opts) {
   const paragraphs = cleanText(post.text, post.source).split(/\n\s*\n/).filter(Boolean);
-  const hasRemoteVideo = post.media.some((m) => m.type === 'video' && !m.path);
+  // Vídeos subidos al blog; si alguno no se pudo subir, se inserta la publicación original
+  const vids = post.media.filter((m) => m.type === 'video');
+  const hasRemoteVideo = vids.some((m) => !uploaded.get(mediaKey(m)));
   const foot = footerHtml(post, opts.footer);
   return {
     html: paragraphs.map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`).join(''),
     images: post.media.filter((m) => m.type === 'image').map((m) => uploaded.get(mediaKey(m))).filter(Boolean).map((i) => ({ ...i, alt: '' })),
-    videos: post.media.filter((m) => m.type === 'video' && m.path).map((m) => uploaded.get(mediaKey(m))).filter(Boolean),
+    videos: vids.map((m) => uploaded.get(mediaKey(m)) && { ...uploaded.get(mediaKey(m)), poster: m.url && !m.path ? m.url : undefined }).filter(Boolean),
     embed: hasRemoteVideo && post.permalink ? { url: post.permalink, provider: post.source } : null,
     footer: foot ? foot.replace(/<!-- \/?wp:paragraph -->\n?/g, '').trim().replace(/^<p>|<\/p>$/g, '') : null,
   };
