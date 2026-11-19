@@ -337,12 +337,16 @@ $('#m-add').onclick = async () => {
 
 // Arrastrar y soltar en la ventana
 let dragDepth = 0;
-window.addEventListener('dragenter', (e) => { if ([...e.dataTransfer.types].includes('Files')) { dragDepth++; $('#drop').classList.remove('hidden'); } });
+// Solo archivos que vienen de fuera de Ecos (al arrastrar una foto dentro del editor, Windows también dice «Files»)
+const externalFiles = (e) => [...e.dataTransfer.types].includes('Files') && ![...e.dataTransfer.types].includes('text/x-ecos') && !document.body.classList.contains('dragging-internal');
+window.addEventListener('dragenter', (e) => { if (externalFiles(e)) { dragDepth++; $('#drop').classList.remove('hidden'); } });
 window.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; $('#drop').classList.add('hidden'); } });
-window.addEventListener('dragover', (e) => { if ([...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
+window.addEventListener('dragover', (e) => { if (externalFiles(e)) e.preventDefault(); });
+window.addEventListener('dragend', () => { dragDepth = 0; $('#drop').classList.add('hidden'); });
 window.addEventListener('drop', async (e) => {
-  if (![...e.dataTransfer.types].includes('Files')) return;
-  e.preventDefault(); dragDepth = 0; $('#drop').classList.add('hidden');
+  dragDepth = 0; $('#drop').classList.add('hidden');
+  if (!externalFiles(e)) return;
+  e.preventDefault();
   const paths = [...e.dataTransfer.files].map((f) => window.api.pathForFile(f)).filter(Boolean);
   if (!paths.length) return;
   if (!$('#restore').classList.contains('hidden')) return rsAnalyze(paths);

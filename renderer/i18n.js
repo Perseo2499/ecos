@@ -225,6 +225,7 @@
     'Convertir en carrusel': 'Turn into carousel', 'Convertir en galería': 'Turn into gallery', 'Arrastra una foto': 'Drag a photo',
     'Texto junto a la imagen…': 'Text next to the image…', 'Cambiar de lado': 'Switch sides', 'Arrastra aquí un vídeo de la bandeja': 'Drag a video from the tray here',
     'Vídeo de {r}': '{r} video', 'Se insertará la publicación original con su vídeo.': 'The original post with its video will be embedded.',
+    'Imagen destacada': 'Featured image', 'Quitar imagen destacada': 'Remove featured image', 'Arrastra aquí la imagen destacada': 'Drag the featured image here', 'Arrastra aquí una foto': 'Drag a photo here', 'Arrastra aquí fotos': 'Drag photos here',
     '{n} foto': '{n} photo', '{n} fotos': '{n} photos', '{n} vídeo': '{n} video', '{n} vídeos': '{n} videos',
     // 0.9 (restaurar copia de seguridad)
     'Restaurar entradas': 'Restore posts', 'Restaurar entradas desde copia de seguridad': 'Restore posts from a backup',

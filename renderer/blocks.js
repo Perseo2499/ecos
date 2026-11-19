@@ -73,6 +73,7 @@
 
     // --- Dibujo ----------------------------------------------------------------------
     render() {
+      this.renderCover();
       const wrap = $('#d-blocks');
       wrap.innerHTML = '';
       wrap.appendChild(this.inserter(0));
@@ -82,8 +83,70 @@
         empty.innerHTML = `<span class="ms">add_circle</span>${t('Pulsa + para añadir un bloque o arrastra aquí una foto')}`;
         wrap.appendChild(empty);
       }
+      // las imágenes no se arrastran «como archivo» (lo hace su contenedor)
+      $$('#editor img').forEach((im) => { im.draggable = false; });
       $('#ed-count').textContent = t('{n} bloques', { n: this.draft.blocks.length });
       $('#ed-undo').disabled = !this.undo.length; $('#ed-redo').disabled = !this.redo.length;
+      this.renderMedia();
+    },
+
+    // --- Arrastrar fotos ---------------------------------------------------------------
+    // drag = { kind: 'media', media } desde la bandeja · { kind: 'photo', block, index } desde un bloque
+    //        (index: posición en galería/carrusel; null en imagen e imagen y texto) · { kind: 'block', id }
+    isPhoto(d) { return d && (d.kind === 'photo' || (d.kind === 'media' && d.media.type !== 'video')); },
+    peek(d) {
+      if (d.kind === 'media') return { ...d.media };
+      const b = this.draft.blocks.find((x) => x.id === d.block);
+      return b ? (d.index == null ? b.img : b.images[d.index]) : null;
+    },
+    // Saca la foto de donde estaba (si viene de un bloque) y la devuelve; llamar dentro de change()
+    take(d) {
+      if (d.kind === 'media') { const { type, poster, ...img } = d.media; return { ...img, alt: img.alt || '' }; }
+      const i = this.draft.blocks.findIndex((x) => x.id === d.block);
+      const b = this.draft.blocks[i];
+      if (!b) return null;
+      if (d.index != null) return b.images.splice(d.index, 1)[0];
+      const img = b.img;
+      if (b.type === 'image') this.draft.blocks.splice(i, 1); else b.img = null;
+      return img;
+    },
+    // Hace que un elemento acepte fotos soltadas; onDrop(img) se ejecuta ya dentro de change()
+    acceptPhoto(el, onDrop, { sameOk = () => true } = {}) {
+      el.addEventListener('dragover', (e) => { if (this.isPhoto(drag) && sameOk(drag)) { e.preventDefault(); e.stopPropagation(); el.classList.add('over'); } });
+      el.addEventListener('dragleave', (e) => { if (!el.contains(e.relatedTarget)) el.classList.remove('over'); });
+      el.addEventListener('drop', (e) => {
+        el.classList.remove('over');
+        if (!this.isPhoto(drag) || !sameOk(drag)) return;
+        e.preventDefault(); e.stopPropagation();
+        const d = drag; drag = null; endDrag();
+        this.change(() => { const img = this.take(d); if (img) onDrop(img, d); });
+      });
+    },
+
+    // Portada (imagen destacada) encima del título: se suelta aquí una foto para elegirla
+    renderCover() {
+      const box = $('#d-cover');
+      if (!box) return;
+      const all = [...this.draft.blocks.flatMap((b) => (b.img ? [b.img] : b.images || [])), ...this.media];
+      const img = all.find((x) => x.id === this.draft.featuredImageId);
+      box.className = 'cover' + (img ? ' has' : '');
+      box.innerHTML = img
+        ? `<img src="${esc(img.url)}" alt=""><span class="cover-tag"><span class="ms fill">star</span>${t('Imagen destacada')}</span><button class="cover-del" title="${t('Quitar imagen destacada')}"><span class="ms">close</span></button>`
+        : `<span class="ms">add_photo_alternate</span>${t('Arrastra aquí la imagen destacada')}`;
+      $('.cover-del', box)?.addEventListener('click', () => this.change(() => (this.draft.featuredImageId = null)));
+      if (!box.dataset.wired) {
+        box.dataset.wired = '1';
+        // a la portada se copia la foto (no se saca de donde está)
+        box.addEventListener('dragover', (e) => { if (this.isPhoto(drag)) { e.preventDefault(); box.classList.add('over'); } });
+        box.addEventListener('dragleave', () => box.classList.remove('over'));
+        box.addEventListener('drop', (e) => {
+          box.classList.remove('over');
+          if (!this.isPhoto(drag)) return;
+          e.preventDefault();
+          const img = this.peek(drag); drag = null; endDrag();
+          if (img) this.change(() => (this.draft.featuredImageId = img.id));
+        });
+      }
     },
 
     // Línea con «+» entre bloques; también recibe fotos y bloques arrastrados
@@ -96,19 +159,21 @@
       el.ondragleave = () => el.classList.remove('over');
       el.ondrop = (e) => {
         e.preventDefault(); el.classList.remove('over');
-        if (drag?.kind === 'block') {
-          const from = this.draft.blocks.findIndex((b) => b.id === drag.id);
-          if (from < 0) return;
-          this.change(() => { const [b] = this.draft.blocks.splice(from, 1); this.draft.blocks.splice(from < i ? i - 1 : i, 0, b); });
-        } else if (drag?.kind === 'media') {
-          const m = drag.media;
-          this.insertAt(i, m.type === 'video' ? this.create('video', { video: m }) : this.create('image', { img: { ...m } }), false);
-        } else if (drag?.kind === 'img') {
-          // una foto sacada de una galería o carrusel pasa a ser un bloque de imagen propio
-          const src = this.draft.blocks.find((b) => b.id === drag.block);
-          this.change(() => { const [img] = src.images.splice(drag.index, 1); this.draft.blocks.splice(i, 0, this.create('image', { img })); });
+        const d = drag; drag = null; endDrag();
+        if (!d) return;
+        // posición estable: el bloque que estaba justo después de la línea (puede moverse al sacar la foto)
+        const after = this.draft.blocks[i]?.id;
+        const at = () => (after ? this.draft.blocks.findIndex((b) => b.id === after) : this.draft.blocks.length);
+        if (d.kind === 'block') {
+          const from = this.draft.blocks.findIndex((b) => b.id === d.id);
+          if (from < 0 || from === i || from === i - 1) return;
+          this.change(() => { const [b] = this.draft.blocks.splice(from, 1); this.draft.blocks.splice(at(), 0, b); });
+        } else if (d.kind === 'media' && d.media.type === 'video') {
+          this.change(() => this.draft.blocks.splice(at(), 0, this.create('video', { video: d.media })));
+        } else {
+          // foto de la bandeja o sacada de un bloque → bloque de imagen propio en esa posición
+          this.change(() => { const img = this.take(d); if (img) this.draft.blocks.splice(at(), 0, this.create('image', { img })); });
         }
-        drag = null;
       };
       return el;
     },
@@ -149,8 +214,8 @@
       };
       $$('.blk-tools [data-a]', el).forEach((btn) => (btn.onclick = act[btn.dataset.a]));
       const handle = $('.blk-handle', el);
-      handle.ondragstart = (e) => { drag = { kind: 'block', id: b.id }; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setDragImage(el, 20, 20); el.classList.add('dragging'); document.body.classList.add('dragging-block'); };
-      handle.ondragend = () => { el.classList.remove('dragging'); document.body.classList.remove('dragging-block'); drag = null; };
+      handle.ondragstart = (e) => { drag = { kind: 'block', id: b.id }; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/x-ecos', 'block'); e.dataTransfer.setDragImage(el, 20, 20); startDrag(el, 'dragging-block'); };
+      handle.ondragend = () => { drag = null; endDrag(); };
       this.body(b, i, $('.blk-body', el), $('.blk-extra', el));
       return el;
     },
@@ -226,12 +291,14 @@
         }
 
         case 'image': {
-          if (!b.img) { body.appendChild(this.dropZone(t('Arrastra aquí una foto de la bandeja'), (m) => this.change(() => (b.img = { ...m })))); break; }
+          if (!b.img) { body.appendChild(this.dropZone(t('Arrastra aquí una foto'), (m) => this.change(() => (b.img = { ...m })))); this.acceptPhoto(body, (img) => (b.img = img)); break; }
           const fig = document.createElement('figure');
-          fig.appendChild(this.photo(b.img, () => this.change(() => (b.img = null)), b));
+          fig.appendChild(this.photo(b.img, () => this.change(() => this.draft.blocks.splice(this.draft.blocks.indexOf(b), 1)), b));
           fig.appendChild(this.editable('figcaption', b.caption, t('Pie de foto (opcional)'), (h) => (b.caption = h)));
           body.appendChild(fig);
-          this.acceptMedia(body, (m) => this.change(() => (b.img = { ...m })));
+          // soltar otra foto sobre esta imagen las junta en una galería
+          this.acceptPhoto(body, (img) => { b.type = 'gallery'; b.images = [b.img, img]; b.columns = 2; delete b.img; delete b.caption; },
+            { sameOk: (d) => !(d.kind === 'photo' && d.block === b.id) });
           break;
         }
 
@@ -240,10 +307,10 @@
           grid.className = b.type === 'gallery' ? 'g-grid' : 'g-car';
           if (b.type === 'gallery') grid.style.setProperty('--cols', b.columns);
           b.images.forEach((img, k) => grid.appendChild(this.photo(img, () => this.change(() => b.images.splice(k, 1)), b, k)));
-          const add = this.dropZone(b.images.length ? t('Suelta más fotos aquí') : t('Arrastra aquí fotos de la bandeja'), (m) => this.change(() => b.images.push({ ...m })), true);
+          const add = this.dropZone(b.images.length ? t('Suelta más fotos aquí') : t('Arrastra aquí fotos'), (m) => this.change(() => b.images.push({ ...m })), true);
           grid.appendChild(add);
           body.appendChild(grid);
-          this.acceptMedia(body, (m) => this.change(() => b.images.push({ ...m })));
+          this.acceptPhoto(body, (img) => b.images.push(img)); // soltar en un hueco: al final
           // Convertir galería ↔ carrusel y elegir columnas
           extra.innerHTML = (b.type === 'gallery'
             ? [2, 3, 4].map((c) => `<button class="lv ${b.columns === c ? 'on' : ''}" data-c="${c}" title="${t('{n} columnas', { n: c })}">${c}<span class="ms">view_column</span></button>`).join('')
@@ -260,7 +327,7 @@
           side.className = 'mt-media';
           if (b.img) side.appendChild(this.photo(b.img, () => this.change(() => (b.img = null)), b));
           else side.appendChild(this.dropZone(t('Arrastra una foto'), (m) => this.change(() => (b.img = { ...m }))));
-          this.acceptMedia(side, (m) => this.change(() => (b.img = { ...m })));
+          this.acceptPhoto(side, (img) => (b.img = img), { sameOk: (d) => !(d.kind === 'photo' && d.block === b.id) });
           const text = this.editable('div', b.html, t('Texto junto a la imagen…'), (h) => (b.html = h), { cls: 'mt-text' });
           row.append(side, text);
           body.appendChild(row);
@@ -288,30 +355,37 @@
     },
 
     // Foto dentro de un bloque: ★ destacada, × quitar, alt, arrastrar para ordenar o sacar de la galería
-    photo(img, remove, block, index) {
+    // Foto dentro de un bloque: ★ destacada, × quitar, alt; se arrastra a cualquier sitio
+    photo(img, remove, block, index = null) {
       const fig = document.createElement('div');
       fig.className = 'ph' + (this.draft.featuredImageId === img.id ? ' featured' : '');
-      fig.innerHTML = `<img src="${esc(img.url)}" alt="">
+      fig.draggable = true;
+      fig.innerHTML = `<img src="${esc(img.url)}" alt="" draggable="false">
         <button class="star" title="${t('Usar como imagen destacada')}"><span class="ms fill">star</span></button>
         <button class="del" title="${t('Quitar')}"><span class="ms">close</span></button>
-        <input class="alt" placeholder="${t('Descripción (alt)')}">`;
+        <input class="alt" placeholder="${t('Descripción (alt)')}" draggable="false">`;
       $('.alt', fig).value = img.alt || '';
       $('.alt', fig).oninput = (e) => { img.alt = e.target.value; this.onChange(); };
       $('.star', fig).onclick = () => this.change(() => (this.draft.featuredImageId = img.id));
       $('.del', fig).onclick = remove;
       $('img', fig).onclick = () => this.onOpenMedia(img);
-      if (index !== undefined) {
-        // reordenar dentro de la galería/carrusel, o arrastrar fuera para convertirla en bloque propio
-        fig.draggable = true;
-        fig.ondragstart = (e) => { e.stopPropagation(); drag = { kind: 'img', block: block.id, index }; e.dataTransfer.effectAllowed = 'move'; fig.classList.add('dragging'); };
-        fig.ondragend = () => { fig.classList.remove('dragging'); drag = null; };
-        fig.ondragover = (e) => { if (drag?.kind === 'img' && drag.block === block.id) { e.preventDefault(); e.stopPropagation(); } };
-        fig.ondrop = (e) => {
-          if (drag?.kind !== 'img' || drag.block !== block.id) return;
-          e.preventDefault(); e.stopPropagation();
-          const from = drag.index; drag = null;
-          this.change(() => { const [m] = block.images.splice(from, 1); block.images.splice(index, 0, m); });
-        };
+      fig.ondragstart = (e) => {
+        if (e.target.tagName === 'INPUT') { e.preventDefault(); return; }
+        e.stopPropagation();
+        drag = { kind: 'photo', block: block.id, index };
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/x-ecos', 'photo');
+        startDrag(fig);
+      };
+      fig.ondragend = () => { drag = null; endDrag(); };
+      // Dentro de una galería o carrusel: soltar sobre una foto la coloca en su lugar
+      if (index !== null) {
+        this.acceptPhoto(fig, (got, d) => {
+          const b = this.draft.blocks.find((x) => x.id === block.id);
+          let at = index;
+          if (d.kind === 'photo' && d.block === block.id && d.index < index) at -= 1; // ya se sacó de antes
+          b.images.splice(at + (d.kind === 'photo' && d.block === block.id && d.index < index ? 1 : 0), 0, got);
+        });
       }
       return fig;
     },
@@ -324,20 +398,9 @@
       return z;
     },
     // Acepta fotos/vídeos soltados desde la bandeja (o desde otra galería)
-    acceptMedia(el, onMedia) {
-      el.addEventListener('dragover', (e) => { if (drag?.kind === 'media' || drag?.kind === 'img') { e.preventDefault(); el.classList.add('over'); } });
-      el.addEventListener('dragleave', () => el.classList.remove('over'));
-      el.addEventListener('drop', (e) => {
-        el.classList.remove('over');
-        if (drag?.kind === 'media' && drag.media.type !== 'video') { e.preventDefault(); e.stopPropagation(); const m = drag.media; drag = null; onMedia(m); }
-        else if (drag?.kind === 'img') {
-          e.preventDefault(); e.stopPropagation();
-          const src = this.draft.blocks.find((x) => x.id === drag.block); const idx = drag.index; drag = null;
-          this.change(() => { const [m] = src.images.splice(idx, 1); onMedia.call(null, m); }, true);
-        }
-      });
-    },
-    // Al pulsar una zona vacía, se resaltan las fotos de la bandeja para elegir una
+    // Compatibilidad: acepta fotos (de la bandeja o de otros bloques) en un contenedor
+    acceptMedia(el, onMedia) { this.acceptPhoto(el, (img) => onMedia(img)); },
+
     pickFromTray(onMedia, kind) {
       const tray = $('#d-media');
       tray.classList.add('picking');
@@ -358,21 +421,43 @@
         it.dataset.i = i; it.dataset.type = m.type;
         it.draggable = true;
         it.innerHTML = m.type === 'video'
-          ? `${m.poster ? `<img src="${esc(m.poster)}" alt="">` : `<video src="${esc(m.url)}" muted preload="metadata"></video>`}<span class="ms fill play">play_circle</span>`
-          : `<img src="${esc(m.url)}" alt="">`;
-        it.ondragstart = (e) => { drag = { kind: 'media', media: { ...m } }; e.dataTransfer.effectAllowed = 'copy'; document.body.classList.add('dragging-media'); };
-        it.ondragend = () => { drag = null; document.body.classList.remove('dragging-media'); };
+          ? `${m.poster ? `<img src="${esc(m.poster)}" alt="" draggable="false">` : `<video src="${esc(m.url)}" muted preload="metadata"></video>`}<span class="ms fill play">play_circle</span>`
+          : `<img src="${esc(m.url)}" alt="" draggable="false">`;
+        it.ondragstart = (e) => { drag = { kind: 'media', media: { ...m } }; e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('text/x-ecos', 'media'); startDrag(it); };
+        it.ondragend = () => { drag = null; endDrag(); };
         it.ondblclick = () => this.onOpenMedia(m);
         tray.appendChild(it);
       });
+      // Soltar en la bandeja una foto de la entrada la quita del contenido
+      if (!tray.dataset.wired) {
+        tray.dataset.wired = '1';
+        const zone = tray.parentElement;
+        zone.addEventListener('dragover', (e) => { if (drag?.kind === 'photo') { e.preventDefault(); zone.classList.add('over'); } });
+        zone.addEventListener('dragleave', (e) => { if (!zone.contains(e.relatedTarget)) zone.classList.remove('over'); });
+        zone.addEventListener('drop', (e) => {
+          zone.classList.remove('over');
+          if (drag?.kind !== 'photo') return;
+          e.preventDefault();
+          const d = drag; drag = null; endDrag();
+          this.change(() => this.take(d));
+        });
+      }
     },
 
-    // Texto de todos los bloques (para la IA)
     plainText() {
       return this.draft.blocks.map((b) => [b.html, b.cite, ...(b.items || [])].filter(Boolean).join('\n')).join('\n\n').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim();
     },
   };
 
   let drag = null;
+  let dragEl = null;
+  // Marca visual mientras se arrastra (y avisa al resto de la app de que es un arrastre interno)
+  function startDrag(el, cls = 'dragging-media') { dragEl = el; el.classList.add('dragging'); document.body.classList.add(cls, 'dragging-internal'); }
+  function endDrag() {
+    dragEl?.classList.remove('dragging'); dragEl = null;
+    document.body.classList.remove('dragging-media', 'dragging-block', 'dragging-internal');
+    $$('#editor .over').forEach((x) => x.classList.remove('over'));
+  }
+  document.addEventListener('dragend', endDrag);
   window.BlockEditor = E;
 })();

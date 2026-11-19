@@ -734,3 +734,31 @@ body.dragging-block .ins::before, body.dragging-media .ins::before { opacity: .2
 .rs-state .spin { display: inline-block; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--surface-c-highest); border-top-color: var(--primary); animation: spin .8s linear infinite; vertical-align: -3px; }
 
 .rs-stat .ms { font-size: 22px; }
+
+/* Portada (imagen destacada) encima del título */
+.cover { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 64px; margin: -14px -14px 20px; border-radius: var(--r-xl);
+  border: 2px dashed var(--outline-var); color: var(--on-surface-var); font-size: 13px; transition: all .25s var(--ease); position: relative; overflow: hidden; }
+.cover.has { border: 0; min-height: 0; display: block; }
+.cover.has img { width: 100%; max-height: 340px; object-fit: cover; display: block; border-radius: var(--r-xl); }
+.cover-tag { position: absolute; left: 12px; top: 12px; display: inline-flex; align-items: center; gap: 4px; padding: 5px 12px 5px 8px; border-radius: var(--r-full);
+  background: color-mix(in srgb, var(--surface-c-lowest) 80%, transparent); backdrop-filter: blur(10px); color: var(--primary); font-weight: 600; font-size: 12px; }
+.cover-tag .ms { font-size: 16px; }
+.cover-del { position: absolute; right: 12px; top: 12px; width: 32px; height: 32px; border: 0; border-radius: 50%; display: grid; place-items: center;
+  background: rgba(0,0,0,.45); color: #fff; opacity: 0; transition: opacity .2s; }
+.cover:hover .cover-del { opacity: 1; }
+.cover.over { border-color: var(--primary); color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, transparent); min-height: 120px; }
+.cover.has.over img { opacity: .5; }
+body.dragging-media .cover:not(.has), body.dragging-internal .cover:not(.has) { min-height: 110px; border-color: color-mix(in srgb, var(--primary) 50%, var(--outline-var)); }
+/* Fotos arrastrables y destinos */
+.ph { cursor: grab; }
+.ph.dragging { opacity: .3; transform: scale(.94); }
+.ph.over img, .blk-body.over { box-shadow: 0 0 0 3px var(--primary); }
+.g-grid .ph.over::before, .g-car .ph.over::before { content: ''; position: absolute; left: -6px; top: 0; bottom: 0; width: 4px; border-radius: 4px; background: var(--primary); }
+.ed-media.over { background: color-mix(in srgb, var(--error) 8%, transparent); box-shadow: inset 0 0 0 2px var(--error); }
+.ed-media.over::after { content: 'Soltar para quitar de la entrada'; display: block; text-align: center; color: var(--error); font-size: 12px; font-weight: 600; margin-top: 10px; }
+body.dragging-internal .ins { height: 30px; }
+body.dragging-internal .ins::before { opacity: .3; }
+
+/* El hueco «Suelta más fotos aquí» solo se ve al arrastrar (o si la galería está vacía) */
+.g-grid .drop-zone.small:not(:only-child), .g-car .drop-zone.small:not(:only-child) { display: none; }
+body.dragging-internal .g-grid .drop-zone.small, body.dragging-internal .g-car .drop-zone.small { display: flex; }
