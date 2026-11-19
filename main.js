@@ -110,7 +110,7 @@ handle('config:get', () => publicCfg());
 handle('config:set', (changes) => {
   for (const [k, v] of Object.entries(changes)) {
     if (v === '••••••') continue; // secreto sin cambios
-    cfg[k] = v;
+    cfg[k] = typeof v === 'string' ? v.trim() : v; // sin espacios sobrantes al pegar claves
   }
   store.save(cfg);
   return publicCfg();
