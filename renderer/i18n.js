@@ -195,7 +195,7 @@
     'Usuarios → Perfil → baja hasta «Contraseñas de aplicación».': 'Users → Profile → scroll down to "Application Passwords".',
     'Escribe «Ecos» como nombre y pulsa «Añadir nueva contraseña de aplicación».': 'Type "Ecos" as the name and click "Add New Application Password".',
     'Copia la contraseña que aparece (solo se muestra una vez) y pégala aquí.': 'Copy the password shown (it is only shown once) and paste it here.',
-    'Automático': 'Automatic', 'Pasos': 'Steps',
+    'Automático': 'Automatic', 'En la papelera': 'In the trash', 'Eliminada': 'Deleted', 'Pasos': 'Steps',
     'Si tu web tiene wp-admin propio, elige «Mi web» y crea una contraseña de aplicación en Usuarios → Perfil.': 'If your site has its own wp-admin, choose "My site" and create an application password in Users → Profile.',
     'Si está en WordPress.com, elige «WordPress.com» y crea una app en developer.wordpress.com/apps.': 'If it is on WordPress.com, choose "WordPress.com" and create an app at developer.wordpress.com/apps.', 'Editar con': 'Edit with', 'Editor de WordPress.com': 'WordPress.com editor',
     'Escritorio de WordPress (wp-admin)': 'WordPress dashboard (wp-admin)', 'Vista previa': 'Preview', 'Ver en mi web': 'View on my site',

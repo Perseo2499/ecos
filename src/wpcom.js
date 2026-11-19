@@ -133,7 +133,15 @@ async function listPosts(cfg, { type = 'post', status = 'any', search = '', page
   };
 }
 const updateMedia = (cfg, id, fields) => call(cfg, `/media/${id}`, fields);
+async function postStatuses(cfg, ids) {
+  const out = {};
+  for (const id of ids) {
+    try { out[id] = (await call(cfg, `/posts/${id}?fields=ID,status`)).status; }
+    catch (e) { if (e instanceof AuthError) throw e; out[id] = /not found|unknown_post|404/i.test(e.message) ? 'deleted' : undefined; }
+  }
+  return out;
+}
 const setPostStatus = (cfg, id, status) => call(cfg, `/posts/${id}`, { status });
 const trashPost = (cfg, id) => call(cfg, `/posts/${id}/delete`, {});
 
-module.exports = { REDIRECT, AuthError, login, siteInfo, publicUrl, publicBase, updatePost, categories, uploadFromUrls, uploadFile, createPost, updateMedia, listPosts, setPostStatus, trashPost };
+module.exports = { postStatuses, REDIRECT, AuthError, login, siteInfo, publicUrl, publicBase, updatePost, categories, uploadFromUrls, uploadFile, createPost, updateMedia, listPosts, setPostStatus, trashPost };

@@ -525,3 +525,12 @@ body:has(.selbar.show) #toast { bottom: 96px; }
 /* Los filtros se quedan fijos bajo la barra superior al desplazarse */
 .tab > .row.filters { position: sticky; top: 64px; z-index: 15; margin: 0 -24px 18px; padding: 10px 24px;
   background: color-mix(in srgb, var(--surface) 82%, transparent); backdrop-filter: blur(18px) saturate(1.4); }
+
+/* Etiqueta de estado en las tarjetas («Publicada», «Borrador», «En la papelera»…) */
+.post .done-badge.st-draft, .post .done-badge.st-pending { color: #b87100; }
+.post .done-badge.st-future { color: #3b6cd8; }
+.post .done-badge.st-private { color: var(--on-surface-var); }
+.post .done-badge.st-trash { color: var(--error); background: color-mix(in srgb, var(--error-container) 85%, transparent); }
+.post .done-badge.st-deleted { color: var(--on-surface-var); text-decoration: line-through; }
+:root[data-theme="dark"] .post .done-badge.st-draft, :root[data-theme="dark"] .post .done-badge.st-pending { color: #f0b860; }
+:root[data-theme="dark"] .post .done-badge.st-future { color: #8fb0ff; }

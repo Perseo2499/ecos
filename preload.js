@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('api', {
   composeDraft: (sections) => call('draft:compose', sections),
   forgetExported: (keys) => call('exported:forget', keys),
   clearExported: () => call('exported:clear'),
+  refreshExported: () => call('exported:refresh'),
 
   // Importaciones
   importMetaExport: (kind) => call('import:metaExport', kind),

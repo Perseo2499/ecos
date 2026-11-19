@@ -18,6 +18,21 @@ const selected = new Set();
 const keyOf = (p) => p.source + ':' + p.id;
 const keysOf = (p) => [keyOf(p), ...(p.alsoOn || []).map((a) => a.source + ':' + a.id)];
 const exportOf = (p) => keysOf(p).map((k) => exported[k]).find(Boolean);
+// «En el blog» solo cuenta si la entrada sigue existiendo (no en la papelera ni eliminada)
+const GONE = ['trash', 'deleted'];
+const liveExport = (p) => { const ex = exportOf(p); return ex && !GONE.includes(ex.status) ? ex : null; };
+const EX_STATUS = () => ({
+  publish: { icon: 'check_circle', label: t('Publicada') }, draft: { icon: 'edit_note', label: t('Borrador') },
+  future: { icon: 'schedule', label: t('Programada') }, pending: { icon: 'hourglass_top', label: t('Pendiente') },
+  private: { icon: 'lock', label: t('Privada') }, trash: { icon: 'delete', label: t('En la papelera') },
+  deleted: { icon: 'block', label: t('Eliminada') },
+});
+let lastRefresh = 0;
+async function refreshExported(force) {
+  if (!CFG.wpConnected || (!force && Date.now() - lastRefresh < 60000)) return;
+  lastRefresh = Date.now();
+  try { exported = await window.api.refreshExported(); renderFeed(); } catch { /* sin conexión */ }
+}
 const prefs = () => ({ theme: 'system', zoom: 1, cards: 230, accent: '#3c6e5f', lang: 'es', checkNew: true, checkToken: true, ...(CFG.prefs || {}) });
 
 // ---------------------------------------------------------------- utilidades
@@ -45,6 +60,7 @@ function showTab(name) {
   $$('header nav button, .tab').forEach((x) => x.classList.remove('active'));
   $(`header nav button[data-tab="${name}"]`).classList.add('active'); $('#tab-' + name).classList.add('active');
   if (name === 'blog' && !blog.loaded) loadBlog();
+  if (name === 'posts') refreshExported();
   updateCount();
 }
 $$('header nav button').forEach((b) => b.onclick = () => showTab(b.dataset.tab));
@@ -88,7 +104,7 @@ async function checkPending() {
   try {
     const r = await window.api.metaPosts($('#page').value, ['instagram', 'facebook']);
     const merged = await window.api.mergeDuplicates(r.posts);
-    const fresh = merged.filter((p) => !exportOf(p) && (!since || new Date(p.date) > since));
+    const fresh = merged.filter((p) => !liveExport(p) && (!since || new Date(p.date) > since));
     if (!since) { await window.api.setConfig({ lastSeenAt: new Date().toISOString() }); return; }
     if (!fresh.length) return;
     banner('pending', t('Hay {n} publicaciones nuevas en tus redes que aún no están en el blog.', { n: fresh.length }), [[t('Verlas'), async (el) => {
@@ -200,7 +216,7 @@ function visiblePosts() {
   const show = $('#f-show').value;
   return posts.filter((p) => {
     if (q && !p.text.toLowerCase().includes(q)) return false;
-    const done = !!exportOf(p);
+    const done = !!liveExport(p);
     return show === 'all' || (show === 'done' ? done : !done);
   });
 }
@@ -215,14 +231,15 @@ function renderFeed() {
     const key = keyOf(p);
     const ex = exportOf(p);
     const card = document.createElement('div');
-    card.className = 'post' + (selected.has(key) ? ' sel' : '') + (ex ? ' done' : '');
+    card.className = 'post' + (selected.has(key) ? ' sel' : '') + (ex && !GONE.includes(ex.status) ? ' done' : '');
     card.tabIndex = 0;
     const first = p.media.find((m) => m.type === 'image') || p.media[0];
     const thumb = first && (first.url || (first.type === 'image' ? fileUrl(first.path) : null));
     const badges = [p, ...(p.alsoOn || [])].map((x) => `<span class="badge ${x.source}">${x.source === 'instagram' ? 'IG' : 'FB'}</span>`).join(' ');
     card.innerHTML = `
       ${thumb ? `<img src="${escHtml(thumb)}" loading="lazy" alt="">` : `<div class="noimg">${t('Sin imagen')}</div>`}
-      ${ex ? `<span class="done-badge" title="${t('Abrir la entrada en WordPress')}"><span class="ms fill">check_circle</span>${t('En el blog')}</span>` : ''}
+      ${ex ? (() => { const st = EX_STATUS()[ex.status] || { icon: 'check_circle', label: t('En el blog') };
+        return `<span class="done-badge st-${escHtml(ex.status || 'publish')}" title="${t('Abrir la entrada en WordPress')}"><span class="ms fill">${st.icon}</span>${st.label}</span>`; })() : ''}
       <span class="check"><span class="ms">check</span></span>
       <div class="media-tools">
         ${p.media.some((m) => m.type === 'video') ? `<span class="vid-badge"><span class="ms fill">play_circle</span>${t('Vídeo')}</span>` : ''}
@@ -354,7 +371,7 @@ $('#sum-go').onclick = (e) => busy(e.target, async () => {
       await loadMore();
     }
   }
-  const inRange = posts.filter((p) => new Date(p.date) >= from && new Date(p.date) <= to && (!$('#sum-pending').checked || !exportOf(p)));
+  const inRange = posts.filter((p) => new Date(p.date) >= from && new Date(p.date) <= to && (!$('#sum-pending').checked || !liveExport(p)));
   if (!inRange.length) throw new Error(t('No hay publicaciones en ese periodo'));
   selected.clear(); inRange.forEach((p) => selected.add(keyOf(p)));
   $('#f-show').value = 'all'; renderFeed(); updateCount();
@@ -365,7 +382,7 @@ $('#sum-go').onclick = (e) => busy(e.target, async () => {
 // ---------------------------------------------------------------- Editor visual
 async function makeDraft() {
   const chosen = posts.filter((p) => selected.has(keyOf(p)));
-  const already = chosen.filter(exportOf);
+  const already = chosen.filter(liveExport);
   if (already.length && !confirm(t('{n} de las publicaciones elegidas ya están en el blog. ¿Crear otra entrada de todos modos?', { n: already.length }))) return;
   toast(t('Subiendo fotos a WordPress…'));
   draft = await window.api.buildDraft(chosen);
@@ -690,16 +707,16 @@ function renderBlog(items) {
     if (it.status === 'publish') btn(t('Ver'), async () => window.api.open(it.url));
     if (['draft', 'pending', 'private'].includes(it.status)) btn(t('Publicar'), async () => {
       if (!confirm(t('¿Publicar «{x}»? Será visible en la web.', { x: title }))) return;
-      await window.api.blogSetStatus(it.id, 'publish', it.type); toast(t('Publicada')); loadBlog();
+      exported = await window.api.blogSetStatus(it.id, 'publish', it.type); toast(t('Publicada')); loadBlog(); renderFeed();
     }, 'primary');
     if (it.status === 'publish') btn(t('Pasar a borrador'), async () => {
       if (!confirm(t('¿Retirar «{x}» de la web y dejarla como borrador?', { x: title }))) return;
-      await window.api.blogSetStatus(it.id, 'draft', it.type); toast(t('Ahora es un borrador')); loadBlog();
+      exported = await window.api.blogSetStatus(it.id, 'draft', it.type); toast(t('Ahora es un borrador')); loadBlog(); renderFeed();
     });
-    if (it.status === 'trash') btn(t('Restaurar como borrador'), async () => { await window.api.blogSetStatus(it.id, 'draft', it.type); toast(t('Restaurada como borrador')); loadBlog(); });
+    if (it.status === 'trash') btn(t('Restaurar como borrador'), async () => { exported = await window.api.blogSetStatus(it.id, 'draft', it.type); toast(t('Restaurada como borrador')); loadBlog(); renderFeed(); });
     else btn(t('Papelera'), async () => {
       if (!confirm(t('¿Mover «{x}» a la papelera? Podrás recuperarla durante 30 días.', { x: title }))) return;
-      await window.api.blogTrash(it.id, it.type); toast(t('Movida a la papelera')); loadBlog();
+      exported = await window.api.blogTrash(it.id, it.type); toast(t('Movida a la papelera')); loadBlog(); renderFeed();
     }, 'danger');
     list.appendChild(row);
   }
@@ -919,7 +936,7 @@ window.api.onConfigChanged((c) => { CFG = { ...CFG, ...c }; renderStatus(); });
   updateCount(); renderFeed(); renderManualCount();
   window.api.updateStatus().then(renderUpdate).catch(() => {});
   window.api.appInfo().then((i) => ($('#about-info').textContent = `${t('Versión')} ${i.version} · Electron ${i.electron} · ${i.platform}`)).catch(() => {});
-  if (CFG.wpConnected) loadCategories();
+  if (CFG.wpConnected) { loadCategories(); refreshExported(true); }
   checkTokenExpiry();
   if (CFG.metaConnected) {
     try { renderPages(await window.api.metaAccounts()); checkPending(); } catch (e) { toast(e.message, true); }

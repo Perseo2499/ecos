@@ -174,7 +174,20 @@ const coll = (type) => (type === 'page' ? 'pages' : 'posts');
 const setPostStatus = (cfg, id, status, type) => req(cfg, `/wp/v2/${coll(type)}/${id}`, { method: 'POST', json: { status } });
 const trashPost = (cfg, id, type) => req(cfg, `/wp/v2/${coll(type)}/${id}`, { method: 'DELETE' });
 
+// Estado actual de varias entradas: { id: 'publish' | 'draft' | 'trash' | … | 'deleted' }
+async function postStatuses(cfg, ids) {
+  const out = {};
+  for (let i = 0; i < ids.length; i += 100) {
+    const chunk = ids.slice(i, i + 100);
+    const q = new URLSearchParams({ include: chunk.join(','), per_page: '100', context: 'edit', _fields: 'id,status',
+      status: 'publish,future,draft,pending,private,trash' });
+    const found = await req(cfg, `/wp/v2/posts?${q}`);
+    for (const id of chunk) out[id] = found.find((x) => x.id === id)?.status || 'deleted';
+  }
+  return out;
+}
+
 const publicBase = (cfg) => { try { return base(cfg); } catch { return null; } };
 const publicUrl = (_cfg, url) => url;
 
-module.exports = { login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, publicBase, publicUrl };
+module.exports = { postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, publicBase, publicUrl };

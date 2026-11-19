@@ -376,8 +376,26 @@ handle('exported:forget', (keys) => { for (const k of keys) delete cfg.exported?
 
 // --- Pestaña «Blog»: gestión de entradas y páginas ---
 handle('blog:list', (opts) => wpCall(() => WP().listPosts(cfg, opts)));
-handle('blog:setStatus', (id, status, type) => wpCall(() => WP().setPostStatus(cfg, id, status, type)));
-handle('blog:trash', (id, type) => wpCall(() => WP().trashPost(cfg, id, type)));
+// Mantiene al día el estado guardado de las publicaciones exportadas que apuntan a esa entrada
+function markExported(postId, status) {
+  let changed = false;
+  for (const rec of Object.values(cfg.exported || {})) if (rec.postId === postId && rec.status !== status) { rec.status = status; changed = true; }
+  if (changed) store.save(cfg);
+  return cfg.exported || {};
+}
+handle('blog:setStatus', async (id, status, type) => { await wpCall(() => WP().setPostStatus(cfg, id, status, type)); return markExported(id, status); });
+handle('blog:trash', async (id, type) => { await wpCall(() => WP().trashPost(cfg, id, type)); return markExported(id, 'trash'); });
+
+// Consulta en WordPress el estado real de todas las entradas creadas desde Ecos
+handle('exported:refresh', async () => {
+  if (!wpIsConnected()) return cfg.exported || {};
+  const ids = [...new Set(Object.values(cfg.exported || {}).map((r) => r.postId).filter(Boolean))];
+  if (!ids.length) return cfg.exported || {};
+  const st = await wpCall(() => WP().postStatuses(cfg, ids));
+  for (const rec of Object.values(cfg.exported)) if (st[rec.postId]) rec.status = st[rec.postId];
+  store.save(cfg);
+  return cfg.exported;
+});
 handle('blog:editUrl', (id, type) => editUrlFor(id, type));
 
 // --- Ajustes: información, registros y restablecer ---
