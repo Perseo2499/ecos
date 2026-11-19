@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('api', {
   updateStatus: () => call('update:status'),
   checkUpdate: () => call('update:check'),
   installUpdate: () => call('update:install'),
+  onToast: (cb) => ipcRenderer.on('toast', (_e, msg) => cb(msg)),
+  onConfigChanged: (cb) => ipcRenderer.on('config:changed', (_e, c) => cb(c)),
   onUpdate: (cb) => ipcRenderer.on('update:status', (_e, st) => cb(st)),
   importMetaExport: (kind) => call('import:metaExport', kind),
   pickImages: (withVideo) => call('import:pickImages', withVideo),

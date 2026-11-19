@@ -203,6 +203,8 @@ function renderUpdate(st) {
   $('#update-install').classList.toggle('hidden', st.state !== 'ready');
 }
 window.api.onUpdate(renderUpdate);
+window.api.onToast((m) => toast(m));
+window.api.onConfigChanged((c) => renderStatus(c));
 $('#update-install').onclick = () => window.api.installUpdate();
 $('#update-check').onclick = async () => renderUpdate(await window.api.checkUpdate());
 

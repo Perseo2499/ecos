@@ -98,7 +98,7 @@ const publicCfg = () => ({
   anthropicKey: cfg.anthropicKey ? '••••••' : '',
   metaUserToken: undefined, wpToken: undefined,
   metaConnected: !!cfg.metaUserToken, wpConnected: !!cfg.wpToken,
-  metaRedirectUri: meta.REDIRECT, wpRedirectUri: wp.REDIRECT,
+  metaRedirectUri: meta.REDIRECT, wpRedirectUri: wp.REDIRECT, wpBlogId: undefined,
 });
 
 // Envuelve los manejadores para devolver errores legibles al renderer
@@ -136,15 +136,38 @@ handle('meta:posts', async (pageId, sources) => {
   return lists.flat().sort((a, b) => new Date(b.date) - new Date(a.date));
 });
 
+// Conecta con WordPress.com y solo guarda el permiso si funciona de verdad.
+// Si el permiso limitado al blog no sirve, lo intenta una vez con acceso a toda la cuenta.
 handle('wp:login', async () => {
-  cfg.wpToken = await wp.login(cfg);
+  let r;
+  try {
+    r = await wp.login(cfg, { log });
+  } catch (err) {
+    if (!(err instanceof wp.AuthError)) throw err;
+    log('WordPress: el permiso limitado al blog no funciona; se pide acceso global.', err.message);
+    mainWin.webContents.send('toast', 'WordPress no aceptó el primer permiso. Se abrirá otra vez el navegador para aprobar el acceso completo.');
+    r = await wp.login(cfg, { global: true, log });
+  }
+  Object.assign(cfg, { wpToken: r.token, wpBlogId: r.blogId });
   store.save(cfg);
-  return (await wp.siteInfo(cfg)).name;
+  return r.siteName;
 });
-handle('wp:categories', () => wp.categories(cfg));
+
+// Si WordPress rechaza el permiso guardado, se borra para que la app muestre «no conectado»
+function wpAuthFailed(err) {
+  log('WordPress: permiso rechazado', err.message);
+  cfg.wpToken = ''; cfg.wpBlogId = '';
+  store.save(cfg);
+  if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('config:changed', publicCfg());
+  return new Error('WordPress ha rechazado la conexión (caducada o no válida). Ve a Configuración y pulsa «Conectar con WordPress.com».');
+}
+handle('wp:categories', async () => {
+  try { return await wp.categories(cfg); } catch (e) { throw e instanceof wp.AuthError ? wpAuthFailed(e) : e; }
+});
 
 // Sube los medios (remotos o locales) y genera el borrador para revisar
 handle('draft:build', async (posts) => {
+  if (!cfg.wpToken) throw new Error('Primero conecta WordPress.com en Configuración.');
   const items = new Map();
   for (const p of posts) for (const m of p.media) {
     if ((m.type === 'image' && (m.url || m.path)) || (m.type === 'video' && m.path)) items.set(mediaKey(m), m);
@@ -155,7 +178,10 @@ handle('draft:build', async (posts) => {
     // uno a uno, para que un fallo no tumbe el resto
     try {
       uploaded.set(key, m.path ? await wp.uploadFile(cfg, m.path) : (await wp.uploadFromUrls(cfg, [m.url]))[0]);
-    } catch (e) { failed.push(e.message); }
+    } catch (e) {
+      if (e instanceof wp.AuthError) throw wpAuthFailed(e); // no tiene sentido seguir con el resto
+      failed.push(e.message);
+    }
   }
   return { ...buildDraft(posts, uploaded), failed };
 });
@@ -181,12 +207,15 @@ handle('import:screenshots', (paths) => importers.importScreenshots(paths, cfg.a
 handle('import:manual', (data) => importers.manualPost(data));
 
 handle('draft:publish', async (d) => {
-  const post = await wp.createPost(cfg, {
-    title: d.title, content: d.content, status: d.status || 'draft',
-    tags: d.tags.join(','), categories: d.categories.join(','),
-    ...(d.featuredImageId ? { featured_image: d.featuredImageId } : {}),
-    ...(d.keepDate ? { date: d.date } : {}),
-  });
+  let post;
+  try {
+    post = await wp.createPost(cfg, {
+      title: d.title, content: d.content, status: d.status || 'draft',
+      tags: d.tags.join(','), categories: d.categories.join(','),
+      ...(d.featuredImageId ? { featured_image: d.featuredImageId } : {}),
+      ...(d.keepDate ? { date: d.date } : {}),
+    });
+  } catch (e) { throw e instanceof wp.AuthError ? wpAuthFailed(e) : e; }
   return { url: post.URL, editUrl: `https://wordpress.com/post/${cfg.wpSite}/${post.ID}` };
 });
 
