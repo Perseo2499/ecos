@@ -7,9 +7,8 @@ const fs = require('fs');
 const path = require('path');
 const { app, nativeImage } = require('electron');
 const AdmZip = require('adm-zip');
-const Anthropic = require('@anthropic-ai/sdk');
 const { z } = require('zod');
-const { zodOutputFormat } = require('@anthropic-ai/sdk/helpers/zod');
+const { askStructured } = require('./ai');
 
 const VIDEO_EXT = /\.(mp4|mov|m4v|webm)$/i;
 const IMAGE_EXT = /\.(jpe?g|png|webp|heic|gif)$/i;
@@ -112,9 +111,7 @@ Extrae:
 - La fecha si se ve.
 - La posición de cada foto de la publicación (solo la imagen, sin barras, iconos ni texto de la app). Si la misma foto aparece en varias capturas, inclúyela una sola vez.`;
 
-async function importScreenshots(paths, apiKey) {
-  if (!apiKey) throw new Error('Falta la clave de la API de Anthropic (Configuración → IA)');
-  const client = new Anthropic({ apiKey });
+async function importScreenshots(paths, aiCfg) {
   const images = paths.map((p) => {
     const img = nativeImage.createFromPath(p);
     if (img.isEmpty()) throw new Error(`No se pudo abrir la imagen ${path.basename(p)}`);
@@ -124,27 +121,11 @@ async function importScreenshots(paths, apiKey) {
   const content = [];
   images.forEach((img, i) => {
     content.push({ type: 'text', text: `Captura ${i}:` });
-    content.push({ type: 'image', source: { type: 'base64', media_type: 'image/png', data: img.toPNG().toString('base64') } });
+    content.push({ type: 'image', base64: img.toPNG().toString('base64'), mediaType: 'image/png' });
   });
   content.push({ type: 'text', text: PROMPT });
 
-  let response;
-  try {
-    response = await client.messages.parse({
-      model: 'claude-opus-5-5',
-      max_tokens: 16000,
-      output_config: { effort: 'low', format: zodOutputFormat(ScreenshotResult) },
-      messages: [{ role: 'user', content }],
-    });
-  } catch (err) {
-    if (err instanceof Anthropic.AuthenticationError) throw new Error('La clave de la API de Anthropic no es válida');
-    if (err instanceof Anthropic.RateLimitError) throw new Error('Demasiadas peticiones a la IA; espera un momento');
-    if (err instanceof Anthropic.APIError) throw new Error(`IA: ${err.message}`);
-    throw err;
-  }
-  if (response.stop_reason === 'refusal') throw new Error('La IA no ha podido procesar estas capturas');
-  const r = response.parsed_output;
-  if (!r) throw new Error('La IA no devolvió un resultado válido');
+  const r = await askStructured(aiCfg, content, ScreenshotResult);
 
   // Recorta cada foto de la captura y la guarda como PNG temporal
   const outDir = path.join(app.getPath('userData'), 'imports', 'capturas-' + Date.now());

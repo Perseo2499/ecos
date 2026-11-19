@@ -50,14 +50,6 @@ const mediaKey = (m) => m.url || m.path;
 
 const para = (html) => `<!-- wp:paragraph -->\n<p>${html}</p>\n<!-- /wp:paragraph -->`;
 
-function imageBlock(img) {
-  return `<!-- wp:image {"id":${img.id},"sizeSlug":"large"} -->\n<figure class="wp-block-image size-large"><img src="${img.url}" class="wp-image-${img.id}"/></figure>\n<!-- /wp:image -->`;
-}
-
-function galleryBlock(imgs) {
-  return `<!-- wp:gallery {"linkTo":"none"} -->\n<figure class="wp-block-gallery has-nested-images columns-default is-cropped">\n${imgs.map(imageBlock).join('\n')}\n</figure>\n<!-- /wp:gallery -->`;
-}
-
 function videoBlock(v) {
   return `<!-- wp:video {"id":${v.id}} -->\n<figure class="wp-block-video"><video controls src="${v.url}"></video></figure>\n<!-- /wp:video -->`;
 }
@@ -76,24 +68,54 @@ function footerHtml(post, template) {
   return para(`<em>${esc(template || DEFAULT_FOOTER).replace('{redes}', redes)}</em>`);
 }
 
-// uploaded: Map(clave del medio -> {id, url}) con los medios ya subidos a WordPress
-function postToBlocks(post, uploaded, opts) {
-  const blocks = [];
-  const imgs = post.media.filter((m) => m.type === 'image').map((m) => uploaded.get(mediaKey(m))).filter(Boolean);
-  const videos = post.media.filter((m) => m.type === 'video' && m.path).map((m) => uploaded.get(mediaKey(m))).filter(Boolean);
-  const hasRemoteVideo = post.media.some((m) => m.type === 'video' && !m.path);
+// --- Secciones editables --------------------------------------------------------
+// Un borrador es { title, tags, date, featuredImageId, sections: [...] }. Cada sección (una por publicación):
+//   { html, images: [{id,url,alt}], videos: [{id,url}], embed: {url,provider}|null, footer: html|null }
+// El editor de Ecos modifica las secciones y composeContent() genera los bloques de WordPress al enviar.
 
+function postToSection(post, uploaded, opts) {
   const paragraphs = cleanText(post.text, post.source).split(/\n\s*\n/).filter(Boolean);
-  for (const p of paragraphs) blocks.push(para(p.replace(/\n/g, '<br>')));
-
-  if (imgs.length === 1) blocks.push(imageBlock(imgs[0]));
-  else if (imgs.length > 1) blocks.push(galleryBlock(imgs));
-  for (const v of videos) blocks.push(videoBlock(v));
-  if (hasRemoteVideo && post.permalink) blocks.push(embedBlock(post.permalink, post.source));
-
+  const hasRemoteVideo = post.media.some((m) => m.type === 'video' && !m.path);
   const foot = footerHtml(post, opts.footer);
-  if (foot) blocks.push(foot);
-  return blocks.join('\n\n');
+  return {
+    html: paragraphs.map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`).join(''),
+    images: post.media.filter((m) => m.type === 'image').map((m) => uploaded.get(mediaKey(m))).filter(Boolean).map((i) => ({ ...i, alt: '' })),
+    videos: post.media.filter((m) => m.type === 'video' && m.path).map((m) => uploaded.get(mediaKey(m))).filter(Boolean),
+    embed: hasRemoteVideo && post.permalink ? { url: post.permalink, provider: post.source } : null,
+    footer: foot ? foot.replace(/<!-- \/?wp:paragraph -->\n?/g, '').trim().replace(/^<p>|<\/p>$/g, '') : null,
+  };
+}
+
+// Limpia el HTML del editor: solo deja negrita, cursiva, enlaces y saltos de línea; devuelve párrafos
+function sanitizeParagraphs(html) {
+  let h = String(html || '')
+    .replace(/<\/(p|div|h[1-6]|li|blockquote)>/gi, '\n\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<(\/?)(b|strong)\b[^>]*>/gi, '<$1strong>')
+    .replace(/<(\/?)(i|em)\b[^>]*>/gi, '<$1em>');
+  // Enlaces: solo href http(s) o mailto
+  h = h.replace(/<a\b[^>]*?href\s*=\s*"([^"]*)"[^>]*>/gi, (_m, href) => (/^(https?:|mailto:)/i.test(href) ? `<a href="${esc(href.replace(/&amp;/g, '&'))}">` : '<a>'));
+  h = h.replace(/<(?!\/?(strong|em|a)\b)[^>]*>/gi, ''); // el resto de etiquetas fuera
+  h = h.replace(/<a>([\s\S]*?)<\/a>/gi, '$1');
+  return h.split(/\n\s*\n/).map((p) => p.trim()).filter((p) => p.replace(/<[^>]+>|&nbsp;|\s/g, '')).map((p) => p.replace(/\n/g, '<br>'));
+}
+
+function imageBlockAlt(img) {
+  const alt = img.alt ? ` alt="${esc(img.alt)}"` : '';
+  return `<!-- wp:image {"id":${img.id},"sizeSlug":"large"} -->\n<figure class="wp-block-image size-large"><img src="${img.url}"${alt} class="wp-image-${img.id}"/></figure>\n<!-- /wp:image -->`;
+}
+
+function composeContent(sections) {
+  return sections.map((sec) => {
+    const blocks = sanitizeParagraphs(sec.html).map(para);
+    const imgs = sec.images || [];
+    if (imgs.length === 1) blocks.push(imageBlockAlt(imgs[0]));
+    else if (imgs.length > 1) blocks.push(`<!-- wp:gallery {"linkTo":"none"} -->\n<figure class="wp-block-gallery has-nested-images columns-default is-cropped">\n${imgs.map(imageBlockAlt).join('\n')}\n</figure>\n<!-- /wp:gallery -->`);
+    for (const v of sec.videos || []) blocks.push(videoBlock(v));
+    if (sec.embed) blocks.push(embedBlock(sec.embed.url, sec.embed.provider));
+    if (sec.footer) blocks.push(para(sec.footer));
+    return blocks.join('\n\n');
+  }).join('\n\n<!-- wp:separator -->\n<hr class="wp-block-separator"/>\n<!-- /wp:separator -->\n\n');
 }
 
 function buildDraft(posts, uploaded, opts = {}) {
@@ -102,11 +124,33 @@ function buildDraft(posts, uploaded, opts = {}) {
   const tags = [...new Set([...sorted.flatMap((p) => extractTags(p.text)), ...extra])];
   const title = sorted.length === 1
     ? makeTitle(sorted[0].text, sorted[0].date, opts.cleanTitle !== false)
-    : 'Resumen de nuestras últimas publicaciones';
-  const content = sorted.map((p) => postToBlocks(p, uploaded, opts)).join('\n\n<!-- wp:separator -->\n<hr class="wp-block-separator"/>\n<!-- /wp:separator -->\n\n');
-  // La primera imagen se usa como imagen destacada
-  const firstImg = sorted.flatMap((p) => p.media).filter((m) => m.type === 'image').map((m) => uploaded.get(mediaKey(m))).find(Boolean);
-  return { title, content, tags, featuredImageId: firstImg?.id, date: sorted[sorted.length - 1].date };
+    : summaryTitle(sorted[0].date, sorted[sorted.length - 1].date);
+  const sections = sorted.map((p) => postToSection(p, uploaded, opts));
+  // Si el primer párrafo es el propio título, no se repite en el texto
+  if (sorted.length === 1) {
+    const plain = (h) => tidyTitle(h.replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&')).toLowerCase();
+    const m = sections[0].html.match(/^<p>([\s\S]*?)<\/p>/);
+    if (m) {
+      const lines = m[1].split('<br>');
+      if (plain(lines[0]) === title.toLowerCase()) { // solo si la línea entera es el título
+        const rest = lines.slice(1).join('<br>').trim();
+        sections[0].html = (rest ? `<p>${rest}</p>` : '') + sections[0].html.slice(m[0].length);
+      }
+    }
+  }
+  const firstImg = sections.flatMap((s) => s.images)[0];
+  return { title, tags, sections, featuredImageId: firstImg?.id, date: sorted[sorted.length - 1].date, sourceText: sorted.map((p) => p.text).join('\n\n---\n\n') };
+}
+
+// «Resumen de noviembre de 2026» / «Resumen del 3 al 16 de noviembre» / «Resumen de octubre y noviembre de 2026»
+function summaryTitle(from, to) {
+  const a = new Date(from), b = new Date(to);
+  const mes = (d) => d.toLocaleDateString('es-ES', { month: 'long' });
+  if (a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth()) {
+    const first = a.getDate() <= 3, last = b.getDate() >= 27;
+    return first && last ? `Resumen de ${mes(a)} de ${a.getFullYear()}` : `Resumen del ${a.getDate()} al ${b.getDate()} de ${mes(a)}`;
+  }
+  return `Resumen de ${mes(a)}${a.getFullYear() !== b.getFullYear() ? ' de ' + a.getFullYear() : ''} a ${mes(b)} de ${b.getFullYear()}`;
 }
 
 // --- Duplicados: la misma publicación en Instagram y Facebook --------------------
@@ -132,4 +176,4 @@ function mergeDuplicates(posts) {
 // Claves de todas las versiones de una publicación (para marcarla como exportada)
 const postKeys = (p) => [p.source + ':' + p.id, ...(p.alsoOn || []).map((a) => a.source + ':' + a.id)];
 
-module.exports = { buildDraft, extractTags, mediaKey, makeTitle, tidyTitle, mergeDuplicates, postKeys, DEFAULT_FOOTER };
+module.exports = { buildDraft, composeContent, sanitizeParagraphs, summaryTitle, extractTags, mediaKey, makeTitle, tidyTitle, mergeDuplicates, postKeys, DEFAULT_FOOTER };

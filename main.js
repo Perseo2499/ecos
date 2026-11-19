@@ -69,12 +69,13 @@ app.on('child-process-gone', (_e, d) => {
   if (d.type === 'GPU' || d.type === 'Utility') escalate(`proceso ${d.type} cerrado (${d.reason}, código ${d.exitCode})`);
 });
 
-let store, meta, wp, buildDraft, mediaKey, DEFAULT_FOOTER, mergeDuplicates, importers, updater;
+let store, meta, wp, buildDraft, composeContent, mediaKey, DEFAULT_FOOTER, mergeDuplicates, importers, updater, ai;
 try {
   store = require('./src/store');
   meta = require('./src/meta');
   wp = require('./src/wpcom');
-  ({ buildDraft, mediaKey, DEFAULT_FOOTER, mergeDuplicates } = require('./src/transform'));
+  ({ buildDraft, composeContent, mediaKey, DEFAULT_FOOTER, mergeDuplicates } = require('./src/transform'));
+  ai = require('./src/ai');
   importers = require('./src/importers');
   updater = require('./src/updater');
 } catch (err) {
@@ -103,8 +104,31 @@ const publicCfg = () => ({
   metaRedirectUri: meta.REDIRECT, wpRedirectUri: wp.REDIRECT, wpBlogId: undefined,
   format: { cleanTitle: true, footer: DEFAULT_FOOTER, extraTags: '', categories: '', status: 'draft', mergeDuplicates: true, ...(cfg.format || {}) },
   exported: cfg.exported || {},
+  templates: cfg.templates || [],
+  metaTokenExpires: cfg.metaTokenExpires || null,
+  lastSeenAt: cfg.lastSeenAt || null,
+  wizardDone: !!cfg.wizardDone || (!!cfg.metaUserToken && !!cfg.wpToken),
+  ai: aiPublic(),
+  aiConfigured: (() => { try { ai.PROVIDERS && aiReady(); return true; } catch { return false; } })(),
   startMode: { level: mode, name: MODES[mode].name },
 });
+
+// Configuración de IA sin las claves (solo si están guardadas)
+function aiPublic() {
+  const provs = cfg.ai?.providers || {};
+  return {
+    active: cfg.ai?.active || 'anthropic',
+    providers: Object.fromEntries(Object.entries(ai.PROVIDERS).map(([id, d]) => [id, {
+      name: d.name, label: d.label, keyUrl: d.keyUrl, needsKey: d.needsKey, defaultBase: d.base || '', defaultModel: d.defaultModel || '',
+      hasKey: !!provs[id]?.key, url: provs[id]?.url || '', model: provs[id]?.model || '',
+    }])),
+  };
+}
+function aiReady() {
+  const id = cfg.ai?.active || 'anthropic';
+  const d = ai.PROVIDERS[id], p = cfg.ai?.providers?.[id] || {};
+  if ((d.needsKey && !p.key) || !(p.model || d.defaultModel)) throw new Error('IA sin configurar');
+}
 
 // Envuelve llamadas a WordPress: si rechaza el permiso, se desconecta y se avisa
 const wpCall = async (fn) => { try { return await fn(); } catch (e) { throw e instanceof wp.AuthError ? wpAuthFailed(e) : e; } };
@@ -125,7 +149,8 @@ handle('config:set', (changes) => {
 });
 
 handle('meta:login', async () => {
-  cfg.metaUserToken = await meta.login(cfg);
+  const r = await meta.login(cfg);
+  cfg.metaUserToken = r.token; cfg.metaTokenExpires = r.expiresAt;
   store.save(cfg);
   accounts = await meta.listAccounts(cfg);
   return accounts.map(({ pageToken, ...a }) => a);
@@ -213,27 +238,89 @@ handle('import:metaExport', async (kind) => {
     : { title: 'ZIP de «Descargar tu información»', filters: [{ name: 'ZIP', extensions: ['zip'] }], properties: ['openFile'] });
   return files ? importers.importMetaExport(files[0]) : null;
 });
+handle('import:metaPath', (p) => importers.importMetaExport(p)); // ZIP o carpeta soltados en la ventana
 handle('import:pickImages', (withVideo) => pick({
   title: 'Elige las imágenes', properties: ['openFile', 'multiSelections'],
   filters: withVideo ? [{ name: 'Fotos y vídeos', extensions: [...IMAGES.extensions, 'mp4', 'mov'] }] : [IMAGES],
 }));
-handle('import:screenshots', (paths) => importers.importScreenshots(paths, cfg.anthropicKey));
+handle('import:screenshots', (paths) => importers.importScreenshots(paths, cfg.ai));
 handle('import:manual', (data) => importers.manualPost(data));
 
 // d.keys: claves de las publicaciones de origen, para marcarlas como «ya en el blog»
+// d: { title, sections, tags, categories, status ('draft'|'publish'|'future'), date, scheduleAt, excerpt,
+//      featuredImageId, keepDate, keys }. El contenido se genera aquí a partir de las secciones del editor.
 handle('draft:publish', async (d) => {
+  // Texto alternativo: se guarda también en la biblioteca de medios
+  for (const img of d.sections.flatMap((x) => x.images)) {
+    if (img.alt) await wpCall(() => wp.updateMedia(cfg, img.id, { alt: img.alt })).catch((e) => log('No se pudo guardar el alt', img.id, e.message));
+  }
+  const scheduled = d.status === 'future' && d.scheduleAt;
+  if (d.status === 'future' && (!d.scheduleAt || new Date(d.scheduleAt) <= new Date())) throw new Error('Elige una fecha y hora futuras para programar la entrada.');
   const post = await wpCall(() => wp.createPost(cfg, {
-    title: d.title, content: d.content, status: d.status || 'draft',
+    title: d.title, content: composeContent(d.sections), status: scheduled ? 'future' : (d.status || 'draft'),
     tags: d.tags.join(','), categories: d.categories.join(','),
+    ...(d.excerpt ? { excerpt: d.excerpt } : {}),
     ...(d.featuredImageId ? { featured_image: d.featuredImageId } : {}),
-    ...(d.keepDate ? { date: d.date } : {}),
+    ...(scheduled ? { date: new Date(d.scheduleAt).toISOString() } : d.keepDate ? { date: d.date } : {}),
   }));
   const editUrl = `https://wordpress.com/post/${cfg.wpSite}/${post.ID}`;
   cfg.exported = cfg.exported || {};
   for (const k of d.keys || []) cfg.exported[k] = { postId: post.ID, url: post.URL, editUrl, title: d.title, status: post.status, at: new Date().toISOString() };
   store.save(cfg);
-  return { url: post.URL, editUrl, exported: cfg.exported };
+  return { url: post.URL, editUrl, status: post.status, date: post.date, exported: cfg.exported };
 });
+
+// --- IA ---
+handle('ai:article', (input) => ai.improveArticle(cfg.ai, { ...input, extra: cfg.aiInstructions || '' }));
+handle('ai:alts', (urls, context) => ai.altTexts(cfg.ai, urls, context));
+
+// Selector de IA: cada proveedor guarda su clave, URL personalizada y modelo
+const aiProv = (id) => { if (!ai.PROVIDERS[id]) throw new Error('Proveedor desconocido'); cfg.ai = cfg.ai || { providers: {} }; cfg.ai.providers = cfg.ai.providers || {}; return (cfg.ai.providers[id] = cfg.ai.providers[id] || {}); };
+handle('ai:setActive', (id) => { aiProv(id); cfg.ai.active = id; store.save(cfg); return aiPublic(); });
+handle('ai:save', (id, { key, url, model }) => {
+  const p = aiProv(id);
+  if (key && key.trim()) p.key = key.trim();          // vacío = mantener la guardada
+  if (url !== undefined) p.url = url.trim();
+  if (model !== undefined) p.model = model.trim();
+  store.save(cfg); return aiPublic();
+});
+handle('ai:remove', (id) => { delete aiProv(id).key; store.save(cfg); return aiPublic(); });
+handle('ai:models', (id, draftKey, draftUrl) => {
+  const p = aiProv(id);
+  return ai.listModels(id, { key: (draftKey || '').trim() || p.key, url: draftUrl !== undefined ? draftUrl : p.url });
+});
+handle('ai:test', async () => { const c = await ai.testConnection(cfg.ai); return `${ai.PROVIDERS[c.id].name} · ${c.model}`; });
+
+// --- Copia de seguridad de la configuración ---
+const BACKUP_KEYS = ['metaAppId', 'metaAppSecret', 'metaConfigId', 'graphVersion', 'wpSite', 'wpClientId', 'wpClientSecret', 'ai', 'aiInstructions', 'format', 'templates', 'exported', 'prefs'];
+handle('config:export', async (withSecrets) => {
+  const r = await dialog.showSaveDialog(mainWin, { title: 'Guardar copia de la configuración', defaultPath: `ecos-configuracion-${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] });
+  if (r.canceled) return false;
+  const out = { ecos: app.getVersion(), exportedAt: new Date().toISOString() };
+  for (const k of BACKUP_KEYS) {
+    if (!withSecrets && /Secret$/.test(k)) continue;
+    if (cfg[k] !== undefined) out[k] = JSON.parse(JSON.stringify(cfg[k]));
+  }
+  if (!withSecrets && out.ai?.providers) for (const p of Object.values(out.ai.providers)) delete p.key;
+  fs.writeFileSync(r.filePath, JSON.stringify(out, null, 2));
+  return r.filePath;
+});
+handle('config:import', async () => {
+  const r = await dialog.showOpenDialog(mainWin, { title: 'Abrir copia de la configuración', filters: [{ name: 'JSON', extensions: ['json'] }], properties: ['openFile'] });
+  if (r.canceled) return null;
+  const data = JSON.parse(fs.readFileSync(r.filePaths[0], 'utf8'));
+  if (!data.ecos) throw new Error('Ese archivo no es una copia de configuración de Ecos');
+  for (const k of BACKUP_KEYS) {
+    if (data[k] === undefined) continue;
+    if (k === 'ai') { // conservar las claves de IA que ya hubiera si la copia no las trae
+      const old = cfg.ai?.providers || {};
+      cfg.ai = { ...data.ai, providers: Object.fromEntries(Object.entries(data.ai.providers || {}).map(([id, p]) => [id, { ...p, key: p.key || old[id]?.key }])) };
+    } else cfg[k] = data[k];
+  }
+  store.save(cfg);
+  return publicCfg();
+});
+
 handle('posts:merge', (list) => mergeDuplicates(list));
 handle('exported:forget', (keys) => { for (const k of keys) delete cfg.exported?.[k]; store.save(cfg); return cfg.exported || {}; });
 
@@ -242,6 +329,19 @@ handle('blog:list', (opts) => wpCall(() => wp.listPosts(cfg, opts)));
 handle('blog:setStatus', (id, status) => wpCall(() => wp.setPostStatus(cfg, id, status)));
 handle('blog:trash', (id) => wpCall(() => wp.trashPost(cfg, id)));
 handle('blog:editUrl', (id, type) => `https://wordpress.com/${type === 'page' ? 'page' : 'post'}/${cfg.wpSite}/${id}`);
+
+// --- Ajustes: información, registros y restablecer ---
+handle('app:info', () => ({
+  version: app.getVersion(), electron: process.versions.electron, chrome: process.versions.chrome,
+  platform: `${process.platform} ${process.arch}`, userData: app.getPath('userData'),
+}));
+handle('app:openData', () => shell.openPath(app.getPath('userData')));
+handle('app:resetAll', () => {
+  log('El usuario borra todos los datos de Ecos');
+  for (const f of ['config.json', 'modo-arranque.json', 'arranque-pendiente']) { try { fs.unlinkSync(path.join(app.getPath('userData'), f)); } catch { /* nada */ } }
+  app.relaunch(); app.exit(0);
+});
+handle('exported:clear', () => { cfg.exported = {}; store.save(cfg); return {}; });
 
 // --- Modo de arranque ---
 handle('mode:tryNormal', () => {
@@ -260,6 +360,11 @@ app.whenReady().then(() => {
   if (!gotLock || !updater) return; // otra copia abierta, o fallo al cargar módulos (ya avisado)
   log(`Arrancando Ecos ${app.getVersion()} (${process.platform} ${process.arch}, Electron ${process.versions.electron}, modo ${mode}: ${MODES[mode].name})`);
   cfg = { wpSite: 'asociacionelin.com', graphVersion: 'v23.0', ...store.load() };
+  // Migración: la clave de Claude de versiones anteriores pasa al nuevo selector de IA
+  if (!cfg.ai) {
+    cfg.ai = { active: 'anthropic', providers: cfg.anthropicKey ? { anthropic: { key: cfg.anthropicKey, model: 'claude-opus-5-5' } } : {} };
+    delete cfg.anthropicKey; store.save(cfg);
+  }
   createWindow();
   mainWin.webContents.on('render-process-gone', (_e, d) => { if (d.reason !== 'clean-exit') escalate(`la ventana se ha cerrado (${d.reason}, código ${d.exitCode})`); });
   // Si la ventana no termina de cargar en 20 s (pantalla en blanco), también se pasa al modo compatible

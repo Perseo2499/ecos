@@ -18,7 +18,16 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx electron-builder --win --x64 --publish never
+      # Firma digital: si existen los secretos WIN_CSC_LINK (certificado .pfx en base64) y WIN_CSC_KEY_PASSWORD,
+      # electron-builder firma el instalador y la app; si no, compila sin firmar.
+      - name: Compilar (y firmar si hay certificado)
+        shell: bash
+        env:
+          CERT: ${{ secrets.WIN_CSC_LINK }}
+          CERT_PASS: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          if [ -n "$CERT" ]; then export WIN_CSC_LINK="$CERT" WIN_CSC_KEY_PASSWORD="$CERT_PASS"; echo "Firmando con certificado"; else echo "Sin certificado: se compila sin firmar"; fi
+          npx electron-builder --win --x64 --publish never
       - name: Prueba de arranque en Windows
         shell: pwsh
         run: |

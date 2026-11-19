@@ -54,6 +54,18 @@ Con las capturas, la IA (Claude) lee el texto y recorta las fotos de la captura.
 4. Revisa el título, las etiquetas (salen de los hashtags), la categoría y el contenido, y pulsa **Enviar a WordPress**.
    Por defecto se crea como **borrador** y se abre el editor de WordPress.com.
 
+## Novedades de la 0.4
+- **Editor visual**: texto con negrita, cursiva y enlaces; fotos que se reordenan arrastrando, ★ imagen destacada, × quitar y descripción (alt) de cada foto; extracto.
+- **Programar** la publicación para un día y hora.
+- **Plantillas** (Comunicado, Actividad…) con categorías, etiquetas, pie y estado.
+- **Resumen de un periodo**: junta todas las publicaciones entre dos fechas en una entrada.
+- **Avisos** de publicaciones nuevas sin pasar al blog y de la caducidad de la conexión con Meta.
+- **Asistente** de primera configuración.
+- **Arrastrar y soltar** fotos, capturas o el ZIP de Meta.
+- **IA a elegir**: OpenAI, Google Gemini, Anthropic Claude, DeepSeek, Mistral, Alibaba Qwen, Ollama (local) u OpenRouter, cada una con su clave, URL opcional y modelo. Sirve para leer capturas, convertir publicaciones en artículos y describir las fotos.
+- **Ajustes**: tema claro/oscuro, tamaño de texto y tarjetas, color, idioma (español/inglés), formato, plantillas, avisos, copia de seguridad (exportar/importar), versión y actualizaciones, modo de arranque, diagnóstico y restablecer.
+- **Firma digital** preparada: añade los secretos `WIN_CSC_LINK` (certificado .pfx en base64) y `WIN_CSC_KEY_PASSWORD` en GitHub para firmar los instaladores.
+
 ## Novedades de la 0.3
 - **Pestaña Blog**: lista las entradas y páginas de WordPress con búsqueda y filtro por estado; editar, ver, publicar, pasar a borrador, papelera y restaurar.
 - **Duplicados**: la misma publicación en Instagram y Facebook se muestra una vez (IG + FB) y el pie cita las dos redes.
@@ -76,6 +88,8 @@ Con las capturas, la IA (Claude) lee el texto y recorta las fotos de la captura.
 | `src/wpcom.js` | Inicio de sesión, subida de medios y creación de entradas en WordPress.com |
 | `src/importers.js` | Importar ZIP de Meta, capturas con IA y entrada manual |
 | `src/transform.js` | Publicación → bloques de Gutenberg |
+| `src/ai.js` | Proveedores de IA (Claude, OpenAI, Gemini, DeepSeek, Mistral, Qwen, Ollama, OpenRouter) |
+| `renderer/i18n.js` | Textos de la interfaz en español e inglés |
 | `src/oauth.js` | Inicio de sesión en el navegador del sistema (servidor local en el puerto 53682) |
 | `src/updater.js` | Actualizaciones automáticas desde GitHub Releases |
 | `src/store.js` | Configuración; los tokens se guardan cifrados con DPAPI de Windows |

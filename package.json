@@ -1,7 +1,7 @@
 {
   "name": "ecos",
-  "version": "0.3.0",
-  "description": "Convierte publicaciones de Instagram y Facebook en entradas de WordPress.com",
+  "version": "0.4.0",
+  "description": "Ecos: de tus redes a tu blog",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -19,7 +19,7 @@
         "nsis",
         "portable"
       ],
-      "signAndEditExecutable": false
+      "signAndEditExecutable": true
     },
     "files": [
       "main.js",

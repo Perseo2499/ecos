@@ -31,7 +31,8 @@ async function login(cfg) {
     grant_type: 'fb_exchange_token', client_id: cfg.metaAppId,
     client_secret: cfg.metaAppSecret, fb_exchange_token: short.access_token,
   }));
-  return long.access_token;
+  // expires_in (segundos) suele ser ~60 días; si no viene, se asume eso
+  return { token: long.access_token, expiresAt: new Date(Date.now() + (long.expires_in || 60 * 86400) * 1000).toISOString() };
 }
 
 // Devuelve las páginas del usuario con su cuenta de Instagram vinculada (si la hay)

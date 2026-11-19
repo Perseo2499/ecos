@@ -113,7 +113,8 @@ async function listPosts(cfg, { type = 'post', status = 'any', search = '', page
     })),
   };
 }
+const updateMedia = (cfg, id, fields) => call(cfg, `/media/${id}`, fields);
 const setPostStatus = (cfg, id, status) => call(cfg, `/posts/${id}`, { status });
 const trashPost = (cfg, id) => call(cfg, `/posts/${id}/delete`, {});
 
-module.exports = { REDIRECT, AuthError, login, siteInfo, categories, uploadFromUrls, uploadFile, createPost, listPosts, setPostStatus, trashPost };
+module.exports = { REDIRECT, AuthError, login, siteInfo, categories, uploadFromUrls, uploadFile, createPost, updateMedia, listPosts, setPostStatus, trashPost };
