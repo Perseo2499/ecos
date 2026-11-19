@@ -265,9 +265,10 @@ handle('draft:publish', async (d) => {
   }));
   const editUrl = `https://wordpress.com/post/${cfg.wpSite}/${post.ID}`;
   cfg.exported = cfg.exported || {};
-  for (const k of d.keys || []) cfg.exported[k] = { postId: post.ID, url: post.URL, editUrl, title: d.title, status: post.status, at: new Date().toISOString() };
+  const url = wp.publicUrl(cfg, post.URL);
+  for (const k of d.keys || []) cfg.exported[k] = { postId: post.ID, url, editUrl, title: d.title, status: post.status, at: new Date().toISOString() };
   store.save(cfg);
-  return { url: post.URL, editUrl, status: post.status, date: post.date, exported: cfg.exported };
+  return { url, editUrl, status: post.status, date: post.date, exported: cfg.exported };
 });
 
 // --- IA ---
@@ -292,7 +293,7 @@ handle('ai:models', (id, draftKey, draftUrl) => {
 handle('ai:test', async () => { const c = await ai.testConnection(cfg.ai); return `${ai.PROVIDERS[c.id].name} · ${c.model}`; });
 
 // --- Copia de seguridad de la configuración ---
-const BACKUP_KEYS = ['metaAppId', 'metaAppSecret', 'metaConfigId', 'graphVersion', 'wpSite', 'wpClientId', 'wpClientSecret', 'ai', 'aiInstructions', 'format', 'templates', 'exported', 'prefs'];
+const BACKUP_KEYS = ['metaAppId', 'metaAppSecret', 'metaConfigId', 'graphVersion', 'wpSite', 'wpPublicUrl', 'wpClientId', 'wpClientSecret', 'ai', 'aiInstructions', 'format', 'templates', 'exported', 'prefs'];
 handle('config:export', async (withSecrets) => {
   const r = await dialog.showSaveDialog(mainWin, { title: 'Guardar copia de la configuración', defaultPath: `ecos-configuracion-${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] });
   if (r.canceled) return false;
@@ -359,7 +360,8 @@ handle('update:install', () => updater.install());
 app.whenReady().then(() => {
   if (!gotLock || !updater) return; // otra copia abierta, o fallo al cargar módulos (ya avisado)
   log(`Arrancando Ecos ${app.getVersion()} (${process.platform} ${process.arch}, Electron ${process.versions.electron}, modo ${mode}: ${MODES[mode].name})`);
-  cfg = { wpSite: 'asociacionelin.com', graphVersion: 'v23.0', ...store.load() };
+  cfg = { wpSite: 'asociacionelin.com', wpPublicUrl: 'https://www.asociacionelin.com/', graphVersion: 'v23.0', ...store.load() };
+  if (!cfg.wpPublicUrl) cfg.wpPublicUrl = 'https://www.asociacionelin.com/';
   // Migración: la clave de Claude de versiones anteriores pasa al nuevo selector de IA
   if (!cfg.ai) {
     cfg.ai = { active: 'anthropic', providers: cfg.anthropicKey ? { anthropic: { key: cfg.anthropicKey, model: 'claude-opus-5-5' } } : {} };

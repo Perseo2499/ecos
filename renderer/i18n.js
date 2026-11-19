@@ -188,7 +188,7 @@
     'Tu blog': 'Your blog', 'Pasos en WordPress.com': 'Steps in WordPress.com',
     'developer.wordpress.com/apps → Create New Application (tipo Web).': 'developer.wordpress.com/apps → Create New Application (type Web).',
     'Pega la Redirect URL de abajo y copia aquí el Client ID y el Secret.': 'Paste the Redirect URL below and copy the Client ID and Secret here.',
-    'Saltar': 'Skip', 'Quitar selección': 'Clear selection', 'Crear entrada': 'Create post', 'Suelta aquí': 'Drop here', 'Enlace (opcional)': 'Link (optional)',
+    'Dirección pública de la web': 'Public website address', 'Saltar': 'Skip', 'Quitar selección': 'Clear selection', 'Crear entrada': 'Create post', 'Suelta aquí': 'Drop here', 'Enlace (opcional)': 'Link (optional)',
     'Buscar…': 'Search…', 'Solo apps de tipo Empresa': 'Business apps only', 'p. ej. Usa lenguaje inclusivo.': 'e.g. Use inclusive language.',
     'Separadas por comas': 'Comma separated', 'Juntar la misma publicación de Instagram y Facebook': 'Merge the same post from Instagram and Facebook',
     'Plantilla': 'Template', 'Otro color': 'Other colour', 'Aún no hay publicaciones': 'No posts yet',

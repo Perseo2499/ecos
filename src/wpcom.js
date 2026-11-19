@@ -61,6 +61,24 @@ async function call(cfg, path, body) {
 
 const siteInfo = (cfg) => call(cfg, '/');
 
+// Dirección pública de la web. WordPress.com a veces devuelve los enlaces con el subdominio interno
+// (https://xxx.wordpress.com) aunque el blog use su propio dominio: se cambian por la dirección pública.
+function publicBase(cfg) {
+  const raw = (cfg.wpPublicUrl || '').trim() || (cfg.wpSite && !/wordpress\.com$/i.test(cfg.wpSite) ? 'https://www.' + cfg.wpSite.replace(/^www\./, '') : '');
+  if (!raw) return null;
+  try { return new URL(/^https?:\/\//i.test(raw) ? raw : 'https://' + raw).origin; } catch { return null; }
+}
+function publicUrl(cfg, url) {
+  const base = publicBase(cfg);
+  if (!base || !url) return url;
+  try {
+    const u = new URL(url);
+    if (!/\.wordpress\.com$/i.test(u.hostname) || u.hostname === 'wordpress.com') return url;
+    if (u.hostname.endsWith('.files.wordpress.com')) return url; // archivos de la biblioteca: se dejan igual
+    return base + u.pathname + u.search + u.hash;
+  } catch { return url; }
+}
+
 async function categories(cfg) {
   const json = await call(cfg, '/categories?number=100');
   return json.categories.map((c) => ({ id: c.ID, name: c.name, slug: c.slug }));
@@ -108,7 +126,7 @@ async function listPosts(cfg, { type = 'post', status = 'any', search = '', page
     found: json.found,
     items: json.posts.map((p) => ({
       id: p.ID, title: p.title || '(sin título)', status: p.status, type: p.type, date: p.date, modified: p.modified,
-      url: p.URL, image: p.featured_image || '', categories: Object.keys(p.categories || {}),
+      url: publicUrl(cfg, p.URL), image: p.featured_image || '', categories: Object.keys(p.categories || {}),
       excerpt: (p.excerpt || '').replace(/<[^>]+>/g, '').replace(/&[#\w]+;/g, ' ').trim().slice(0, 160),
     })),
   };
@@ -117,4 +135,4 @@ const updateMedia = (cfg, id, fields) => call(cfg, `/media/${id}`, fields);
 const setPostStatus = (cfg, id, status) => call(cfg, `/posts/${id}`, { status });
 const trashPost = (cfg, id) => call(cfg, `/posts/${id}/delete`, {});
 
-module.exports = { REDIRECT, AuthError, login, siteInfo, categories, uploadFromUrls, uploadFile, createPost, updateMedia, listPosts, setPostStatus, trashPost };
+module.exports = { REDIRECT, AuthError, login, siteInfo, publicUrl, categories, uploadFromUrls, uploadFile, createPost, updateMedia, listPosts, setPostStatus, trashPost };
