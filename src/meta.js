@@ -46,12 +46,14 @@ async function listAccounts(cfg) {
   }));
 }
 
-async function facebookPosts(cfg, account, limit = 25) {
+// Las dos funciones devuelven { posts, next }: next es el cursor para «Cargar más» (null si no hay más)
+async function facebookPosts(cfg, account, after = null, limit = 25) {
   const json = await get(`${graph(cfg)}/${account.pageId}/posts?` + new URLSearchParams({
     fields: 'id,message,created_time,permalink_url,full_picture,attachments{media_type,media,url,subattachments{media_type,media,url}}',
-    limit: String(limit), access_token: account.pageToken,
+    limit: String(limit), access_token: account.pageToken, ...(after ? { after } : {}),
   }));
-  return json.data.map((p) => {
+  const next = json.paging?.next ? json.paging.cursors?.after || null : null;
+  const posts = json.data.map((p) => {
     const media = [];
     for (const a of p.attachments?.data || []) {
       const items = a.subattachments?.data?.length ? a.subattachments.data : [a];
@@ -62,21 +64,24 @@ async function facebookPosts(cfg, account, limit = 25) {
     if (!media.length && p.full_picture) media.push({ type: 'image', url: p.full_picture });
     return { source: 'facebook', id: p.id, text: p.message || '', date: p.created_time, permalink: p.permalink_url, media };
   });
+  return { posts, next };
 }
 
-async function instagramPosts(cfg, account, limit = 25) {
-  if (!account.igId) return [];
+async function instagramPosts(cfg, account, after = null, limit = 25) {
+  if (!account.igId) return { posts: [], next: null };
   const json = await get(`${graph(cfg)}/${account.igId}/media?` + new URLSearchParams({
     fields: 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,children{media_type,media_url,thumbnail_url}',
-    limit: String(limit), access_token: account.pageToken,
+    limit: String(limit), access_token: account.pageToken, ...(after ? { after } : {}),
   }));
+  const next = json.paging?.next ? json.paging.cursors?.after || null : null;
   const conv = (m) => m.media_type === 'VIDEO'
     ? { type: 'video', url: m.thumbnail_url, videoUrl: m.media_url }
     : { type: 'image', url: m.media_url };
-  return json.data.map((m) => ({
+  const posts = json.data.map((m) => ({
     source: 'instagram', id: m.id, text: m.caption || '', date: m.timestamp, permalink: m.permalink,
     media: m.media_type === 'CAROUSEL_ALBUM' ? (m.children?.data || []).map(conv) : [conv(m)],
   }));
+  return { posts, next };
 }
 
 module.exports = { REDIRECT, login, listAccounts, facebookPosts, instagramPosts };

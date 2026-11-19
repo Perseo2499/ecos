@@ -95,4 +95,25 @@ async function uploadFile(cfg, filePath) {
 
 const createPost = (cfg, post) => call(cfg, '/posts/new', post);
 
-module.exports = { REDIRECT, AuthError, login, siteInfo, categories, uploadFromUrls, uploadFile, createPost };
+// --- Gestión del blog (pestaña «Blog») ------------------------------------------
+// type: 'post' | 'page'; status: 'any' | 'publish' | 'draft' | 'pending' | 'future' | 'private' | 'trash'
+async function listPosts(cfg, { type = 'post', status = 'any', search = '', page = 1, number = 20 } = {}) {
+  const q = new URLSearchParams({
+    type, status, number: String(number), page: String(page), order_by: 'modified', order: 'DESC',
+    fields: 'ID,title,status,date,modified,URL,type,featured_image,categories,excerpt',
+    ...(search ? { search } : {}),
+  });
+  const json = await call(cfg, '/posts/?' + q);
+  return {
+    found: json.found,
+    items: json.posts.map((p) => ({
+      id: p.ID, title: p.title || '(sin título)', status: p.status, type: p.type, date: p.date, modified: p.modified,
+      url: p.URL, image: p.featured_image || '', categories: Object.keys(p.categories || {}),
+      excerpt: (p.excerpt || '').replace(/<[^>]+>/g, '').replace(/&[#\w]+;/g, ' ').trim().slice(0, 160),
+    })),
+  };
+}
+const setPostStatus = (cfg, id, status) => call(cfg, `/posts/${id}`, { status });
+const trashPost = (cfg, id) => call(cfg, `/posts/${id}/delete`, {});
+
+module.exports = { REDIRECT, AuthError, login, siteInfo, categories, uploadFromUrls, uploadFile, createPost, listPosts, setPostStatus, trashPost };

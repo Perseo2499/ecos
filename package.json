@@ -1,6 +1,6 @@
 {
   "name": "ecos",
-  "version": "0.2.6",
+  "version": "0.3.0",
   "description": "Convierte publicaciones de Instagram y Facebook en entradas de WordPress.com",
   "main": "main.js",
   "scripts": {
@@ -30,8 +30,9 @@
     ],
     "nsis": {
       "oneClick": true,
-      "perMachine": false,
-      "artifactName": "Ecos-Setup-${version}.${ext}"
+      "perMachine": true,
+      "artifactName": "Ecos-Setup-${version}.${ext}",
+      "shortcutName": "Ecos"
     },
     "portable": {
       "artifactName": "Ecos-${version}-portable.${ext}"

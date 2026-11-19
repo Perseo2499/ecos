@@ -1,7 +1,16 @@
 const $ = (s) => document.querySelector(s);
-let posts = [];
+const escHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let rawPosts = [];     // todo lo cargado/importado
+let posts = [];        // lo que se muestra (con duplicados juntados si la opción está activa)
 let draft = null;
+let draftKeys = [];    // claves de las publicaciones de origen del borrador
+let cursors = null;    // «Cargar más» de Meta
+let exported = {};     // publicaciones ya pasadas al blog
+let format = {};       // opciones de Configuración → Formato
 const selected = new Set();
+const keyOf = (p) => p.source + ':' + p.id;
+const keysOf = (p) => [keyOf(p), ...(p.alsoOn || []).map((a) => a.source + ':' + a.id)];
+const exportOf = (p) => keysOf(p).map((k) => exported[k]).find(Boolean);
 
 function toast(msg, isError) {
   const t = $('#toast');
@@ -21,6 +30,7 @@ document.querySelectorAll('[data-copy]').forEach((b) => b.onclick = () => {
 document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
   document.querySelectorAll('nav button, .tab').forEach((x) => x.classList.remove('active'));
   b.classList.add('active'); $('#tab-' + b.dataset.tab).classList.add('active');
+  if (b.dataset.tab === 'blog' && !blog.loaded) loadBlog();
 });
 
 function renderStatus(cfg) {
@@ -40,6 +50,36 @@ for (const f of ['#f-meta', '#f-wp', '#f-ai']) $(f).onsubmit = async (e) => {
   const data = Object.fromEntries(new FormData(e.target));
   const cfg = await window.api.setConfig(data); renderStatus(cfg); toast('Guardado');
 };
+
+function fillFormat(f) {
+  const form = $('#f-format');
+  form.cleanTitle.checked = f.cleanTitle !== false;
+  form.footer.value = f.footer ?? '';
+  form.extraTags.value = f.extraTags || '';
+  form.categories.value = f.categories || '';
+  form.status.value = f.status || 'draft';
+}
+$('#f-format').onsubmit = async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const next = {
+    ...format, cleanTitle: form.cleanTitle.checked, footer: form.footer.value, extraTags: form.extraTags.value,
+    categories: form.categories.value, status: form.status.value,
+  };
+  const cfg = await window.api.setConfig({ format: next });
+  format = cfg.format; toast('Guardado');
+};
+
+// Modo de arranque
+function renderMode(m) {
+  $('#mode-name').textContent = m.name;
+  const compat = m.level > 0;
+  $('#mode-hint').textContent = compat
+    ? 'Ecos detectó que en este equipo no arrancaba con el aislamiento de seguridad de Chromium y usa el modo compatible. Si has reinstalado Ecos o actualizado Windows, puedes volver a probar el modo normal: si falla, Ecos vuelve sola al compatible.'
+    : 'Modo recomendado.';
+  $('#mode-normal').classList.toggle('hidden', !compat);
+}
+$('#mode-normal').onclick = () => { toast('Reiniciando Ecos…'); window.api.tryNormalMode(); };
 
 function renderPages(accs) {
   $('#page').innerHTML = accs.map((a) => `<option value="${a.pageId}">${a.pageName}${a.igUser ? ' · @' + a.igUser : ' (sin Instagram)'}</option>`).join('');
@@ -68,21 +108,37 @@ async function loadCategories() {
 // Listado de publicaciones
 const fileUrl = (p) => p && 'file:///' + encodeURI(p.replace(/\\/g, '/')).replace(/#/g, '%23');
 const fmtDate = (d) => new Date(d).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' });
+function visiblePosts() {
+  const q = $('#f-search').value.trim().toLowerCase();
+  const show = $('#f-show').value;
+  return posts.filter((p) => {
+    if (q && !p.text.toLowerCase().includes(q)) return false;
+    const done = !!exportOf(p);
+    return show === 'all' || (show === 'done' ? done : !done);
+  });
+}
+
 function renderFeed() {
-  if (!posts.length) { $('#feed').innerHTML = '<p class="hint">No hay publicaciones.</p>'; return; }
+  const list = visiblePosts();
+  if (!rawPosts.length) { $('#feed').innerHTML = '<p class="hint">No hay publicaciones todavía.</p>'; return; }
+  if (!list.length) { $('#feed').innerHTML = '<p class="hint">Ninguna publicación coincide con el filtro.</p>'; return; }
   $('#feed').innerHTML = '';
-  for (const p of posts) {
-    const key = p.source + ':' + p.id;
+  for (const p of list) {
+    const key = keyOf(p);
+    const ex = exportOf(p);
     const card = document.createElement('div');
-    card.className = 'post' + (selected.has(key) ? ' sel' : '');
+    card.className = 'post' + (selected.has(key) ? ' sel' : '') + (ex ? ' done' : '');
     const first = p.media.find((m) => m.type === 'image') || p.media[0];
     const thumb = first && (first.url || (first.type === 'image' ? fileUrl(first.path) : null));
+    const badges = [p, ...(p.alsoOn || [])].map((x) => `<span class="badge ${x.source}">${x.source === 'instagram' ? 'IG' : 'FB'}</span>`).join(' ');
     card.innerHTML = `
-      ${thumb ? `<img src="${thumb}">` : '<div class="noimg">Sin imagen</div>'}
-      <div class="meta"><span class="badge ${p.source}">${p.source === 'instagram' ? 'IG' : 'FB'}</span>
+      ${thumb ? `<img src="${escHtml(thumb)}" loading="lazy">` : '<div class="noimg">Sin imagen</div>'}
+      ${ex ? '<span class="done-badge" title="Abrir la entrada en WordPress">✓ En el blog</span>' : ''}
+      <div class="meta">${badges}
         ${fmtDate(p.date)}${p.media.length > 1 ? ` · ${p.media.length} archivos` : ''}${p.media.some((m) => m.type === 'video') ? ' · vídeo' : ''}</div>
       <p></p>`;
     card.querySelector('p').textContent = p.text.slice(0, 220) + (p.text.length > 220 ? '…' : '');
+    if (ex) card.querySelector('.done-badge').onclick = (e) => { e.stopPropagation(); window.api.open(ex.editUrl); };
     card.onclick = () => {
       selected.has(key) ? selected.delete(key) : selected.add(key);
       card.classList.toggle('sel'); updateCount();
@@ -95,23 +151,45 @@ function updateCount() {
   $('#make').disabled = selected.size === 0;
 }
 
+const metaSources = () => [$('#src-ig').checked && 'instagram', $('#src-fb').checked && 'facebook'].filter(Boolean);
+const hasMore = () => cursors && (cursors.facebook || cursors.instagram);
 $('#load').onclick = (e) => busy(e.target, async () => {
-  const sources = [$('#src-ig').checked && 'instagram', $('#src-fb').checked && 'facebook'].filter(Boolean);
-  addPosts(await window.api.metaPosts($('#page').value, sources));
+  const r = await window.api.metaPosts($('#page').value, metaSources());
+  cursors = r.cursors;
+  await addPosts(r.posts);
+  toast(`${r.posts.length} publicaciones cargadas`);
+});
+$('#more').onclick = (e) => busy(e.target, async () => {
+  const r = await window.api.metaPosts($('#page').value, metaSources(), cursors);
+  cursors = r.cursors;
+  await addPosts(r.posts);
 });
 
-// Añade publicaciones a la lista sin duplicar
-function addPosts(list, select = false) {
-  const have = new Set(posts.map((p) => p.source + ':' + p.id));
+// Añade publicaciones a la lista sin duplicar y recalcula la vista
+async function addPosts(list, select = false) {
+  const have = new Set(rawPosts.map(keyOf));
   for (const p of list) {
-    const key = p.source + ':' + p.id;
-    if (!have.has(key)) posts.push(p);
-    if (select) selected.add(key);
+    if (!have.has(keyOf(p))) rawPosts.push(p);
+    if (select) selected.add(keyOf(p));
   }
-  posts.sort((a, b) => new Date(b.date) - new Date(a.date));
+  rawPosts.sort((a, b) => new Date(b.date) - new Date(a.date));
+  await rebuildView();
+}
+async function rebuildView() {
+  posts = $('#f-merge').checked ? await window.api.mergeDuplicates(rawPosts) : rawPosts;
+  // La selección se queda solo con publicaciones visibles
+  const valid = new Set(posts.map(keyOf));
+  for (const k of [...selected]) if (!valid.has(k)) selected.delete(k);
+  $('#more').classList.toggle('hidden', !hasMore());
   updateCount(); renderFeed();
 }
-$('#clear').onclick = () => { posts = []; selected.clear(); updateCount(); $('#feed').innerHTML = '<p class="hint">Lista vacía.</p>'; };
+$('#f-merge').onchange = async () => {
+  format = (await window.api.setConfig({ format: { ...format, mergeDuplicates: $('#f-merge').checked } })).format;
+  rebuildView();
+};
+$('#f-search').oninput = renderFeed;
+$('#f-show').onchange = renderFeed;
+$('#clear').onclick = () => { rawPosts = []; posts = []; cursors = null; selected.clear(); $('#more').classList.add('hidden'); updateCount(); renderFeed(); };
 
 // Selector de origen
 document.querySelectorAll('.sources button').forEach((b) => b.onclick = () => {
@@ -122,7 +200,7 @@ document.querySelectorAll('.sources button').forEach((b) => b.onclick = () => {
 // ZIP de Meta
 const importZip = (kind) => (e) => busy(e.target, async () => {
   const list = await window.api.importMetaExport(kind);
-  if (list) { addPosts(list); toast(`${list.length} publicaciones importadas`); }
+  if (list) { await addPosts(list); toast(`${list.length} publicaciones importadas`); }
 });
 $('#zip-file').onclick = importZip('file');
 $('#zip-folder').onclick = importZip('folder');
@@ -132,7 +210,7 @@ $('#shots-pick').onclick = (e) => busy(e.target, async () => {
   const files = await window.api.pickImages(false);
   if (!files) return;
   const post = await window.api.importScreenshots(files);
-  addPosts([post], true);
+  await addPosts([post], true);
   toast(post.warning || `Publicación leída: ${post.media.length} foto(s). Ya está seleccionada.`, !!post.warning);
 });
 
@@ -148,17 +226,25 @@ $('#m-add').onclick = async () => {
     text: $('#m-text').value, date: $('#m-date').value || null, source: $('#m-source').value,
     permalink: $('#m-link').value.trim() || null, files: manualFiles,
   });
-  addPosts([post], true);
+  await addPosts([post], true);
   $('#m-text').value = ''; $('#m-link').value = ''; manualFiles = []; $('#m-count').textContent = '0 archivos';
   toast('Añadida a la lista y seleccionada');
 };
 
 // Borrador
 $('#make').onclick = (e) => busy(e.target, async () => {
-  const chosen = posts.filter((p) => selected.has(p.source + ':' + p.id));
+  const chosen = posts.filter((p) => selected.has(keyOf(p)));
+  const already = chosen.filter(exportOf);
+  if (already.length && !confirm(`${already.length === 1 ? 'Una de las publicaciones ya está' : already.length + ' publicaciones ya están'} en el blog. ¿Crear otra entrada de todos modos?`)) return;
+  toast('Subiendo fotos a WordPress…');
   draft = await window.api.buildDraft(chosen);
+  draftKeys = chosen.flatMap(keysOf);
+  $('#sent').classList.add('hidden'); $('#send').classList.remove('hidden');
   $('#d-title').value = draft.title;
   $('#d-tags').value = draft.tags.join(', ');
+  $('#d-status').value = format.status || 'draft';
+  const defCats = (format.categories || '').split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
+  for (const o of $('#d-cats').options) o.selected = defCats.includes(o.value.toLowerCase());
   $('#d-content').value = draft.content;
   $('#d-preview').innerHTML = draft.content;
   $('#editor').classList.remove('hidden');
@@ -178,10 +264,18 @@ $('#send').onclick = (e) => busy(e.target, async () => {
     categories: [...$('#d-cats').selectedOptions].map((o) => o.value),
     status: $('#d-status').value,
     keepDate: $('#d-keepdate').checked,
+    keys: draftKeys,
   });
-  toast('¡Entrada creada! Abriendo el editor de WordPress…');
-  window.api.open(res.editUrl);
+  exported = res.exported;
+  lastSent = res;
+  $('#sent-text').textContent = $('#d-status').value === 'publish' ? '¡Entrada publicada!' : 'Borrador creado en WordPress.';
+  $('#send').classList.add('hidden'); $('#sent').classList.remove('hidden');
+  selected.clear(); updateCount(); renderFeed();
 });
+let lastSent = null;
+$('#sent-edit').onclick = () => lastSent && window.api.open(lastSent.editUrl);
+$('#sent-view').onclick = () => lastSent && window.api.open(lastSent.url);
+$('#sent-close').onclick = () => $('#editor').classList.add('hidden');
 
 // Actualizaciones
 function renderUpdate(st) {
@@ -212,6 +306,90 @@ $('#update-check').onclick = async () => renderUpdate(await window.api.checkUpda
   window.api.updateStatus().then(renderUpdate).catch(() => {});
   const cfg = await window.api.getConfig();
   fillForms(cfg); renderStatus(cfg);
+  format = cfg.format; exported = cfg.exported || {};
+  fillFormat(format); renderMode(cfg.startMode);
+  $('#f-merge').checked = format.mergeDuplicates !== false;
   if (cfg.metaConnected) window.api.metaAccounts().then(renderPages).catch((e) => toast(e.message, true));
   if (cfg.wpConnected) loadCategories();
 })();
+
+// --- Pestaña «Blog»: entradas y páginas de WordPress ----------------------------
+const blog = { loaded: false, type: 'post', page: 1, per: 20, found: 0 };
+const STATUS = { publish: 'Publicada', draft: 'Borrador', future: 'Programada', pending: 'Pendiente', private: 'Privada', trash: 'Papelera' };
+
+async function loadBlog() {
+  const list = $('#b-list');
+  list.innerHTML = '<p class="hint pad">Cargando…</p>';
+  try {
+    const r = await window.api.blogList({ type: blog.type, status: $('#b-status').value, search: $('#b-search').value.trim(), page: blog.page, number: blog.per });
+    blog.loaded = true; blog.found = r.found;
+    renderBlog(r.items);
+  } catch (e) {
+    list.innerHTML = `<p class="hint pad">${escHtml(e.message)}</p>`;
+  }
+}
+
+function renderBlog(items) {
+  const list = $('#b-list');
+  const pages = Math.max(1, Math.ceil(blog.found / blog.per));
+  $('#b-info').textContent = `${blog.found} ${blog.type === 'page' ? 'páginas' : 'entradas'} · página ${blog.page} de ${pages}`;
+  $('#b-prev').disabled = blog.page <= 1;
+  $('#b-next').disabled = blog.page >= pages;
+  if (!items.length) { list.innerHTML = '<p class="hint pad">No hay nada con estos filtros.</p>'; return; }
+  list.innerHTML = '';
+  for (const it of items) {
+    const row = document.createElement('div');
+    row.className = 'b-row';
+    const when = new Date(it.status === 'publish' || it.status === 'future' ? it.date : it.modified)
+      .toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+    row.innerHTML = `
+      ${it.image ? `<img src="${escHtml(it.image)}" loading="lazy">` : '<div class="noimg">Sin imagen</div>'}
+      <div>
+        <div class="b-title"></div>
+        <div class="b-meta"><span class="st ${it.status}">${STATUS[it.status] || it.status}</span>${when}${it.categories.length ? ' · ' + escHtml(it.categories.join(', ')) : ''}</div>
+        <div class="b-ex"></div>
+      </div>
+      <div class="b-actions"></div>`;
+    row.querySelector('.b-title').textContent = decodeEntities(it.title);
+    row.querySelector('.b-ex').textContent = decodeEntities(it.excerpt);
+    const actions = row.querySelector('.b-actions');
+    const btn = (label, fn, cls = '') => {
+      const b = document.createElement('button'); b.textContent = label; if (cls) b.className = cls;
+      b.onclick = () => busy(b, fn); actions.appendChild(b);
+    };
+    if (it.status !== 'trash') btn('Editar', async () => window.api.open(await window.api.blogEditUrl(it.id, it.type)));
+    if (it.status === 'publish') btn('Ver', async () => window.api.open(it.url));
+    if (['draft', 'pending', 'private'].includes(it.status)) btn('Publicar', async () => {
+      if (!confirm(`¿Publicar «${decodeEntities(it.title)}»? Será visible en la web.`)) return;
+      await window.api.blogSetStatus(it.id, 'publish'); toast('Publicada'); loadBlog();
+    }, 'primary');
+    if (it.status === 'publish') btn('Pasar a borrador', async () => {
+      if (!confirm(`¿Retirar «${decodeEntities(it.title)}» de la web y dejarla como borrador?`)) return;
+      await window.api.blogSetStatus(it.id, 'draft'); toast('Ahora es un borrador'); loadBlog();
+    });
+    if (it.status === 'trash') btn('Restaurar como borrador', async () => {
+      await window.api.blogSetStatus(it.id, 'draft'); toast('Restaurada como borrador'); loadBlog();
+    });
+    else btn('Papelera', async () => {
+      if (!confirm(`¿Mover «${decodeEntities(it.title)}» a la papelera? Podrás recuperarla durante 30 días.`)) return;
+      await window.api.blogTrash(it.id); toast('Movida a la papelera'); loadBlog();
+    }, 'danger');
+    list.appendChild(row);
+  }
+}
+function decodeEntities(s) { const t = document.createElement('textarea'); t.innerHTML = s || ''; return t.value; }
+
+document.querySelectorAll('#b-type button').forEach((b) => b.onclick = () => {
+  document.querySelectorAll('#b-type button').forEach((x) => x.classList.toggle('active', x === b));
+  blog.type = b.dataset.type; blog.page = 1; loadBlog();
+});
+$('#b-status').onchange = () => { blog.page = 1; loadBlog(); };
+let bSearchTimer;
+$('#b-search').oninput = () => { clearTimeout(bSearchTimer); bSearchTimer = setTimeout(() => { blog.page = 1; loadBlog(); }, 400); };
+$('#b-refresh').onclick = () => loadBlog();
+$('#b-prev').onclick = () => { blog.page--; loadBlog(); };
+$('#b-next').onclick = () => { blog.page++; loadBlog(); };
+$('#b-new').onclick = async () => {
+  const cfg = await window.api.getConfig();
+  window.api.open(`https://wordpress.com/${blog.type === 'page' ? 'page' : 'post'}/${cfg.wpSite}`);
+};

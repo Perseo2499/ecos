@@ -11,6 +11,7 @@
   <h1>Ecos</h1>
   <nav>
     <button data-tab="posts" class="active">Publicaciones</button>
+    <button data-tab="blog">Blog</button>
     <button data-tab="settings">Configuración</button>
   </nav>
   <div class="status"><span id="st-meta" class="pill">Meta: no conectado</span><span id="st-wp" class="pill">WordPress: no conectado</span></div>
@@ -58,13 +59,23 @@
     </div>
 
     <div class="toolbar">
+      <input id="f-search" type="search" placeholder="Buscar en el texto…" class="search">
+      <select id="f-show" title="Qué publicaciones mostrar">
+        <option value="all">Todas</option>
+        <option value="pending">Sin pasar al blog</option>
+        <option value="done">Ya en el blog</option>
+      </select>
+      <label title="Si la misma publicación está en Instagram y Facebook, se muestra una sola vez"><input type="checkbox" id="f-merge" checked> Juntar duplicados</label>
       <button id="clear">Vaciar lista</button>
       <span class="spacer"></span>
       <span id="sel-count">0 seleccionadas</span>
       <button id="make" class="primary" disabled>Crear entrada con la selección</button>
     </div>
     <div class="split">
-      <div id="feed" class="feed"><p class="hint">Conecta tu cuenta en «Configuración» y pulsa «Cargar publicaciones».</p></div>
+      <div class="feed-col">
+        <div id="feed" class="feed"><p class="hint">Conecta tu cuenta en «Configuración» y pulsa «Cargar publicaciones».</p></div>
+        <div class="more"><button id="more" class="hidden">Cargar más publicaciones</button></div>
+      </div>
       <aside id="editor" class="editor hidden">
         <h2>Vista previa de la entrada</h2>
         <label>Título <input id="d-title"></label>
@@ -80,8 +91,38 @@
         <div id="d-preview" class="preview"></div>
         <textarea id="d-content" class="hidden"></textarea>
         <button id="send" class="primary">Enviar a WordPress</button>
+        <div id="sent" class="sent hidden">
+          <p>✓ <b id="sent-text">Entrada creada.</b></p>
+          <button id="sent-edit" class="primary">Abrir en el editor de WordPress</button>
+          <button id="sent-view">Ver en la web</button>
+          <button id="sent-close">Cerrar</button>
+        </div>
       </aside>
     </div>
+  </section>
+
+  <section id="tab-blog" class="tab">
+    <div class="toolbar">
+      <div class="seg" id="b-type">
+        <button data-type="post" class="active">Entradas</button>
+        <button data-type="page">Páginas</button>
+      </div>
+      <select id="b-status">
+        <option value="any">Todos los estados</option>
+        <option value="publish">Publicadas</option>
+        <option value="draft">Borradores</option>
+        <option value="future">Programadas</option>
+        <option value="pending">Pendientes de revisión</option>
+        <option value="private">Privadas</option>
+        <option value="trash">Papelera</option>
+      </select>
+      <input id="b-search" type="search" placeholder="Buscar por título o texto…" class="search">
+      <button id="b-refresh">Actualizar</button>
+      <span class="spacer"></span>
+      <button id="b-new" class="primary">Nueva en WordPress</button>
+    </div>
+    <div id="b-list" class="blog-list"><p class="hint">Conecta WordPress.com en «Configuración».</p></div>
+    <div class="pager"><button id="b-prev">← Anteriores</button><span id="b-info" class="hint"></span><button id="b-next">Siguientes →</button></div>
   </section>
 
   <section id="tab-settings" class="tab">
@@ -107,11 +148,27 @@
         <button type="submit">Guardar</button>
         <button type="button" id="wp-login" class="primary">Conectar con WordPress.com</button>
       </form>
+      <form class="card" id="f-format">
+        <h2>Formato de las entradas</h2>
+        <label class="inline"><input type="checkbox" name="cleanTitle"> Limpiar el título (quitar emojis y signos sueltos)</label>
+        <label>Pie de cada entrada <input name="footer" placeholder="Vacío = sin pie"></label>
+        <p class="hint">{redes} se cambia por los enlaces a Instagram y/o Facebook.</p>
+        <label>Etiquetas que se añaden siempre <input name="extraTags" placeholder="p. ej. asociación, ceuta"></label>
+        <label>Categorías por defecto <input name="categories" placeholder="Nombres separados por comas"></label>
+        <label>Estado por defecto
+          <select name="status"><option value="draft">Borrador</option><option value="publish">Publicar directamente</option></select>
+        </label>
+        <button type="submit">Guardar</button>
+      </form>
       <div class="card">
         <h2>Actualizaciones</h2>
         <p>Versión instalada: <b id="app-version">–</b></p>
         <p id="update-detail" class="hint"></p>
         <button type="button" id="update-check">Buscar actualizaciones</button>
+        <h2 class="sub">Modo de arranque</h2>
+        <p>Ahora: <b id="mode-name">–</b></p>
+        <p class="hint" id="mode-hint"></p>
+        <button type="button" id="mode-normal" class="hidden">Probar el modo normal</button>
       </div>
       <form class="card" id="f-ai">
         <h2>IA (para capturas de pantalla)</h2>

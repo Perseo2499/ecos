@@ -42,7 +42,9 @@ const modeFile = () => path.join(app.getPath('userData'), 'modo-arranque.json');
 const pendingFile = () => path.join(app.getPath('userData'), 'arranque-pendiente');
 let mode = 0;
 try { mode = JSON.parse(fs.readFileSync(modeFile(), 'utf8')).nivel ? 1 : 0; } catch { /* primera vez */ }
-try { if (JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'modo-grafico.json'), 'utf8')).nivel) mode = 1; } catch { /* versión anterior */ }
+// Migración desde 0.2.3 (modo-grafico.json): si había detectado fallos, se mantiene el modo compatible
+const legacyMode = path.join(app.getPath('userData'), 'modo-grafico.json');
+try { if (JSON.parse(fs.readFileSync(legacyMode, 'utf8')).nivel) { mode = 1; fs.writeFileSync(path.join(app.getPath('userData'), 'modo-arranque.json'), JSON.stringify({ nivel: 1 })); } fs.unlinkSync(legacyMode); } catch { /* no existe */ }
 const saveMode = (n) => { try { fs.writeFileSync(modeFile(), JSON.stringify({ nivel: n, fecha: new Date().toISOString() })); } catch { /* nada */ } };
 if (gotLock && mode === 0 && fs.existsSync(pendingFile())) {
   mode = 1; saveMode(1);
@@ -67,12 +69,12 @@ app.on('child-process-gone', (_e, d) => {
   if (d.type === 'GPU' || d.type === 'Utility') escalate(`proceso ${d.type} cerrado (${d.reason}, código ${d.exitCode})`);
 });
 
-let store, meta, wp, buildDraft, mediaKey, importers, updater;
+let store, meta, wp, buildDraft, mediaKey, DEFAULT_FOOTER, mergeDuplicates, importers, updater;
 try {
   store = require('./src/store');
   meta = require('./src/meta');
   wp = require('./src/wpcom');
-  ({ buildDraft, mediaKey } = require('./src/transform'));
+  ({ buildDraft, mediaKey, DEFAULT_FOOTER, mergeDuplicates } = require('./src/transform'));
   importers = require('./src/importers');
   updater = require('./src/updater');
 } catch (err) {
@@ -99,7 +101,13 @@ const publicCfg = () => ({
   metaUserToken: undefined, wpToken: undefined,
   metaConnected: !!cfg.metaUserToken, wpConnected: !!cfg.wpToken,
   metaRedirectUri: meta.REDIRECT, wpRedirectUri: wp.REDIRECT, wpBlogId: undefined,
+  format: { cleanTitle: true, footer: DEFAULT_FOOTER, extraTags: '', categories: '', status: 'draft', mergeDuplicates: true, ...(cfg.format || {}) },
+  exported: cfg.exported || {},
+  startMode: { level: mode, name: MODES[mode].name },
 });
+
+// Envuelve llamadas a WordPress: si rechaza el permiso, se desconecta y se avisa
+const wpCall = async (fn) => { try { return await fn(); } catch (e) { throw e instanceof wp.AuthError ? wpAuthFailed(e) : e; } };
 
 // Envuelve los manejadores para devolver errores legibles al renderer
 const handle = (name, fn) => ipcMain.handle(name, async (_e, ...args) => {
@@ -126,14 +134,20 @@ handle('meta:accounts', async () => {
   accounts = await meta.listAccounts(cfg);
   return accounts.map(({ pageToken, ...a }) => a);
 });
-handle('meta:posts', async (pageId, sources) => {
+// cursors: undefined = primera página; { facebook, instagram } = «Cargar más» (null = esa red no tiene más)
+handle('meta:posts', async (pageId, sources, cursors) => {
   const acc = accounts.find((a) => a.pageId === pageId);
   if (!acc) throw new Error('Página no encontrada; vuelve a conectar con Meta');
-  const lists = await Promise.all([
-    sources.includes('facebook') ? meta.facebookPosts(cfg, acc) : [],
-    sources.includes('instagram') ? meta.instagramPosts(cfg, acc) : [],
+  const want = (net) => sources.includes(net) && (!cursors || cursors[net]);
+  const none = { posts: [], next: null };
+  const [fb, ig] = await Promise.all([
+    want('facebook') ? meta.facebookPosts(cfg, acc, cursors?.facebook) : none,
+    want('instagram') ? meta.instagramPosts(cfg, acc, cursors?.instagram) : none,
   ]);
-  return lists.flat().sort((a, b) => new Date(b.date) - new Date(a.date));
+  return {
+    posts: [...fb.posts, ...ig.posts].sort((a, b) => new Date(b.date) - new Date(a.date)),
+    cursors: { facebook: fb.next, instagram: ig.next },
+  };
 });
 
 // Conecta con WordPress.com y solo guarda el permiso si funciona de verdad.
@@ -183,7 +197,7 @@ handle('draft:build', async (posts) => {
       failed.push(e.message);
     }
   }
-  return { ...buildDraft(posts, uploaded), failed };
+  return { ...buildDraft(posts, uploaded, publicCfg().format), failed };
 });
 
 // --- Importaciones alternativas ---
@@ -206,17 +220,34 @@ handle('import:pickImages', (withVideo) => pick({
 handle('import:screenshots', (paths) => importers.importScreenshots(paths, cfg.anthropicKey));
 handle('import:manual', (data) => importers.manualPost(data));
 
+// d.keys: claves de las publicaciones de origen, para marcarlas como «ya en el blog»
 handle('draft:publish', async (d) => {
-  let post;
-  try {
-    post = await wp.createPost(cfg, {
-      title: d.title, content: d.content, status: d.status || 'draft',
-      tags: d.tags.join(','), categories: d.categories.join(','),
-      ...(d.featuredImageId ? { featured_image: d.featuredImageId } : {}),
-      ...(d.keepDate ? { date: d.date } : {}),
-    });
-  } catch (e) { throw e instanceof wp.AuthError ? wpAuthFailed(e) : e; }
-  return { url: post.URL, editUrl: `https://wordpress.com/post/${cfg.wpSite}/${post.ID}` };
+  const post = await wpCall(() => wp.createPost(cfg, {
+    title: d.title, content: d.content, status: d.status || 'draft',
+    tags: d.tags.join(','), categories: d.categories.join(','),
+    ...(d.featuredImageId ? { featured_image: d.featuredImageId } : {}),
+    ...(d.keepDate ? { date: d.date } : {}),
+  }));
+  const editUrl = `https://wordpress.com/post/${cfg.wpSite}/${post.ID}`;
+  cfg.exported = cfg.exported || {};
+  for (const k of d.keys || []) cfg.exported[k] = { postId: post.ID, url: post.URL, editUrl, title: d.title, status: post.status, at: new Date().toISOString() };
+  store.save(cfg);
+  return { url: post.URL, editUrl, exported: cfg.exported };
+});
+handle('posts:merge', (list) => mergeDuplicates(list));
+handle('exported:forget', (keys) => { for (const k of keys) delete cfg.exported?.[k]; store.save(cfg); return cfg.exported || {}; });
+
+// --- Pestaña «Blog»: gestión de entradas y páginas ---
+handle('blog:list', (opts) => wpCall(() => wp.listPosts(cfg, opts)));
+handle('blog:setStatus', (id, status) => wpCall(() => wp.setPostStatus(cfg, id, status)));
+handle('blog:trash', (id) => wpCall(() => wp.trashPost(cfg, id)));
+handle('blog:editUrl', (id, type) => `https://wordpress.com/${type === 'page' ? 'page' : 'post'}/${cfg.wpSite}/${id}`);
+
+// --- Modo de arranque ---
+handle('mode:tryNormal', () => {
+  saveMode(0);
+  log('El usuario pide probar el modo normal; reiniciando');
+  app.relaunch(); app.exit(0);
 });
 
 handle('open', (url) => shell.openExternal(url));

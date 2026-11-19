@@ -54,6 +54,14 @@ Con las capturas, la IA (Claude) lee el texto y recorta las fotos de la captura.
 4. Revisa el título, las etiquetas (salen de los hashtags), la categoría y el contenido, y pulsa **Enviar a WordPress**.
    Por defecto se crea como **borrador** y se abre el editor de WordPress.com.
 
+## Novedades de la 0.3
+- **Pestaña Blog**: lista las entradas y páginas de WordPress con búsqueda y filtro por estado; editar, ver, publicar, pasar a borrador, papelera y restaurar.
+- **Duplicados**: la misma publicación en Instagram y Facebook se muestra una vez (IG + FB) y el pie cita las dos redes.
+- **«✓ En el blog»**: Ecos recuerda qué publicaciones ya se han pasado; se puede filtrar por «Sin pasar al blog».
+- **Cargar más** publicaciones antiguas, y búsqueda en el texto.
+- **Formato de las entradas** (Configuración): limpiar título, pie personalizable, etiquetas y categorías por defecto, estado por defecto.
+- Se instala en *Archivos de programa* (pide permiso de administrador).
+
 ## Qué hace la conversión
 - Primera frase → título; párrafos → bloques de párrafo; @menciones y URLs → enlaces.
 - Hashtags → etiquetas de WordPress (se quitan del final del texto).
