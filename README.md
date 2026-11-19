@@ -54,6 +54,10 @@ Con las capturas, la IA (Claude) lee el texto y recorta las fotos de la captura.
 4. Revisa el título, las etiquetas (salen de los hashtags), la categoría y el contenido, y pulsa **Enviar a WordPress**.
    Por defecto se crea como **borrador** y se abre el editor de WordPress.com.
 
+## Novedades de la 1.0
+- **Modo desarrollador** (Ajustes → Avanzado): añade la tarjeta **CLI** en Conexiones con una terminal integrada (pestañas, copiar/pegar) para usar **Claude Code** u otras herramientas sobre el código de Ecos. Detecta Git, Node.js y Claude Code, permite clonar el proyecto de GitHub e instalar Claude Code.
+- La versión de desarrollo (`npm start`) usa su propia carpeta de datos (`Ecos-dev`) para poder abrirse junto a la instalada.
+
 ## Novedades de la 0.9
 - **Restaurar entradas desde copia de seguridad** (Ajustes): analiza ZIP de UpdraftPlus / Duplicator / BackWPup, `.wpress` de All-in-One WP Migration, exportación XML de WordPress y `.sql`/`.sql.gz` (cualquier prefijo de tablas), o una carpeta descomprimida. Muestra entradas, páginas, fotos encontradas y perdidas, categorías y fechas; restaura las elegidas con su fecha original, sus fotos (de la copia o descargadas de la web antigua), categorías y etiquetas, sin duplicar las que ya existen.
 
@@ -112,6 +116,7 @@ Con las capturas, la IA (Claude) lee el texto y recorta las fotos de la captura.
 | `src/transform.js` | Publicación → bloques de Gutenberg |
 | `src/backup.js` | Análisis y restauración de copias de seguridad de WordPress |
 | `renderer/blocks.js` | Editor de bloques |
+| `src/devterm.js` | Terminal integrada del modo desarrollador (node-pty) |
 | `src/ai.js` | Proveedores de IA (Claude, OpenAI, Gemini, DeepSeek, Mistral, Qwen, Ollama, OpenRouter) |
 | `renderer/i18n.js` | Textos de la interfaz en español e inglés |
 | `src/oauth.js` | Inicio de sesión en el navegador del sistema (servidor local en el puerto 53682) |

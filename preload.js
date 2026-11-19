@@ -61,6 +61,17 @@ contextBridge.exposeInMainWorld('api', {
   backupClose: () => call('backup:close'),
   onBackupProgress: on('backup:progress'),
 
+  // Modo desarrollador: terminal integrada
+  devTools: () => call('dev:tools'),
+  devPickDir: () => call('dev:pickDir'),
+  devCheckDir: (dir) => call('dev:checkDir', dir),
+  ptySpawn: (opts) => call('pty:spawn', opts),
+  ptyWrite: (id, data) => ipcRenderer.send('pty:write', id, data),
+  ptyResize: (id, cols, rows) => ipcRenderer.send('pty:resize', id, cols, rows),
+  ptyKill: (id) => call('pty:kill', id),
+  onPtyData: on('pty:data'),
+  onPtyExit: on('pty:exit'),
+
   // Ajustes
   exportConfig: (withSecrets) => call('config:export', withSecrets),
   importConfig: () => call('config:import'),

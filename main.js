@@ -2,6 +2,22 @@ const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
+// Versión de desarrollo («npm start» desde el código): datos aparte para poder abrirla junto a la
+// instalada (si compartieran carpeta, el bloqueo de una sola copia la cerraría). La primera vez se
+// copia la configuración de la instalada para no tener que volver a conectar nada.
+const IS_DEV = !app.isPackaged;
+if (IS_DEV) {
+  const appData = app.getPath('appData');
+  const devData = path.join(appData, 'Ecos-dev');
+  try {
+    if (!fs.existsSync(path.join(devData, 'config.json'))) {
+      const installed = ['Ecos', 'ecos'].map((n) => path.join(appData, n, 'config.json')).find((f) => fs.existsSync(f));
+      if (installed) { fs.mkdirSync(devData, { recursive: true }); fs.copyFileSync(installed, path.join(devData, 'config.json')); }
+    }
+  } catch { /* sin configuración previa */ }
+  app.setPath('userData', devData);
+}
+
 // Registro de errores en %APPDATA%\Ecos\ecos.log y aviso visible si algo falla al arrancar
 const logFile = () => path.join(app.getPath('userData'), 'ecos.log');
 function log(...args) {
@@ -89,10 +105,11 @@ let mainWin;
 
 function createWindow() {
   const win = mainWin = new BrowserWindow({
-    width: 1280, height: 860, icon: path.join(__dirname, 'renderer', 'assets', 'icon.png'), title: 'Ecos', autoHideMenuBar: true,
+    width: 1280, height: 860, icon: path.join(__dirname, 'renderer', 'assets', 'icon.png'), title: IS_DEV ? 'Ecos (desarrollo)' : 'Ecos', autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false },
   });
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  if (IS_DEV) win.on('page-title-updated', (e) => e.preventDefault()); // que se note que es la versión de desarrollo
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
 }
 
@@ -382,7 +399,7 @@ handle('ai:models', (id, draftKey, draftUrl) => {
 handle('ai:test', async () => { const c = await ai.testConnection(cfg.ai); return `${ai.PROVIDERS[c.id].name} · ${c.model}`; });
 
 // --- Copia de seguridad de la configuración ---
-const BACKUP_KEYS = ['metaAppId', 'metaAppSecret', 'metaConfigId', 'graphVersion', 'wpMode', 'wpUrl', 'wpUser', 'wpAppPassword', 'wpSite', 'wpPublicUrl', 'wpEditor', 'wpClientId', 'wpClientSecret', 'ai', 'aiInstructions', 'format', 'templates', 'exported', 'prefs'];
+const BACKUP_KEYS = ['devDir', 'metaAppId', 'metaAppSecret', 'metaConfigId', 'graphVersion', 'wpMode', 'wpUrl', 'wpUser', 'wpAppPassword', 'wpSite', 'wpPublicUrl', 'wpEditor', 'wpClientId', 'wpClientSecret', 'ai', 'aiInstructions', 'format', 'templates', 'exported', 'prefs'];
 handle('config:export', async (withSecrets) => {
   const r = await dialog.showSaveDialog(mainWin, { title: 'Guardar copia de la configuración', defaultPath: `ecos-configuracion-${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] });
   if (r.canceled) return false;
@@ -503,6 +520,26 @@ handle('backup:restore', async (keys, opts = {}) => {
 });
 handle('backup:close', () => { if (backupAn) { backupAn.sources.forEach((x) => x.close()); backupAn = null; } });
 
+// --- Modo desarrollador: terminal integrada (src/devterm.js) ---
+const devterm = () => require('./src/devterm');
+const sendWin = (ch, v) => { if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send(ch, v); };
+handle('dev:tools', () => devterm().tools());
+handle('dev:pickDir', async () => {
+  const r = await dialog.showOpenDialog(mainWin, { title: 'Carpeta del proyecto Ecos (código fuente)', properties: ['openDirectory', 'createDirectory'] });
+  if (r.canceled) return null;
+  cfg.devDir = r.filePaths[0]; store.save(cfg);
+  return cfg.devDir;
+});
+// ¿Es esa carpeta el código de Ecos? (tiene package.json con "name": "ecos")
+handle('dev:checkDir', (dir) => {
+  try { return JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).name === 'ecos'; } catch { return false; }
+});
+handle('pty:spawn', (opts) => devterm().spawn({ ...opts, cwd: opts.cwd || cfg.devDir }, sendWin));
+ipcMain.on('pty:write', (_e, id, data) => devterm().write(id, data));
+ipcMain.on('pty:resize', (_e, id, cols, rows) => devterm().resize(id, cols, rows));
+handle('pty:kill', (id) => devterm().kill(id));
+app.on('before-quit', () => { try { devterm().killAll(); } catch { /* sin terminales */ } });
+
 // --- Ajustes: información, registros y restablecer ---
 handle('app:info', () => ({
   version: app.getVersion(), electron: process.versions.electron, chrome: process.versions.chrome,
@@ -547,6 +584,18 @@ app.whenReady().then(() => {
   mainWin.webContents.once('did-finish-load', () => {
     clearTimeout(loadTimer);
     log('Ventana cargada');
+    // Autocomprobación de la terminal (la usa la prueba automática de GitHub en Windows)
+    if (process.env.ECOS_SELFTEST_PTY) {
+      try {
+        let out = '';
+        const r = devterm().spawn({ cols: 80, rows: 10 }, (ch, v) => {
+          if (ch === 'pty:data') out += v.data;
+          if (ch === 'pty:exit') log('Autocomprobación terminal: fin', v.code);
+        });
+        setTimeout(() => devterm().write(r.id, 'echo ecos-pty-ok\r'), 1500);
+        setTimeout(() => { log('Autocomprobación terminal:', /ecos-pty-ok[\s\S]*ecos-pty-ok/.test(out) || out.includes('ecos-pty-ok') ? 'OK' : 'FALLO', JSON.stringify(out.slice(-120))); devterm().kill(r.id); }, 5000);
+      } catch (e) { log('Autocomprobación terminal: ERROR', e); }
+    }
     try { fs.unlinkSync(pendingFile()); } catch { /* nada */ }
     // Solo para pruebas: ECOS_PRUEBA_FALLO=GPU|Tab simula que se cae ese proceso
     if (process.env.ECOS_PRUEBA_FALLO) {

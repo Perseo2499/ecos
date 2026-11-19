@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data: file:; media-src * data: file: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'">
 <title>Ecos</title>
+<link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -245,6 +246,22 @@
         </div>
       </form>
 
+      <div class="card dev-card hidden" id="dev-card">
+        <div class="card-head"><span class="ms fill ic dev">terminal</span><h2>CLI</h2><span class="hint" data-i18n>Desarrollo interno</span></div>
+        <div class="field copy"><label data-i18n>Carpeta del código de Ecos</label><input id="dev-dir" readonly data-i18n-ph placeholder="Sin elegir">
+          <button id="dev-pick" class="btn text icon-only" data-i18n-title title="Elegir carpeta"><span class="ms">folder_open</span></button></div>
+        <p class="hint" id="dev-dir-hint"></p>
+        <div class="dev-tools" id="dev-tools"></div>
+        <div class="card-actions wrap">
+          <button id="dev-clone" class="btn outlined"><span class="ms">download</span><span data-i18n>Clonar desde GitHub</span></button>
+          <button id="dev-term" class="btn tonal"><span class="ms">terminal</span><span data-i18n>Terminal</span></button>
+          <button id="dev-claude" class="btn filled"><span class="ms">auto_awesome</span><span data-i18n>Abrir Claude Code</span></button>
+        </div>
+        <details class="help"><summary><span class="ms">info</span><span data-i18n>¿Cómo funciona?</span></summary>
+          <p data-i18n>La terminal se abre en la carpeta del código de Ecos. Desde ahí, Claude Code puede leer y modificar la app. Para probar los cambios, escribe «npm start» (ejecuta la versión de desarrollo) y, cuando estén listos, súbelos a GitHub: se publicará una actualización automática.</p>
+        </details>
+      </div>
+
       <div class="card ai-card" id="ai-card">
         <div class="card-head"><span class="ms fill ic ai">auto_awesome</span><h2 data-i18n>Inteligencia artificial</h2><span class="hint" data-i18n>Opcional</span></div>
         <div class="ai-test">
@@ -374,6 +391,7 @@
 
         <div class="card" id="set-advanced">
           <div class="card-head"><span class="ms fill ic">build</span><h2 data-i18n>Avanzado</h2></div>
+          <label class="switch"><input type="checkbox" id="s-devmode"><span data-i18n>Modo desarrollador (terminal y Claude Code en «Conexiones»)</span></label>
           <div class="set-row"><span data-i18n>Modo de arranque</span><b id="mode-name">–</b></div>
           <p class="hint" id="mode-hint"></p>
           <div class="card-actions wrap">
@@ -520,6 +538,18 @@
   </div>
 </div>
 
+<div id="term" class="term hidden">
+  <div class="ed-bar">
+    <button id="term-close" class="btn text icon-only" data-i18n-title title="Cerrar"><span class="ms">arrow_back</span></button>
+    <div id="term-tabs" class="term-tabs"></div>
+    <button id="term-new" class="btn text icon-only" data-i18n-title title="Nueva terminal"><span class="ms">add</span></button>
+    <span class="spacer"></span>
+    <button id="term-run" class="btn outlined"><span class="ms">play_arrow</span><span data-i18n>npm start</span></button>
+    <button id="term-claude" class="btn filled"><span class="ms">auto_awesome</span>Claude Code</button>
+  </div>
+  <div id="term-panes" class="term-panes"></div>
+</div>
+
 <div id="ins-menu" class="ins-menu hidden">
   <button data-type="paragraph"><span class="ms">notes</span><span data-i18n>Párrafo</span></button>
   <button data-type="heading"><span class="ms">title</span><span data-i18n>Título</span></button>
@@ -536,6 +566,8 @@
 <div id="drop" class="drop hidden"><div><span class="ms fill">file_download</span><span data-i18n>Suelta aquí</span></div></div>
 <div id="toast"></div>
 <script src="i18n.js"></script>
+<script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+<script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
 <script src="blocks.js"></script>
 <script src="renderer.js"></script>
 </body>

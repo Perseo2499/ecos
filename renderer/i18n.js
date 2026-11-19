@@ -246,6 +246,19 @@
     'Se crearán {n} entradas como borrador en tu web, con sus fotos. ¿Continuar?': '{n} posts will be created as drafts on your site, with their photos. Continue?',
     'Se crearán {n} entradas en tu web con su estado original (las publicadas serán visibles). ¿Continuar?': '{n} posts will be created on your site with their original status (published ones will be visible). Continue?',
     '{ok} restauradas · {ex} ya existían · {err} con error': '{ok} restored · {ex} already existed · {err} with errors', '{n} fotos no se encontraron': '{n} photos were not found',
+    // 1.0 (modo desarrollador)
+    'Modo desarrollador (terminal y Claude Code en «Conexiones»)': 'Developer mode (terminal and Claude Code in "Connections")',
+    'Desarrollo interno': 'Internal development', 'Carpeta del código de Ecos': 'Ecos source code folder', 'Sin elegir': 'Not chosen', 'Elegir carpeta': 'Choose folder',
+    'Clonar desde GitHub': 'Clone from GitHub', 'Terminal': 'Terminal', 'Abrir Claude Code': 'Open Claude Code', '¿Cómo funciona?': 'How does it work?',
+    'La terminal se abre en la carpeta del código de Ecos. Desde ahí, Claude Code puede leer y modificar la app. Para probar los cambios, escribe «npm start» (ejecuta la versión de desarrollo) y, cuando estén listos, súbelos a GitHub: se publicará una actualización automática.': 'The terminal opens in the Ecos source folder. From there, Claude Code can read and change the app. To try your changes, type "npm start" (runs the development version) and, when they are ready, push them to GitHub: an automatic update will be published.',
+    'Nueva terminal': 'New terminal', 'Elige la carpeta con el código de Ecos o clónalo desde GitHub.': 'Choose the folder with the Ecos source code or clone it from GitHub.',
+    'Es el código de Ecos.': 'It is the Ecos source code.', 'Esa carpeta no parece el código de Ecos (falta su package.json).': 'That folder does not look like the Ecos source code (its package.json is missing).',
+    'Comprobando herramientas…': 'Checking tools…', 'Descargar': 'Download', 'Instalar': 'Install', 'Instalar Claude Code': 'Install Claude Code',
+    'Modo desarrollador activado: tienes la tarjeta «CLI» en Conexiones.': 'Developer mode on: the "CLI" card is in Connections.',
+    'Necesitas instalar Git para clonar el proyecto.': 'You need to install Git to clone the project.',
+    'Elige la carpeta donde guardar el proyecto (se creará dentro la carpeta «ecos»).': 'Choose where to save the project (an "ecos" folder will be created inside).',
+    'Clonar': 'Clone', 'Claude Code no está instalado. Pulsa «Instalar» en la tarjeta.': 'Claude Code is not installed. Click "Install" on the card.',
+    'La terminal ha terminado': 'The terminal has ended',
   };
   const DICTS = { es: {}, en: EN };
   const norm = (s) => s.trim().replace(/\s+/g, ' ');
