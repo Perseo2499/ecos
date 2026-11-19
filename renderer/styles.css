@@ -521,3 +521,7 @@ body:has(.selbar.show) #toast { bottom: 96px; }
 .wp-mode-panel { animation: enter .3s var(--ease); }
 
 #toast { white-space: pre-line; } #toast.show { pointer-events: auto; cursor: pointer; }
+
+/* Los filtros se quedan fijos bajo la barra superior al desplazarse */
+.tab > .row.filters { position: sticky; top: 64px; z-index: 15; margin: 0 -24px 18px; padding: 10px 24px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent); backdrop-filter: blur(18px) saturate(1.4); }
