@@ -1093,8 +1093,22 @@ function openRestore() {
   if (!rs.data) rsShow('#rs-pick');
 }
 async function closeRestore() {
+  if (rs.running && !await ask(t('Hay una restauración en marcha. ¿Cancelarla y salir?'), { danger: true })) return;
+  if (rs.running || rs.analyzing) cancelBackupJob();
   $('#restore').classList.add('hidden'); document.body.classList.remove('editing');
 }
+// Cancelar el análisis o la restauración en curso (la entrada que se está subiendo termina o se corta)
+function cancelBackupJob() { rs.gen = (rs.gen || 0) + 1; window.api.backupCancel().catch(() => {}); }
+$('#rs-cancel').onclick = () => { cancelBackupJob(); rs.analyzing = false; rsShow('#rs-pick'); toast(t('Análisis cancelado.')); };
+$('#rs-stop').onclick = async () => {
+  if (!await ask(t('¿Cancelar la restauración? Lo ya restaurado se queda en tu web; la entrada que se está subiendo ahora puede quedar a medias.'), { danger: true, ok: t('Cancelar restauración'), cancel: t('Seguir') })) return;
+  cancelBackupJob();
+  $('#rs-stop').disabled = true; $('#rs-stop').lastElementChild.textContent = t('Cancelando…');
+};
+$('#rs-change').onclick = async () => {
+  await window.api.backupClose().catch(() => {});
+  rs.data = null; rs.sel = new Set(); $('#rs-go').classList.add('hidden'); $('#rs-change').classList.add('hidden'); rsShow('#rs-pick');
+};
 $('#rs-open').onclick = openRestore;
 $('#rs-close').onclick = closeRestore;
 $('#rs-files').onclick = async () => { const p = await window.api.backupPick('files'); if (p) rsAnalyze(p); };
@@ -1110,14 +1124,22 @@ window.api.onBackupProgress((p) => {
 
 async function rsAnalyze(paths) {
   rsShow('#rs-working'); $('#rs-step').textContent = '';
-  $('#rs-go').classList.add('hidden');
+  $('#rs-go').classList.add('hidden'); $('#rs-change').classList.add('hidden');
+  const gen = rs.gen = (rs.gen || 0) + 1;
+  rs.analyzing = true;
   try {
-    rs.data = await window.api.backupAnalyze(paths);
+    const data = await window.api.backupAnalyze(paths);
+    if (gen !== rs.gen) return; // se canceló mientras tanto
+    rs.analyzing = false;
+    rs.data = data;
+    $('#rs-change').classList.remove('hidden');
     rs.sel = new Set(rs.data.posts.filter((p) => !p.restored && p.type === 'post').map((p) => p.key));
     rs.state = {};
     rsRender();
     rsShow('#rs-result');
   } catch (e) {
+    rs.analyzing = false;
+    if (gen !== rs.gen || /Cancelado/.test(e.message)) return;
     rsShow('#rs-pick'); toast(e.message, true);
   }
 }
@@ -1214,12 +1236,19 @@ async function rsRestore() {
   const keys = rs.data.posts.filter((p) => rs.sel.has(p.key)).map((p) => p.key);
   const asDraft = $('#rs-status').value === 'draft';
   if (!await ask(t(asDraft ? 'Se crearán {n} entradas como borrador en tu web, con sus fotos. ¿Continuar?' : 'Se crearán {n} entradas en tu web con su estado original (las publicadas serán visibles). ¿Continuar?', { n: keys.length }))) return;
-  const res = await window.api.backupRestore(keys, { status: $('#rs-status').value, skipExisting: $('#rs-skip').checked, createCategories: true, download: true });
+  rs.running = true;
+  $('#rs-stop').disabled = false; $('#rs-stop').lastElementChild.textContent = t('Cancelar restauración');
+  $('#rs-stop').classList.remove('hidden'); $('#rs-change').classList.add('hidden');
+  let res;
+  try { res = await window.api.backupRestore(keys, { status: $('#rs-status').value, skipExisting: $('#rs-skip').checked, createCategories: true, download: true }); }
+  finally { rs.running = false; $('#rs-stop').classList.add('hidden'); $('#rs-change').classList.remove('hidden'); }
+  for (const k of keys) if (rs.state[k]?.state === 'working' || rs.state[k]?.state === 'cancelled') { delete rs.state[k]; rsRenderRow(k); }
+  const cancelled = res.length < keys.length;
   const ok = res.filter((r) => r.state === 'ok').length, ex = res.filter((r) => r.state === 'exists').length, err = res.filter((r) => r.state === 'error').length;
   for (const r of res) if (r.state === 'ok') { const p = rs.data.posts.find((x) => x.key === r.key); p.restored = r; rs.sel.delete(r.key); }
   blog.loaded = false;
   const lost = res.flatMap((r) => r.problems || []).length;
-  toast(t('{ok} restauradas · {ex} ya existían · {err} con error', { ok, ex, err }) + (lost ? ' · ' + t('{n} fotos no se encontraron', { n: lost }) : ''), err > 0);
+  toast((cancelled ? t('Restauración cancelada.') + ' ' : '') + t('{ok} restauradas · {ex} ya existían · {err} con error', { ok, ex, err }) + (lost ? ' · ' + t('{n} fotos no se encontraron', { n: lost }) : ''), err > 0);
 }
 
 // ---------------------------------------------------------------- Modo desarrollador: CLI

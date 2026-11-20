@@ -558,6 +558,8 @@
     <button id="rs-close" class="btn text icon-only" data-i18n-title title="Cerrar"><span class="ms">arrow_back</span></button>
     <b class="ed-bar-title" data-i18n>Restaurar desde copia de seguridad</b>
     <span class="spacer"></span>
+    <button id="rs-change" class="btn text hidden"><span class="ms">swap_horiz</span><span data-i18n>Elegir otra copia</span></button>
+    <button id="rs-stop" class="btn outlined danger hidden"><span class="ms">stop_circle</span><span data-i18n>Cancelar restauración</span></button>
     <button id="rs-go" class="btn filled hidden"><span class="ms">cloud_upload</span><span id="rs-go-label"></span></button>
   </div>
   <div class="rs-body">
@@ -577,6 +579,7 @@
       <div class="spinner"></div>
       <h2 data-i18n>Analizando la copia…</h2>
       <p class="hint" id="rs-step"></p>
+      <button id="rs-cancel" class="btn outlined"><span class="ms">close</span><span data-i18n>Cancelar</span></button>
     </div>
     <!-- 3. Resultado -->
     <div id="rs-result" class="hidden">

@@ -66,6 +66,7 @@ contextBridge.exposeInMainWorld('api', {
   backupPreview: (key) => call('backup:preview', key),
   backupRestore: (keys, opts) => call('backup:restore', keys, opts),
   backupClose: () => call('backup:close'),
+  backupCancel: () => call('backup:cancel'),
   onBackupProgress: on('backup:progress'),
 
   // Modo desarrollador: terminal integrada

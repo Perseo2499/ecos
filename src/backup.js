@@ -209,7 +209,9 @@ async function analyze(paths, progress = () => {}) {
   let db = null, dbFile = '';
   const wxrs = [], wxrNames = [];
   for (const src of sources) {
+    let n = 0;
     for (const name of src.list()) {
+      if (++n % 400 === 0) { progress({ step: 'indexar', file: name }); await new Promise((r) => setImmediate(r)); }
       const low = name.toLowerCase();
       const up = low.indexOf('uploads/');
       if (IMG_EXT.test(name) && (up >= 0 || src.kind === 'carpeta')) {
@@ -301,18 +303,21 @@ async function analyze(paths, progress = () => {}) {
 // ---------------------------------------------------------------- restauración de una entrada
 // upload(buffer, filename) → { id, url } en el WordPress de destino.
 // Devuelve los campos listos para crear la entrada, con los enlaces antiguos cambiados por los nuevos.
-async function prepare(an, post, upload, { download = true } = {}) {
+async function prepare(an, post, upload, { download = true, job = null } = {}) {
   const map = new Map();      // URL o ruta antigua → { id, url } nueva
   const idMap = new Map();    // ID de adjunto antiguo → ID nuevo (para [gallery ids])
   const problems = [];
   for (const m of post.media) {
+    if (job?.stop) break;
     const key = m.rel || m.url;
     if (map.has(key)) continue;
     let buf = null, name = path.basename((m.rel || m.url).split('?')[0]);
     const f = an.findFile(m.rel);
     if (f) buf = await f.src.read(f.name);
     else if (download) {
-      try { const r = await fetch(m.url.split('?')[0]); if (r.ok) buf = Buffer.from(await r.arrayBuffer()); } catch { /* sin conexión */ }
+      // como mucho 45 s por foto (web.archive.org a veces no contesta); «Cancelar» corta la descarga
+      const signal = job ? AbortSignal.any([AbortSignal.timeout(45000), job.ctrl.signal]) : AbortSignal.timeout(45000);
+      try { const r = await fetch(m.url.split('?')[0], { signal }); if (r.ok) buf = Buffer.from(await r.arrayBuffer()); } catch { /* sin conexión, tiempo agotado o cancelado */ }
     }
     if (!buf) { problems.push(name); continue; }
     try {

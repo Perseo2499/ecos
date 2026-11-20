@@ -503,9 +503,17 @@ handle('backup:pick', async (kind) => {
         filters: [{ name: 'Copias de WordPress', extensions: ['zip', 'wpress', 'sql', 'gz', 'xml'] }, { name: 'Todos', extensions: ['*'] }] });
   return r.canceled ? null : r.filePaths;
 });
+// Cancelar: se para entre archivos/entradas y se cortan las descargas en curso
+let backupJob = { stop: false, ctrl: new AbortController() };
+const newJob = () => (backupJob = { stop: false, ctrl: new AbortController() });
+const CANCELLED = 'Cancelado';
+handle('backup:cancel', () => { backupJob.stop = true; backupJob.ctrl.abort(); return true; });
 handle('backup:analyze', async (paths) => {
   if (backupAn) { backupAn.sources.forEach((x) => x.close()); backupAn = null; }
-  backupAn = await backupMod().analyze(paths, sendProgress);
+  const job = newJob();
+  const an = await backupMod().analyze(paths, (p) => { if (job.stop) throw new Error(CANCELLED); sendProgress(p); });
+  if (job.stop) { an.sources.forEach((x) => x.close()); throw new Error(CANCELLED); }
+  backupAn = an;
   log(`Copia de seguridad analizada: ${backupAn.kinds.join(', ')} · ${backupAn.posts.length} entradas/páginas`);
   const done = cfg.restored || {};
   return {
@@ -538,7 +546,9 @@ handle('backup:restore', async (keys, opts = {}) => {
   if (!wpIsConnected()) throw new Error('Primero conecta tu WordPress en «Conexiones».');
   const results = [];
   cfg.restored = cfg.restored || {};
+  const job = newJob();
   for (const key of keys) {
+    if (job.stop) { log('Restauración cancelada'); break; }
     const x = backupAn.posts.find((q) => q.key === key);
     if (!x) continue;
     sendProgress({ key, state: 'working' });
@@ -547,7 +557,8 @@ handle('backup:restore', async (keys, opts = {}) => {
         const existing = await wpCall(() => WP().findExisting(cfg, x.type, x.slug, x.title));
         if (existing) { results.push({ key, state: 'exists', postId: existing }); sendProgress({ key, state: 'exists', postId: existing }); continue; }
       }
-      const prep = await backupMod().prepare(backupAn, x, (buf, name) => wpCall(() => WP().uploadNamed(cfg, buf, name)), { download: opts.download !== false });
+      const prep = await backupMod().prepare(backupAn, x, (buf, name) => wpCall(() => WP().uploadNamed(cfg, buf, name)), { download: opts.download !== false, job });
+      if (job.stop) { sendProgress({ key, state: 'cancelled' }); break; }
       const status = opts.status === 'original' ? (['publish', 'future', 'private', 'pending', 'draft'].includes(x.status) ? x.status : 'draft') : 'draft';
       const post = await wpCall(() => WP().createPost(cfg, { ...prep.fields, status, type: x.type, createCategories: opts.createCategories !== false }));
       const url = WP().publicUrl(cfg, post.URL);
