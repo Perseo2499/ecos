@@ -259,6 +259,12 @@
     'Elige la carpeta donde guardar el proyecto (se creará dentro la carpeta «ecos»).': 'Choose where to save the project (an "ecos" folder will be created inside).',
     'Clonar': 'Clone', 'Claude Code no está instalado. Pulsa «Instalar» en la tarjeta.': 'Claude Code is not installed. Click "Install" on the card.',
     'La terminal ha terminado': 'The terminal has ended',
+    // 1.1 (CLI como proveedor de IA)
+    '¿Qué CLI responde?': 'Which CLI answers?', 'elige una CLI': 'choose a CLI',
+    'Antigravity no tiene un modo de línea de comandos no interactivo: su agente funciona dentro del IDE (o como servidor ACP). Usa Gemini CLI para los modelos de Google.': 'Antigravity has no non-interactive command-line mode: its agent runs inside the IDE (or as an ACP server). Use Gemini CLI for Google models.',
+    'Ecos ejecuta la CLI instalada en este ordenador en modo no interactivo y solo lectura, y lee su respuesta como si fuera una API. Antes, inicia sesión en ella desde la terminal (tarjeta CLI).': 'Ecos runs the CLI installed on this computer in non-interactive, read-only mode and reads its answer as if it were an API. Sign in to it first from the terminal (CLI card).',
+    'Modelo (opcional: si lo dejas vacío, usa el de la CLI)': 'Model (optional: leave empty to use the CLI default)',
+    'Los botones de IA usarán {c}. Pulsa «Probar» para comprobarlo.': 'The AI buttons will use {c}. Click "Try it" to check.',
   };
   const DICTS = { es: {}, en: EN };
   const norm = (s) => s.trim().replace(/\s+/g, ' ');

@@ -162,19 +162,28 @@ function renderAi() {
   const A = CFG.ai; if (!A) return;
   aiSel = A.active;
   const act = A.providers[A.active];
-  $('#ai-current').textContent = act ? `${act.name} · ${act.model || act.defaultModel || t('sin modelo')}${act.needsKey && !act.hasKey ? ' · ' + t('sin clave') : ''}` : '';
+  const CLI_NAMES = { claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini CLI' };
+  $('#ai-current').textContent = !act ? '' : act.cli
+    ? `${act.name} · ${CLI_NAMES[act.tool] || t('elige una CLI')}${act.model ? ' · ' + act.model : ''}`
+    : `${act.name} · ${act.model || act.defaultModel || t('sin modelo')}${act.needsKey && !act.hasKey ? ' · ' + t('sin clave') : ''}`;
   $('#ai-providers').innerHTML = '';
   for (const [id, p] of Object.entries(A.providers)) {
+    if (p.cli && !prefs().devMode && id !== aiSel) continue; // la CLI local solo con el modo desarrollador
     const row = document.createElement('label');
     row.className = 'ai-prov' + (id === aiSel ? ' sel active' : '');
     row.innerHTML = `<input type="radio" name="ai-prov" ${id === aiSel ? 'checked' : ''}>
-      <img class="ai-logo" src="${logoOf(id)}" alt="">
+      ${p.cli ? '<span class="ai-logo cli-logo"><span class="ms">terminal</span></span>' : `<img class="ai-logo" src="${logoOf(id)}" alt="">`}
       <span class="ai-name">${escHtml(p.name)}</span>
       ${p.hasKey || !p.needsKey ? `<span class="ai-ok" title="${t('Clave guardada')}"></span>` : ''}`;
     row.querySelector('input').onchange = async () => { CFG.ai = await window.api.aiSetActive(id); renderAi(); };
     $('#ai-providers').appendChild(row);
   }
   const p = A.providers[aiSel];
+  // CLI local: se elige la herramienta en lugar de URL y clave
+  $('#ai-cli').classList.toggle('hidden', !p.cli);
+  $$('#ai-url, #ai-key, .ai-key-actions').forEach((x) => x.classList.toggle('hidden', !!p.cli));
+  $$('#ai-cli-tools button').forEach((b) => b.classList.toggle('active', b.dataset.tool === p.tool));
+  $('#ai-model').placeholder = p.cli ? t('Modelo (opcional: si lo dejas vacío, usa el de la CLI)') : t('Nombre del modelo');
   $('#ai-url').value = p.url; $('#ai-url').placeholder = t('URL personalizada (opcional)');
   $('#ai-url').title = p.defaultBase || '';
   $('#ai-key').value = '';
@@ -184,6 +193,13 @@ function renderAi() {
   $('#ai-model').value = p.model || p.defaultModel || '';
   $('#ai-instructions').value = CFG.aiInstructions || '';
 }
+$$('#ai-cli-tools button').forEach((b) => (b.onclick = async () => {
+  if (b.disabled) return;
+  CFG.ai = await window.api.aiSave('cli', { tool: b.dataset.tool });
+  if (CFG.ai.active !== 'cli') CFG.ai = await window.api.aiSetActive('cli');
+  $('#ai-model-list').innerHTML = (await window.api.aiModels('cli').catch(() => [])).map((m) => `<option value="${escHtml(m)}">`).join('');
+  renderAi(); toast(t('Los botones de IA usarán {c}. Pulsa «Probar» para comprobarlo.', { c: b.textContent.trim() }));
+}));
 $('#ai-save').onclick = (e) => busy(e.target, async () => {
   CFG.ai = await window.api.aiSave(aiSel, { key: $('#ai-key').value, url: $('#ai-url').value, model: $('#ai-model').value });
   if (CFG.ai.active !== aiSel) CFG.ai = await window.api.aiSetActive(aiSel);
@@ -662,7 +678,7 @@ function renderBlog(items) {
     row.innerHTML = `
       ${it.image ? `<img src="${escHtml(it.image)}" loading="lazy" alt="">` : `<div class="noimg"><span class="ms">image</span></div>`}
       <div><div class="b-title"></div>
-        <div class="b-meta"><span class="st ${escHtml(it.status)}">${STATUS()[it.status] || escHtml(it.status)}</span>${fromEcos ? `<span class="st ecos" title="${t('Entrada creada desde Ecos')}"><img src="assets/logo.svg" alt="">${t('Creada con Ecos')}</span>` : ''}${when}${it.categories.length ? ' · ' + escHtml(it.categories.join(', ')) : ''}</div>
+        <div class="b-meta"><span class="st ${escHtml(it.status)}">${STATUS()[it.status] || escHtml(it.status)}</span>${fromEcos ? `<span class="st ecos" title="${t('Entrada creada desde Ecos')}"><img src="assets/logo-mark.svg" alt="">${t('Creada con Ecos')}</span>` : ''}${when}${it.categories.length ? ' · ' + escHtml(it.categories.join(', ')) : ''}</div>
         <div class="b-ex"></div></div>
       <div class="b-actions"></div>`;
     const title = decodeEntities(it.title);
@@ -1038,7 +1054,7 @@ async function refreshDevTools() {
   $$('#dev-tools [data-url]').forEach((a) => (a.onclick = (e) => { e.preventDefault(); window.api.open(a.dataset.url); }));
   $('#dev-install')?.addEventListener('click', () => openTerminal({ cmd: CLAUDE_INSTALL, title: t('Instalar Claude Code') }));
 }
-$('#s-devmode').onchange = async () => { await savePrefs({ devMode: $('#s-devmode').checked }); renderDevCard(); if ($('#s-devmode').checked) toast(t('Modo desarrollador activado: tienes la tarjeta «CLI» en Conexiones.')); };
+$('#s-devmode').onchange = async () => { await savePrefs({ devMode: $('#s-devmode').checked }); renderDevCard(); renderAi(); if ($('#s-devmode').checked) toast(t('Modo desarrollador activado: tienes la tarjeta «CLI» en Conexiones.')); };
 $('#dev-pick').onclick = async () => { const d = await window.api.devPickDir(); if (d) { CFG.devDir = d; renderDevCard(); } };
 $('#dev-clone').onclick = async () => {
   if (!dev.tools?.git) return toast(t('Necesitas instalar Git para clonar el proyecto.'), true);

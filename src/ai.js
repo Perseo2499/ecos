@@ -15,6 +15,8 @@ const PROVIDERS = {
   alibaba: { name: 'Alibaba', label: 'Qwen', compat: true, base: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1', keyUrl: 'https://modelstudio.console.alibabacloud.com/', needsKey: true },
   ollama: { name: 'Ollama', label: 'local y gratis', base: 'http://localhost:11434', keyUrl: 'https://ollama.com/download', needsKey: false },
   openrouter: { name: 'OpenRouter', label: 'cientos de modelos', compat: true, base: 'https://openrouter.ai/api/v1', keyUrl: 'https://openrouter.ai/keys', needsKey: true },
+  // CLI local (modo desarrollador): Claude Code, Codex o Gemini CLI responden como si fueran una API
+  cli: { name: 'CLI local', label: 'Claude Code · Codex · Gemini CLI', needsKey: false, cli: true, keyUrl: '' },
 };
 
 // Modelos de Claude que admiten el respaldo automático ante rechazos y el parámetro effort
@@ -28,6 +30,10 @@ function current(aiCfg) {
   if (!def) throw new Error('Proveedor de IA desconocido');
   if (def.needsKey && !p.key) throw new Error(`Falta la clave de ${def.name} (Conexiones → IA)`);
   const model = (p.model || def.defaultModel || '').trim();
+  if (def.cli) {
+    if (!p.tool) throw new Error('Elige qué CLI usar (Conexiones → IA → CLI local)');
+    return { id, def, tool: p.tool, model }; // el modelo es opcional: cada CLI tiene el suyo por defecto
+  }
   if (!model) throw new Error(`Elige un modelo de ${def.name} (Conexiones → IA → Ver modelos disponibles)`);
   return { id, def, key: p.key, base: (p.url || def.base || '').trim().replace(/\/$/, ''), model };
 }
@@ -71,11 +77,21 @@ async function httpJson(url, opts, provider) {
   return json;
 }
 
+let cliLog = () => {};
+const setCliLog = (fn) => { cliLog = fn; };
+
 // parts: [{type:'text', text}, {type:'image', url} | {type:'image', base64, mediaType}]
 async function askStructured(aiCfg, parts, schema, { effort = 'low', maxTokens = 16000 } = {}) {
   const c = current(aiCfg);
   const instructions = 'Responde únicamente con un objeto JSON que cumpla este esquema:\n' + JSON.stringify(jsonSchema(schema));
   let raw;
+
+  if (c.def.cli) {
+    const data = await require('./clirun').ask({ tool: c.tool, model: c.model }, parts, jsonSchema(schema), cliLog);
+    const ok = schema.safeParse(data);
+    if (!ok.success) throw new Error('La CLI devolvió datos incompletos; prueba otra vez o con otro modelo');
+    return ok.data;
+  }
 
   if (c.id === 'anthropic') {
     const client = new Anthropic({ apiKey: c.key, ...(c.base ? { baseURL: c.base } : {}) });
@@ -162,6 +178,7 @@ async function askStructured(aiCfg, parts, schema, { effort = 'low', maxTokens =
 async function listModels(id, p = {}) {
   const def = PROVIDERS[id];
   if (!def) throw new Error('Proveedor desconocido');
+  if (def.cli) return require('./clirun').MODELS[p.tool] || [];
   if (def.needsKey && !p.key) throw new Error('Escribe primero la clave');
   const base = (p.url || def.base || '').trim().replace(/\/$/, '');
   if (id === 'anthropic') {
@@ -234,4 +251,4 @@ async function altTexts(aiCfg, imageUrls, context = '') {
   return imageUrls.map((_, i) => r.alts.find((a) => a.index === i)?.alt || '');
 }
 
-module.exports = { PROVIDERS, askStructured, listModels, testConnection, improveArticle, altTexts };
+module.exports = { setCliLog, PROVIDERS, askStructured, listModels, testConnection, improveArticle, altTexts };

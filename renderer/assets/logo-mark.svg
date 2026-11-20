@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="211 201 623 623">
+  <!-- Logo de Ecos: arcos concéntricos (degradado) que se convierten en las líneas de una página -->
+  <defs>
+    <linearGradient id="arc" gradientUnits="userSpaceOnUse" x1="250" y1="0" x2="520" y2="0">
+      <stop offset="0" stop-color="#ff5552"/>
+      <stop offset=".55" stop-color="#ff8a3a"/>
+      <stop offset="1" stop-color="#fbb424"/>
+    </linearGradient>
+  </defs>
+  <g fill="none" stroke-width="37">
+    <!-- Mitad izquierda: arcos -->
+    <path d="M518 251.5 A260.5 260.5 0 0 0 518 772.5" stroke="url(#arc)"/>
+    <path d="M518 329.5 A182.5 182.5 0 0 0 518 694.5" stroke="url(#arc)"/>
+    <path d="M518 405.5 A107 107 0 0 0 518 622.5" stroke="url(#arc)"/>
+    <path d="M518 479 A34 34 0 0 0 518 548" stroke="#fdfbe9" stroke-width="34"/>
+    <!-- Mitad derecha: líneas de la página -->
+    <path d="M517 251.5 H806" stroke="#fbb424"/>
+    <path d="M517 329.5 H788 M517 405.5 H788" stroke="#fdfbe9"/>
+    <!-- El amarillo termina en una onda redondeada sobre el crema -->
+    <path d="M517 329.5 H630" stroke="#fbb424" stroke-linecap="round"/>
+    <path d="M517 405.5 H578" stroke="#fbb424" stroke-linecap="round"/>
+    <path d="M517 479 H788 M517 548 H788" stroke="#fdfbe9" stroke-width="34"/>
+    <path d="M517 622.5 H788 M517 694.5 H788" stroke="#fdfbe9"/>
+  </g>
+  <!-- Lomo y línea inferior de la página, con la esquina redondeada -->
+  <path d="M769.5 311 H806 V758 A33 33 0 0 1 773 791 H518 V754 H769.5 Z" fill="#fdfbe9"/>
+</svg>

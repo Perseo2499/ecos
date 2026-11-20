@@ -790,3 +790,21 @@ body.dragging-internal .g-grid .drop-zone.small, body.dragging-internal .g-car .
 .term-pane .xterm { height: 100%; }
 .term-pane .xterm-viewport { scrollbar-color: #3a3f3d transparent; }
 .spin { display: inline-block; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--surface-c-highest); border-top-color: var(--primary); animation: spin .8s linear infinite; }
+
+/* Logo: dibujo centrado y ajustado dentro de su cuadrado oscuro */
+.logo { display: grid; place-items: center; padding: 5px; background: #1f1f1f; }
+.logo img { width: 100%; height: 100%; object-fit: contain; }
+.logo.big { padding: 9px; }
+.st.ecos img { padding: 1px; }
+
+/* Selector de CLI local */
+.cli-logo { display: grid; place-items: center; border-radius: 9px; background: #1f1f1f; color: #ffb454; filter: grayscale(1) opacity(.45); }
+.ai-prov.active .cli-logo { filter: none; }
+.cli-logo .ms { font-size: 20px; }
+.ai-cli { margin: 4px 0 12px; }
+.cli-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.cli-tools button { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 14px; border: 0; border-radius: var(--r-m);
+  background: var(--surface-c-high); color: var(--on-surface-var); font-weight: 500; transition: background .2s, border-radius .3s var(--spring); }
+.cli-tools button:hover:not(:disabled) { background: var(--surface-c-highest); }
+.cli-tools button.active { background: var(--primary-container); color: var(--on-primary-container); border-radius: var(--r-l); }
+.cli-tools button:disabled { opacity: .45; cursor: help; }

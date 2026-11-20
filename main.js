@@ -93,6 +93,7 @@ try {
   wpself = require('./src/wpself');
   ({ buildDraft, composeContent, composeBlocks, blockImages, mediaKey, DEFAULT_FOOTER, mergeDuplicates } = require('./src/transform'));
   ai = require('./src/ai');
+  ai.setCliLog((...a) => log(...a));
   importers = require('./src/importers');
   updater = require('./src/updater');
 } catch (err) {
@@ -105,7 +106,7 @@ let mainWin;
 
 function createWindow() {
   const win = mainWin = new BrowserWindow({
-    width: 1280, height: 860, icon: path.join(__dirname, 'renderer', 'assets', 'icon.png'), title: IS_DEV ? 'Ecos (desarrollo)' : 'Ecos', autoHideMenuBar: true,
+    width: 1280, height: 860, icon: path.join(__dirname, 'renderer', 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'), // .ico: cada tamaño dibujado aparte title: IS_DEV ? 'Ecos (desarrollo)' : 'Ecos', autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false },
   });
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
@@ -139,14 +140,14 @@ function aiPublic() {
     active: cfg.ai?.active || 'anthropic',
     providers: Object.fromEntries(Object.entries(ai.PROVIDERS).map(([id, d]) => [id, {
       name: d.name, label: d.label, keyUrl: d.keyUrl, needsKey: d.needsKey, defaultBase: d.base || '', defaultModel: d.defaultModel || '',
-      hasKey: !!provs[id]?.key, url: provs[id]?.url || '', model: provs[id]?.model || '',
+      hasKey: !!provs[id]?.key, url: provs[id]?.url || '', model: provs[id]?.model || '', tool: provs[id]?.tool || '', cli: !!d.cli,
     }])),
   };
 }
 function aiReady() {
   const id = cfg.ai?.active || 'anthropic';
   const d = ai.PROVIDERS[id], p = cfg.ai?.providers?.[id] || {};
-  if ((d.needsKey && !p.key) || !(p.model || d.defaultModel)) throw new Error('IA sin configurar');
+  if (d.cli ? !p.tool : ((d.needsKey && !p.key) || !(p.model || d.defaultModel))) throw new Error('IA sin configurar');
 }
 
 // WordPress: «wpcom» (WordPress.com con OAuth) o «selfhosted» (web propia con wp-admin y contraseña de aplicación)
@@ -384,8 +385,9 @@ handle('ai:alts', (urls, context) => ai.altTexts(cfg.ai, urls, context));
 // Selector de IA: cada proveedor guarda su clave, URL personalizada y modelo
 const aiProv = (id) => { if (!ai.PROVIDERS[id]) throw new Error('Proveedor desconocido'); cfg.ai = cfg.ai || { providers: {} }; cfg.ai.providers = cfg.ai.providers || {}; return (cfg.ai.providers[id] = cfg.ai.providers[id] || {}); };
 handle('ai:setActive', (id) => { aiProv(id); cfg.ai.active = id; store.save(cfg); return aiPublic(); });
-handle('ai:save', (id, { key, url, model }) => {
+handle('ai:save', (id, { key, url, model, tool }) => {
   const p = aiProv(id);
+  if (tool !== undefined) p.tool = tool;
   if (key && key.trim()) p.key = key.trim();          // vacío = mantener la guardada
   if (url !== undefined) p.url = url.trim();
   if (model !== undefined) p.model = model.trim();
@@ -394,9 +396,9 @@ handle('ai:save', (id, { key, url, model }) => {
 handle('ai:remove', (id) => { delete aiProv(id).key; store.save(cfg); return aiPublic(); });
 handle('ai:models', (id, draftKey, draftUrl) => {
   const p = aiProv(id);
-  return ai.listModels(id, { key: (draftKey || '').trim() || p.key, url: draftUrl !== undefined ? draftUrl : p.url });
+  return ai.listModels(id, { key: (draftKey || '').trim() || p.key, url: draftUrl !== undefined ? draftUrl : p.url, tool: p.tool });
 });
-handle('ai:test', async () => { const c = await ai.testConnection(cfg.ai); return `${ai.PROVIDERS[c.id].name} · ${c.model}`; });
+handle('ai:test', async () => { const c = await ai.testConnection(cfg.ai); return c.tool ? `${require('./src/clirun').TOOLS[c.tool].name}${c.model ? ' · ' + c.model : ''}` : `${ai.PROVIDERS[c.id].name} · ${c.model}`; });
 
 // --- Copia de seguridad de la configuración ---
 const BACKUP_KEYS = ['devDir', 'metaAppId', 'metaAppSecret', 'metaConfigId', 'graphVersion', 'wpMode', 'wpUrl', 'wpUser', 'wpAppPassword', 'wpSite', 'wpPublicUrl', 'wpEditor', 'wpClientId', 'wpClientSecret', 'ai', 'aiInstructions', 'format', 'templates', 'exported', 'prefs'];

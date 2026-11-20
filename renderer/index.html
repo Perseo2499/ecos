@@ -9,7 +9,7 @@
 </head>
 <body>
 <header class="appbar">
-  <div class="brand"><span class="logo"><img src="assets/logo.svg" alt=""></span><b>Ecos</b></div>
+  <div class="brand"><span class="logo"><img src="assets/logo-mark.svg" alt=""></span><b>Ecos</b></div>
   <nav class="tabs">
     <button data-tab="posts" class="active"><span class="ms">dynamic_feed</span><span data-i18n>Publicaciones</span></button>
     <button data-tab="blog"><span class="ms">article</span><span data-i18n>Blog</span></button>
@@ -272,6 +272,16 @@
         <div class="ai-box">
           <div class="ai-summary"><span class="ai-spark"><span class="ms fill">auto_awesome</span></span><div><b data-i18n>Proveedor y clave</b><div class="hint" id="ai-current"></div></div></div>
           <div id="ai-providers" class="ai-providers"></div>
+          <div id="ai-cli" class="ai-cli hidden">
+            <div class="section-label" data-i18n>¿Qué CLI responde?</div>
+            <div class="cli-tools" id="ai-cli-tools">
+              <button data-tool="claude"><span class="ms">auto_awesome</span>Claude Code</button>
+              <button data-tool="codex"><span class="ms">code</span>Codex</button>
+              <button data-tool="gemini"><span class="ms">diamond</span>Gemini CLI</button>
+              <button data-tool="antigravity" disabled data-i18n-title title="Antigravity no tiene un modo de línea de comandos no interactivo: su agente funciona dentro del IDE (o como servidor ACP). Usa Gemini CLI para los modelos de Google."><span class="ms">rocket</span>Antigravity</button>
+            </div>
+            <p class="hint" data-i18n>Ecos ejecuta la CLI instalada en este ordenador en modo no interactivo y solo lectura, y lee su respuesta como si fuera una API. Antes, inicia sesión en ella desde la terminal (tarjeta CLI).</p>
+          </div>
           <input id="ai-url" class="pill-input" data-i18n-ph placeholder="URL personalizada (opcional)">
           <input id="ai-key" class="pill-input" type="password">
           <div class="ai-key-actions"><a href="#" id="ai-getkey" class="hint" data-i18n>¿Dónde consigo la clave?</a><span class="spacer"></span><button id="ai-remove" class="btn text danger" data-i18n>Quitar</button><button id="ai-save" class="btn text" data-i18n>Guardar</button></div>
@@ -404,7 +414,7 @@
         </div>
 
         <div class="card about" id="set-about">
-          <span class="logo big"><img src="assets/logo.svg" alt=""></span>
+          <span class="logo big"><img src="assets/logo-mark.svg" alt=""></span>
           <div><h2>Ecos</h2><div class="hint" data-i18n>De tus redes a tu blog.</div><div class="hint" id="about-info"></div><div class="hint">© 2026 Asociación Elín</div></div>
           <button id="open-repo" class="btn text icon-only" data-i18n-title title="Página del proyecto"><span class="ms">open_in_new</span></button>
         </div>
