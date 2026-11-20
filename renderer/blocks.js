@@ -484,13 +484,13 @@
           // Colocación: cuadrícula (con columnas), mosaico o carrusel
           const lay = b.type === 'carousel' ? 'carousel' : b.layout === 'mosaic' ? 'mosaic' : 'grid';
           extra.innerHTML = [['grid', 'grid_view', t('Cuadrícula')], ['mosaic', 'dashboard', t('Mosaico')], ['carousel', 'view_carousel', t('Carrusel')]]
-            .map(([k, ic, n]) => `<button class="lv ${lay === k ? 'on' : ''}" data-lay="${k}" title="${n}"><span class="ms">${ic}</span>${n}</button>`).join('')
+            .map(([k, ic, n]) => `<button class="lv ${lay === k ? 'on' : ''}" data-lay="${k}" title="${n}"><span class="ms">${ic}</span><span class="lbl">${n}</span></button>`).join('')
             + (lay === 'grid' ? '<span class="lv-sep"></span>' + [2, 3, 4].map((c) => `<button class="lv ${b.columns === c ? 'on' : ''}" data-c="${c}" title="${t('{n} columnas', { n: c })}">${c}<span class="ms">view_column</span></button>`).join('') : '')
             // estilo del carrusel
             + (lay === 'carousel' ? '<span class="lv-sep"></span>' + [['single', 'crop_landscape', t('Una a una')], ['multi', 'view_week', t('Varias a la vez')], ['peek', 'view_carousel', t('Vecinas asomando')]]
-              .map(([k, ic, n]) => `<button class="lv ${(b.view || 'single') === k ? 'on' : ''}" data-view="${k}" title="${n}"><span class="ms">${ic}</span>${n}</button>`).join('')
-              + `<button class="lv ${b.squares ? 'on' : ''}" data-sq="1" title="${t('Recorta todas las fotos en cuadrado')}"><span class="ms">crop_square</span>${t('Cuadradas')}</button>`
-              + (b.view === 'peek' ? `<button class="lv" data-peekcss="1" title="${t('Copia el estilo que hay que pegar una vez en tu web')}"><span class="ms">content_copy</span>${t('Estilo para la web')}</button>` : '') : '');
+              .map(([k, ic, n]) => `<button class="lv ${(b.view || 'single') === k ? 'on' : ''}" data-view="${k}" title="${n}"><span class="ms">${ic}</span><span class="lbl">${n}</span></button>`).join('')
+              + `<button class="lv ${b.squares ? 'on' : ''}" data-sq="1" title="${t('Recorta todas las fotos en cuadrado')}"><span class="ms">crop_square</span><span class="lbl">${t('Cuadradas')}</span></button>`
+              + (b.view === 'peek' ? `<button class="lv" data-peekcss="1" title="${t('Copia el estilo que hay que pegar una vez en tu web')}"><span class="ms">palette</span><span class="lbl">${t('Estilo para la web')}</span></button>` : '') : '');
           $$('[data-c]', extra).forEach((x) => (x.onclick = () => this.change(() => (b.columns = Number(x.dataset.c)))));
           $$('[data-view]', extra).forEach((x) => (x.onclick = () => this.change(() => (b.view = x.dataset.view))));
           $$('[data-sq]', extra).forEach((x) => (x.onclick = () => this.change(() => (b.squares = !b.squares))));

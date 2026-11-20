@@ -1279,3 +1279,15 @@ body.locked > *:not(#lock):not(#toast):not(.dlg-scrim) { visibility: hidden; }
 .b-bulk:not(.on) #b-clear { display: none; }
 .b-catlist { display: flex; flex-wrap: wrap; gap: 8px; max-height: 280px; overflow: auto; margin: 6px 0 14px; }
 .b-bulk-actions .btn.small { width: auto; margin: 0; height: 34px; padding: 0 12px; white-space: nowrap; }
+
+/* Barra del bloque: nunca más ancha que el bloque. En galerías y carruseles las opciones van solo con su icono
+   (el nombre sale al pasar el ratón) y solo la elegida muestra su nombre */
+.blk-tools { max-width: calc(100% - 20px); }
+.blk-extra { min-width: 0; flex-wrap: nowrap; }
+.blk-extra .lv { white-space: nowrap; flex: none; }
+.blk-gallery .blk-extra .lv:not(.on) .lbl, .blk-carousel .blk-extra .lv:not(.on) .lbl { display: none; }
+.blk-gallery .blk-type, .blk-carousel .blk-type { font-size: 0; gap: 0; padding-right: 4px; }
+.blk-gallery .blk-type .ms, .blk-carousel .blk-type .ms { font-size: 18px; }
+/* Bloques estrechos (ventana pequeña): también la opción elegida solo con su icono */
+.blk-gallery, .blk-carousel { container-type: inline-size; }
+@container (max-width: 640px) { .blk-extra .lv .lbl { display: none; } }
