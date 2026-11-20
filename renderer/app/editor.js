@@ -238,6 +238,17 @@ $('#ai-article').onclick = (e) => busy(e.target, async () => {
   $('#d-tags').value = [...new Set([...cur, ...r.tags])].join(', ');
   toast(t('Listo. Revisa el texto antes de enviarlo.'));
 });
+// Normalizar formato: el formato habitual del blog sin tocar el texto (sin IA, al instante; se deshace con Ctrl+Z)
+const NORM_LABEL = () => ({ 'títulos→párrafos': t('texto que estaba en títulos'), estilos: t('colores, tamaños y fuentes sueltos'), limpieza: t('código sobrante'), vacíos: t('bloques vacíos'),
+  subtítulos: t('subtítulos'), mayúsculas: t('textos en MAYÚSCULAS'), niveles: t('niveles de los títulos'), listas: t('listas'), galerías: t('fotos seguidas → galería'), separadores: t('separadores repetidos') });
+$('#d-normalize').onclick = () => {
+  const E = window.BlockEditor;
+  const r = window.Normalize.normalizeBlocks(draft.blocks, (type, extra) => E.create(type, extra));
+  if (!r.changes) return toast(t('La entrada ya tiene el formato habitual.'));
+  E.change(() => { draft.blocks = r.blocks; });
+  const what = Object.keys(r.notes).map((k) => NORM_LABEL()[k] || k).join(', ');
+  toast(t('Formato normalizado: {w}. Puedes deshacerlo con Ctrl+Z.', { w: what }));
+};
 $('#ai-alts').onclick = (e) => busy(e.target, async () => {
   const imgs = draft.blocks.flatMap((b) => (b.img ? [b.img] : b.images || []));
   if (!imgs.length) throw new Error(t('Esta entrada no tiene fotos'));

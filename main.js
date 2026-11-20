@@ -594,6 +594,7 @@ handle('backup:restore', async (keys, opts = {}) => {
       }
       const prep = await backupMod().prepare(backupAn, x, (buf, name) => wpCall(() => WP().uploadNamed(cfg, buf, name)), { download: opts.download !== false, job });
       if (job.stop) { sendProgress({ key, state: 'cancelled' }); break; }
+      if (opts.modern !== false) prep.fields.content = modernize(prep.fields.content); // bloques de WordPress con el formato habitual
       const status = opts.status === 'original' ? (['publish', 'future', 'private', 'pending', 'draft'].includes(x.status) ? x.status : 'draft') : 'draft';
       const post = await wpCall(() => WP().createPost(cfg, { ...prep.fields, status, type: x.type, createCategories: opts.createCategories !== false }));
       const url = WP().publicUrl(cfg, post.URL);
@@ -608,6 +609,27 @@ handle('backup:restore', async (keys, opts = {}) => {
     }
   }
   return results;
+});
+// Contenido antiguo → bloques de WordPress con el formato habitual del blog (el texto no cambia)
+let normSeq = 0;
+function modernize(html) {
+  const Nz = require('./renderer/normalize');
+  const blocks = require('./src/parseblocks').parseBlocks(html);
+  const r = Nz.normalizeBlocks(blocks, (type, extra = {}) => ({ id: 'n' + Date.now().toString(36) + (normSeq++).toString(36), type, ...extra }));
+  return composeBlocks(r.blocks);
+}
+// Entradas ya restauradas: se lee su contenido en WordPress, se normaliza y se guarda solo el contenido
+handle('backup:normalizeRestored', async (postIds) => {
+  const done = [], errors = [];
+  for (const id of postIds) {
+    try {
+      const p = await wpCall(() => WP().getPost(cfg, id));
+      const content = modernize(p.content);
+      if (content.trim() && content !== p.content) await wpCall(() => WP().updateContent(cfg, id, content));
+      done.push(id); sendProgress({ normalized: id });
+    } catch (e) { errors.push(`${id}: ${e.message}`); log('Normalizar', id, e.message); }
+  }
+  return { done: done.length, errors };
 });
 handle('backup:close', () => { if (backupAn) { backupAn.sources.forEach((x) => x.close()); backupAn = null; } });
 

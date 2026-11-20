@@ -15,6 +15,8 @@ try {
   $asTask = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation` + '`' + String.raw`1' })[0]
   function Await($op, [Type]$t) { $task = $asTask.MakeGenericMethod($t).Invoke($null, @($op)); $task.Wait(-1) | Out-Null; $task.Result }
   $null = [Windows.Security.Credentials.KeyCredentialManager, Windows.Security.Credentials, ContentType = WindowsRuntime]
+  $null = [Windows.Security.Cryptography.CryptographicBuffer, Windows.Security.Cryptography, ContentType = WindowsRuntime]
+  $CB = [Windows.Security.Cryptography.CryptographicBuffer]
   $KCM = [Windows.Security.Credentials.KeyCredentialManager]
   $supported = Await ($KCM::IsSupportedAsync()) ([bool])
   if ($Mode -eq 'check') { @{ supported = $supported } | ConvertTo-Json -Compress; exit 0 }
@@ -26,12 +28,11 @@ try {
     $r = Await ($KCM::RequestCreateAsync('Ecos', [Windows.Security.Credentials.KeyCredentialCreationOption]::ReplaceExisting)) ($RT)
     if ([string]$r.Status -ne 'Success') { @{ error = [string]$r.Status } | ConvertTo-Json -Compress; exit 0 }
   }
-  $bytes = [Convert]::FromBase64String($ChallengeB64)
-  $buf = [System.Runtime.InteropServices.WindowsRuntime.WindowsRuntimeBufferExtensions]::AsBuffer($bytes)
+  # (conversión con la API de Windows: PowerShell no resuelve bien las de .NET para IBuffer)
+  $buf = $CB::DecodeFromBase64String($ChallengeB64)
   $s = Await ($r.Credential.RequestSignAsync($buf)) ([Windows.Security.Credentials.KeyCredentialOperationResult])
   if ([string]$s.Status -ne 'Success') { @{ error = [string]$s.Status } | ConvertTo-Json -Compress; exit 0 }
-  $sig = [System.Runtime.InteropServices.WindowsRuntime.WindowsRuntimeBufferExtensions]::ToArray($s.Result)
-  @{ signature = [Convert]::ToBase64String($sig) } | ConvertTo-Json -Compress
+  @{ signature = $CB::EncodeToBase64String($s.Result) } | ConvertTo-Json -Compress
 } catch { @{ error = 'exception'; detail = $_.Exception.Message } | ConvertTo-Json -Compress }
 `;
 

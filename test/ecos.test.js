@@ -111,3 +111,25 @@ test('la IA por CLI: se extrae el JSON aunque venga envuelto', () => {
   const { extractJson } = require('../src/clirun');
   assert.deepEqual(extractJson('Aquí tienes:\n```json\n{"ok": true}\n```'), { ok: true });
 });
+
+test('normalizar formato: corrige el formato sin cambiar el texto', () => {
+  const N = require('../renderer/normalize');
+  let i = 0; const create = (type, extra = {}) => ({ id: 'n' + i++, type, ...extra });
+  const blocks = [
+    { id: 'a', type: 'heading', level: 4, html: 'El pasado sábado celebramos el CARNAVAL en Ceuta.' },
+    { id: 'b', type: 'paragraph', html: '<span style="color:red">TEXTO TODO EN MAYÚSCULAS QUE GRITA</span>', color: '#f00', size: '28px' },
+    { id: 'c', type: 'paragraph', html: '<strong>Lo que hicimos</strong>' },
+    { id: 'd', type: 'paragraph', html: '- Talleres<br>- Encuentros' },
+    { id: 'e', type: 'image', img: { id: 1, url: 'a.jpg' }, caption: '' },
+    { id: 'f', type: 'image', img: { id: 2, url: 'b.jpg' }, caption: '' },
+    { id: 'g', type: 'image', img: { id: 3, url: 'c.jpg' }, caption: '' },
+    { id: 'h', type: 'separator' }, { id: 'i', type: 'separator' },
+  ];
+  const r = N.normalizeBlocks(blocks, create);
+  assert.deepEqual(r.blocks.map((b) => b.type + (b.level || '')), ['paragraph', 'paragraph', 'heading2', 'list', 'gallery']);
+  assert.equal(r.blocks[1].html, 'Texto todo en mayúsculas que grita');
+  assert.equal(r.blocks[1].color, undefined);
+  assert.deepEqual(r.blocks[3].items, ['Talleres', 'Encuentros']);
+  assert.equal(r.blocks[4].images.length, 3);
+  assert.equal(N.normalizeBlocks(r.blocks, create).changes, 0); // aplicarlo dos veces no cambia nada más
+});

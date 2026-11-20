@@ -70,6 +70,7 @@ contextBridge.exposeInMainWorld('api', {
   backupRestore: (keys, opts) => call('backup:restore', keys, opts),
   backupClose: () => call('backup:close'),
   backupCancel: () => call('backup:cancel'),
+  backupNormalize: (ids) => call('backup:normalizeRestored', ids),
   lockState: () => call('lock:state'),
   lockUnlock: (x) => call('lock:unlock', x),
   lockNow: () => call('lock:lock'),

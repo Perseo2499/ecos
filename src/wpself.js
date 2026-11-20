@@ -218,6 +218,8 @@ async function getPost(cfg, id, type) {
     title: p.title?.raw ?? '', excerpt: p.excerpt?.raw ?? '', content: p.content?.raw ?? '', featured: p.featured_media || null, slug: p.slug || '',
   };
 }
+// Solo el contenido (sin tocar categorías, etiquetas ni nada más)
+const updateContent = (cfg, id, content, type) => req(cfg, `/wp/v2/${coll(type)}/${id}`, { method: 'POST', json: { content } });
 // Borrado definitivo (solo para el borrador de la vista previa, que Ecos vuelve a crear al enviar)
 const deletePost = (cfg, id, type) => req(cfg, `/wp/v2/${coll(type)}/${id}?force=true`, { method: 'DELETE' });
 
@@ -314,4 +316,4 @@ async function saveStructure(cfg, ch, progress = () => {}) {
   return { errors };
 }
 
-module.exports = { siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, publicBase, publicUrl };
+module.exports = { siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, updateContent, publicBase, publicUrl };

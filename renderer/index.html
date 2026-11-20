@@ -175,6 +175,7 @@
             <div class="ai-row">
               <button id="ai-article" class="btn ai"><span class="ms">auto_awesome</span><span data-i18n>Convertir en artículo</span></button>
               <button id="ai-alts" class="btn ai"><span class="ms">image_search</span><span data-i18n>Describir fotos</span></button>
+              <button id="d-normalize" class="btn ai" data-i18n-title title="Deja la entrada con el formato habitual del blog sin cambiar el texto (útil en entradas antiguas o restauradas)"><span class="ms">format_paint</span><span data-i18n>Normalizar formato</span></button>
             </div>
             <div class="field"><span class="ms">sell</span><input id="d-tags" data-i18n-ph placeholder="Etiquetas"></div>
             <div class="section-label" data-i18n>Categorías</div>
@@ -627,6 +628,8 @@
         <span class="spacer"></span>
         <select id="rs-status"><option value="draft" data-i18n>Restaurar como borradores</option><option value="original" data-i18n>Mantener su estado original</option></select>
         <label class="switch small" data-i18n-title title="Si ya hay una entrada con la misma dirección, no se duplica"><input type="checkbox" id="rs-skip" checked><span data-i18n>Saltar las que ya existen</span></label>
+        <label class="switch small" data-i18n-title title="Convierte el contenido antiguo en bloques de WordPress y le da el formato habitual del blog (el texto no cambia)"><input type="checkbox" id="rs-modern" checked><span data-i18n>Con el formato actual</span></label>
+        <button id="rs-normalize" class="btn text hidden"><span class="ms">format_paint</span><span id="rs-normalize-label"></span></button>
       </div>
       <div id="rs-list" class="rs-list"></div>
     </div>
@@ -688,6 +691,7 @@
 <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
 <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
 <script src="carousel.js"></script>
+<script src="normalize.js"></script>
 <script src="blocks.js"></script>
 <script src="format.js"></script>
 <script src="structure.js"></script>

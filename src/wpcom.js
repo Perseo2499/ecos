@@ -128,6 +128,7 @@ async function uploadNamed(cfg, buf, name) {
   try { return await uploadFile(cfg, file); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
 const updatePost = (cfg, id, post) => call(cfg, `/posts/${id}`, post);
+const updateContent = (cfg, id, content) => call(cfg, `/posts/${id}`, { content });
 
 // --- Gestión del blog (pestaña «Blog») ------------------------------------------
 // type: 'post' | 'page'; status: 'any' | 'publish' | 'draft' | 'pending' | 'future' | 'private' | 'trash'
@@ -168,4 +169,4 @@ const trashPost = (cfg, id) => call(cfg, `/posts/${id}/delete`, {});
 // En WordPress.com, borrar una entrada que ya está en la papelera la elimina para siempre
 const deletePost = async (cfg, id) => { const p = await call(cfg, `/posts/${id}?fields=status`); if (p.status !== 'trash') await trashPost(cfg, id); return trashPost(cfg, id); };
 
-module.exports = { deletePost, getPost, findExisting, uploadNamed, postStatuses, REDIRECT, AuthError, login, siteInfo, publicUrl, publicBase, updatePost, categories, uploadFromUrls, uploadFile, createPost, updateMedia, listPosts, setPostStatus, trashPost };
+module.exports = { updateContent, deletePost, getPost, findExisting, uploadNamed, postStatuses, REDIRECT, AuthError, login, siteInfo, publicUrl, publicBase, updatePost, categories, uploadFromUrls, uploadFile, createPost, updateMedia, listPosts, setPostStatus, trashPost };

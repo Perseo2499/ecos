@@ -140,6 +140,10 @@ function rsRenderRow(key) {
 function rsUpdateGo() {
   const n = rs.sel.size;
   if (!$('#rs-go-label')) return;
+  // entradas ya restauradas: se pueden pasar al formato actual
+  const restored = (rs.data?.posts || []).filter((p) => p.restored?.postId);
+  $('#rs-normalize').classList.toggle('hidden', !restored.length || !!rs.running);
+  $('#rs-normalize-label').textContent = t('Normalizar las ya restauradas ({n})', { n: restored.length });
   $('#rs-go').classList.toggle('hidden', !n);
   $('#rs-go-label').textContent = t(n === 1 ? 'Restaurar {n} entrada' : 'Restaurar {n} entradas', { n });
 }
@@ -157,7 +161,7 @@ async function rsRestore() {
   $('#rs-stop').disabled = false; $('#rs-stop').lastElementChild.textContent = t('Cancelar restauración');
   $('#rs-stop').classList.remove('hidden'); $('#rs-change').classList.add('hidden');
   let res;
-  try { res = await window.api.backupRestore(keys, { status: $('#rs-status').value, skipExisting: $('#rs-skip').checked, createCategories: true, download: true }); }
+  try { res = await window.api.backupRestore(keys, { status: $('#rs-status').value, skipExisting: $('#rs-skip').checked, createCategories: true, download: true, modern: $('#rs-modern').checked }); }
   finally { rs.running = false; $('#rs-stop').classList.add('hidden'); $('#rs-change').classList.remove('hidden'); }
   for (const k of keys) if (rs.state[k]?.state === 'working' || rs.state[k]?.state === 'cancelled') { delete rs.state[k]; rsRenderRow(k); }
   const cancelled = res.length < keys.length;
@@ -167,3 +171,10 @@ async function rsRestore() {
   const lost = res.flatMap((r) => r.problems || []).length;
   toast((cancelled ? t('Restauración cancelada.') + ' ' : '') + t('{ok} restauradas · {ex} ya existían · {err} con error', { ok, ex, err }) + (lost ? ' · ' + t('{n} fotos no se encontraron', { n: lost }) : ''), err > 0);
 }
+
+$('#rs-normalize').onclick = (e) => busy(e.currentTarget, async () => {
+  const restored = rs.data.posts.filter((p) => p.restored?.postId);
+  if (!await ask(t('Se normalizará el formato de {n} entradas ya restauradas en tu web (bloques de WordPress y formato habitual; el texto no cambia). ¿Continuar?', { n: restored.length }))) return;
+  const r = await window.api.backupNormalize(restored.map((p) => p.restored.postId));
+  toast(t('{n} entradas normalizadas.', { n: r.done }) + (r.errors.length ? ' ' + t('{e} con error.', { e: r.errors.length }) : ''), r.errors.length > 0);
+});
