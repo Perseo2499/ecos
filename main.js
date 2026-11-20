@@ -317,7 +317,7 @@ function editUrlFor(id, type = 'post') {
 function postFields(d, status) {
   const scheduled = status === 'future' && d.scheduleAt;
   return {
-    title: d.title, content: d.blocks ? composeBlocks(d.blocks) : composeContent(d.sections), status: scheduled ? 'future' : status,
+    title: d.title, content: d.blocks ? composeBlocks(d.blocks, { spectra: isSelf() }) : composeContent(d.sections), status: scheduled ? 'future' : status,
     tags: d.tags.join(','), categories: d.categories.join(','),
     excerpt: d.excerpt || '',
     ...(d.slug ? { slug: d.slug } : {}),
@@ -616,7 +616,7 @@ function modernize(html) {
   const Nz = require('./renderer/normalize');
   const blocks = require('./src/parseblocks').parseBlocks(html);
   const r = Nz.normalizeBlocks(blocks, (type, extra = {}) => ({ id: 'n' + Date.now().toString(36) + (normSeq++).toString(36), type, ...extra }));
-  return composeBlocks(r.blocks);
+  return composeBlocks(r.blocks, { spectra: isSelf() });
 }
 // Entradas ya restauradas: se lee su contenido en WordPress, se normaliza y se guarda solo el contenido
 handle('backup:normalizeRestored', async (postIds) => {
@@ -705,8 +705,8 @@ handle('lock:unlock', async ({ password, code } = {}) => {
   if (!opened) throw new Error('Escribe la contraseña');
   return finishUnlock(opened, code);
 });
-function finishUnlock(opened, code) {
-  if (opened.secrets.totp) {
+function finishUnlock(opened, code, viaHello = false) {
+  if (opened.secrets.totp && !viaHello) {
     if (!code) { pendingOpen = opened; return { needCode: true }; } // falta el código del móvil
     const c = String(code).trim();
     const okTotp = vault.checkTotp(opened.secrets.totp, c);
@@ -730,7 +730,8 @@ handle('lock:hello', async () => {
   let k;
   try { k = Buffer.from(vault.decrypt(cfg.lock.hello.wrapped, hk).k, 'base64'); } catch { throw new Error('Windows Hello no ha podido abrir la bóveda. Entra con la contraseña y vuelve a activarlo.'); }
   pendingOpen = null;
-  return finishUnlock(store.openWithKey(cfg, k));
+  // Windows Hello ya son dos factores (la llave guardada en el chip del ordenador + huella, cara o PIN): sin código del móvil
+  return finishUnlock(store.openWithKey(cfg, k), null, true);
 });
 handle('hello:status', async () => ({ windows: process.platform === 'win32', supported: await require('./src/winhello').supported(), enabled: !!cfg.lock?.hello }));
 handle('hello:enable', async ({ current } = {}) => {

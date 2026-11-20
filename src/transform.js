@@ -203,6 +203,19 @@ try {
     .split('\n').filter((l) => !/^\s*\/\//.test(l)).map((l) => l.trim()).join(' ');
 } catch { /* sin script: el carrusel se desliza igualmente */ }
 
+// En la web propia, el carrusel va como galería de Spectra (que la web ya tiene): WordPress la dibuja
+// en el servidor con sus propias flechas, puntos y deslizamiento, sin depender de que deje pasar scripts.
+function spectraCarouselBlock(b) {
+  const hex = require('crypto').createHash('md5').update(String(b.id)).digest('hex').slice(0, 8);
+  const media = b.images.map((i) => ({ id: Number(i.id) || 0, url: i.url, alt: i.alt || '', caption: b.captions ? (i.alt || '') : '' }));
+  const a = {
+    block_id: hex, readyToRender: true, mediaGallery: media, mediaIDs: media.map((m) => m.id).filter(Boolean), feedLayout: 'carousel',
+    columnsDesk: 1, columnsTab: 1, columnsMob: 1, carouselLoop: true, carouselAutoplay: b.autoplay !== false, carouselAutoplaySpeed: 5000,
+    carouselPauseOnHover: true, paginateUseArrows: true, paginateUseDots: true, imageDisplayCaption: !!b.captions, galleryImageSize: 'large', className: 'ecos-carrusel',
+  };
+  return `<!-- wp:uagb/image-gallery ${JSON.stringify(a).replace(/--/g, '\\u002d\\u002d')} /-->`;
+}
+
 function carouselBlock(b) {
   const id = 'ecos-c-' + b.id.replace(/[^a-z0-9]/gi, '');
   const S = `#${id}`;
@@ -339,7 +352,7 @@ function mosaicBlock(b) {
   return `<!-- wp:html -->\n<div class="ecos-mosaico" id="${id}" style="display:grid;grid-template-columns:repeat(4,1fr);grid-auto-flow:dense;gap:8px;margin:2em 0"><style>${css}</style>${figs}</div>\n<!-- /wp:html -->`;
 }
 
-function composeBlocks(blocks) {
+function composeBlocks(blocks, opts = {}) {
   const out = [];
   const anchors = headingAnchors(blocks);
   for (const b of blocks) {
@@ -402,7 +415,7 @@ function composeBlocks(blocks) {
         out.push(`<!-- wp:gallery {"columns":${cols},"linkTo":"none"} -->\n<figure class="wp-block-gallery has-nested-images columns-${cols} is-cropped">\n${b.images.map((i) => imageBlockFull(i)).join('\n')}\n</figure>\n<!-- /wp:gallery -->`);
         break;
       }
-      case 'carousel': if (b.images?.length) out.push(carouselBlock(b)); break;
+      case 'carousel': if (b.images?.length) out.push(opts.spectra ? spectraCarouselBlock(b) : carouselBlock(b)); break;
       case 'mediatext': {
         if (!b.img) break;
         const right = b.right ? ' has-media-on-the-right' : '';

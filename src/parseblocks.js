@@ -87,6 +87,13 @@ function toBlock(t) {
       return { id: bid(), type: 'buttons', html: inner(link, 'a'), url: attr(link, 'href'), align: a.layout?.justifyContent || 'left', variant: /is-style-outline/.test(btns[0].attrs.className || '') ? 'outline' : 'fill' };
     }
     case 'details': return { id: bid(), type: 'details', summary: inner(h, 'summary'), html: all(h, 'p').map((p) => `<p>${p}</p>`).join('') };
+    case 'uagb/image-gallery': {
+      // galería de Spectra: en carrusel es el carrusel de Ecos; si no, una galería
+      const images = (a.mediaGallery || []).filter((m) => m && m.url).map((m) => ({ id: Number(m.id) || m.url, url: m.url, alt: m.alt || '' }));
+      if (!images.length) return raw();
+      return a.feedLayout === 'carousel' ? { id: bid(), type: 'carousel', images, ...(a.carouselAutoplay === false ? { autoplay: false } : {}), ...(a.imageDisplayCaption ? { captions: true } : {}) }
+        : { id: bid(), type: 'gallery', images, columns: a.columnsDesk || 3 };
+    }
     case 'html': {
       // carrusel y mosaico de Ecos
       if (/class="ecos-(carrusel|mosaico)"/.test(h)) {

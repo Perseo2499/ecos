@@ -133,3 +133,13 @@ test('normalizar formato: corrige el formato sin cambiar el texto', () => {
   assert.equal(r.blocks[4].images.length, 3);
   assert.equal(N.normalizeBlocks(r.blocks, create).changes, 0); // aplicarlo dos veces no cambia nada más
 });
+
+test('carrusel en la web propia: galería de Spectra que se lee de vuelta como carrusel', () => {
+  const { parseBlocks } = require('../src/parseblocks');
+  const html = T.composeBlocks([{ id: 'c1', type: 'carousel', images: [{ id: 1, url: 'a.jpg', alt: 'uno' }, { id: 2, url: 'b.jpg', alt: '' }] }], { spectra: true });
+  assert.match(html, /^<!-- wp:uagb\/image-gallery \{.*"feedLayout":"carousel".*\} \/-->$/);
+  const back = parseBlocks(html);
+  assert.equal(back.length, 1);
+  assert.equal(back[0].type, 'carousel');
+  assert.deepEqual(back[0].images.map((i) => i.id), [1, 2]);
+});
