@@ -121,9 +121,26 @@ function renderConnStates() {
       const name = $('h2', head);
       name.classList.add('conn-name'); name.tabIndex = 0; name.setAttribute('role', 'button');
       const toggle = () => {
+        // despliegue suave: se anima la altura de la tarjeta (y el contenido aparece deslizándose)
+        const opening = card.classList.contains('collapsed');
+        const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const from = card.offsetHeight;
         card.classList.toggle('collapsed');
+        const to = card.offsetHeight;
+        if (!still && card.animate) {
+          card.getAnimations().forEach((x) => x.cancel());
+          if (!opening) card.classList.remove('collapsed'); // al cerrar, el contenido se ve hasta que termina
+          card.style.overflow = 'hidden';
+          const ease = 'cubic-bezier(.2, 0, 0, 1)';
+          const anim = card.animate([{ height: from + 'px' }, { height: to + 'px' }], { duration: opening ? 380 : 280, easing: ease });
+          const body = [...card.children].filter((c) => !c.classList.contains('card-head'));
+          body.forEach((c, i) => c.animate(opening
+            ? [{ opacity: 0, transform: 'translateY(-8px)' }, { opacity: 1, transform: 'none' }]
+            : [{ opacity: 1 }, { opacity: 0 }], { duration: opening ? 320 : 180, delay: opening ? Math.min(i, 6) * 25 : 0, easing: ease, fill: 'backwards' }));
+          anim.onfinish = anim.oncancel = () => { card.style.overflow = ''; if (!opening) card.classList.add('collapsed'); };
+        }
         connOpen = connOpen || {};
-        connOpen[id] = !card.classList.contains('collapsed');
+        connOpen[id] = opening;
         try { localStorage.setItem('ecos-conn-open', JSON.stringify(connOpen)); } catch { /* nada */ }
       };
       $('.conn-arrow', head).onclick = toggle;

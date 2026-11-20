@@ -1028,8 +1028,8 @@ img.gl-copy { object-fit: contain; }
 .conn-arrow svg { fill: currentColor; transition: transform .35s var(--ease); }
 .conn-arrow:hover { background: var(--surface-c-highest); }
 .collapsed .conn-arrow svg { transform: rotate(-90deg); }
-:root[data-vinyl="on"] .conn-arrow { background: #000; box-shadow: inset 0 0 0 1px #2e2e2e; color: #fff; }
-:root[data-vinyl="on"] .conn-arrow:hover { box-shadow: inset 0 0 0 1px var(--vinyl); }
+:root[data-vinyl="on"] .conn-arrow { background: #000; box-shadow: none; color: #fff; }
+:root[data-vinyl="on"] .conn-arrow:hover { background: #161616; }
 :root[data-vinyl="on"] .card:not(.collapsed) .conn-arrow { color: var(--vinyl); }
 
 /* Serigrafías del índice de Ajustes: cabecera, número de cada sección y LED en la activa */
@@ -1190,3 +1190,6 @@ img.gl-copy { object-fit: contain; }
 .b-meta .st.restored { display: inline-flex; align-items: center; gap: 4px; background: color-mix(in srgb, #1565c0 14%, transparent); color: #4f8fd8; }
 .b-meta .st.restored .ms { font-size: 15px; }
 .b-row.ecos-made:has(.st.restored) { box-shadow: inset 3px 0 0 #4f8fd8; }
+
+.conn-arrow { box-shadow: none; outline: none; }
+.conn-arrow:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
