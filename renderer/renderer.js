@@ -744,7 +744,11 @@ $('#b-new').onclick = () => {
 function applyPrefs() {
   const p = prefs();
   const dark = p.theme === 'dark' || (p.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
-  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  document.documentElement.dataset.theme = dark || p.vinyl ? 'dark' : 'light';
+  window.Vinyl?.apply({ vinyl: !!p.vinyl, silk: p.silk !== false });
+  $('#s-vinyl').checked = !!p.vinyl; $('#s-silk').checked = p.silk !== false;
+  $('#s-silk-row').classList.toggle('hidden', !p.vinyl);
+  $$('#s-theme button, #s-accent button, #s-accent-custom').forEach((b) => (b.disabled = !!p.vinyl));
   document.documentElement.style.setProperty('--accent', p.accent);
   document.documentElement.style.setProperty('--card-min', p.cards + 'px');
   window.api.setZoom(Number(p.zoom) || 1);
@@ -760,6 +764,8 @@ function applyPrefs() {
 }
 matchMedia('(prefers-color-scheme: dark)').onchange = applyPrefs;
 $$('#s-theme button').forEach((b) => b.onclick = () => savePrefs({ theme: b.dataset.v }));
+$('#s-vinyl').onchange = () => savePrefs({ vinyl: $('#s-vinyl').checked });
+$('#s-silk').onchange = () => savePrefs({ silk: $('#s-silk').checked });
 $$('#s-zoom button').forEach((b) => b.onclick = () => savePrefs({ zoom: Number(b.dataset.v) }));
 $$('#s-cards button').forEach((b) => b.onclick = () => savePrefs({ cards: Number(b.dataset.v) }));
 $$('#s-accent button').forEach((b) => b.onclick = () => savePrefs({ accent: b.dataset.v }));
