@@ -33,6 +33,8 @@
       if (!sec || $('.silk-row', sec)) continue;
       sec.insertAdjacentHTML('afterbegin', `<div class="silk-row vinyl-only">${silk(left, { led: true })}${speaker(14, 1)}<span class="spacer"></span>${silk(code, { jp })}</div>`);
     }
+    // nombre de cada sección de Ajustes para su serigrafía
+    $$('.set-body > .card').forEach((c) => { c.dataset.silk = ($('h2', c)?.textContent || c.id).trim(); });
     const ed = $('.ed-bar');
     if (ed && !$('.silk', ed)) $('.ed-bar-title', ed)?.insertAdjacentHTML('afterend', `<span class="vinyl-only">${silk('ED-01', { jp: '編集' })}</span>`);
   }

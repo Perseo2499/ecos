@@ -9,7 +9,7 @@
   const root = document.documentElement;
   const TABS = ['posts', 'blog', 'connections', 'settings'];
   const n = TABS.length;
-  const STEP = 50, PILL = 190, PAD = 5; // hueco de cada icono, ancho de la píldora, relleno de la pista
+  const STEP = 72, PILL = 250, PAD = 5; // hueco de cada icono, ancho de la píldora, relleno de la pista
   const INNER = (n - 1) * STEP + PILL;
   const DUR = 400;
   // Iconos de puntos (pares x,y de 0 a 1): rombo, triángulo, cruz y aspa

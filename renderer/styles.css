@@ -977,9 +977,9 @@ img.gl-copy { object-fit: contain; }
 /* ---- Barra Vinilo (en la cabecera) ---- */
 .vnav { display: none; }
 :root[data-vinyl="on"] .vnav { display: block; position: relative; flex: none; margin: 0 auto;
-  height: 46px; padding: 5px; border-radius: 28px; background: #1c1c1c; box-shadow: 0 0 0 1px #2a2a2a;
+  height: 46px; padding: 5px; border-radius: 28px; background: #1c1c1c;
   touch-action: none; user-select: none; cursor: pointer; }
-.vnav-pill { position: absolute; left: 5px; top: 5px; height: 36px; border-radius: 22px; background: #000; box-shadow: inset 0 0 0 1px #2e2e2e; }
+.vnav-pill { position: absolute; left: 5px; top: 5px; height: 36px; border-radius: 22px; background: #000; }
 .vnav-item { position: absolute; left: 5px; top: 5px; height: 36px; display: flex; align-items: center; color: #fff; pointer-events: none; }
 .vnav-ic { display: grid; place-items: center; width: 20px; height: 20px; }
 .vnav-ic svg { fill: currentColor; width: 20px; height: 20px; }
@@ -993,3 +993,49 @@ img.gl-copy { object-fit: contain; }
 :root[data-vinyl="on"] .tab.vpeek { display: block; position: absolute; left: 24px; right: 24px; }
 :root[data-vinyl="on"] .selbar:not(.show) { visibility: hidden; }
 :root[data-vinyl="on"] .tab.vhide { visibility: hidden; }
+
+/* Serigrafía entre las secciones de Ajustes: código, nombre, línea y rejilla de altavoz */
+:root[data-silk="on"] .set-body { gap: 44px; }
+:root[data-silk="on"] .set-body > .card + .card::before {
+  content: '\25B8  SEC-' counter(mod, decimal-leading-zero) '  \00B7  ' attr(data-silk);
+  position: absolute; left: 4px; right: 4px; top: -31px; height: 16px; pointer-events: none;
+  font: 400 9px/16px 'Silk Mono', monospace; letter-spacing: 2px; text-transform: uppercase; color: var(--silk); white-space: nowrap;
+  background: linear-gradient(var(--silk-line), var(--silk-line)) calc(100% - 84px) 50% / calc(55% - 84px) 1px no-repeat,
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='72' height='6'><circle cx='3' cy='3' r='1' fill='white' fill-opacity='.3'/><circle cx='9' cy='3' r='1' fill='white' fill-opacity='.3'/><circle cx='15' cy='3' r='1' fill='white' fill-opacity='.3'/><circle cx='21' cy='3' r='1' fill='white' fill-opacity='.3'/><circle cx='27' cy='3' r='1' fill='white' fill-opacity='.3'/><circle cx='33' cy='3' r='1' fill='white' fill-opacity='.3'/><circle cx='39' cy='3' r='1' fill='white' fill-opacity='.3'/><circle cx='45' cy='3' r='1' fill='white' fill-opacity='.3'/><circle cx='51' cy='3' r='1' fill='white' fill-opacity='.3'/><circle cx='57' cy='3' r='1' fill='white' fill-opacity='.3'/><circle cx='63' cy='3' r='1' fill='white' fill-opacity='.3'/><circle cx='69' cy='3' r='1' fill='white' fill-opacity='.3'/></svg>") 100% 50% / 72px 6px no-repeat;
+}
+
+/* ---- Conexiones: desplegables a todo el ancho ---- */
+#conn-cards { display: flex; flex-direction: column; gap: 14px; }
+#conn-cards > .card { width: 100%; }
+#conn-cards > .card > .card-head { cursor: pointer; user-select: none; border-radius: var(--r-l); margin: -10px -12px 18px; padding: 10px 12px; transition: background .2s, margin .25s; }
+#conn-cards > .card > .card-head:hover { background: color-mix(in srgb, var(--on-surface) 5%, transparent); }
+#conn-cards > .card > .card-head:focus-visible { outline: 2px solid var(--primary); }
+#conn-cards > .card > :not(.card-head) { max-width: 880px; }
+#conn-cards > .card.collapsed > :not(.card-head) { display: none !important; }
+#conn-cards > .card.collapsed > .card-head { margin-bottom: -10px; }
+#conn-cards > .card.collapsed { padding-block: 16px; }
+#conn-cards .card-head .hint { margin-left: 0; }
+.conn-state { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: var(--r-full); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.conn-state:empty { padding: 0; }
+.conn-state.ok { background: color-mix(in srgb, #2e7d32 16%, transparent); color: #3c9a46; }
+.conn-state.off { background: var(--surface-c-high); color: var(--on-surface-var); }
+.conn-state.ok::before, .conn-state.off::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.conn-chev { color: var(--on-surface-var); transition: transform .3s var(--ease); }
+.conn-state:empty + .conn-chev { margin-left: auto; }
+.collapsed .conn-chev { transform: rotate(-90deg); }
+#conn-cards .ai-card { grid-row: auto; }
+
+/* Serigrafías del índice de Ajustes: cabecera, número de cada sección y LED en la activa */
+:root[data-silk="on"] .set-nav { counter-reset: nav; padding-top: 22px; }
+:root[data-silk="on"] .set-nav::before {
+  content: 'INDEX \00B7  SYS'; position: absolute; top: 0; left: 16px; right: 8px; height: 14px;
+  font: 400 9px/14px 'Silk Mono', monospace; letter-spacing: 2px; color: var(--silk);
+  background: linear-gradient(var(--silk-line), var(--silk-line)) 100% 50% / calc(100% - 118px) 1px no-repeat; }
+:root[data-silk="on"] .set-nav::after {
+  content: ''; display: block; height: 6px; margin: 14px 16px 0; opacity: .9;
+  background: radial-gradient(circle, var(--silk-dot) 0 .9px, transparent 1.2px) 0 0 / 6px 6px repeat-x; }
+:root[data-silk="on"] .set-nav a { counter-increment: nav; position: relative; }
+:root[data-silk="on"] .set-nav a::after {
+  content: counter(nav, decimal-leading-zero); margin-left: auto;
+  font: 400 9px/1 'Silk Mono', monospace; letter-spacing: 2px; color: var(--silk); }
+:root[data-silk="on"] .set-nav a.active::after { content: '\25CF  ' counter(nav, decimal-leading-zero); color: var(--vinyl); text-shadow: 0 0 6px var(--vinyl); }

@@ -75,6 +75,40 @@ function renderStatus() {
   $('#st-wp').classList.toggle('ok', !!CFG.wpConnected);
   const exp = CFG.metaTokenExpires && new Date(CFG.metaTokenExpires);
   $('#meta-expiry').textContent = CFG.metaConnected && exp ? t('La conexión con Meta caduca el {d}.', { d: fmtDay(exp) }) : '';
+  renderConnStates();
+}
+
+// ---------------------------------------------------------------- Conexiones en desplegables
+// Cada conexión ocupa todo el ancho y se abre o cierra pulsando su cabecera. Al principio se abren las que
+// faltan por configurar; después se recuerda lo que dejó abierto cada persona.
+const CONN = { 'f-meta': () => CFG.metaConnected, 'f-wp': () => CFG.wpConnected, 'ai-card': () => CFG.aiConfigured, 'dev-card': null };
+let connOpen = null;
+try { connOpen = JSON.parse(localStorage.getItem('ecos-conn-open') || 'null'); } catch { /* sin almacenamiento */ }
+function renderConnStates() {
+  for (const [id, ok] of Object.entries(CONN)) {
+    const card = document.getElementById(id);
+    if (!card) continue;
+    const head = $('.card-head', card);
+    if (!head.querySelector('.conn-chev')) {
+      head.insertAdjacentHTML('beforeend', '<span class="conn-state"></span><span class="ms conn-chev">expand_more</span>');
+      head.setAttribute('role', 'button'); head.tabIndex = 0;
+      const toggle = () => {
+        card.classList.toggle('collapsed');
+        connOpen = connOpen || {};
+        connOpen[id] = !card.classList.contains('collapsed');
+        try { localStorage.setItem('ecos-conn-open', JSON.stringify(connOpen)); } catch { /* nada */ }
+      };
+      head.addEventListener('click', (e) => { if (!e.target.closest('a, button, input, select')) toggle(); });
+      head.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+      const done = ok ? ok() : false;
+      card.classList.toggle('collapsed', connOpen && id in connOpen ? !connOpen[id] : !!done);
+    }
+    const st = $('.conn-state', head);
+    if (!ok) { st.textContent = ''; continue; }
+    const done = !!ok();
+    st.className = 'conn-state ' + (done ? 'ok' : 'off');
+    st.textContent = done ? (id === 'ai-card' ? t('Lista') : t('Conectado')) : (id === 'ai-card' ? t('Sin configurar') : t('No conectado'));
+  }
 }
 
 function banner(id, html, actions = []) {
@@ -165,6 +199,7 @@ function renderAi() {
   // los botones de IA del editor se activan en cuanto hay una IA lista (sin reiniciar la app)
   if (A.configured !== undefined) {
     CFG.aiConfigured = A.configured;
+    renderConnStates();
     $$('#ai-article, #ai-alts').forEach((b) => { b.disabled = !CFG.aiConfigured; b.parentElement.title = CFG.aiConfigured ? '' : t('Configura una IA en «Conexiones» para usar estos botones.'); });
   }
   aiSel = A.active;
