@@ -1,56 +1,53 @@
 // Windows Hello (huella, cara o PIN de Windows) para desbloquear Ecos.
-// Usa KeyCredentialManager (WinRT) a través de Windows PowerShell, sin módulos nativos: Windows Hello firma
-// un reto con una clave guardada en el TPM del ordenador; de esa firma (RSA PKCS#1, siempre la misma para el
-// mismo reto) sale la llave que abre la copia de la llave de la bóveda. Sin Windows Hello no hay llave.
-const { spawn } = require('child_process');
+// Un pequeño programa en C# (src/winhello.cs) usa KeyCredentialManager: Windows Hello firma un reto con una
+// clave guardada en el TPM del ordenador; de esa firma (RSA PKCS#1, siempre la misma para el mismo reto) sale
+// la llave que abre la copia de la llave de la bóveda. Sin Windows Hello no hay llave.
+// El programa se compila en GitHub y va con el instalador (resources/winhello.exe); si faltara, se compila
+// aquí con el compilador de .NET Framework que trae Windows.
+const { spawn, execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 
-const SCRIPT = String.raw`param([string]$Mode = 'check', [string]$ChallengeB64 = '')
-$ErrorActionPreference = 'Stop'
-try {
-  Add-Type -AssemblyName System.Runtime.WindowsRuntime
-  $asTask = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation` + '`' + String.raw`1' })[0]
-  function Await($op, [Type]$t) { $task = $asTask.MakeGenericMethod($t).Invoke($null, @($op)); $task.Wait(-1) | Out-Null; $task.Result }
-  $null = [Windows.Security.Credentials.KeyCredentialManager, Windows.Security.Credentials, ContentType = WindowsRuntime]
-  $null = [Windows.Security.Cryptography.CryptographicBuffer, Windows.Security.Cryptography, ContentType = WindowsRuntime]
-  $CB = [Windows.Security.Cryptography.CryptographicBuffer]
-  $KCM = [Windows.Security.Credentials.KeyCredentialManager]
-  $supported = Await ($KCM::IsSupportedAsync()) ([bool])
-  if ($Mode -eq 'check') { @{ supported = $supported } | ConvertTo-Json -Compress; exit 0 }
-  if (-not $supported) { @{ error = 'unsupported' } | ConvertTo-Json -Compress; exit 0 }
-  $RT = [Windows.Security.Credentials.KeyCredentialRetrievalResult]
-  $r = Await ($KCM::OpenAsync('Ecos')) ($RT)
-  if ([string]$r.Status -ne 'Success') {
-    if ($Mode -ne 'enroll') { @{ error = 'nokey' } | ConvertTo-Json -Compress; exit 0 }
-    $r = Await ($KCM::RequestCreateAsync('Ecos', [Windows.Security.Credentials.KeyCredentialCreationOption]::ReplaceExisting)) ($RT)
-    if ([string]$r.Status -ne 'Success') { @{ error = [string]$r.Status } | ConvertTo-Json -Compress; exit 0 }
-  }
-  # (conversión con la API de Windows: PowerShell no resuelve bien las de .NET para IBuffer)
-  $buf = $CB::DecodeFromBase64String($ChallengeB64)
-  $s = Await ($r.Credential.RequestSignAsync($buf)) ([Windows.Security.Credentials.KeyCredentialOperationResult])
-  if ([string]$s.Status -ne 'Success') { @{ error = [string]$s.Status } | ConvertTo-Json -Compress; exit 0 }
-  @{ signature = $CB::EncodeToBase64String($s.Result) } | ConvertTo-Json -Compress
-} catch { @{ error = 'exception'; detail = $_.Exception.Message } | ConvertTo-Json -Compress }
-`;
+// Orden de compilación (la misma que usa GitHub): sin «await», solo .NET Framework y los metadatos de Windows
+function cscArgs(src, out) {
+  const win = process.env.WINDIR || 'C:\\Windows';
+  const md = path.join(win, 'System32', 'WinMetadata');
+  const gac = path.join(win, 'Microsoft.NET', 'assembly', 'GAC_MSIL', 'System.Runtime');
+  const ver = fs.readdirSync(gac).find((d) => d.startsWith('v4.0'));
+  return ['/nologo', '/target:exe', '/platform:anycpu', `/out:${out}`,
+    `/r:${path.join(md, 'Windows.Security.winmd')}`, `/r:${path.join(md, 'Windows.Foundation.winmd')}`, `/r:${path.join(md, 'Windows.Storage.winmd')}`,
+    `/r:${path.join(gac, ver, 'System.Runtime.dll')}`, src];
+}
+function helperPath() {
+  const packaged = process.resourcesPath && path.join(process.resourcesPath, 'winhello.exe');
+  if (packaged && fs.existsSync(packaged)) return packaged;
+  // sin instalador (desarrollo) o si faltara: se compila una vez en la carpeta de datos
+  const { app } = require('electron');
+  const out = path.join(app.getPath('userData'), 'winhello.exe');
+  if (fs.existsSync(out)) return out;
+  const csc = path.join(process.env.WINDIR || 'C:\\Windows', 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ecos-hello-'));
+  const src = path.join(dir, 'winhello.cs');
+  fs.writeFileSync(src, fs.readFileSync(path.join(__dirname, 'winhello.cs')));
+  try { execFileSync(csc, cscArgs(src, out), { windowsHide: true, timeout: 60000 }); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  return out;
+}
 
 function run(mode, challengeB64 = '') {
   if (process.platform !== 'win32') return Promise.resolve({ error: 'unsupported' });
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ecos-hello-'));
-  const file = path.join(dir, 'hello.ps1');
-  fs.writeFileSync(file, '﻿' + SCRIPT, 'utf8');
+  let exe;
+  try { exe = helperPath(); } catch (e) { return Promise.resolve({ error: 'exception', detail: 'no se pudo preparar Windows Hello: ' + e.message }); }
   return new Promise((resolve) => {
-    const ps = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', file, '-Mode', mode, '-ChallengeB64', challengeB64], { windowsHide: true });
+    const p = spawn(exe, [mode, challengeB64], { windowsHide: true });
     let out = '', err = '';
-    const timer = setTimeout(() => ps.kill(), 120000);
-    ps.stdout.on('data', (d) => (out += d));
-    ps.stderr.on('data', (d) => (err += d));
-    ps.on('error', (e) => { clearTimeout(timer); resolve({ error: 'exception', detail: e.message }); });
-    ps.on('close', () => {
+    const timer = setTimeout(() => p.kill(), 120000);
+    p.stdout.on('data', (d) => (out += d));
+    p.stderr.on('data', (d) => (err += d));
+    p.on('error', (e) => { clearTimeout(timer); resolve({ error: 'exception', detail: e.message }); });
+    p.on('close', () => {
       clearTimeout(timer);
-      fs.rmSync(dir, { recursive: true, force: true });
       const line = out.trim().split(/\r?\n/).filter(Boolean).pop() || '';
       try { resolve(JSON.parse(line)); } catch { resolve({ error: 'exception', detail: (err || out).trim().slice(0, 300) }); }
     });
@@ -80,4 +77,4 @@ async function keyFor(challengeB64, enroll = false) {
   return crypto.createHash('sha256').update('ecos-winhello-v1').update(Buffer.from(r.signature, 'base64')).digest();
 }
 
-module.exports = { supported, keyFor, run, SCRIPT };
+module.exports = { supported, keyFor, run, cscArgs };

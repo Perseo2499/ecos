@@ -20,18 +20,15 @@ jobs:
       - run: npm ci
       - name: Pruebas automáticas
         run: npm test
-      - name: Windows Hello (el script carga las API de Windows)
-        shell: pwsh
+      - name: Windows Hello (compilar el ayudante y comprobarlo)
+        shell: powershell
         run: |
-          node -e "require('fs').writeFileSync('hello.ps1', '\ufeff' + require('./src/winhello.js').SCRIPT)"
-          $out = powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File hello.ps1 -Mode check
-          Write-Host "Respuesta: $out"
-          if ($out -notmatch '"supported"') { Write-Error "El script de Windows Hello no funciona: $out"; exit 1 }
-          $t = powershell.exe -NoProfile -NonInteractive -Command "`$null = [Windows.Security.Cryptography.CryptographicBuffer, Windows.Security.Cryptography, ContentType = WindowsRuntime]; `$b = [Windows.Security.Cryptography.CryptographicBuffer]::DecodeFromBase64String('aG9sYQ=='); [Windows.Security.Cryptography.CryptographicBuffer]::EncodeToBase64String(`$b)"
-          Write-Host "Conversión: $t"
-          if ($t.Trim() -ne 'aG9sYQ==') { Write-Error "La conversión de búferes de Windows no funciona: $t"; exit 1 }
-      # Firma digital: si existen los secretos WIN_CSC_LINK (certificado .pfx en base64) y WIN_CSC_KEY_PASSWORD,
-      # electron-builder firma el instalador y la app; si no, compila sin firmar.
+          $args2 = node -e "console.log(JSON.stringify(require('./src/winhello.js').cscArgs('src/winhello.cs','build/winhello.exe')))" | ConvertFrom-Json
+          & "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe" @args2
+          if (-not (Test-Path build\winhello.exe)) { Write-Error "No se pudo compilar winhello.exe"; exit 1 }
+          $c = .\build\winhello.exe check; $t = .\build\winhello.exe selftest aG9sYQ==
+          Write-Host "check: $c | selftest: $t"
+          if ($c -notmatch '"supported"' -or $t -notmatch 'aG9sYQ==') { Write-Error "El ayudante de Windows Hello no responde bien"; exit 1 }
       - name: Compilar (y firmar si hay certificado)
         shell: bash
         env:

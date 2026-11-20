@@ -50,6 +50,12 @@
     "copyright": "Copyright © 2026 Asociación Elín. Todos los derechos reservados.",
     "asarUnpack": [
       "**/node_modules/@lydell/node-pty*/**"
+    ],
+    "extraResources": [
+      {
+        "from": "build/winhello.exe",
+        "to": "winhello.exe"
+      }
     ]
   },
   "dependencies": {
