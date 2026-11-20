@@ -1186,3 +1186,7 @@ img.gl-copy { object-fit: contain; }
 .ai-opts select { width: 100%; height: auto; min-height: 40px; padding-top: 8px; padding-bottom: 8px; line-height: 1.3; }
 .ai-opts .switch { margin: 4px 0; font-size: 12.5px; }
 .ai-opts textarea { width: 100%; margin-top: 6px; font: inherit; font-size: 12.5px; padding: 8px 10px; border-radius: var(--r-m); border: 0; background: var(--surface-c-high); color: var(--on-surface); resize: vertical; }
+
+.b-meta .st.restored { display: inline-flex; align-items: center; gap: 4px; background: color-mix(in srgb, #1565c0 14%, transparent); color: #4f8fd8; }
+.b-meta .st.restored .ms { font-size: 15px; }
+.b-row.ecos-made:has(.st.restored) { box-shadow: inset 3px 0 0 #4f8fd8; }

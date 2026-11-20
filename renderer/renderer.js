@@ -702,7 +702,7 @@ $('#ed-pull').onclick = (e) => busy(e.currentTarget, async () => {
   if (r.featured && r.featured !== draft.featuredImageId) changes.push(t('la imagen destacada'));
   if (r.contentChanged === null) { // enviada con una versión anterior de Ecos: se compara con lo que hay en el editor
     const norm = (x) => String(x || '').replace(/ecos-[cm]-[a-z0-9]+/g, '').replace(/\s+/g, ' ').trim();
-    r.contentChanged = norm(await window.api.composeDraft(draft.blocks)) !== norm(r.content);
+    r.contentChanged = norm(await window.api.composeDraft(draft.blocks)) !== norm(await window.api.composeDraft(r.blocks));
   }
   if (r.contentChanged) changes.push(t('el contenido'));
   const stName = (WP_STATE()[r.status] || [r.status])[0];
@@ -877,11 +877,12 @@ function renderBlog(items) {
     // Fecha de la entrada (también en borradores); la de última modificación queda en el texto emergente
     const when = `<span title="${escHtml(t('Última modificación: {d}', { d: fmtDay(it.modified) }))}">${fmtDay(it.date)}</span>`;
     const fromEcos = Object.values(exported).some((r) => r.postId === it.id);
-    row.classList.toggle('ecos-made', fromEcos);
+    const restored = !fromEcos && Object.values(CFG.restored || {}).some((r) => r.postId === it.id);
+    row.classList.toggle('ecos-made', fromEcos || restored);
     row.innerHTML = `
       ${it.image ? `<img src="${escHtml(it.image)}" loading="lazy" alt="">` : `<div class="noimg"><span class="ms">image</span></div>`}
       <div><div class="b-title"></div>
-        <div class="b-meta"><span class="st ${escHtml(it.status)}">${STATUS()[it.status] || escHtml(it.status)}</span>${fromEcos ? `<span class="st ecos" title="${t('Entrada creada desde Ecos')}"><img src="assets/logo-mark.svg" alt="">${t('Creada con Ecos')}</span>` : ''}${when}${it.categories.length ? ' · ' + escHtml(it.categories.join(', ')) : ''}</div>
+        <div class="b-meta"><span class="st ${escHtml(it.status)}">${STATUS()[it.status] || escHtml(it.status)}</span>${fromEcos ? `<span class="st ecos" title="${t('Entrada creada desde Ecos')}"><img src="assets/logo-mark.svg" alt="">${t('Creada con Ecos')}</span>` : ''}${restored ? `<span class="st restored" title="${t('Recuperada de una copia de seguridad con Ecos')}"><span class="ms">settings_backup_restore</span>${t('Restaurada')}</span>` : ''}${when}${it.categories.length ? ' · ' + escHtml(it.categories.join(', ')) : ''}</div>
         <div class="b-ex"></div></div>
       <div class="b-actions"></div>`;
     const title = decodeEntities(it.title);
@@ -893,8 +894,8 @@ function renderBlog(items) {
       b.className = 'btn ' + (cls === 'primary' ? 'tonal' : cls === 'danger' ? 'text danger' : 'text');
       b.textContent = label; b.onclick = () => busy(b, fn); actions.appendChild(b);
     };
-    if (fromEcos && it.status !== 'trash' && it.type !== 'page') btn(t('Editar en Ecos'), () => openFromWp(it.id), 'primary');
-    if (it.status !== 'trash') btn(fromEcos ? t('Editar en WordPress') : t('Editar'), async () => window.api.open(await window.api.blogEditUrl(it.id, it.type)));
+    if ((fromEcos || restored) && it.status !== 'trash' && it.type !== 'page') btn(t('Editar en Ecos'), () => openFromWp(it.id), 'primary');
+    if (it.status !== 'trash') btn(fromEcos || restored ? t('Editar en WordPress') : t('Editar'), async () => window.api.open(await window.api.blogEditUrl(it.id, it.type)));
     if (it.status === 'publish') btn(t('Ver'), async () => window.api.open(it.url));
     if (['draft', 'pending', 'private'].includes(it.status)) btn(t('Publicar'), async () => {
       if (!await ask(t('¿Publicar «{x}»? Será visible en la web.', { x: title }))) return;
@@ -1221,7 +1222,7 @@ function rsRenderRow(key) {
   const st = rs.state[key];
   const done = st?.state === 'ok' ? st : p.restored;
   const state = st?.state === 'working' ? `<span class="spin"></span> ${t('Restaurando…')}`
-    : done ? `<span class="ms fill">check_circle</span> <a href="#" data-open="${escHtml(done.editUrl || '')}">${t('Restaurada')}</a>`
+    : done ? `<span class="ms fill">check_circle</span> <a href="#" data-open="${escHtml(done.editUrl || '')}">${t('Restaurada')}</a>${p.type !== 'page' && done.postId ? ` · <a href="#" data-ecos="${done.postId}">${t('Editar en Ecos')}</a>` : ''}`
     : st?.state === 'exists' ? `<span class="ms">content_copy</span> ${t('Ya existe en tu web')}`
     : st?.state === 'error' ? `<span class="ms">error</span> ${escHtml(st.message.slice(0, 80))}` : '';
   const thumb = row.querySelector('img.th');
@@ -1252,6 +1253,7 @@ function rsRenderRow(key) {
   };
   row.onclick = (e) => {
     if (e.target.dataset.open !== undefined) { e.preventDefault(); if (e.target.dataset.open) window.api.open(e.target.dataset.open); return; }
+    if (e.target.dataset.ecos) { e.preventDefault(); const id = Number(e.target.dataset.ecos); closeRestore().then(() => openFromWp(id).catch((err) => toast(err.message, true))); return; }
     rs.sel.has(key) ? rs.sel.delete(key) : rs.sel.add(key);
     rsRenderRow(key); rsUpdateGo();
   };
@@ -1281,7 +1283,7 @@ async function rsRestore() {
   for (const k of keys) if (rs.state[k]?.state === 'working' || rs.state[k]?.state === 'cancelled') { delete rs.state[k]; rsRenderRow(k); }
   const cancelled = res.length < keys.length;
   const ok = res.filter((r) => r.state === 'ok').length, ex = res.filter((r) => r.state === 'exists').length, err = res.filter((r) => r.state === 'error').length;
-  for (const r of res) if (r.state === 'ok') { const p = rs.data.posts.find((x) => x.key === r.key); p.restored = r; rs.sel.delete(r.key); }
+  for (const r of res) if (r.state === 'ok') { const p = rs.data.posts.find((x) => x.key === r.key); p.restored = r; rs.sel.delete(r.key); CFG.restored = { ...(CFG.restored || {}), ['local|' + r.key]: { postId: r.postId } }; }
   blog.loaded = false;
   const lost = res.flatMap((r) => r.problems || []).length;
   toast((cancelled ? t('Restauración cancelada.') + ' ' : '') + t('{ok} restauradas · {ex} ya existían · {err} con error', { ok, ex, err }) + (lost ? ' · ' + t('{n} fotos no se encontraron', { n: lost }) : ''), err > 0);

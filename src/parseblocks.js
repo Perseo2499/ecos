@@ -99,8 +99,114 @@ function toBlock(t) {
   }
 }
 
-function parseBlocks(content) {
-  return tokenize(String(content || '')).map(toBlock).filter((b) => b.type !== 'paragraph' || (b.html || '').replace(/<[^>]+>|&nbsp;|\s/g, ''));
+// --- Contenido «clásico» (sin bloques: editor clásico, importaciones, copias de seguridad) ------------
+// Se separa en elementos de primer nivel (párrafos, títulos, listas, citas, imágenes, tablas…) y cada uno
+// pasa a ser un bloque editable de Ecos. Lo que no se reconoce queda como bloque «raw» (se conserva igual).
+const VIDEO_URL = /^(https?:\/\/(?:www\.)?(?:youtube\.com|youtu\.be|vimeo\.com|dailymotion\.com|tiktok\.com|open\.spotify\.com|soundcloud\.com)\S*)$/i;
+const providerOf = (u) => (u.match(/youtube|youtu\.be|vimeo|dailymotion|tiktok|spotify|soundcloud/i)?.[0] || '').toLowerCase().replace('youtu.be', 'youtube');
+
+// Trocea el HTML en elementos de primer nivel: [{ tag, html }] (texto suelto: tag '')
+function topLevel(html) {
+  const out = [];
+  const re = /<\/?([a-z][a-z0-9]*)\b[^>]*?(\/?)>/gi;
+  const VOID = /^(img|br|hr|input|source|embed)$/i;
+  let depth = 0, start = 0, top = null, last = 0, m;
+  while ((m = re.exec(html))) {
+    const tag = m[1].toLowerCase(), closing = m[0][1] === '/', self = m[2] === '/' || VOID.test(tag);
+    if (depth === 0) {
+      if (closing) continue;
+      const txt = html.slice(last, m.index); if (txt.trim()) out.push({ tag: '', html: txt });
+      if (self) { out.push({ tag, html: m[0] }); last = re.lastIndex; continue; }
+      if (/^(a|strong|b|em|i|span|u|s|sub|sup|code|mark|small|font)$/.test(tag)) { continue; } // en línea: parte del texto
+      top = tag; start = m.index; depth = 1;
+      continue;
+    }
+    if (self) continue;
+    if (tag === top) depth += closing ? -1 : 1;
+    if (depth === 0) { out.push({ tag: top, html: html.slice(start, re.lastIndex) }); last = re.lastIndex; top = null; }
+  }
+  const rest = html.slice(depth ? start : last); if (rest.trim()) out.push({ tag: depth ? top : '', html: rest });
+  // el texto suelto se une con lo que va en línea a su alrededor
+  const merged = [];
+  for (const x of out) {
+    if (x.tag === '' && merged.length && merged[merged.length - 1].tag === '') merged[merged.length - 1].html += x.html;
+    else merged.push(x);
+  }
+  return merged;
 }
 
-module.exports = { parseBlocks, tokenize };
+function classicBlocks(html) {
+  const blocks = [];
+  const raw = (h, label = 'html') => blocks.push({ id: bid(), type: 'raw', markup: `<!-- wp:html -->\n${h.trim()}\n<!-- /wp:html -->`, label });
+  const para = (h) => {
+    // un enlace de vídeo solo en su línea: el vídeo
+    const plain = h.replace(/<[^>]+>/g, '').trim();
+    if (VIDEO_URL.test(plain)) { blocks.push({ id: bid(), type: 'embed', url: plain, provider: providerOf(plain), caption: '' }); return; }
+    // imágenes dentro del párrafo: van aparte
+    for (const im of h.match(/<img\b[^>]*>/gi) || []) { const img = imgOf(im); if (img) blocks.push({ id: bid(), type: 'image', img, caption: '' }); }
+    const text = h.replace(/<a\b[^>]*>\s*(<img\b[^>]*>)\s*<\/a>/gi, '').replace(/<img\b[^>]*>/gi, '').trim();
+    if (text.replace(/<[^>]+>|&nbsp;|\s/g, '')) blocks.push({ id: bid(), type: 'paragraph', html: text.replace(/^<br\s*\/?>|<br\s*\/?>$/gi, '') });
+  };
+  for (const el of topLevel(String(html))) {
+    const inner = el.html.replace(/^<[^>]+>|<\/[a-z0-9]+>$/gi, '');
+    const align = (el.html.match(/text-align:\s*(center|right|justify)/i) || [])[1];
+    switch (el.tag) {
+      case '':
+        for (const ptxt of el.html.split(/\n\s*\n/)) if (ptxt.trim()) para(ptxt.trim().replace(/\n/g, '<br>'));
+        break;
+      case 'p': case 'div': case 'span': case 'center': {
+        if (el.tag === 'div' && /<(p|h[1-6]|ul|ol|table|blockquote)\b/i.test(inner)) { classicBlocks(inner).forEach((b) => blocks.push(b)); break; }
+        const n = blocks.length; para(inner);
+        if (align) for (const b of blocks.slice(n)) if (b.type === 'paragraph') b.align = align;
+        break;
+      }
+      case 'h1': case 'h2': case 'h3': case 'h4': case 'h5': case 'h6': {
+        const l = Math.min(5, Math.max(2, Number(el.tag[1])));
+        if (inner.replace(/<[^>]+>|\s/g, '')) blocks.push({ id: bid(), type: 'heading', level: l, html: inner.replace(/<\/?(h\d|span)[^>]*>/gi, ''), ...(align ? { align } : {}) });
+        break;
+      }
+      case 'ul': case 'ol': blocks.push({ id: bid(), type: 'list', ordered: el.tag === 'ol', items: all(el.html, 'li').map((x) => x.replace(/<\/?(p|ul|ol)[^>]*>/gi, ' ').trim()).filter(Boolean) }); break;
+      case 'blockquote': blocks.push({ id: bid(), type: 'quote', html: (all(inner, 'p').join('<br>') || inner).trim(), cite: inner.match(/<cite[^>]*>([\s\S]*?)<\/cite>/i)?.[1] || '' }); break;
+      case 'img': { const img = imgOf(el.html); if (img) blocks.push({ id: bid(), type: 'image', img, caption: '' }); break; }
+      case 'a': case 'figure': {
+        const imgs = (el.html.match(/<img\b[^>]*>/gi) || []).map(imgOf).filter(Boolean);
+        if (imgs.length === 1) blocks.push({ id: bid(), type: 'image', img: imgs[0], caption: (el.html.match(/<figcaption[^>]*>([\s\S]*?)<\/figcaption>/i) || [])[1] || '' });
+        else if (imgs.length > 1) {
+          // fotos con su propio pie: una imagen con su pie cada una (la galería no guarda pies)
+          const figs = [...el.html.matchAll(/<figure\b[^>]*>\s*(<img\b[^>]*>)\s*(?:<figcaption[^>]*>([\s\S]*?)<\/figcaption>)?\s*<\/figure>/gi)];
+          if (figs.some((f) => f[2])) for (const f of figs) { const img = imgOf(f[1]); if (img) blocks.push({ id: bid(), type: 'image', img, caption: (f[2] || '').trim() }); }
+          else blocks.push({ id: bid(), type: 'gallery', images: imgs, columns: 3 });
+        }
+        else if (el.tag === 'a') para(el.html); else raw(el.html);
+        break;
+      }
+      case 'hr': blocks.push({ id: bid(), type: 'separator' }); break;
+      case 'iframe': {
+        const src = attr(el.html, 'src');
+        const yt = src.match(/youtube(?:-nocookie)?\.com\/embed\/([\w-]{11})/);
+        if (yt) blocks.push({ id: bid(), type: 'embed', url: `https://www.youtube.com/watch?v=${yt[1]}`, provider: 'youtube', caption: '' });
+        else raw(el.html, 'iframe');
+        break;
+      }
+      case 'br': break;
+      case 'table': {
+        const rows = all(el.html, 'tr').map((tr) => [...tr.matchAll(/<t[hd]\b[^>]*>([\s\S]*?)<\/t[hd]>/gi)].map((c) => c[1].trim()));
+        if (rows.length && rows.every((r) => r.length)) blocks.push({ id: bid(), type: 'table', rows, head: /<th\b/i.test(el.html), stripes: false, caption: '' });
+        else raw(el.html, 'table');
+        break;
+      }
+      default: raw(el.html, el.tag);
+    }
+  }
+  return blocks;
+}
+
+function parseBlocks(content) {
+  const out = [];
+  for (const t of tokenize(String(content || ''))) {
+    if (t.name === 'freeform') out.push(...classicBlocks(t.inner)); else out.push(toBlock(t));
+  }
+  return out.filter((b) => b.type !== 'paragraph' || (b.html || '').replace(/<[^>]+>|&nbsp;|\s/g, ''));
+}
+
+module.exports = { parseBlocks, tokenize, classicBlocks };
