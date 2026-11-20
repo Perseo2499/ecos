@@ -416,6 +416,10 @@
           <div id="sec-more" class="hidden">
             <div class="set-row"><span data-i18n>Bloquear tras un tiempo sin usar Ecos</span>
               <select id="sec-auto"><option value="5">5 min</option><option value="15">15 min</option><option value="30">30 min</option><option value="60">1 h</option><option value="0" data-i18n>Nunca</option></select></div>
+            <div class="sec-2fa hidden" id="sec-hello">
+              <div><b data-i18n>Windows Hello</b><div class="hint" id="sec-hello-status"></div></div>
+              <span class="spacer"></span><div id="sec-hello-actions"></div>
+            </div>
             <div class="sec-2fa">
               <div><b data-i18n>Doble factor</b><div class="hint" id="sec-2fa-status"></div></div>
               <span class="spacer"></span><div id="sec-2fa-actions"></div>
@@ -674,6 +678,7 @@
       <div id="lock-code-row" class="field hidden"><span class="ms">phonelink_lock</span><input id="lock-code" inputmode="numeric" maxlength="11" data-i18n-ph placeholder="Código de 6 cifras de tu app"></div>
       <p class="lock-err" id="lock-err"></p>
       <button class="btn filled" id="lock-go" type="submit"><span class="ms">lock_open</span><span data-i18n>Entrar</span></button>
+      <button class="btn tonal hidden" id="lock-hello" type="button"><span class="ms">fingerprint</span><span data-i18n>Entrar con Windows Hello</span></button>
     </form>
     <a href="#" id="lock-forgot" class="hint" data-i18n>¿Has olvidado la contraseña?</a>
   </div>

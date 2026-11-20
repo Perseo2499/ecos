@@ -81,6 +81,9 @@ function open(cfg, password) {
   try { return { k, secrets: V.decrypt(sys.dec(vaultBlob), k) }; } catch { throw new Error('Contraseña incorrecta'); }
 }
 function unlock(cfg, opened) { key = opened.k; putSecrets(cfg, opened.secrets); }
+// Windows Hello: la llave de la bóveda llega envuelta con la llave de Hello
+const currentKey = () => key;
+function openWithKey(cfg, k) { try { return { k, secrets: V.decrypt(sys.dec(vaultBlob), k) }; } catch { throw new Error('No se pudo abrir la bóveda con Windows Hello'); } }
 function lockNow(cfg) { if (!cfg.lock) return; save(cfg); key = null; wipeSecrets(cfg); }
 function setPassword(cfg, password) {
   const salt = crypto.randomBytes(16).toString('hex');
@@ -96,4 +99,4 @@ function resetForgotten(cfg) { delete cfg.lock; wipeSecrets(cfg); key = null; va
 const seal = (cfg, obj) => (cfg.lock && key ? 'ENC:' + V.encrypt(obj, key) : JSON.stringify(obj));
 const unseal = (cfg, text) => { if (!text) return null; if (text.startsWith('ENC:')) return key ? V.decrypt(text.slice(4), key) : null; return JSON.parse(text); };
 
-module.exports = { seal, unseal, load, save, isLocked, open, unlock, lockNow, setPassword, clearPassword, resetForgotten, SECRET_KEYS };
+module.exports = { currentKey, openWithKey, seal, unseal, load, save, isLocked, open, unlock, lockNow, setPassword, clearPassword, resetForgotten, SECRET_KEYS };

@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
+const crypto = require('crypto');
 const fs = require('fs');
 
 // Versión de desarrollo («npm start» desde el código): datos aparte para poder abrirla junto a la
@@ -125,7 +126,7 @@ const publicCfg = () => ({
   metaAppSecret: cfg.metaAppSecret ? '••••••' : '', wpClientSecret: cfg.wpClientSecret ? '••••••' : '',
   anthropicKey: cfg.anthropicKey ? '••••••' : '',
   metaUserToken: undefined, wpToken: undefined, __totp: undefined, __recovery: undefined, vault: undefined, sentContent: undefined,
-  lock: cfg.lock ? { auto: cfg.lock.auto ?? 15, twoFactor: !!cfg.__totp, recoveryLeft: (cfg.__recovery || []).length } : null,
+  lock: cfg.lock ? { auto: cfg.lock.auto ?? 15, twoFactor: !!cfg.__totp, recoveryLeft: (cfg.__recovery || []).length, hello: !!cfg.lock.hello } : null,
   metaConnected: !!cfg.metaUserToken, wpConnected: wpIsConnected(),
   wpMode: cfg.wpMode || 'wpcom', wpAppPassword: cfg.wpAppPassword ? '••••••' : '', wpSiteLabel: wpLabel(),
   metaRedirectUri: meta.REDIRECT, wpRedirectUri: wp.REDIRECT, wpBlogId: undefined,
@@ -169,7 +170,7 @@ const wpCall = async (fn) => { try { return await fn(); } catch (e) { throw e in
 
 // Envuelve los manejadores para devolver errores legibles al renderer
 // Con la app bloqueada solo responden estas peticiones (entrar y lo imprescindible para la pantalla de acceso)
-const LOCK_OK = new Set(['lock:state', 'lock:unlock', 'lock:reset', 'app:info', 'update:status', 'update:check', 'update:install']);
+const LOCK_OK = new Set(['lock:state', 'lock:unlock', 'lock:hello', 'lock:reset', 'app:info', 'update:status', 'update:check', 'update:install']);
 const isLocked = () => !!cfg && store.isLocked(cfg);
 const handle = (name, fn) => ipcMain.handle(name, async (_e, ...args) => {
   if (isLocked() && !LOCK_OK.has(name)) return { ok: false, error: 'Ecos está bloqueada' };
@@ -666,7 +667,7 @@ const vault = require('./src/vault');
 const lockGuard = { fails: 0, until: 0 };
 let pendingOpen = null; // contraseña buena a falta del código del doble factor
 const lockPrefs = () => { const p = cfg.prefs || {}; return { theme: p.theme, accent: p.accent, lang: p.lang, vinyl: p.vinyl, silk: p.silk, zoom: p.zoom }; };
-handle('lock:state', () => ({ locked: isLocked(), enabled: !!cfg.lock, auto: cfg.lock?.auto ?? 15, prefs: lockPrefs(), needCode: !!pendingOpen }));
+handle('lock:state', () => ({ locked: isLocked(), enabled: !!cfg.lock, auto: cfg.lock?.auto ?? 15, prefs: lockPrefs(), needCode: !!pendingOpen, hello: !!cfg.lock?.hello }));
 function failedAttempt(msg) {
   lockGuard.fails++;
   if (lockGuard.fails >= 3) lockGuard.until = Date.now() + Math.min(5 * 60000, 2000 * 2 ** (lockGuard.fails - 3)); // espera creciente
@@ -680,6 +681,9 @@ handle('lock:unlock', async ({ password, code } = {}) => {
   let opened = pendingOpen;
   if (password !== undefined) { try { opened = store.open(cfg, password); } catch (e) { pendingOpen = null; failedAttempt(e.message); } }
   if (!opened) throw new Error('Escribe la contraseña');
+  return finishUnlock(opened, code);
+});
+function finishUnlock(opened, code) {
   if (opened.secrets.totp) {
     if (!code) { pendingOpen = opened; return { needCode: true }; } // falta el código del móvil
     const c = String(code).trim();
@@ -693,7 +697,31 @@ handle('lock:unlock', async ({ password, code } = {}) => {
   store.save(cfg);
   log('Acceso: desbloqueada');
   return { ok: true };
+}
+// Entrar con Windows Hello (huella, cara o PIN): su firma abre la copia de la llave de la bóveda
+handle('lock:hello', async () => {
+  if (!isLocked()) return { ok: true };
+  if (!cfg.lock?.hello) throw new Error('Windows Hello no está activado');
+  const wait = Math.ceil((lockGuard.until - Date.now()) / 1000);
+  if (wait > 0) throw new Error(`Demasiados intentos. Espera ${wait} s.`);
+  const hk = await require('./src/winhello').keyFor(cfg.lock.hello.challenge);
+  let k;
+  try { k = Buffer.from(vault.decrypt(cfg.lock.hello.wrapped, hk).k, 'base64'); } catch { throw new Error('Windows Hello no ha podido abrir la bóveda. Entra con la contraseña y vuelve a activarlo.'); }
+  pendingOpen = null;
+  return finishUnlock(store.openWithKey(cfg, k));
 });
+handle('hello:status', async () => ({ windows: process.platform === 'win32', supported: await require('./src/winhello').supported(), enabled: !!cfg.lock?.hello }));
+handle('hello:enable', async ({ current } = {}) => {
+  if (!cfg.lock) throw new Error('Primero activa la contraseña');
+  const opened = store.open(cfg, current); // comprueba la contraseña y da la llave de la bóveda
+  const challenge = crypto.randomBytes(32).toString('base64');
+  const hk = await require('./src/winhello').keyFor(challenge, true); // pide la huella/cara/PIN
+  cfg.lock.hello = { challenge, wrapped: vault.encrypt({ k: opened.k.toString('base64') }, hk), at: new Date().toISOString() };
+  store.save(cfg);
+  log('Acceso: Windows Hello activado');
+  return publicCfg();
+});
+handle('hello:disable', () => { if (cfg.lock) { delete cfg.lock.hello; store.save(cfg); } log('Acceso: Windows Hello quitado'); return publicCfg(); });
 function lockApp(reason) {
   if (!cfg?.lock || isLocked()) return;
   store.lockNow(cfg);
@@ -709,7 +737,7 @@ handle('lock:set', ({ password, current } = {}) => {
   if (String(password || '').length < 8) throw new Error('La contraseña debe tener al menos 8 caracteres');
   if (cfg.lock) needPassword(current);
   const keep = { totp: cfg.__totp, recovery: cfg.__recovery };
-  store.setPassword(cfg, password);
+  store.setPassword(cfg, password); // (Windows Hello, si estaba, queda desactivado: la llave es otra)
   cfg.__totp = keep.totp || null; cfg.__recovery = keep.recovery || []; store.save(cfg);
   log('Acceso: contraseña', keep.totp ? 'cambiada' : 'activada');
   return publicCfg();

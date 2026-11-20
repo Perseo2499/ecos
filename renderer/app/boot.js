@@ -41,6 +41,18 @@ async function lockGate() {
     let needCode = !!st.needCode;
     const showCode = () => { $('#lock-pass-row').classList.add('hidden'); $('#lock-code-row').classList.remove('hidden'); $('#lock-msg').textContent = t('Escribe el código de tu app de autenticación (o un código de recuperación).'); $('#lock-code').focus(); };
     if (needCode) showCode();
+    // Windows Hello: botón y, al abrir, se pide directamente la huella/cara/PIN
+    const done = async () => { $('#lock').classList.add('hidden'); document.body.classList.remove('locked'); $('#lock-pass').value = ''; $('#lock-code').value = ''; startAutoLock(await window.api.lockState()); resolve(); };
+    const hello = async () => {
+      $('#lock-err').textContent = ''; $('#lock-hello').disabled = true;
+      try {
+        const r = await window.api.lockHello();
+        if (r?.needCode) { needCode = true; showCode(); return; }
+        await done();
+      } catch (err) { $('#lock-err').textContent = t(err.message); }
+      finally { $('#lock-hello').disabled = false; }
+    };
+    if (st.hello && !needCode) { $('#lock-hello').classList.remove('hidden'); $('#lock-hello').onclick = hello; setTimeout(hello, 400); }
     $('#lock-form').onsubmit = async (e) => {
       e.preventDefault();
       $('#lock-err').textContent = '';
@@ -48,10 +60,7 @@ async function lockGate() {
       try {
         const r = await window.api.lockUnlock(needCode ? { code: $('#lock-code').value } : { password: $('#lock-pass').value });
         if (r?.needCode) { needCode = true; showCode(); return; }
-        $('#lock').classList.add('hidden'); document.body.classList.remove('locked');
-        $('#lock-pass').value = ''; $('#lock-code').value = '';
-        startAutoLock(await window.api.lockState());
-        resolve();
+        await done();
       } catch (err) {
         $('#lock-err').textContent = t(err.message.replace(/\d+ s\.$/, '{s} s.'), { s: (err.message.match(/(\d+) s\.$/) || [])[1] });
         $('#lock-box')?.classList.add('shake');
@@ -121,6 +130,21 @@ function renderSecurity() {
     $('#sec-2fa-actions').innerHTML = L.twoFactor ? `<button class="btn text danger" data-s="2fa-off">${t('Desactivar')}</button>` : `<button class="btn tonal" data-s="2fa-on"><span class="ms">phonelink_lock</span>${t('Activar')}</button>`;
   }
   $$('#set-security [data-s]').forEach((b) => (b.onclick = () => busy(b, () => secAction(b.dataset.s))));
+  // Windows Hello (solo en Windows con Hello configurado)
+  if (L) window.api.helloStatus().then((h) => {
+    $('#sec-hello').classList.toggle('hidden', !h.windows);
+    $('#sec-hello-status').textContent = !h.supported ? t('Configura Windows Hello en Windows (Configuración → Cuentas → Opciones de inicio de sesión) para usarlo aquí.')
+      : h.enabled ? t('Activado: Ecos se abre con tu huella, cara o PIN de Windows (la contraseña sigue valiendo).') : t('Entra con tu huella, cara o PIN de Windows en lugar de escribir la contraseña.');
+    $('#sec-hello-actions').innerHTML = !h.supported ? '' : h.enabled ? `<button class="btn text danger" data-h="off">${t('Desactivar')}</button>` : `<button class="btn tonal" data-h="on"><span class="ms">fingerprint</span>${t('Activar')}</button>`;
+    $$('#sec-hello [data-h]').forEach((b) => (b.onclick = () => busy(b, async () => {
+      if (b.dataset.h === 'on') {
+        const v = await askFields(t('Para activar Windows Hello, escribe tu contraseña de Ecos. Después Windows te pedirá la huella, la cara o el PIN.'), [{ label: t('Contraseña actual') }], { ok: t('Activar') });
+        if (!v) return;
+        CFG = await window.api.helloEnable({ current: v[0] }); toast(t('Windows Hello activado.'));
+      } else { CFG = await window.api.helloDisable(); toast(t('Windows Hello desactivado.')); }
+      renderSecurity();
+    })));
+  }).catch(() => {});
 }
 const min8 = (v) => (v.length < 8 ? t('La contraseña debe tener al menos 8 caracteres') : null);
 const same = (v, all) => (v !== all[all.length - 2] ? t('Las contraseñas no coinciden') : null);

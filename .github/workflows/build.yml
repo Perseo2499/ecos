@@ -20,6 +20,13 @@ jobs:
       - run: npm ci
       - name: Pruebas automáticas
         run: npm test
+      - name: Windows Hello (el script carga las API de Windows)
+        shell: pwsh
+        run: |
+          node -e "require('fs').writeFileSync('hello.ps1', '\ufeff' + require('./src/winhello.js').SCRIPT)"
+          $out = powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File hello.ps1 -Mode check
+          Write-Host "Respuesta: $out"
+          if ($out -notmatch '"supported"') { Write-Error "El script de Windows Hello no funciona: $out"; exit 1 }
       # Firma digital: si existen los secretos WIN_CSC_LINK (certificado .pfx en base64) y WIN_CSC_KEY_PASSWORD,
       # electron-builder firma el instalador y la app; si no, compila sin firmar.
       - name: Compilar (y firmar si hay certificado)
