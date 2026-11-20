@@ -165,6 +165,77 @@ async function uploadFromUrls(cfg, urls) {
 }
 const updateMedia = (cfg, id, fields) => req(cfg, `/wp/v2/media/${id}`, { method: 'POST', json: { alt_text: fields.alt ?? fields.alt_text } });
 
+// --- Biblioteca de medios ------------------------------------------------------------
+const MEDIA_FIELDS = 'id,date,source_url,mime_type,media_type,alt_text,title,media_details';
+const normMedia = (m) => {
+  const d = m.media_details || {}, sz = d.sizes || {};
+  const file = decodeURIComponent((m.source_url || '').split('?')[0].split('/').pop() || '');
+  return {
+    id: m.id, date: m.date, url: m.source_url, type: m.media_type === 'video' ? 'video' : 'image', mime: m.mime_type || '',
+    alt: m.alt_text || '', name: decode((m.title && (m.title.rendered ?? m.title.raw)) || '').replace(/<[^>]+>/g, '') || file,
+    thumb: (sz.medium || sz.thumbnail || {}).source_url || '', large: (sz.large || {}).source_url || '',
+    width: d.width || 0, height: d.height || 0, size: d.filesize || 0,
+  };
+};
+// {page, perPage, type: 'all'|'image'|'video', search} → { items, total, totalPages }
+async function listMedia(cfg, { page = 1, perPage = 40, type = 'all', search = '' } = {}) {
+  const q = new URLSearchParams({ per_page: String(perPage), page: String(page), _fields: MEDIA_FIELDS, orderby: 'date', order: 'desc' });
+  if (type === 'image' || type === 'video') q.set('media_type', type);
+  if (search) q.set('search', search);
+  const { data, res } = await req(cfg, `/wp/v2/media?${q}`, { raw: true });
+  return {
+    items: (data || []).filter((m) => m.media_type === 'image' || m.media_type === 'video').map(normMedia),
+    total: Number(res.headers.get('x-wp-total') || 0), totalPages: Number(res.headers.get('x-wp-totalpages') || 1),
+  };
+}
+const deleteMedia = (cfg, id) => req(cfg, `/wp/v2/media/${Number(id)}?force=true`, { method: 'DELETE' });
+
+// Dirección de una foto sin dominio, sin extensión ni sufijos de tamaño (-300x200, -scaled, -e1234)
+const mediaBase = (u) => {
+  const m = String(u || '').split(/[?#]/)[0].match(/\/wp-content\/uploads\/.+$/);
+  return m ? m[0].replace(/\.[a-z0-9]+$/i, '').replace(/(-scaled|-e\d+|-\d+x\d+)+$/i, '').toLowerCase() : '';
+};
+// Qué medios se usan en las entradas y páginas. posts: [{id,title,content,featured_media}], media: [{id,source_url}]
+// → { [idMedio]: [{id, title} de cada entrada donde se usa] }
+function usedMediaIds(posts, media) {
+  const byBase = new Map();
+  for (const m of media || []) { const b = mediaBase(m.source_url); if (b) byBase.set(b, [...(byBase.get(b) || []), m.id]); }
+  const out = {};
+  const mark = (id, p) => {
+    id = Number(id); if (!id) return;
+    const list = (out[id] ||= []);
+    const title = p.title?.raw ?? p.title?.rendered ?? p.title ?? '';
+    const label = (typeof title === 'string' ? decode(title) : '') || `#${p.id}`;
+    if (!list.some((x) => x.id === p.id)) list.push({ id: p.id, title: label });
+  };
+  for (const p of posts || []) {
+    const html = typeof p.content === 'string' ? p.content : (p.content?.raw ?? p.content?.rendered ?? '');
+    if (p.featured_media) mark(p.featured_media, p);
+    for (const m of html.matchAll(/wp-image-(\d+)/g)) mark(m[1], p);
+    for (const c of html.matchAll(/<!--\s*wp:[^>]*?-->/g)) {
+      for (const m of c[0].matchAll(/"(?:id|mediaId)"\s*:\s*(\d+)/g)) mark(m[1], p);
+      for (const m of c[0].matchAll(/"ids"\s*:\s*\[([\d,\s]*)\]/g)) m[1].split(',').forEach((x) => mark(x, p));
+    }
+    for (const u of html.matchAll(/\/wp-content\/uploads\/[^\s"'<>),\\]+/g)) {
+      for (const id of byBase.get(mediaBase(u[0])) || []) mark(id, p);
+    }
+  }
+  return out;
+}
+async function mediaUsage(cfg) {
+  const posts = [];
+  for (const coll of ['posts', 'pages']) {
+    posts.push(...(await all(cfg, `/wp/v2/${coll}?context=edit&status=publish,draft,private,pending,future&_fields=id,title,content,featured_media`)));
+  }
+  const media = [];
+  for (let page = 1; page <= 200; page++) {
+    const { data, res } = await req(cfg, `/wp/v2/media?per_page=100&page=${page}&_fields=id,source_url`, { raw: true });
+    media.push(...(data || []));
+    if (page >= Number(res.headers.get('x-wp-totalpages') || 1)) break;
+  }
+  return usedMediaIds(posts, media);
+}
+
 // --- Entradas ----------------------------------------------------------------------
 // Recibe los campos en el formato de WordPress.com (nombres separados por comas) y los adapta
 async function toRest(cfg, f) {
@@ -344,4 +415,4 @@ async function saveStructure(cfg, ch, progress = () => {}) {
   return { errors };
 }
 
-module.exports = { changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl };
+module.exports = { listMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl };

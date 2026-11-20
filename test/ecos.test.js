@@ -167,3 +167,26 @@ test('mosaico: se adapta al número de piezas sin huecos y admite vídeos', () =
   assert.equal(car.view, 'peek');
   assert.equal(car.squares, true);
 });
+
+test('biblioteca de medios: detección de fotos usadas', () => {
+  const W = require('../src/wpself');
+  const media = [
+    { id: 1, source_url: 'https://x.org/wp-content/uploads/2024/05/playa.jpg' },
+    { id: 2, source_url: 'https://x.org/wp-content/uploads/2024/05/mar-scaled.jpg' },
+    { id: 3, source_url: 'https://x.org/wp-content/uploads/2024/05/playa2.jpg' },
+    { id: 4, source_url: 'https://x.org/wp-content/uploads/2024/05/destacada.png' },
+    { id: 5, source_url: 'https://x.org/wp-content/uploads/2024/05/galeria.jpg' },
+    { id: 6, source_url: 'https://x.org/wp-content/uploads/2024/05/libre.jpg' },
+    { id: 7, source_url: 'https://x.org/wp-content/uploads/2024/05/clase.jpg' },
+  ];
+  const posts = [
+    { id: 10, title: { raw: 'Viaje' }, featured_media: 4, content: { raw: '<!-- wp:image {"id":5} --><figure><img src="https://www.x.org/wp-content/uploads/2024/05/playa-300x200.jpg"></figure><!-- /wp:image -->' } },
+    { id: 11, title: { raw: 'Otra' }, featured_media: 0, content: { raw: '<img class="wp-image-7" src="a"><img src="http://x.org/wp-content/uploads/2024/05/mar-1024x768.jpg">' } },
+  ];
+  const u = W.usedMediaIds(posts, media);
+  assert.deepEqual(Object.keys(u).sort(), ['1', '2', '4', '5', '7']);
+  assert.equal(u[4][0].title, 'Viaje');
+  assert.equal(u[2][0].id, 11);
+  assert.equal(u[3], undefined); // playa2 no es playa
+  assert.equal(u[6], undefined);
+});

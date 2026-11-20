@@ -110,15 +110,17 @@ function renderBlog(items) {
 $$('#b-type button').forEach((b) => b.onclick = async () => {
   if (blog.type === 'structure' && b.dataset.type !== 'structure' && window.SiteStructure.dirty() && !await ask(t('Tienes cambios de estructura sin guardar. ¿Salir sin guardarlos?'))) return;
   $$('#b-type button').forEach((x) => x.classList.toggle('active', x === b));
-  const st = b.dataset.type === 'structure', cal = b.dataset.type === 'calendar';
+  const st = b.dataset.type === 'structure', cal = b.dataset.type === 'calendar', med = b.dataset.type === 'media';
   // Estructura y Calendario: en lugar de la lista
-  $$('#b-status, #tab-blog .field.search, #b-refresh, #b-new, #b-list, #tab-blog .pager').forEach((x) => x.classList.toggle('hidden', st || cal));
+  $$('#b-status, #tab-blog .field.search, #b-refresh, #b-new, #b-list, #b-bulk, #tab-blog .pager').forEach((x) => x.classList.toggle('hidden', st || cal || med));
   $('#b-structure').classList.toggle('hidden', !st);
   $('#b-calendar').classList.toggle('hidden', !cal);
+  $('#b-media').classList.toggle('hidden', !med);
   blog.type = b.dataset.type;
   bsel.clear();
   if (st) return window.SiteStructure.open();
   if (cal) return renderCalendar();
+  if (med) return renderMediaLib();
   blog.page = 1; loadBlog();
 });
 $('#b-status').onchange = () => { blog.page = 1; loadBlog(); };
