@@ -410,14 +410,19 @@ handle('ai:article', async (input) => {
   const opts = { ...(input.opts || {}) };
   let sources = [];
   // primero, si se pide, buscar en internet (cada IA con su propia búsqueda web)
-  if (opts.web) {
+  if (opts.web && ai.isCli(cfg.ai)) {
+    opts.searchNow = true; // la CLI busca y escribe en la misma llamada (más rápido)
+    sendToast('Buscando en internet y escribiendo el artículo…');
+  } else if (opts.web) {
     sendToast('Buscando información en internet…');
     const r = await ai.research(cfg.ai, { title: input.title, text: input.text });
     opts.research = r.notes; sources = r.sources;
     sendToast('Escribiendo el artículo…');
   }
   const art = await ai.improveArticle(cfg.ai, { ...input, opts, extra: cfg.aiInstructions || '' });
-  return { ...art, sources };
+  const seen = new Set();
+  const all = [...sources, ...(art.sources || [])].filter((x) => /^https?:\/\//.test(x.url || '') && !seen.has(x.url) && seen.add(x.url));
+  return { ...art, sources: opts.web ? all.slice(0, 12) : [] };
 });
 handle('ai:alts', (urls, context) => ai.altTexts(cfg.ai, urls, context));
 handle('ai:rewrite', (input) => ai.rewrite(cfg.ai, { ...input, extra: cfg.aiInstructions || '' }));

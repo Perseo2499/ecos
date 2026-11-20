@@ -266,6 +266,7 @@
     'Modelo (opcional: si lo dejas vacío, usa el de la CLI)': 'Model (optional: leave empty to use the CLI default)',
     'Los botones de IA usarán {c}. Pulsa «Probar» para comprobarlo.': 'The AI buttons will use {c}. Click "Try it" to check.',
     // 1.2 (editor completo)
+    'Trabajando… {s} s': 'Working… {s} s', 'Buscando en internet y escribiendo el artículo…': 'Searching the internet and writing the article…',
     'Cómo convertir en artículo': 'How to turn into an article',
     'Extensión': 'Length',
     'Más breve': 'Shorter',

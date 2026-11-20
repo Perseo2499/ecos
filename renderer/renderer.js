@@ -70,7 +70,10 @@ function toast(msg, isError) {
 }
 async function busy(btn, fn) {
   const label = btn.innerHTML; btn.disabled = true; btn.textContent = t('Trabajando…');
-  try { return await fn(); } catch (e) { toast(e.message, true); } finally { btn.disabled = false; btn.innerHTML = label; }
+  // en tareas largas (IA), los segundos que lleva: así se ve que sigue trabajando
+  const t0 = Date.now();
+  const tick = setInterval(() => { const s = Math.round((Date.now() - t0) / 1000); if (s >= 3) btn.textContent = t('Trabajando… {s} s', { s }); }, 1000);
+  try { return await fn(); } catch (e) { toast(e.message, true); } finally { clearInterval(tick); btn.disabled = false; btn.innerHTML = label; }
 }
 const fileUrl = (p) => p && 'file:///' + encodeURI(p.replace(/\\/g, '/')).replace(/#/g, '%23');
 const fmtDate = (d) => new Date(d).toLocaleString(prefs().lang === 'en' ? 'en-GB' : 'es-ES', { dateStyle: 'medium', timeStyle: 'short' });

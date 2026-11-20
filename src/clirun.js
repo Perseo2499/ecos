@@ -44,7 +44,7 @@ const loginHint = (tool, text) => (/log ?in|sign ?in|auth|credential|api[ _]?key
 
 // parts: [{type:'text', text}, {type:'image', base64, mediaType} | {type:'image', url}]
 // schema: JSON Schema de la respuesta. Devuelve el objeto JSON (lo valida luego zod en ai.js).
-async function ask({ tool, model }, parts, schema, log = () => {}) {
+async function ask({ tool, model, web = false }, parts, schema, log = () => {}) {
   const T = TOOLS[tool];
   if (!T) throw new Error('Elige una CLI (Claude Code, Codex o Gemini CLI)');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ecos-cli-'));
@@ -70,18 +70,19 @@ async function ask({ tool, model }, parts, schema, log = () => {}) {
 
     if (tool === 'claude') {
       // Solo la herramienta de lectura (para ver las imágenes); sin MCP ni sesiones guardadas
+      const allow = [...(images.length ? ['Read'] : []), ...(web ? ['WebSearch'] : [])].join(',');
       const args = ['-p', 'Sigue exactamente las instrucciones recibidas por la entrada estándar.', '--output-format', 'json',
-        '--tools', images.length ? 'Read' : '', ...(images.length ? ['--allowedTools', 'Read'] : []),
+        '--tools', allow, ...(allow ? ['--allowedTools', allow] : []),
         '--strict-mcp-config', '--no-session-persistence', ...(model ? ['--model', model] : [])];
-      res = await run(T.bin, args, { cwd: dir, input: text + imgNote + rules });
+      res = await run(T.bin, args, { cwd: dir, input: text + imgNote + rules, ...(web ? { timeout: 300000 } : {}) });
       let j; try { j = JSON.parse(res.out); } catch { j = null; }
       if (res.code !== 0 || !j || j.is_error) throw new Error(`Claude Code: ${(j?.result || res.err || res.out || 'error').toString().trim().slice(0, 300)}.${loginHint(tool, res.err + res.out)}`);
       data = j.structured_output || extractJson(j.result);
     } else if (tool === 'codex') {
       fs.writeFileSync(path.join(dir, 'schema.json'), schemaText);
-      const args = ['exec', '--skip-git-repo-check', '--sandbox', 'read-only', '--ephemeral', '--color', 'never',
+      const args = [...(web ? ['--search'] : []), 'exec', '--skip-git-repo-check', '--sandbox', 'read-only', '--ephemeral', '--color', 'never',
         '--output-schema', 'schema.json', '-o', 'respuesta.txt', ...(model ? ['-m', model] : []), ...images.flatMap((n) => ['-i', n]), '-'];
-      res = await run(T.bin, args, { cwd: dir, input: text + rules });
+      res = await run(T.bin, args, { cwd: dir, input: text + rules, ...(web ? { timeout: 300000 } : {}) });
       const outFile = path.join(dir, 'respuesta.txt');
       if (res.code !== 0 || !fs.existsSync(outFile)) throw new Error(`Codex: ${(res.err || res.out || 'error').trim().split('\n').slice(-3).join(' ').slice(0, 300)}.${loginHint(tool, res.err + res.out)}`);
       data = extractJson(fs.readFileSync(outFile, 'utf8'));
@@ -90,7 +91,7 @@ async function ask({ tool, model }, parts, schema, log = () => {}) {
       const atRefs = images.length ? '\n\nImágenes: ' + images.map((n) => '@' + n).join(' ') : '';
       const args = ['-p', 'Sigue exactamente las instrucciones recibidas por la entrada estándar.' + atRefs, '--output-format', 'json',
         '--approval-mode', 'plan', '--skip-trust', ...(model ? ['-m', model] : [])];
-      res = await run(T.bin, args, { cwd: dir, input: text + rules });
+      res = await run(T.bin, args, { cwd: dir, input: text + rules, ...(web ? { timeout: 300000 } : {}) });
       // la respuesta va por la salida estándar; los errores (también en JSON) por la de errores
       let j = null;
       for (const txt of [res.out, res.err]) { try { j = extractJson(txt); if (j.response !== undefined || j.error) break; } catch { /* siguiente */ } }
@@ -123,8 +124,8 @@ async function search({ tool, model }, prompt, log = () => {}) {
   try {
     let res, text;
     if (tool === 'claude') {
-      res = await run(T.bin, ['-p', 'Sigue exactamente las instrucciones recibidas por la entrada estándar.', '--output-format', 'json', '--tools', 'WebSearch,WebFetch',
-        '--allowedTools', 'WebSearch,WebFetch', '--strict-mcp-config', '--no-session-persistence', ...(model ? ['--model', model] : [])], { cwd: dir, input: prompt, timeout: 300000 });
+      res = await run(T.bin, ['-p', 'Sigue exactamente las instrucciones recibidas por la entrada estándar.', '--output-format', 'json', '--tools', 'WebSearch',
+        '--allowedTools', 'WebSearch', '--strict-mcp-config', '--no-session-persistence', ...(model ? ['--model', model] : [])], { cwd: dir, input: prompt, timeout: 300000 });
       let j; try { j = JSON.parse(res.out); } catch { j = null; }
       if (res.code !== 0 || !j || j.is_error) throw new Error(`Claude Code: ${(j?.result || res.err || res.out || 'error').toString().trim().slice(0, 300)}.${loginHint(tool, res.err + res.out)}`);
       text = j.result;

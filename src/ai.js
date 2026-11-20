@@ -81,13 +81,13 @@ let cliLog = () => {};
 const setCliLog = (fn) => { cliLog = fn; };
 
 // parts: [{type:'text', text}, {type:'image', url} | {type:'image', base64, mediaType}]
-async function askStructured(aiCfg, parts, schema, { effort = 'low', maxTokens = 16000 } = {}) {
+async function askStructured(aiCfg, parts, schema, { effort = 'low', maxTokens = 16000, web = false } = {}) {
   const c = current(aiCfg);
   const instructions = 'Responde únicamente con un objeto JSON que cumpla este esquema:\n' + JSON.stringify(jsonSchema(schema));
   let raw;
 
   if (c.def.cli) {
-    const data = await require('./clirun').ask({ tool: c.tool, model: c.model }, parts, jsonSchema(schema), cliLog);
+    const data = await require('./clirun').ask({ tool: c.tool, model: c.model, web }, parts, jsonSchema(schema), cliLog);
     const ok = schema.safeParse(data);
     if (!ok.success) throw new Error('La CLI devolvió datos incompletos; prueba otra vez o con otro modelo');
     return ok.data;
@@ -220,6 +220,7 @@ const Article = z.object({
     text: z.string().describe('Texto plano, sin HTML ni Markdown ni hashtags'),
   })).describe('Cuerpo del artículo en orden: párrafos y, si se piden, subtítulos'),
   tags: z.array(z.string()).describe('Entre 3 y 8 etiquetas en minúsculas, sin #'),
+  sources: z.array(z.object({ title: z.string(), url: z.string() })).describe('Fuentes de internet usadas (vacío si no se buscó nada)'),
 });
 
 const LENGTH = {
@@ -244,6 +245,7 @@ function improveArticle(aiCfg, { title, text, extra = '', opts = {} }) {
     o.headings ? 'Organiza el cuerpo en secciones con subtítulos (kind = "h2") cuando el texto tenga más de tres párrafos; no pongas subtítulo antes del primer párrafo.' : 'No uses subtítulos: solo párrafos (kind = "p").',
     o.spelling ? 'Corrige la ortografía, la gramática y la puntuación.' : '',
     'Escribe en el mismo idioma que el original.',
+    o.searchNow ? 'Antes de escribir, haz como mucho 3 búsquedas web rápidas sobre el tema (contexto, datos oficiales, informes de ONG o prensa reconocida). No abras páginas: usa los resultados. Incorpora solo datos relevantes y verificables, atribúyelos en el texto («según…») y pon cada fuente usada en «sources» (título y URL). Si no encuentras nada fiable, escribe sin ellos.' : '',
     o.research ? 'Usa la información de internet de abajo para ampliar y contextualizar el artículo: incorpora solo los datos relevantes y verificables, atribúyelos en el texto («según…») y no copies frases literales. Si algo no encaja con el original, no lo uses.' : '',
     extra ? `Indicaciones generales de la asociación: ${extra}` : '',
     o.notes ? `Indicaciones para esta entrada: ${o.notes}` : '',
@@ -264,13 +266,14 @@ Información de internet (con sus fuentes):
 <<<
 ${o.research}
 >>>` : ''}`;
-  return askStructured(aiCfg, [{ type: 'text', text: prompt }], Article, { effort: 'medium' });
+  // más rápido: esfuerzo bajo salvo cuando se pide desarrollar más el texto
+  return askStructured(aiCfg, [{ type: 'text', text: prompt }], Article, { effort: o.length === 'longer' ? 'medium' : 'low', web: !!o.searchNow });
 }
 
 // --- Buscar en internet para ampliar un artículo ------------------------------------
 // Devuelve { notes, sources: [{ title, url }] }. Cada proveedor usa su propia búsqueda web.
 const RESEARCH_PROMPT = (title, text) => `Busca en internet información fiable y actual que sirva para ampliar y contextualizar esta publicación de una asociación (contexto, datos oficiales, antecedentes, informes de ONG o prensa reconocida).
-Devuelve entre 4 y 10 puntos breves con hechos verificables, cada uno con su fuente. No inventes nada; si no encuentras información fiable, dilo.
+Haz como mucho 3 búsquedas y no abras páginas: usa los resultados. Devuelve entre 4 y 6 puntos breves con hechos verificables, cada uno con su fuente. No inventes nada; si no encuentras información fiable, dilo.
 Al final, añade una línea «FUENTES:» y debajo una fuente por línea con el formato «Título — URL».
 
 Título: ${title}
@@ -306,7 +309,7 @@ async function research(aiCfg, { title, text }) {
           model: c.model, max_tokens: 16000,
           ...(fallback ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' } : {}),
           ...(CLAUDE_EFFORT.test(c.model) ? { output_config: { effort: 'low' } } : {}),
-          tools: [{ type: toolType, name: 'web_search', max_uses: 5 }],
+          tools: [{ type: toolType, name: 'web_search', max_uses: 3 }],
           messages,
         });
         if (r.stop_reason === 'refusal') throw new Error('La IA no ha podido hacer esta búsqueda');
@@ -406,4 +409,6 @@ ${html}
   return askStructured(aiCfg, [{ type: 'text', text: prompt }], Rewrite).then((r) => r.html);
 }
 
-module.exports = { research, rewrite, setCliLog, PROVIDERS, askStructured, listModels, testConnection, improveArticle, altTexts };
+const isCli = (aiCfg) => !!PROVIDERS[aiCfg?.active]?.cli;
+
+module.exports = { isCli, research, rewrite, setCliLog, PROVIDERS, askStructured, listModels, testConnection, improveArticle, altTexts };
