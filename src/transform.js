@@ -7,6 +7,7 @@
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const HASHTAG = /#([\p{L}\p{N}_]+)/gu;
 const DEFAULT_FOOTER = 'Publicado originalmente en {redes}.';
+const SAFE_COLOR = /^(#[0-9a-f]{3,8}|rgba?\([\d.,\s%]+\))$/i;
 const NET = { instagram: 'Instagram', facebook: 'Facebook' };
 
 function extractTags(text) {
@@ -51,8 +52,9 @@ const mediaKey = (m) => (m.type === 'video' ? m.videoUrl || m.path || m.url : m.
 
 const para = (html) => `<!-- wp:paragraph -->\n<p>${html}</p>\n<!-- /wp:paragraph -->`;
 
-function videoBlock(v) {
-  return `<!-- wp:video {"id":${v.id}} -->\n<figure class="wp-block-video"><video controls preload="metadata" src="${v.url}"></video></figure>\n<!-- /wp:video -->`;
+function videoBlock(v, cap = '') {
+  const c = cap && sanitizeParagraphs(cap).join('<br>');
+  return `<!-- wp:video${v.id ? ` {"id":${v.id}}` : ''} -->\n<figure class="wp-block-video"><video controls preload="metadata" src="${esc(v.url)}"></video>${c ? `<figcaption class="wp-element-caption">${c}</figcaption>` : ''}</figure>\n<!-- /wp:video -->`;
 }
 
 function embedBlock(url, provider) {
@@ -95,10 +97,19 @@ function sanitizeParagraphs(html) {
     .replace(/<\/(p|div|h[1-6]|li|blockquote)>/gi, '\n\n')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<(\/?)(b|strong)\b[^>]*>/gi, '<$1strong>')
-    .replace(/<(\/?)(i|em)\b[^>]*>/gi, '<$1em>');
-  // Enlaces: solo href http(s) o mailto
-  h = h.replace(/<a\b[^>]*?href\s*=\s*"([^"]*)"[^>]*>/gi, (_m, href) => (/^(https?:|mailto:)/i.test(href) ? `<a href="${esc(href.replace(/&amp;/g, '&'))}">` : '<a>'));
-  h = h.replace(/<(?!\/?(strong|em|a)\b)[^>]*>/gi, ''); // el resto de etiquetas fuera
+    .replace(/<(\/?)(i|em)\b[^>]*>/gi, '<$1em>')
+    .replace(/<(\/?)(s|strike|del)\b[^>]*>/gi, '<$1s>')
+    .replace(/<(\/?)(u|code|sub|sup)\b[^>]*>/gi, '<$1$2>');
+  // Enlaces: solo href http(s), mailto, tel o un ancla de la propia entrada
+  h = h.replace(/<a\b[^>]*?href\s*=\s*"([^"]*)"[^>]*>/gi, (_m, href) => (/^(https?:|mailto:|tel:|#[\w-]+$)/i.test(href) ? `<a href="${esc(href.replace(/&amp;/g, '&'))}">` : '<a>'));
+  // Color y resaltado del texto (formato «has-inline-color» de WordPress)
+  h = h.replace(/<mark\b[^>]*>/gi, (m) => {
+    const st = (m.match(/style\s*=\s*"([^"]*)"/i) || [])[1] || '';
+    const val = (k) => { const v = (st.match(new RegExp('(?:^|;)\\s*' + k + '\\s*:\\s*([^;]+)', 'i')) || [])[1]?.trim(); return v && SAFE_COLOR.test(v) ? v : ''; };
+    const bg = val('background-color'), fg = val('color');
+    return `<mark style="background-color:${bg || 'rgba(0, 0, 0, 0)'}${fg ? ';color:' + fg : ''}" class="has-inline-color">`;
+  });
+  h = h.replace(/<(?!\/?(strong|em|a|s|u|code|sub|sup|mark)\b)[^>]*>/gi, ''); // el resto de etiquetas fuera
   h = h.replace(/<a>([\s\S]*?)<\/a>/gi, '$1');
   return h.split(/\n\s*\n/).map((p) => p.trim()).filter((p) => p.replace(/<[^>]+>|&nbsp;|\s/g, '')).map((p) => p.replace(/\n/g, '<br>'));
 }
@@ -192,25 +203,130 @@ function carouselBlock(b) {
   return `<!-- wp:html -->\n<div class="ecos-carrusel" id="${id}"><style>${css}</style>${figs}</div>\n<!-- /wp:html -->`;
 }
 
+// Estilos de bloque (alineación, tamaño, fuente, colores) con los atributos estándar de WordPress
+const FONTS = {
+  serif: 'Georgia, Times New Roman, serif', sans: 'Helvetica Neue, Arial, sans-serif', round: 'Trebuchet MS, Segoe UI, sans-serif',
+  mono: 'Courier New, monospace', hand: 'Segoe Print, Comic Sans MS, cursive',
+};
+function blockStyle(b, { alignKey = 'align', align = true, dropCap = false } = {}) {
+  const attrs = {}, cls = [], css = [];
+  if (align && ['center', 'right', 'justify'].includes(b.align)) { attrs[alignKey] = b.align; cls.push('has-text-align-' + b.align); }
+  if (dropCap && b.dropCap) { attrs.dropCap = true; cls.push('has-drop-cap'); }
+  const st = {};
+  const color = SAFE_COLOR.test(b.color || '') && b.color, bg = SAFE_COLOR.test(b.bg || '') && b.bg;
+  if (color || bg) {
+    st.color = {};
+    if (color) { st.color.text = color; cls.push('has-text-color'); css.push('color:' + color); }
+    if (bg) { st.color.background = bg; cls.push('has-background'); css.push('background-color:' + bg); }
+  }
+  const size = /^\d{1,3}px$/.test(b.size || '') && b.size, font = FONTS[b.font];
+  if (size || font) {
+    st.typography = {};
+    if (font) { st.typography.fontFamily = font; css.push('font-family:' + font); }
+    if (size) { st.typography.fontSize = size; css.push('font-size:' + size); }
+  }
+  if (Object.keys(st).length) attrs.style = st;
+  const json = Object.keys(attrs).length ? ' ' + JSON.stringify(attrs) : '';
+  return { json, attrs, cls: cls.length ? ' ' + cls.join(' ') : '', style: css.length ? ` style="${css.join(';')}"` : '' };
+}
+
+// Anclas de los títulos (para el índice): «Qué hicimos» → «que-hicimos»
+const slug = (html) => html.replace(/<[^>]+>/g, '').replace(/&[a-z]+;/g, ' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'seccion';
+function headingAnchors(blocks) {
+  const used = new Map(), out = new Map();
+  for (const b of blocks) {
+    if (b.type !== 'heading' || !inline(b.html || '')) continue;
+    const base = slug(b.html); const n = (used.get(base) || 0) + 1; used.set(base, n);
+    out.set(b.id, n > 1 ? `${base}-${n}` : base);
+  }
+  return out;
+}
+
+// Vídeos y contenidos de otras webs (WordPress los inserta con oEmbed a partir del enlace)
+const VIDEO_PROVIDERS = ['youtube', 'vimeo', 'dailymotion', 'tiktok', 'videopress'];
+function embedFull(b) {
+  const prov = (b.provider || '').replace(/[^a-z-]/g, '');
+  const video = VIDEO_PROVIDERS.includes(prov);
+  const aspect = video && prov !== 'tiktok' ? ' wp-embed-aspect-16-9 wp-has-aspect-ratio' : '';
+  const attrs = { url: b.url, type: video ? 'video' : 'rich', providerNameSlug: prov || 'embed-handler' };
+  if (video) attrs.responsive = true;
+  if (aspect) attrs.className = aspect.trim();
+  const cap = b.caption && inline(b.caption) ? `<figcaption class="wp-element-caption">${inline(b.caption)}</figcaption>` : '';
+  return `<!-- wp:embed ${JSON.stringify(attrs)} -->\n<figure class="wp-block-embed is-type-${attrs.type} is-provider-${attrs.providerNameSlug} wp-block-embed-${attrs.providerNameSlug}${aspect}"><div class="wp-block-embed__wrapper">\n${esc(b.url)}\n</div>${cap}</figure>\n<!-- /wp:embed -->`;
+}
+
+function tableBlock(b) {
+  const rows = (b.rows || []).filter((r) => r.length);
+  if (!rows.length) return '';
+  const cell = (tag, h) => `<${tag}>${inline(h || '')}</${tag}>`;
+  const head = b.head ? `<thead><tr>${rows[0].map((c) => cell('th', c)).join('')}</tr></thead>` : '';
+  const body = (b.head ? rows.slice(1) : rows).map((r) => `<tr>${r.map((c) => cell('td', c)).join('')}</tr>`).join('');
+  const attrs = { hasFixedLayout: false }; if (b.stripes) attrs.className = 'is-style-stripes';
+  return `<!-- wp:table ${JSON.stringify(attrs)} -->\n<figure class="wp-block-table${b.stripes ? ' is-style-stripes' : ''}"><table>${head}<tbody>${body}</tbody></table>${b.caption && inline(b.caption) ? `<figcaption class="wp-element-caption">${inline(b.caption)}</figcaption>` : ''}</figure>\n<!-- /wp:table -->`;
+}
+
+function buttonsBlock(b) {
+  const text = inline(b.html || '');
+  if (!text) return '';
+  const href = /^(https?:|mailto:|tel:|#)/i.test(b.url || '') ? ` href="${esc(b.url)}"` : '';
+  const just = ['center', 'right'].includes(b.align) ? { layout: { type: 'flex', justifyContent: b.align } } : null;
+  const outline = b.variant === 'outline';
+  return `<!-- wp:buttons${just ? ' ' + JSON.stringify(just) : ''} -->\n<div class="wp-block-buttons"><!-- wp:button${outline ? ' {"className":"is-style-outline"}' : ''} -->\n<div class="wp-block-button${outline ? ' is-style-outline' : ''}"><a class="wp-block-button__link wp-element-button"${href}>${text}</a></div>\n<!-- /wp:button --></div>\n<!-- /wp:buttons -->`;
+}
+
 function composeBlocks(blocks) {
   const out = [];
+  const anchors = headingAnchors(blocks);
   for (const b of blocks) {
     switch (b.type) {
-      case 'paragraph': for (const p of sanitizeParagraphs(b.html)) out.push(para(p)); break;
-      case 'heading': {
-        const l = [2, 3, 4].includes(b.level) ? b.level : 2;
-        if (inline(b.html)) out.push(`<!-- wp:heading${l === 2 ? '' : ` {"level":${l}}`} -->\n<h${l} class="wp-block-heading">${inline(b.html)}</h${l}>\n<!-- /wp:heading -->`);
+      case 'paragraph': {
+        const st = blockStyle(b, { dropCap: true });
+        for (const p of sanitizeParagraphs(b.html)) out.push(`<!-- wp:paragraph${st.json} -->\n<p${st.cls ? ` class="${st.cls.trim()}"` : ''}${st.style}>${p}</p>\n<!-- /wp:paragraph -->`);
         break;
       }
-      case 'quote':
+      case 'heading': {
+        const l = [2, 3, 4, 5].includes(b.level) ? b.level : 2;
         if (!inline(b.html)) break;
-        out.push(`<!-- wp:quote -->\n<blockquote class="wp-block-quote">${sanitizeParagraphs(b.html).map(para).join('\n')}${b.cite ? `<cite>${inline(b.cite)}</cite>` : ''}</blockquote>\n<!-- /wp:quote -->`);
+        const st = blockStyle(b, { alignKey: 'textAlign' });
+        const attrs = { ...(l === 2 ? {} : { level: l }), ...st.attrs };
+        const id = anchors.get(b.id);
+        out.push(`<!-- wp:heading${Object.keys(attrs).length ? ' ' + JSON.stringify(attrs) : ''} -->\n<h${l} class="wp-block-heading${st.cls}"${id ? ` id="${id}"` : ''}${st.style}>${inline(b.html)}</h${l}>\n<!-- /wp:heading -->`);
         break;
+      }
+      case 'quote': {
+        if (!inline(b.html)) break;
+        const cite = b.cite && inline(b.cite) ? `<cite>${inline(b.cite)}</cite>` : '';
+        const st = blockStyle(b, { align: false });
+        if (b.pull) { // cita destacada (centrada y grande)
+          out.push(`<!-- wp:pullquote${st.json} -->\n<figure class="wp-block-pullquote${st.cls}"${st.style}><blockquote><p>${sanitizeParagraphs(b.html).join('<br>')}</p>${cite}</blockquote></figure>\n<!-- /wp:pullquote -->`);
+        } else {
+          out.push(`<!-- wp:quote${st.json} -->\n<blockquote class="wp-block-quote${st.cls}"${st.style}>${sanitizeParagraphs(b.html).map(para).join('\n')}${cite}</blockquote>\n<!-- /wp:quote -->`);
+        }
+        break;
+      }
       case 'list': {
         const items = (b.items || []).map(inline).filter(Boolean);
         if (!items.length) break;
         const tag = b.ordered ? 'ol' : 'ul';
-        out.push(`<!-- wp:list${b.ordered ? ' {"ordered":true}' : ''} -->\n<${tag} class="wp-block-list">${items.map((i) => `<!-- wp:list-item -->\n<li>${i}</li>\n<!-- /wp:list-item -->`).join('\n')}</${tag}>\n<!-- /wp:list -->`);
+        const st = blockStyle(b, { align: false });
+        const attrs = { ...(b.ordered ? { ordered: true } : {}), ...st.attrs };
+        out.push(`<!-- wp:list${Object.keys(attrs).length ? ' ' + JSON.stringify(attrs) : ''} -->\n<${tag} class="wp-block-list${st.cls}"${st.style}>${items.map((i) => `<!-- wp:list-item -->\n<li>${i}</li>\n<!-- /wp:list-item -->`).join('\n')}</${tag}>\n<!-- /wp:list -->`);
+        break;
+      }
+      case 'table': out.push(tableBlock(b)); break;
+      case 'buttons': out.push(buttonsBlock(b)); break;
+      case 'spacer': { const h = Math.max(8, Math.min(200, Number(b.height) || 40)); out.push(`<!-- wp:spacer {"height":"${h}px"} -->\n<div style="height:${h}px" aria-hidden="true" class="wp-block-spacer"></div>\n<!-- /wp:spacer -->`); break; }
+      case 'details': {
+        if (!inline(b.summary || '')) break;
+        out.push(`<!-- wp:details -->\n<details class="wp-block-details"><summary>${inline(b.summary)}</summary>${sanitizeParagraphs(b.html).map(para).join('\n')}</details>\n<!-- /wp:details -->`);
+        break;
+      }
+      case 'toc': {
+        const items = blocks.filter((h) => h.type === 'heading' && anchors.has(h.id) && (h.level || 2) <= 3);
+        if (!items.length) break;
+        const head = b.title && inline(b.title) ? `<!-- wp:paragraph -->\n<p><strong>${inline(b.title)}</strong></p>\n<!-- /wp:paragraph -->\n\n` : '';
+        out.push(head + `<!-- wp:list -->\n<ul class="wp-block-list">${items.map((h) => `<!-- wp:list-item -->\n<li><a href="#${anchors.get(h.id)}">${inline(h.html).replace(/<[^>]+>/g, '')}</a></li>\n<!-- /wp:list-item -->`).join('\n')}</ul>\n<!-- /wp:list -->`);
         break;
       }
       case 'image': if (b.img) out.push(imageBlockFull(b.img, b.caption)); break;
@@ -229,8 +345,8 @@ function composeBlocks(blocks) {
         out.push(`<!-- wp:media-text {${b.right ? '"mediaPosition":"right",' : ''}"mediaId":${b.img.id},"mediaLink":"${esc(b.img.url)}","mediaType":"image"} -->\n<div class="wp-block-media-text${right} is-stacked-on-mobile"><figure class="wp-block-media-text__media"><img src="${esc(b.img.url)}" alt="${esc(b.img.alt || '')}" class="wp-image-${b.img.id} size-full"/></figure><div class="wp-block-media-text__content">${text}</div></div>\n<!-- /wp:media-text -->`);
         break;
       }
-      case 'video': if (b.video) out.push(videoBlock(b.video)); break;
-      case 'embed': if (b.url) out.push(embedBlock(b.url, b.provider || 'instagram')); break;
+      case 'video': if (b.video) out.push(videoBlock(b.video, b.caption)); break;
+      case 'embed': if (b.url) out.push(b.provider === 'instagram' || b.provider === 'facebook' || !b.provider ? embedBlock(b.url, b.provider || 'instagram') : embedFull(b)); break;
       case 'separator': out.push('<!-- wp:separator -->\n<hr class="wp-block-separator has-alpha-channel-opacity"/>\n<!-- /wp:separator -->'); break;
       default: break;
     }
@@ -275,4 +391,4 @@ function mergeDuplicates(posts) {
 // Claves de todas las versiones de una publicación (para marcarla como exportada)
 const postKeys = (p) => [p.source + ':' + p.id, ...(p.alsoOn || []).map((a) => a.source + ':' + a.id)];
 
-module.exports = { composeBlocks, sectionsToBlocks, blockImages, buildDraft, composeContent, sanitizeParagraphs, summaryTitle, extractTags, mediaKey, makeTitle, tidyTitle, mergeDuplicates, postKeys, DEFAULT_FOOTER };
+module.exports = { FONTS, VIDEO_PROVIDERS, composeBlocks, sectionsToBlocks, blockImages, buildDraft, composeContent, sanitizeParagraphs, summaryTitle, extractTags, mediaKey, makeTitle, tidyTitle, mergeDuplicates, postKeys, DEFAULT_FOOTER };

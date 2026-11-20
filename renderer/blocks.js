@@ -14,9 +14,46 @@
     image: { icon: 'image', name: t('Imagen') }, gallery: { icon: 'grid_view', name: t('Galería') },
     carousel: { icon: 'view_carousel', name: t('Carrusel') }, mediatext: { icon: 'vertical_split', name: t('Imagen y texto') },
     quote: { icon: 'format_quote', name: t('Cita') }, list: { icon: 'format_list_bulleted', name: t('Lista') },
-    video: { icon: 'movie', name: t('Vídeo') }, embed: { icon: 'smart_display', name: t('Vídeo de la red social') },
-    separator: { icon: 'horizontal_rule', name: t('Separador') },
+    video: { icon: 'movie', name: t('Vídeo') }, embed: { icon: 'smart_display', name: t('Vídeo o contenido de otra web') },
+    separator: { icon: 'horizontal_rule', name: t('Separador') }, table: { icon: 'table', name: t('Tabla') },
+    buttons: { icon: 'smart_button', name: t('Botón') }, spacer: { icon: 'height', name: t('Espacio') },
+    details: { icon: 'expand_circle_down', name: t('Desplegable') }, toc: { icon: 'toc', name: t('Índice') },
   });
+  const TEXT_TYPES = ['paragraph', 'heading', 'quote', 'list'];
+
+  // Enlaces de vídeo y otras webs → bloque «embed» (WordPress los inserta con oEmbed)
+  const EMBEDS = [
+    { id: 'youtube', name: 'YouTube', re: /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/)|youtu\.be\/)([\w-]{11})/i, player: (m) => `https://www.youtube-nocookie.com/embed/${m[1]}` },
+    { id: 'vimeo', name: 'Vimeo', re: /vimeo\.com\/(?:video\/|channels\/[\w-]+\/)?(\d+)/i, player: (m) => `https://player.vimeo.com/video/${m[1]}` },
+    { id: 'dailymotion', name: 'Dailymotion', re: /(?:dailymotion\.com\/video|dai\.ly)\/([a-z0-9]+)/i, player: (m) => `https://www.dailymotion.com/embed/video/${m[1]}` },
+    { id: 'tiktok', name: 'TikTok', re: /tiktok\.com\/.+\/video\/\d+/i },
+    { id: 'instagram', name: 'Instagram', re: /instagram\.com\/(?:p|reel|tv)\//i },
+    { id: 'facebook', name: 'Facebook', re: /(?:facebook\.com|fb\.watch)\//i },
+    { id: 'twitter', name: 'X (Twitter)', re: /(?:twitter|x)\.com\/\w+\/status\/\d+/i },
+    { id: 'spotify', name: 'Spotify', re: /open\.spotify\.com\/(track|album|playlist|episode|show)\/(\w+)/i, player: (m) => `https://open.spotify.com/embed/${m[1]}/${m[2]}` },
+    { id: 'soundcloud', name: 'SoundCloud', re: /soundcloud\.com\/[\w-]+\/[\w-]+/i },
+  ];
+  const detectEmbed = (url) => {
+    const u = String(url || '').trim();
+    if (!/^https?:\/\/\S+$/i.test(u)) return null;
+    if (/\.(mp4|webm|mov|m4v|ogv)(\?.*)?$/i.test(u)) return { file: true, url: u };
+    for (const p of EMBEDS) { const m = u.match(p.re); if (m) return { provider: p.id, name: p.name, url: u, player: p.player?.(m) }; }
+    return null;
+  };
+
+  // Aspecto de un bloque de texto en el editor (igual que lo pintará la web)
+  const FONTS = { serif: 'Georgia, Times New Roman, serif', sans: 'Helvetica Neue, Arial, sans-serif', round: 'Trebuchet MS, Segoe UI, sans-serif', mono: 'Courier New, monospace', hand: 'Segoe Print, Comic Sans MS, cursive' };
+  function applyStyle(el, b) {
+    if (!el) return;
+    el.style.textAlign = ['center', 'right', 'justify'].includes(b.align) ? b.align : '';
+    el.style.fontSize = b.size || '';
+    el.style.fontFamily = FONTS[b.font] || '';
+    el.style.color = b.color || '';
+    el.style.backgroundColor = b.bg || '';
+    el.style.padding = b.bg ? '14px 18px' : '';
+    el.style.borderRadius = b.bg ? '10px' : '';
+    el.classList.toggle('drop-cap', !!b.dropCap);
+  }
 
   const E = {
     draft: null, media: [], onChange: () => {}, onOpenMedia: () => {},
@@ -56,6 +93,12 @@
       if (type === 'mediatext') { b.img = null; b.html = ''; b.right = false; }
       if (type === 'image') { b.img = null; b.caption = ''; }
       if (type === 'video') b.video = null;
+      if (type === 'embed') { b.url = ''; b.provider = ''; b.caption = ''; }
+      if (type === 'table') { b.rows = [['', '', ''], ['', '', ''], ['', '', '']]; b.head = true; b.stripes = false; }
+      if (type === 'buttons') { b.html = ''; b.url = ''; b.align = 'left'; b.variant = 'fill'; }
+      if (type === 'spacer') b.height = 40;
+      if (type === 'details') { b.summary = ''; b.html = ''; }
+      if (type === 'toc') b.title = t('En esta entrada');
       return Object.assign(b, extra);
     },
     insertAt(i, block, focus = true) {
@@ -85,9 +128,10 @@
       }
       // las imágenes no se arrastran «como archivo» (lo hace su contenedor)
       $$('#editor img').forEach((im) => { im.draggable = false; });
-      $('#ed-count').textContent = t('{n} bloques', { n: this.draft.blocks.length });
+      window.FormatBar?.review();
       $('#ed-undo').disabled = !this.undo.length; $('#ed-redo').disabled = !this.redo.length;
       this.renderMedia();
+      if (this.active && !document.contains(this.active.el)) { this.active = null; window.FormatBar?.update(); }
     },
 
     // --- Arrastrar fotos ---------------------------------------------------------------
@@ -226,20 +270,92 @@
       el.contentEditable = 'true'; el.className = 'rt' + (opts.cls ? ' ' + opts.cls : ''); el.dataset.ph = placeholder;
       el.innerHTML = html || '';
       let snap = false;
-      el.oninput = () => { if (!snap) { this.snapshot(); snap = true; } onInput(el.innerHTML); this.onChange(); };
+      el.oninput = () => { if (!snap) { this.snapshot(); snap = true; } onInput(el.innerHTML); this.onChange(); if (opts.block?.type === 'heading') this.refreshToc(); };
       el.onblur = () => { snap = false; };
-      el.onpaste = (e) => { e.preventDefault(); document.execCommand('insertText', false, e.clipboardData.getData('text/plain')); };
+      el.onfocus = () => { if (opts.block) this.setActive(opts.block, el, opts.styleEl); };
+      el.onpaste = (e) => {
+        e.preventDefault();
+        const text = e.clipboardData.getData('text/plain');
+        const url = text.trim();
+        const sel = getSelection();
+        // Un enlace pegado sobre texto seleccionado lo convierte en enlace
+        if (/^https?:\/\/\S+$/i.test(url) && sel.rangeCount && !sel.isCollapsed) { document.execCommand('createLink', false, url); return; }
+        // Un enlace de vídeo pegado en un párrafo vacío se convierte en el vídeo
+        const emb = opts.block?.type === 'paragraph' && !el.textContent.trim() ? detectEmbed(url) : null;
+        if (emb) { this.replaceBlock(opts.block, emb.file ? this.create('video', { video: { url: emb.url } }) : this.create('embed', { url: emb.url, provider: emb.provider })); return; }
+        document.execCommand('insertText', false, text);
+      };
       el.onkeydown = (e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); const u = prompt(t('Dirección del enlace (https://…)')); if (u) document.execCommand('createLink', false, u); }
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); window.FormatBar?.link(); return; }
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'u') { e.preventDefault(); document.execCommand('underline'); return; }
+        if (opts.block?.type === 'paragraph' && this.shortcut(e, el, opts.block)) return;
         opts.onKey?.(e, el);
       };
       return el;
     },
 
+    // --- Bloque activo (para la barra de formato) ------------------------------------------
+    active: null,
+    setActive(b, el, styleEl) { this.active = { b, el, styleEl: styleEl || el }; window.FormatBar?.update(); },
+    replaceBlock(b, nb, focus = true) {
+      const i = this.draft.blocks.indexOf(b);
+      if (i < 0) return;
+      this.change(() => this.draft.blocks.splice(i, 1, nb));
+      if (focus) this.focus(nb.id);
+    },
+    // Atajos al estilo Markdown al principio de un párrafo: «## », «- », «1. », «> », «---» y «/» para el menú
+    shortcut(e, el, b) {
+      const txt = el.textContent;
+      if (e.key === '/' && !txt.trim()) {
+        e.preventDefault();
+        this.openMenu(el, (type) => this.replaceBlock(b, this.create(type)));
+        return true;
+      }
+      if (e.key === 'Enter' && /^\s*(---|\*\*\*)\s*$/.test(txt)) { e.preventDefault(); this.replaceBlock(b, this.create('separator'), false); return true; }
+      if (e.key !== ' ') return false;
+      const sel = getSelection();
+      if (!sel.rangeCount) return false;
+      const r = document.createRange(); r.selectNodeContents(el); r.setEnd(sel.getRangeAt(0).startContainer, sel.getRangeAt(0).startOffset);
+      const before = r.toString();
+      const map = { '#': ['heading', { level: 2 }], '##': ['heading', { level: 2 }], '###': ['heading', { level: 3 }], '####': ['heading', { level: 4 }],
+        '-': ['list', {}], '*': ['list', {}], '1.': ['list', { ordered: true }], '>': ['quote', {}] };
+      const hit = map[before];
+      if (!hit) return false;
+      e.preventDefault();
+      const rest = el.innerHTML.replace(/^(\s|&nbsp;)*(#{1,4}|-|\*|1\.|&gt;)/, '').trim();
+      const nb = this.create(hit[0], hit[1]);
+      if (hit[0] === 'list') nb.items = [rest]; else nb.html = rest;
+      this.replaceBlock(b, nb);
+      return true;
+    },
+    // Convierte un bloque de texto en otro tipo conservando el texto y su estilo
+    convert(b, type, extra = {}) {
+      const text = b.type === 'list' ? (b.items || []).join('<br>') : b.html || '';
+      const nb = this.create(type, extra);
+      for (const k of ['align', 'size', 'font', 'color', 'bg']) if (b[k]) nb[k] = b[k];
+      if (type === 'list') nb.items = b.type === 'list' ? b.items : text.split(/<br\s*\/?>/i).filter((x) => x.replace(/<[^>]+>/g, '').trim()).concat(text ? [] : ['']);
+      else nb.html = text;
+      if (type === 'list' && !nb.items.length) nb.items = [''];
+      if (type === 'quote' && b.type === 'quote') { nb.cite = b.cite; }
+      this.replaceBlock(b, nb);
+    },
+    refreshToc() {
+      const heads = this.draft.blocks.filter((h) => h.type === 'heading' && (h.level || 2) <= 3 && (h.html || '').replace(/<[^>]+>/g, '').trim());
+      $$('.toc-list').forEach((ul) => {
+        ul.innerHTML = heads.length ? heads.map((h) => `<li class="lvl${h.level || 2}">${esc(h.html.replace(/<[^>]+>/g, ''))}</li>`).join('')
+          : `<li class="hint">${t('Añade títulos (H2 o H3) y aparecerán aquí.')}</li>`;
+      });
+    },
+    // Palabras y tiempo de lectura
+    stats() {
+      const words = this.plainText().split(/\s+/).filter(Boolean).length;
+      return { words, minutes: Math.max(1, Math.round(words / 200)) };
+    },
+
     body(b, i, body, extra) {
       const self = this;
-      const textBlock = (tag, cls) => this.editable(tag, b.html, t('Escribe aquí…'), (h) => (b.html = h), {
-        cls,
+      const textBlock = (tag, cls) => this.editable(tag, b.html, b.type === 'paragraph' ? t('Escribe aquí… (pulsa / para elegir un bloque)') : t('Escribe aquí…'), (h) => (b.html = h), {
+        cls, block: b,
         onKey(e, el) {
           // Intro al final de un párrafo crea otro; Retroceso en un bloque vacío lo borra
           if (b.type === 'paragraph' && e.key === 'Enter' && !e.shiftKey) {
@@ -256,20 +372,26 @@
       });
 
       switch (b.type) {
-        case 'paragraph': body.appendChild(textBlock('p')); break;
+        case 'paragraph': { const p = textBlock('p'); applyStyle(p, b); body.appendChild(p); break; }
 
         case 'heading': {
-          body.appendChild(textBlock('h' + b.level, 'h'));
-          extra.innerHTML = [2, 3, 4].map((l) => `<button class="lv ${b.level === l ? 'on' : ''}" data-l="${l}">H${l}</button>`).join('');
+          const h = textBlock('h' + b.level, 'h'); applyStyle(h, b);
+          body.appendChild(h);
+          extra.innerHTML = [2, 3, 4, 5].map((l) => `<button class="lv ${b.level === l ? 'on' : ''}" data-l="${l}">H${l}</button>`).join('');
           $$('.lv', extra).forEach((x) => (x.onclick = () => this.change(() => (b.level = Number(x.dataset.l)))));
           break;
         }
 
         case 'quote': {
           const q = document.createElement('blockquote');
-          q.appendChild(textBlock('p'));
-          q.appendChild(this.editable('cite', b.cite, t('Autor o fuente (opcional)'), (h) => (b.cite = h)));
+          if (b.pull) q.className = 'pull';
+          const qp = this.editable('p', b.html, t('Escribe aquí…'), (h) => (b.html = h), { cls: '', block: b, styleEl: q });
+          q.appendChild(qp);
+          q.appendChild(this.editable('cite', b.cite, t('Autor o fuente (opcional)'), (h) => (b.cite = h), { block: b, styleEl: q }));
+          applyStyle(q, b);
           body.appendChild(q);
+          extra.innerHTML = `<button class="lv ${!b.pull ? 'on' : ''}" data-p="0" title="${t('Cita normal')}"><span class="ms">format_quote</span></button><button class="lv ${b.pull ? 'on' : ''}" data-p="1" title="${t('Cita destacada (grande y centrada)')}"><span class="ms">format_quote</span>+</button>`;
+          $$('[data-p]', extra).forEach((x) => (x.onclick = () => this.change(() => (b.pull = x.dataset.p === '1'))));
           break;
         }
 
@@ -277,6 +399,7 @@
           const list = document.createElement(b.ordered ? 'ol' : 'ul');
           b.items.forEach((it, k) => {
             const li = this.editable('li', it, t('Elemento'), (h) => (b.items[k] = h), {
+              block: b, styleEl: list,
               onKey(e, el) {
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); self.change(() => b.items.splice(k + 1, 0, '')); requestAnimationFrame(() => $$(`.blk[data-id="${b.id}"] li`)[k + 1]?.focus()); }
                 if (e.key === 'Backspace' && !el.textContent.trim() && b.items.length > 1) { e.preventDefault(); self.change(() => b.items.splice(k, 1)); }
@@ -284,6 +407,7 @@
             });
             list.appendChild(li);
           });
+          applyStyle(list, b);
           body.appendChild(list);
           extra.innerHTML = `<button class="lv ${!b.ordered ? 'on' : ''}" data-o="0"><span class="ms">format_list_bulleted</span></button><button class="lv ${b.ordered ? 'on' : ''}" data-o="1"><span class="ms">format_list_numbered</span></button>`;
           $$('.lv', extra).forEach((x) => (x.onclick = () => this.change(() => (b.ordered = x.dataset.o === '1'))));
@@ -337,15 +461,113 @@
         }
 
         case 'video': {
-          if (!b.video) { body.appendChild(this.dropZone(t('Arrastra aquí un vídeo de la bandeja'), (m) => this.change(() => (b.video = m)), false, 'video')); break; }
+          if (!b.video) {
+            body.appendChild(this.dropZone(t('Arrastra aquí un vídeo de la bandeja'), (m) => this.change(() => (b.video = m)), false, 'video'));
+            body.appendChild(this.urlField(t('…o pega el enlace del vídeo (YouTube, Vimeo, TikTok, archivo .mp4…)'), (emb) => {
+              if (emb.file) this.change(() => (b.video = { url: emb.url }));
+              else this.replaceBlock(b, this.create('embed', { url: emb.url, provider: emb.provider }), false);
+            }));
+            break;
+          }
           const v = document.createElement('video');
           v.src = b.video.url; v.controls = true; v.preload = 'metadata'; if (b.video.poster) v.poster = b.video.poster;
           body.appendChild(v);
+          body.appendChild(this.editable('figcaption', b.caption, t('Pie del vídeo (opcional)'), (h) => (b.caption = h)));
           break;
         }
 
         case 'embed': {
-          body.innerHTML = `<div class="embed-box"><span class="ms fill">smart_display</span><div><b>${t('Vídeo de {r}', { r: b.provider === 'facebook' ? 'Facebook' : 'Instagram' })}</b><div class="hint">${t('Se insertará la publicación original con su vídeo.')}</div></div></div>`;
+          if (!b.url) {
+            body.appendChild(this.urlField(t('Pega el enlace (YouTube, Vimeo, TikTok, Spotify, X, Instagram…)'), (emb) => {
+              if (emb.file) this.replaceBlock(b, this.create('video', { video: { url: emb.url } }), false);
+              else this.change(() => { b.url = emb.url; b.provider = emb.provider; });
+            }, true));
+            break;
+          }
+          const emb = detectEmbed(b.url) || { name: b.provider === 'facebook' ? 'Facebook' : 'Instagram' };
+          if (emb.player) {
+            const fr = document.createElement('div');
+            fr.className = 'embed-frame' + (b.provider === 'spotify' ? ' audio' : '');
+            fr.innerHTML = `<iframe src="${esc(emb.player)}" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen loading="lazy"></iframe>`;
+            body.appendChild(fr);
+          } else {
+            body.innerHTML = `<div class="embed-box"><span class="ms fill">smart_display</span><div><b>${esc(emb.name || b.provider)}</b><div class="hint">${esc(b.url)}</div><div class="hint">${t('Tu web mostrará aquí el contenido original.')}</div></div></div>`;
+          }
+          if (!['instagram', 'facebook'].includes(b.provider) || b.caption) body.appendChild(this.editable('figcaption', b.caption, t('Pie (opcional)'), (h) => (b.caption = h)));
+          extra.innerHTML = `<button class="lv" data-u="1" title="${t('Cambiar enlace')}"><span class="ms">link</span></button>`;
+          $('[data-u]', extra).onclick = () => this.change(() => { b.url = ''; b.provider = ''; });
+          break;
+        }
+
+        case 'table': {
+          const tb = document.createElement('table');
+          tb.className = 'ed-table' + (b.stripes ? ' stripes' : '');
+          b.rows.forEach((row, r) => {
+            const tr = document.createElement('tr');
+            row.forEach((c, k) => {
+              const cell = this.editable(b.head && r === 0 ? 'th' : 'td', c, '', (h) => (b.rows[r][k] = h), {
+                block: b,
+                onKey(e) { if (e.key === 'Enter' && !e.shiftKey) e.preventDefault(); if (e.key === 'Tab') { e.preventDefault(); const cells = $$(`.blk[data-id="${b.id}"] [contenteditable]`); cells[cells.indexOf(e.target) + (e.shiftKey ? -1 : 1)]?.focus(); } },
+              });
+              tr.appendChild(cell);
+            });
+            tb.appendChild(tr);
+          });
+          body.appendChild(tb);
+          body.appendChild(this.editable('figcaption', b.caption, t('Pie de tabla (opcional)'), (h) => (b.caption = h)));
+          const cols = b.rows[0]?.length || 0;
+          extra.innerHTML = `<button class="lv" data-t="r+" title="${t('Añadir fila')}"><span class="ms">add_row_below</span></button>
+            <button class="lv" data-t="r-" title="${t('Quitar la última fila')}" ${b.rows.length < 2 ? 'disabled' : ''}><span class="ms">remove</span><span class="ms">table_rows</span></button>
+            <button class="lv" data-t="c+" title="${t('Añadir columna')}" ${cols >= 8 ? 'disabled' : ''}><span class="ms">add_column_right</span></button>
+            <button class="lv" data-t="c-" title="${t('Quitar la última columna')}" ${cols < 2 ? 'disabled' : ''}><span class="ms">remove</span><span class="ms">view_column</span></button>
+            <button class="lv ${b.head ? 'on' : ''}" data-t="h" title="${t('Primera fila como encabezado')}"><span class="ms">table_chart</span></button>
+            <button class="lv ${b.stripes ? 'on' : ''}" data-t="s" title="${t('Filas a rayas')}"><span class="ms">reorder</span></button>`;
+          const ops = { 'r+': () => b.rows.push(Array(cols).fill('')), 'r-': () => b.rows.pop(), 'c+': () => b.rows.forEach((r) => r.push('')), 'c-': () => b.rows.forEach((r) => r.pop()), h: () => (b.head = !b.head), s: () => (b.stripes = !b.stripes) };
+          $$('[data-t]', extra).forEach((x) => (x.onclick = () => this.change(ops[x.dataset.t])));
+          break;
+        }
+
+        case 'buttons': {
+          const wrap = document.createElement('div');
+          wrap.className = 'ed-btns'; wrap.style.justifyContent = b.align === 'center' ? 'center' : b.align === 'right' ? 'flex-end' : 'flex-start';
+          const btn = this.editable('span', b.html, t('Texto del botón'), (h) => (b.html = h), { cls: 'ed-btn' + (b.variant === 'outline' ? ' outline' : ''), block: b, onKey(e) { if (e.key === 'Enter') e.preventDefault(); } });
+          wrap.appendChild(btn);
+          body.appendChild(wrap);
+          const url = document.createElement('input');
+          url.className = 'ed-btn-url'; url.placeholder = t('Enlace del botón (https://…)'); url.value = b.url || '';
+          url.oninput = () => { b.url = url.value.trim(); this.onChange(); };
+          body.appendChild(url);
+          extra.innerHTML = ['left', 'center', 'right'].map((a) => `<button class="lv ${b.align === a ? 'on' : ''}" data-al="${a}"><span class="ms">format_align_${a}</span></button>`).join('')
+            + `<button class="lv ${b.variant !== 'outline' ? 'on' : ''}" data-v="fill" title="${t('Relleno')}"><span class="ms fill">smart_button</span></button><button class="lv ${b.variant === 'outline' ? 'on' : ''}" data-v="outline" title="${t('Contorno')}"><span class="ms">smart_button</span></button>`;
+          $$('[data-al]', extra).forEach((x) => (x.onclick = () => this.change(() => (b.align = x.dataset.al))));
+          $$('[data-v]', extra).forEach((x) => (x.onclick = () => this.change(() => (b.variant = x.dataset.v))));
+          break;
+        }
+
+        case 'spacer': {
+          body.innerHTML = `<div class="ed-spacer" style="height:${Number(b.height) || 40}px"><span>${Number(b.height) || 40} px</span></div>`;
+          extra.innerHTML = [20, 40, 80, 120].map((h) => `<button class="lv ${Number(b.height) === h ? 'on' : ''}" data-h="${h}">${h}</button>`).join('');
+          $$('[data-h]', extra).forEach((x) => (x.onclick = () => this.change(() => (b.height = Number(x.dataset.h)))));
+          break;
+        }
+
+        case 'details': {
+          const d = document.createElement('div');
+          d.className = 'ed-details';
+          const sum = this.editable('div', b.summary, t('Pregunta o título que se ve siempre'), (h) => (b.summary = h), { cls: 'ed-sum', block: b, onKey(e) { if (e.key === 'Enter') e.preventDefault(); } });
+          d.append(sum, this.editable('div', b.html, t('Contenido que se muestra al pulsar…'), (h) => (b.html = h), { cls: 'ed-det', block: b }));
+          body.appendChild(d);
+          break;
+        }
+
+        case 'toc': {
+          const box = document.createElement('div');
+          box.className = 'ed-toc';
+          box.appendChild(this.editable('div', b.title, t('Título del índice (opcional)'), (h) => (b.title = h), { cls: 'ed-toc-title', onKey(e) { if (e.key === 'Enter') e.preventDefault(); } }));
+          const ul = document.createElement('ul'); ul.className = 'toc-list';
+          box.appendChild(ul);
+          body.appendChild(box);
+          requestAnimationFrame(() => this.refreshToc());
           break;
         }
 
@@ -388,6 +610,23 @@
         });
       }
       return fig;
+    },
+
+    urlField(label, onOk, focus = false) {
+      const f = document.createElement('div');
+      f.className = 'url-field';
+      f.innerHTML = `<span class="ms">link</span><input placeholder="${esc(label)}"><button class="btn tonal small">${t('Insertar')}</button>`;
+      const inp = $('input', f);
+      const go = () => {
+        const emb = detectEmbed(inp.value);
+        if (!emb) { inp.classList.add('bad'); toast(t('Pega un enlace completo de YouTube, Vimeo, TikTok, Dailymotion, Spotify, SoundCloud, X, Instagram, Facebook o de un archivo de vídeo.')); return; }
+        onOk(emb);
+      };
+      $('button', f).onclick = go;
+      inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } };
+      inp.onpaste = () => setTimeout(() => { if (detectEmbed(inp.value)) go(); }, 0);
+      if (focus) requestAnimationFrame(() => inp.focus());
+      return f;
     },
 
     dropZone(label, onMedia, small = false, kind = 'image') {
@@ -445,7 +684,7 @@
     },
 
     plainText() {
-      return this.draft.blocks.map((b) => [b.html, b.cite, ...(b.items || [])].filter(Boolean).join('\n')).join('\n\n').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim();
+      return this.draft.blocks.map((b) => [b.summary, b.html, b.cite, ...(b.items || []), ...(b.rows || []).flat()].filter(Boolean).join('\n')).join('\n\n').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim();
     },
   };
 
@@ -459,5 +698,7 @@
     $$('#editor .over').forEach((x) => x.classList.remove('over'));
   }
   document.addEventListener('dragend', endDrag);
+  const toast = (m) => window.toast ? window.toast(m, true) : alert(m);
+  Object.assign(E, { detectEmbed, applyStyle, TEXT_TYPES, FONTS });
   window.BlockEditor = E;
 })();

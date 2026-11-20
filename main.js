@@ -381,6 +381,7 @@ handle('draft:publish', async (d) => {
 // --- IA ---
 handle('ai:article', (input) => ai.improveArticle(cfg.ai, { ...input, extra: cfg.aiInstructions || '' }));
 handle('ai:alts', (urls, context) => ai.altTexts(cfg.ai, urls, context));
+handle('ai:rewrite', (input) => ai.rewrite(cfg.ai, { ...input, extra: cfg.aiInstructions || '' }));
 
 // Selector de IA: cada proveedor guarda su clave, URL personalizada y modelo
 const aiProv = (id) => { if (!ai.PROVIDERS[id]) throw new Error('Proveedor desconocido'); cfg.ai = cfg.ai || { providers: {} }; cfg.ai.providers = cfg.ai.providers || {}; return (cfg.ai.providers[id] = cfg.ai.providers[id] || {}); };

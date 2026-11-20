@@ -36,6 +36,7 @@ async function refreshExported(force) {
 const prefs = () => ({ theme: 'system', zoom: 1, cards: 230, accent: '#3c6e5f', lang: 'es', checkNew: true, checkToken: true, ...(CFG.prefs || {}) });
 
 // ---------------------------------------------------------------- utilidades
+window.CFG_AI_READY = () => !!CFG.aiConfigured;
 function toast(msg, isError) {
   const el = $('#toast');
   el.textContent = msg; el.className = 'show' + (isError ? ' error' : '');
@@ -451,7 +452,7 @@ function openEditor() {
   if (!draft.blocks) draft.blocks = [];
   window.BlockEditor.mount(draft, {
     media: mediaPool(),
-    onChange: () => window.BlockEditor.renderMedia(),
+    onChange: () => { window.BlockEditor.renderMedia(); window.FormatBar.review(); },
     onOpenMedia: (m) => {
       const pool = mediaPool();
       openLightbox(pool.map((x) => ({ type: x.type, src: x.url, poster: x.poster })), Math.max(0, pool.findIndex((x) => x.id === m.id)));
@@ -610,7 +611,14 @@ document.addEventListener('keydown', (e) => {
 // Dentro de Ecos con los estilos reales de tu web (leídos de su portada); «Ver en mi web» guarda un
 // borrador y abre la vista previa de WordPress.
 $('#preview').onclick = (e) => busy(e.target, async () => {
-  const content = (await window.api.composeDraft(draft.blocks)).replace(/<!--[\s\S]*?-->/g, '');
+  let content = await window.api.composeDraft(draft.blocks);
+  // Lo que WordPress añade al mostrar la entrada: alineación de los botones y reproductores de vídeo
+  content = content.replace(/<!-- wp:buttons \{"layout":\{"type":"flex","justifyContent":"(center|right)"\}\} -->\n<div class="wp-block-buttons/g, (_m, j) => `<div class="wp-block-buttons is-content-justification-${j}`)
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<div class="wp-block-embed__wrapper">\n(\S+)\n<\/div>/g, (m, url) => {
+      const e = window.BlockEditor.detectEmbed(url.replace(/&amp;/g, '&'));
+      return e?.player ? `<div class="wp-block-embed__wrapper"><iframe src="${escHtml(e.player)}" style="width:100%;aspect-ratio:${/spotify/.test(e.player) ? '16/5' : '16/9'};border:0" allowfullscreen></iframe></div>` : m;
+    });
   const featured = draft.blocks.flatMap((b) => (b.img ? [b.img] : b.images || [])).find((i) => i.id === draft.featuredImageId);
   const cats = $$('#d-cats input:checked').map((i) => i.value);
   const date = new Date($('#d-keepdate').checked ? draft.date : Date.now()).toLocaleDateString(prefs().lang === 'en' ? 'en-GB' : 'es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -626,7 +634,17 @@ $('#preview').onclick = (e) => busy(e.target, async () => {
       .ecos-pv img,.ecos-pv video{max-width:100%;height:auto}
       .ecos-pv .ecos-meta{opacity:.7;font-size:.9em;margin-bottom:1.5em}
       .ecos-pv .ecos-featured{width:100%;border-radius:12px;margin-bottom:1.5em}
-      .ecos-pv .wp-block-embed{padding:18px;border:1px dashed #bbb;border-radius:10px;font-size:14px;word-break:break-all}
+      .ecos-pv .wp-block-embed:not(:has(iframe)){padding:18px;border:1px dashed #bbb;border-radius:10px;font-size:14px;word-break:break-all}
+      .has-text-align-center{text-align:center}.has-text-align-right{text-align:right}.has-text-align-justify{text-align:justify}
+      .has-background{padding:1.25em 2.375em}.has-drop-cap:first-letter{float:left;font-size:5.5em;line-height:.68;font-weight:100;margin:.05em .1em 0 0;text-transform:uppercase}
+      mark.has-inline-color{padding:0 .1em}
+      .wp-block-table table{width:100%;border-collapse:collapse}.wp-block-table td,.wp-block-table th{border:1px solid;padding:.5em}.wp-block-table.is-style-stripes tbody tr:nth-child(odd){background:#f0f0f0}
+      .wp-block-buttons{display:flex;gap:.5em;flex-wrap:wrap;margin:1.5em 0}.wp-block-buttons.is-content-justification-center{justify-content:center}.wp-block-buttons.is-content-justification-right{justify-content:flex-end}
+      .wp-block-button__link{display:inline-block;padding:.65em 1.4em;border-radius:9999px;background:#32373c;color:#fff;text-decoration:none}
+      .is-style-outline .wp-block-button__link{background:transparent;color:inherit;border:2px solid}
+      .wp-block-pullquote{text-align:center;border-block:4px solid;padding:2em 0;margin:2em 0;font-size:1.5em}.wp-block-pullquote blockquote{margin:0;border:0;padding:0}
+      .wp-block-details{border:1px solid #ddd;border-radius:10px;padding:.8em 1.1em;margin:1.5em 0}.wp-block-details summary{cursor:pointer;font-weight:600}
+      .wp-element-caption{font-size:.85em;opacity:.75;text-align:center}
     </style></head>
     <body class="${escHtml(site.bodyClass.replace(/\bhome\b|\bblog\b|\bpage\b/g, ''))} single single-post wp-embed-responsive">
     <main class="site-main"><article class="post type-post status-publish hentry ecos-pv">

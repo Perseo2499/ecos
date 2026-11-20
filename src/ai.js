@@ -251,4 +251,34 @@ async function altTexts(aiCfg, imageUrls, context = '') {
   return imageUrls.map((_, i) => r.alts.find((a) => a.index === i)?.alt || '');
 }
 
-module.exports = { setCliLog, PROVIDERS, askStructured, listModels, testConnection, improveArticle, altTexts };
+// --- Reescribir un bloque del editor ----------------------------------------------
+const Rewrite = z.object({ html: z.string().describe('El texto resultante en HTML en línea: solo <strong>, <em>, <a href> y <br>; sin <p> ni otras etiquetas') });
+const REWRITE = {
+  improve: 'Mejora la redacción: más clara, fluida y atractiva, sin cambiar el significado.',
+  fix: 'Corrige solo la ortografía, la gramática y la puntuación. No cambies el estilo ni las palabras correctas.',
+  shorter: 'Hazlo más breve (aprox. la mitad) conservando lo esencial.',
+  longer: 'Desarróllalo un poco más (aprox. el doble) con explicaciones y transiciones, sin inventar hechos, cifras, nombres ni citas.',
+  friendly: 'Reescríbelo con un tono más cercano y cálido.',
+  formal: 'Reescríbelo con un tono más formal e institucional.',
+  headline: 'Propón un título (encabezado) breve y atractivo para este fragmento, de menos de 70 caracteres, sin emojis.',
+};
+function rewrite(aiCfg, { html, action, title = '', kind = 'paragraph', extra = '' }) {
+  const how = REWRITE[action] || REWRITE.improve;
+  const prompt = `Eres editor del blog de una asociación. ${how}
+
+Reglas:
+- Escribe en el mismo idioma que el texto.
+- Mantén los enlaces (<a href>) y las negritas/cursivas importantes.
+- ${kind === 'list' ? 'Es una lista: separa cada elemento con <br> y no añadas viñetas ni números.' : 'Separa los párrafos con <br><br> si hay varios.'}
+${extra ? `- Indicaciones de la asociación: ${extra}
+` : ''}
+Título de la entrada: ${title}
+
+Texto:
+<<<
+${html}
+>>>`;
+  return askStructured(aiCfg, [{ type: 'text', text: prompt }], Rewrite).then((r) => r.html);
+}
+
+module.exports = { rewrite, setCliLog, PROVIDERS, askStructured, listModels, testConnection, improveArticle, altTexts };

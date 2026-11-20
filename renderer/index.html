@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data: file:; media-src * data: file: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data: file:; frame-src https://www.youtube-nocookie.com https://player.vimeo.com https://www.dailymotion.com https://open.spotify.com; media-src * data: file: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'">
 <title>Ecos</title>
 <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
 <link rel="stylesheet" href="styles.css">
@@ -107,6 +107,44 @@
           </div>
           <!-- Lienzo -->
           <div class="ed-canvas" id="ed-canvas">
+            <div id="fmt" class="fmt-bar off">
+              <select id="fmt-type" data-i18n-title title="Tipo de bloque">
+                <option value="paragraph" data-i18n>Párrafo</option><option value="h2" data-i18n>Título 2</option><option value="h3" data-i18n>Título 3</option>
+                <option value="h4" data-i18n>Título 4</option><option value="h5" data-i18n>Título 5</option><option value="quote" data-i18n>Cita</option>
+                <option value="ul" data-i18n>Lista</option><option value="ol" data-i18n>Lista numerada</option>
+              </select>
+              <select id="fmt-font" data-i18n-title title="Fuente">
+                <option value="" data-i18n>Fuente del tema</option><option value="serif" style="font-family:Georgia,serif" data-i18n>Serif clásica</option>
+                <option value="sans" style="font-family:Arial,sans-serif" data-i18n>Sin serifa</option><option value="round" style="font-family:'Trebuchet MS',sans-serif" data-i18n>Redondeada</option>
+                <option value="mono" style="font-family:'Courier New',monospace" data-i18n>Máquina de escribir</option><option value="hand" style="font-family:'Segoe Print','Comic Sans MS',cursive" data-i18n>Manuscrita</option>
+              </select>
+              <select id="fmt-size" data-i18n-title title="Tamaño del texto">
+                <option value="" data-i18n>Tamaño normal</option><option value="14px" data-i18n>Pequeño</option><option value="22px" data-i18n>Mediano</option>
+                <option value="28px" data-i18n>Grande</option><option value="36px" data-i18n>Muy grande</option><option value="48px" data-i18n>Enorme</option>
+              </select>
+              <span class="sep"></span>
+              <button data-cmd="bold" data-i18n-title title="Negrita (Ctrl+B)"><span class="ms">format_bold</span></button>
+              <button data-cmd="italic" data-i18n-title title="Cursiva (Ctrl+I)"><span class="ms">format_italic</span></button>
+              <button data-cmd="underline" data-i18n-title title="Subrayado (Ctrl+U)"><span class="ms">format_underlined</span></button>
+              <button data-cmd="strikeThrough" data-i18n-title title="Tachado"><span class="ms">format_strikethrough</span></button>
+              <span class="sep"></span>
+              <button data-x="link" data-i18n-title title="Enlace (Ctrl+K)"><span class="ms">link</span></button>
+              <button data-x="color" class="cbtn" data-i18n-title title="Color del texto"><span class="ms">format_color_text</span><i class="cbar"></i></button>
+              <button data-x="bg" class="cbtn" data-i18n-title title="Resaltado o fondo"><span class="ms">format_ink_highlighter</span><i class="cbar"></i></button>
+              <span class="sep"></span>
+              <button data-al="left" data-i18n-title title="Alinear a la izquierda"><span class="ms">format_align_left</span></button>
+              <button data-al="center" data-i18n-title title="Centrar"><span class="ms">format_align_center</span></button>
+              <button data-al="right" data-i18n-title title="Alinear a la derecha"><span class="ms">format_align_right</span></button>
+              <button data-al="justify" data-i18n-title title="Justificar"><span class="ms">format_align_justify</span></button>
+              <span class="sep"></span>
+              <button data-cmd="superscript" data-i18n-title title="Superíndice"><span class="ms">superscript</span></button>
+              <button data-cmd="subscript" data-i18n-title title="Subíndice"><span class="ms">subscript</span></button>
+              <button data-x="code" data-i18n-title title="Código"><span class="ms">code</span></button>
+              <button data-x="drop" data-i18n-title title="Letra capital (primera letra grande)"><span class="ms">text_fields</span></button>
+              <button data-x="clear" data-i18n-title title="Quitar formato"><span class="ms">format_clear</span></button>
+              <span class="sep"></span>
+              <button data-x="ai" class="ai-fmt" data-i18n-title title="IA para este bloque"><span class="ms">auto_awesome</span></button>
+            </div>
             <div class="ed-page">
               <div id="d-cover" class="cover"></div>
               <textarea id="d-title" class="title-input" rows="1" data-i18n-ph placeholder="Título"></textarea>
@@ -115,6 +153,8 @@
           </div>
           <!-- Ajustes de la entrada -->
           <div class="ed-side">
+            <div class="section-label" data-i18n>Revisión</div>
+            <div id="d-review" class="review"></div>
             <div class="field"><label data-i18n>Plantilla</label><select id="d-template"><option value="" data-i18n>Sin plantilla</option></select></div>
             <div class="field"><label data-i18n>Extracto</label><textarea id="d-excerpt" rows="3" data-i18n-ph placeholder="Resumen corto (opcional)"></textarea></div>
             <div class="ai-row">
@@ -570,8 +610,16 @@
   <button data-type="quote"><span class="ms">format_quote</span><span data-i18n>Cita</span></button>
   <button data-type="list"><span class="ms">format_list_bulleted</span><span data-i18n>Lista</span></button>
   <button data-type="video"><span class="ms">movie</span><span data-i18n>Vídeo</span></button>
+  <button data-type="embed"><span class="ms">smart_display</span><span data-i18n>Vídeo de un enlace</span></button>
+  <button data-type="table"><span class="ms">table</span><span data-i18n>Tabla</span></button>
+  <button data-type="buttons"><span class="ms">smart_button</span><span data-i18n>Botón</span></button>
+  <button data-type="details"><span class="ms">expand_circle_down</span><span data-i18n>Desplegable</span></button>
+  <button data-type="toc"><span class="ms">toc</span><span data-i18n>Índice</span></button>
+  <button data-type="spacer"><span class="ms">height</span><span data-i18n>Espacio</span></button>
   <button data-type="separator"><span class="ms">horizontal_rule</span><span data-i18n>Separador</span></button>
+  <p class="ins-tip" data-i18n>Truco: en un párrafo vacío escribe «/» para abrir este menú, «## » para un título, «- » para una lista o pega un enlace de YouTube.</p>
 </div>
+<div id="fmt-pop" class="fmt-pop hidden"></div>
 <div id="selbar" class="selbar"><span id="sel-count"></span><button id="sel-clear" class="btn text" data-i18n>Quitar selección</button><button id="make" class="btn filled" disabled><span class="ms">post_add</span><span data-i18n>Crear entrada</span></button></div>
 <div id="drop" class="drop hidden"><div><span class="ms fill">file_download</span><span data-i18n>Suelta aquí</span></div></div>
 <div id="toast"></div>
@@ -579,6 +627,7 @@
 <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
 <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
 <script src="blocks.js"></script>
+<script src="format.js"></script>
 <script src="renderer.js"></script>
 </body>
 </html>
