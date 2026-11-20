@@ -266,7 +266,7 @@
     'Modelo (opcional: si lo dejas vacío, usa el de la CLI)': 'Model (optional: leave empty to use the CLI default)',
     'Los botones de IA usarán {c}. Pulsa «Probar» para comprobarlo.': 'The AI buttons will use {c}. Click "Try it" to check.',
     // 1.2 (editor completo)
-    'Lista': 'Ready', 'Conectado': 'Connected', 'Sin configurar': 'Not set up', 'No conectado': 'Not connected',
+    'Abrir': 'Open', 'Cerrar': 'Close', 'Lista': 'Ready', 'Conectado': 'Connected', 'Sin configurar': 'Not set up', 'No conectado': 'Not connected',
     'Fecha de la entrada: {d}.': 'Post date: {d}.',
     'Tema Vinilo (negro con serigrafías)': 'Vinyl theme (black with silkscreen labels)', 'Serigrafías y paneles': 'Silkscreen labels and panels',
     'Vídeo o contenido de otra web': 'Video or content from another site',

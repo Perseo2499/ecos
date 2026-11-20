@@ -79,8 +79,8 @@ function renderStatus() {
 }
 
 // ---------------------------------------------------------------- Conexiones en desplegables
-// Cada conexión ocupa todo el ancho y se abre o cierra pulsando su cabecera. Al principio se abren las que
-// faltan por configurar; después se recuerda lo que dejó abierto cada persona.
+// Lista de conexiones, una encima de otra y a todo el ancho. Empiezan cerradas; cada una se abre o se cierra
+// pulsando su nombre o su flecha. Se recuerda lo que dejó abierto cada persona.
 const CONN = { 'f-meta': () => CFG.metaConnected, 'f-wp': () => CFG.wpConnected, 'ai-card': () => CFG.aiConfigured, 'dev-card': null };
 let connOpen = null;
 try { connOpen = JSON.parse(localStorage.getItem('ecos-conn-open') || 'null'); } catch { /* sin almacenamiento */ }
@@ -89,20 +89,22 @@ function renderConnStates() {
     const card = document.getElementById(id);
     if (!card) continue;
     const head = $('.card-head', card);
-    if (!head.querySelector('.conn-chev')) {
-      head.insertAdjacentHTML('beforeend', '<span class="conn-state"></span><span class="ms conn-chev">expand_more</span>');
-      head.setAttribute('role', 'button'); head.tabIndex = 0;
+    if (!head.querySelector('.conn-arrow')) {
+      head.insertAdjacentHTML('beforeend', '<span class="conn-state"></span><button type="button" class="conn-arrow" title=""><svg viewBox="0 0 1 1" width="18" height="18"><circle cx=".14" cy=".34" r=".08"/><circle cx=".32" cy=".5" r=".08"/><circle cx=".5" cy=".66" r=".08"/><circle cx=".68" cy=".5" r=".08"/><circle cx=".86" cy=".34" r=".08"/></svg></button>');
+      const name = $('h2', head);
+      name.classList.add('conn-name'); name.tabIndex = 0; name.setAttribute('role', 'button');
       const toggle = () => {
         card.classList.toggle('collapsed');
         connOpen = connOpen || {};
         connOpen[id] = !card.classList.contains('collapsed');
         try { localStorage.setItem('ecos-conn-open', JSON.stringify(connOpen)); } catch { /* nada */ }
       };
-      head.addEventListener('click', (e) => { if (!e.target.closest('a, button, input, select')) toggle(); });
-      head.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
-      const done = ok ? ok() : false;
-      card.classList.toggle('collapsed', connOpen && id in connOpen ? !connOpen[id] : !!done);
+      $('.conn-arrow', head).onclick = toggle;
+      name.onclick = toggle;
+      name.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } };
+      card.classList.toggle('collapsed', !(connOpen && connOpen[id]));
     }
+    $('.conn-arrow', head).title = card.classList.contains('collapsed') ? t('Abrir') : t('Cerrar');
     const st = $('.conn-state', head);
     if (!ok) { st.textContent = ''; continue; }
     const done = !!ok();
