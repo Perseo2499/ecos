@@ -746,18 +746,14 @@ document.addEventListener('keydown', (e) => {
 // ---------------------------------------------------------------- Vista previa de la entrada
 // Dentro de Ecos con los estilos reales de tu web (leídos de su portada); «Ver en mi web» guarda un
 // borrador y abre la vista previa de WordPress.
-$('#preview').onclick = (e) => busy(e.target, async () => {
-  let content = await window.api.composeDraft(draft.blocks);
-  // Lo que WordPress añade al mostrar la entrada: alineación de los botones y reproductores de vídeo
-  content = content.replace(/<!-- wp:buttons \{"layout":\{"type":"flex","justifyContent":"(center|right)"\}\} -->\n<div class="wp-block-buttons/g, (_m, j) => `<div class="wp-block-buttons is-content-justification-${j}`)
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/<div class="wp-block-embed__wrapper">\n(\S+)\n<\/div>/g, (m, url) => {
-      const e = window.BlockEditor.detectEmbed(url.replace(/&amp;/g, '&'));
-      return e?.player ? `<div class="wp-block-embed__wrapper"><iframe src="${escHtml(e.player)}" style="width:100%;aspect-ratio:${/spotify/.test(e.player) ? '16/5' : '16/9'};border:0" allowfullscreen></iframe></div>` : m;
-    });
-  const featured = draft.blocks.flatMap((b) => (b.img ? [b.img] : b.images || [])).find((i) => i.id === draft.featuredImageId);
-  const cats = $$('#d-cats input:checked').map((i) => i.value);
-  const date = new Date($('#d-keepdate').checked ? draft.date : Date.now()).toLocaleDateString(prefs().lang === 'en' ? 'en-GB' : 'es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+// Ventana de vista previa con los estilos reales de la web (editor y entradas de una copia)
+async function showPreview({ title, date: when, cats = [], featured, content, web = false }) {
+  // enlaces de vídeo solos en una línea: el reproductor, como hace WordPress
+  content = content.replace(/<p>\s*(https?:\/\/[^\s<]+)\s*<\/p>/g, (m, url) => {
+    const e = window.BlockEditor.detectEmbed(url.replace(/&amp;/g, '&'));
+    return e?.player ? `<figure class="wp-block-embed"><iframe src="${escHtml(e.player)}" style="width:100%;aspect-ratio:16/9;border:0" allowfullscreen></iframe></figure>` : m;
+  });
+  const date = new Date(typeof when === 'string' ? when.replace(' ', 'T') : when).toLocaleDateString(prefs().lang === 'en' ? 'en-GB' : 'es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
   let site = { css: '', bodyClass: '' };
   try { site = await window.api.siteStyles(); } catch { /* sin conexión: estilo genérico */ }
   const generic = site.css ? '' : `body{font:18px/1.7 Georgia,serif;color:#1d1d1f}h1{font:700 40px/1.15 system-ui,sans-serif}
@@ -785,14 +781,29 @@ $('#preview').onclick = (e) => busy(e.target, async () => {
     <body class="${escHtml(site.bodyClass.replace(/\bhome\b|\bblog\b|\bpage\b/g, ''))} single single-post wp-embed-responsive">
     <main class="site-main"><article class="post type-post status-publish hentry ecos-pv">
       <header class="entry-header">${cats.length ? `<div class="cat-links ecos-meta">${escHtml(cats.join(' · '))}</div>` : ''}
-        <h1 class="entry-title wp-block-post-title">${escHtml($('#d-title').value)}</h1><div class="ecos-meta entry-meta">${date}</div></header>
-      ${featured ? `<img class="ecos-featured wp-post-image" src="${escHtml(featured.url)}" alt="">` : ''}
+        <h1 class="entry-title wp-block-post-title">${escHtml(title)}</h1><div class="ecos-meta entry-meta">${date}</div></header>
+      ${featured ? `<img class="ecos-featured wp-post-image" src="${escHtml(featured)}" alt="">` : ''}
       <div class="entry-content wp-block-post-content is-layout-constrained">${content}</div>
     </article></main></body></html>`;
   $('#pv-frame').onload = () => $('#pv-frame').contentDocument.querySelectorAll('[data-ecos-carousel]').forEach((el) => window.ecosCarousel(el));
+  $('#pv-web').classList.toggle('hidden', !web);
   $('#pv-modal').classList.remove('hidden');
   if (!site.css) toast(t('No se pudieron leer los estilos de tu web; la vista previa usa un estilo genérico.'));
+}
+$('#preview').onclick = (e) => busy(e.target, async () => {
+  let content = await window.api.composeDraft(draft.blocks);
+  // Lo que WordPress añade al mostrar la entrada: alineación de los botones y reproductores de vídeo
+  content = content.replace(/<!-- wp:buttons \{"layout":\{"type":"flex","justifyContent":"(center|right)"\}\} -->\n<div class="wp-block-buttons/g, (_m, j) => `<div class="wp-block-buttons is-content-justification-${j}`)
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<div class="wp-block-embed__wrapper">\n(\S+)\n<\/div>/g, (m, url) => {
+      const e = window.BlockEditor.detectEmbed(url.replace(/&amp;/g, '&'));
+      return e?.player ? `<div class="wp-block-embed__wrapper"><iframe src="${escHtml(e.player)}" style="width:100%;aspect-ratio:${/spotify/.test(e.player) ? '16/5' : '16/9'};border:0" allowfullscreen></iframe></div>` : m;
+    });
+  const featured = draft.blocks.flatMap((b) => (b.img ? [b.img] : b.images || [])).find((i) => i.id === draft.featuredImageId);
+  const cats = $$('#d-cats input:checked').map((i) => i.value);
+  await showPreview({ title: $('#d-title').value, date: $('#d-keepdate').checked ? draft.date : Date.now(), cats, featured: featured?.url, content, web: true });
 });
+
 $$('#pv-size button').forEach((b) => b.onclick = () => {
   $$('#pv-size button').forEach((x) => x.classList.toggle('active', x === b));
   $('#pv-frame').style.maxWidth = b.dataset.w + 'px';
@@ -1153,9 +1164,17 @@ function rsRenderRow(key) {
         <span>${t('{n} palabras', { n: p.words })}</span></div>
       <div class="ex"></div>
     </div>
-    <div class="rs-state ${escHtml(done ? 'ok' : st?.state || '')}">${state}</div>`;
+    <div class="rs-state ${escHtml(done ? 'ok' : st?.state || '')}">${state}</div>
+    <button class="btn text icon-only rs-pv" title="${t('Vista previa')}"><span class="ms">visibility</span></button>`;
   row.querySelector('.t').textContent = p.title;
   row.querySelector('.ex').textContent = p.excerpt;
+  row.querySelector('.rs-pv').onclick = (e) => {
+    e.stopPropagation();
+    busy(e.currentTarget, async () => {
+      const r = await window.api.backupPreview(key);
+      await showPreview({ title: r.title, date: r.date, cats: r.categories, featured: r.featured, content: r.content });
+    });
+  };
   row.onclick = (e) => {
     if (e.target.dataset.open !== undefined) { e.preventDefault(); if (e.target.dataset.open) window.api.open(e.target.dataset.open); return; }
     rs.sel.has(key) ? rs.sel.delete(key) : rs.sel.add(key);

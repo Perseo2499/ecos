@@ -59,6 +59,7 @@ contextBridge.exposeInMainWorld('api', {
   backupAnalyze: (paths) => call('backup:analyze', paths),
   backupThumb: (key) => call('backup:thumb', key),
   backupContent: (key) => call('backup:content', key),
+  backupPreview: (key) => call('backup:preview', key),
   backupRestore: (keys, opts) => call('backup:restore', keys, opts),
   backupClose: () => call('backup:close'),
   onBackupProgress: on('backup:progress'),

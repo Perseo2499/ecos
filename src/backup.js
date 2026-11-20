@@ -344,6 +344,38 @@ async function prepare(an, post, upload, { download = true } = {}) {
 }
 
 // Miniatura de una foto de la copia (para la lista), como data URL pequeña
+// Contenido de una entrada de la copia para la vista previa: las fotos que están dentro de la copia se
+// incrustan (reducidas); las demás se dejan con su dirección (web antigua o web.archive.org).
+async function previewContent(an, post, nativeImage) {
+  const cache = new Map();
+  const local = async (rel) => {
+    if (!rel) return null;
+    if (cache.has(rel)) return cache.get(rel);
+    const f = an.findFile(rel) || an.findFile(original(rel));
+    let url = null;
+    if (f && f.size < 25e6 && /\.(jpe?g|png|gif|webp)$/i.test(f.name)) {
+      const img = nativeImage.createFromBuffer(await f.src.read(f.name));
+      if (!img.isEmpty()) url = (img.getSize().width > 1200 ? img.resize({ width: 1200 }) : img).toJPEG(82).toString('base64');
+      if (url) url = 'data:image/jpeg;base64,' + url;
+    }
+    cache.set(rel, url);
+    return url;
+  };
+  let content = String(post.content || '');
+  // contenido del editor clásico (sin bloques): los saltos de línea dobles son párrafos
+  if (!/<!-- wp:/.test(content) && !/<p[\s>]/i.test(content)) content = content.split(/\n\s*\n/).map((p) => (/^\s*<(h\d|ul|ol|figure|div|blockquote|table|\[)/i.test(p) ? p : `<p>${p.trim().replace(/\n/g, '<br>')}</p>`)).join('\n\n');
+  const urls = [...new Set(content.match(/https?:\/\/[^\s"'<>)]+/g) || [])];
+  for (const u of urls) {
+    const rel = uploadsRel(u);
+    const data = rel && (await local(rel));
+    if (data) content = content.split(u).join(data);
+  }
+  content = content.replace(/<!--[\s\S]*?-->/g, '').replace(/<script[\s\S]*?<\/script>/gi, '');
+  const fm = (post.media || []).find((m) => m.featured);
+  const featured = fm ? (await local(fm.rel)) || fm.url : null;
+  return { title: post.title, date: post.date, type: post.type, categories: post.categories || [], content, featured };
+}
+
 async function thumbnail(an, rel, nativeImage) {
   const f = an.findFile(rel);
   if (!f || f.size > 25e6 || !/\.(jpe?g|png|gif|webp)$/i.test(f.name)) return null;
@@ -352,4 +384,4 @@ async function thumbnail(an, rel, nativeImage) {
   return img.resize({ width: 120 }).toDataURL();
 }
 
-module.exports = { analyze, prepare, thumbnail, parseSql, wpFromSql, wpFromWxr, uploadsRel, original };
+module.exports = { previewContent, analyze, prepare, thumbnail, parseSql, wpFromSql, wpFromWxr, uploadsRel, original };

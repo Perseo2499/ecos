@@ -513,7 +513,16 @@ handle('backup:analyze', async (paths) => {
 });
 handle('backup:thumb', async (key) => {
   const x = backupAn?.posts.find((q) => q.key === key);
-  return x?.thumbRel ? backupMod().thumbnail(backupAn, x.thumbRel, require('electron').nativeImage) : null;
+  const local = x?.thumbRel ? await backupMod().thumbnail(backupAn, x.thumbRel, require('electron').nativeImage) : null;
+  if (local) return local;
+  // la foto no está en la copia: su dirección original (p. ej. web.archive.org)
+  const m = (x?.media || []).find((mm) => mm.featured) || (x?.media || [])[0];
+  return m?.url || null;
+});
+handle('backup:preview', async (key) => {
+  const x = backupAn?.posts.find((q) => q.key === key);
+  if (!x) throw new Error('No se encuentra esa entrada en la copia');
+  return backupMod().previewContent(backupAn, x, require('electron').nativeImage);
 });
 handle('backup:content', (key) => backupAn?.posts.find((q) => q.key === key)?.content || '');
 // opts: { status: 'draft' | 'original', createCategories, skipExisting, download }
