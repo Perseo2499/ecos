@@ -266,6 +266,8 @@
     'Modelo (opcional: si lo dejas vacío, usa el de la CLI)': 'Model (optional: leave empty to use the CLI default)',
     'Los botones de IA usarán {c}. Pulsa «Probar» para comprobarlo.': 'The AI buttons will use {c}. Click "Try it" to check.',
     // 1.2 (editor completo)
+    'Ya está en tu web': 'Already on your site',
+    'Ya está en tu web (borrador)': 'Already on your site (draft)',
     '1 coincidencia': '1 match',
     'Anterior': 'Previous',
     'Mes': 'Month',

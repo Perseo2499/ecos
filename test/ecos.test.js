@@ -238,3 +238,17 @@ test('las fotos se amplían al pulsarlas y las fotos sin número no rompen el bl
   const mos = require('../src/parseblocks').parseBlocks(T.composeBlocks([{ id: 'm', type: 'gallery', layout: 'mosaic', images: [{ id: 1, url: 'a.jpg' }, { id: 2, url: 'b.jpg' }] }]))[0];
   assert.equal(mos.images.length, 2);
 });
+
+test('restaurar: reconoce entradas que ya están en la web aunque cambie la escritura', () => {
+  const W = require('../src/wpself');
+  const index = [
+    { id: 1, slug: 'acompanamiento-de-inmigrantes', title: W.normTitle('Acompañamiento de inmigrantes'), day: '2011-11-05', status: 'draft' },
+    { id: 2, slug: '', title: W.normTitle('VOLUNTARIADO EN NAVIDAD'), day: '2011-11-03', status: 'draft' },
+    { id: 3, slug: 'otra', title: W.normTitle('Encuentros festivos'), day: '2011-11-04', status: 'draft' },
+  ];
+  assert.equal(W.matchExisting(index, { slug: 'acompa%C3%B1amiento-de-inmigrantes', title: 'x', date: '2011-11-05 10:00:00' })?.id, undefined); // otra dirección y otro título
+  assert.equal(W.matchExisting(index, { slug: '', title: 'Acompañamiento  de inmigrantes', date: '2011-11-05 10:00:00' }).id, 1);
+  assert.equal(W.matchExisting(index, { slug: 'voluntariado-en-navidad', title: 'Voluntariado en Navidad', date: '2011-11-03 09:00:00' }).id, 2);
+  assert.equal(W.matchExisting(index, { slug: 'otra', title: 'Nada que ver', date: '' }).id, 3);
+  assert.equal(W.matchExisting(index, { slug: 'nueva', title: 'Nueva entrada', date: '2020-01-01' }), null);
+});

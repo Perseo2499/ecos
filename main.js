@@ -652,13 +652,31 @@ handle('backup:analyze', async (paths) => {
   backupAn = an;
   log(`Copia de seguridad analizada: ${backupAn.kinds.join(', ')} · ${backupAn.posts.length} entradas/páginas`);
   const done = cfg.restored || {};
+  // Lo que ya está en la web (restaurado antes, con Ecos o a mano, en cualquier estado: también borradores)
+  const index = { post: [], page: [] };
+  if (isSelf() && wpIsConnected()) {
+    for (const ty of ['post', 'page']) index[ty] = await WP().postIndex(cfg, ty).catch((e) => { log('No se pudo leer la lista de la web', ty, e.message); return []; });
+  }
+  const W = WP();
+  // La misma entrada repetida dentro de la copia (varios archivos XML con lo mismo): se muestra una sola vez
+  const seen = new Set();
+  const unique = backupAn.posts.filter((x) => {
+    const k = `${x.type}|${W.normTitle ? W.normTitle(x.title) : x.title}|${String(x.date || '').slice(0, 10)}`;
+    if (seen.has(k)) return false;
+    seen.add(k); return true;
+  });
+  if (unique.length < backupAn.posts.length) log(`Copia: ${backupAn.posts.length - unique.length} entradas repetidas dentro de la copia se muestran una sola vez`);
+  const existing = (x) => {
+    const h = W.matchExisting ? W.matchExisting(index[x.type === 'page' ? 'page' : 'post'] || [], x) : null;
+    return h ? { postId: h.id, status: h.status, existing: true, editUrl: editUrlFor(h.id, x.type) } : null;
+  };
   return {
     kinds: backupAn.kinds, dbFile: backupAn.dbFile, siteUrl: backupAn.siteUrl, siteName: backupAn.siteName, stats: backupAn.stats,
-    posts: backupAn.posts.map((x) => ({
+    posts: unique.map((x) => ({
       key: x.key, id: x.id, type: x.type, status: x.status, title: x.title, date: x.date, slug: x.slug,
       categories: x.categories, tags: x.tags, words: x.words, media: x.media.length, mediaFound: x.mediaFound, mediaMissing: x.mediaMissing,
       excerpt: (x.excerpt || x.content).replace(/<[^>]+>|\[[^\]]+\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180),
-      restored: done[restoredKey(x.key)] || null,
+      restored: done[restoredKey(x.key)] || existing(x),
     })),
   };
 });
@@ -690,7 +708,7 @@ handle('backup:restore', async (keys, opts = {}) => {
     sendProgress({ key, state: 'working' });
     try {
       if (opts.skipExisting !== false) {
-        const existing = await wpCall(() => WP().findExisting(cfg, x.type, x.slug, x.title));
+        const existing = await wpCall(() => WP().findExisting(cfg, x.type, x.slug, x.title, x.date));
         if (existing) { results.push({ key, state: 'exists', postId: existing }); sendProgress({ key, state: 'exists', postId: existing }); continue; }
       }
       const prep = await backupMod().prepare(backupAn, x, (buf, name) => wpCall(() => WP().uploadNamed(cfg, buf, name)), { download: opts.download !== false, job });

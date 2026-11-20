@@ -101,7 +101,7 @@ function rsRenderRow(key) {
   const st = rs.state[key];
   const done = st?.state === 'ok' ? st : p.restored;
   const state = st?.state === 'working' ? `<span class="spin"></span> ${t('Restaurando…')}`
-    : done ? `<span class="ms fill">check_circle</span> <a href="#" data-open="${escHtml(done.editUrl || '')}">${t('Restaurada')}</a>${p.type !== 'page' && done.postId ? ` · <a href="#" data-ecos="${done.postId}">${t('Editar en Ecos')}</a>` : ''}`
+    : done ? `<span class="ms fill">check_circle</span> <a href="#" data-open="${escHtml(done.editUrl || '')}">${done.existing ? (done.status === 'publish' ? t('Ya está en tu web') : t('Ya está en tu web (borrador)')) : t('Restaurada')}</a>${p.type !== 'page' && done.postId ? ` · <a href="#" data-ecos="${done.postId}">${t('Editar en Ecos')}</a>` : ''}`
     : st?.state === 'exists' ? `<span class="ms">content_copy</span> ${t('Ya existe en tu web')}`
     : st?.state === 'error' ? `<span class="ms">error</span> ${escHtml(st.message.slice(0, 80))}` : '';
   const thumb = row.querySelector('img.th');

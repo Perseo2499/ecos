@@ -356,12 +356,37 @@ async function postStatuses(cfg, ids) {
 }
 
 // ¿Existe ya una entrada o página con ese «slug» (o, si no hay, ese título)? → id o null
-async function findExisting(cfg, type, slug, title) {
+// Para reconocer una entrada aunque cambie la forma de escribirla: sin tildes, mayúsculas ni signos
+const normTitle = (s) => String(s || '').replace(/&#0?39;|&#8217;|&#8216;/g, "'").replace(/&amp;/g, '&').replace(/&[a-z#0-9]+;/gi, ' ')
+  .normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const normSlug = (s) => { try { return decodeURIComponent(String(s || '')).toLowerCase(); } catch { return String(s || '').toLowerCase(); } };
+// Índice ligero de todas las entradas (o páginas) de la web, en cualquier estado, para saber cuáles ya existen
+async function postIndex(cfg, type = 'post') {
   const coll = type === 'page' ? 'pages' : 'posts';
-  const q = new URLSearchParams({ status: 'publish,future,draft,pending,private', context: 'edit', _fields: 'id,title,slug', per_page: '10',
-    ...(slug ? { slug } : { search: title }) });
-  const found = await req(cfg, `/wp/v2/${coll}?${q}`);
-  const hit = found.find((p) => (slug ? p.slug === slug : (p.title?.raw || '').trim().toLowerCase() === String(title).trim().toLowerCase()));
+  const out = [];
+  for (let page = 1; page < 50; page++) {
+    const { data, res } = await req(cfg, `/wp/v2/${coll}?status=publish,future,draft,pending,private&context=edit&_fields=id,slug,title,date,status&per_page=100&page=${page}`, { raw: true });
+    out.push(...data.map((p) => ({ id: p.id, slug: normSlug(p.slug), title: normTitle(p.title?.raw ?? p.title?.rendered), day: String(p.date || '').slice(0, 10), status: p.status })));
+    if (page >= Number(res.headers.get('x-wp-totalpages') || 1)) break;
+  }
+  return out;
+}
+// Busca en el índice una entrada de la copia: por dirección; si no, por título y día; si no, por título (si solo hay una)
+function matchExisting(index, x) {
+  const slug = normSlug(x.slug), title = normTitle(x.title), day = String(x.date || '').slice(0, 10);
+  if (slug) { const h = index.find((p) => p.slug && p.slug === slug); if (h) return h; }
+  if (!title) return null;
+  const same = index.filter((p) => p.title === title);
+  return same.find((p) => p.day === day) || (same.length === 1 ? same[0] : null);
+}
+async function findExisting(cfg, type, slug, title, date) {
+  const coll = type === 'page' ? 'pages' : 'posts';
+  const base = { status: 'publish,future,draft,pending,private', context: 'edit', _fields: 'id,title,slug,date,status', per_page: '20' };
+  const toIdx = (p) => ({ id: p.id, slug: normSlug(p.slug), title: normTitle(p.title?.raw), day: String(p.date || '').slice(0, 10), status: p.status });
+  const found = [];
+  if (slug) found.push(...(await req(cfg, `/wp/v2/${coll}?${new URLSearchParams({ ...base, slug })}`)).map(toIdx));
+  if (title) found.push(...(await req(cfg, `/wp/v2/${coll}?${new URLSearchParams({ ...base, search: String(title).slice(0, 80) })}`)).map(toIdx));
+  const hit = matchExisting(found, { slug, title, date });
   return hit ? hit.id : null;
 }
 const uploadNamed = (cfg, buf, name) => uploadBuffer(cfg, buf, name, MIME[path.extname(name).slice(1).toLowerCase()] || 'application/octet-stream');
@@ -435,4 +460,4 @@ async function saveStructure(cfg, ch, progress = () => {}) {
   return { errors };
 }
 
-module.exports = { listMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw };
+module.exports = { postIndex, matchExisting, normTitle, listMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw };
