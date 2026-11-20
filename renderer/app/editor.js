@@ -1,6 +1,10 @@
 // Ecos · Editor de entradas: panel lateral, buscadores y redes, autoguardado, IA, envío, visor y vista previa.
 // (Comparte el ámbito global con los demás archivos de renderer/app, que se cargan en orden desde index.html.)
 
+// El editor (y la terminal) son capas a pantalla completa: van directamente en <body> para que se vean
+// desde cualquier pantalla (antes el editor estaba dentro de «Publicaciones» y desde Blog no se veía).
+for (const id of ['#editor', '#term']) { const el = $(id); if (el && el.parentElement !== document.body) document.body.appendChild(el); }
+
 // ---------------------------------------------------------------- Editor visual
 async function makeDraft() {
   const chosen = posts.filter((p) => selected.has(keyOf(p)));

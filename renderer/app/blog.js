@@ -89,8 +89,9 @@ function renderBlog(items) {
       b.className = 'btn ' + (cls === 'primary' ? 'tonal' : cls === 'danger' ? 'text danger' : 'text');
       b.textContent = label; b.onclick = () => busy(b, fn); actions.appendChild(b);
     };
-    if ((fromEcos || restored) && it.status !== 'trash' && it.type !== 'page') btn(t('Editar en Ecos'), () => openFromWp(it.id), 'primary');
-    if (it.status !== 'trash') btn(fromEcos || restored ? t('Editar en WordPress') : t('Editar'), async () => window.api.open(await window.api.blogEditUrl(it.id, it.type)));
+    // cualquier entrada se puede editar en Ecos (el HTML antiguo se convierte en bloques)
+    if (it.status !== 'trash' && it.type !== 'page') btn(t('Editar en Ecos'), () => openFromWp(it.id), 'primary');
+    if (it.status !== 'trash') btn(it.type === 'page' ? t('Editar') : t('Editar en WordPress'), async () => window.api.open(await window.api.blogEditUrl(it.id, it.type)));
     if (it.status === 'publish') btn(t('Ver'), async () => window.api.open(it.url));
     if (['draft', 'pending', 'private'].includes(it.status)) btn(t('Publicar'), async () => {
       if (!await ask(t('¿Publicar «{x}»? Será visible en la web.', { x: title }))) return;

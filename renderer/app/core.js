@@ -104,3 +104,11 @@ function renderStatus() {
   $('#meta-expiry').textContent = CFG.metaConnected && exp ? t('La conexión con Meta caduca el {d}.', { d: fmtDay(exp) }) : '';
   renderConnStates();
 }
+
+// Red de seguridad: si queda el modo «pantalla completa» sin ninguna pantalla completa visible (la barra de
+// arriba se esconde y no se podría salir), se quita solo.
+setInterval(() => {
+  if (!document.body.classList.contains('editing')) return;
+  const open = ['#editor', '#restore', '#term'].some((s) => { const el = document.querySelector(s); return el && !el.classList.contains('hidden') && el.checkVisibility(); });
+  if (!open) document.body.classList.remove('editing');
+}, 1500);
