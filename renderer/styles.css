@@ -714,9 +714,10 @@ body.dragging-block .ins::before, body.dragging-media .ins::before { opacity: .2
 .rs-source { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 13px; color: var(--on-surface-var);
   padding: 12px 18px; border-radius: var(--r-l); background: var(--surface-c-low); }
 .rs-source b { color: var(--on-surface); }
-.rs-filters { position: sticky; top: -24px; }
+.rs-filters { position: sticky; top: -24px; z-index: 10; flex-wrap: wrap; row-gap: 10px; margin: 0 -24px 18px; padding: 14px 24px 12px;
+  background: var(--surface); box-shadow: 0 1px 0 var(--outline-var), 0 8px 16px -10px rgba(0,0,0,.45); }
 .rs-list { display: flex; flex-direction: column; gap: 8px; }
-.rs-row { display: grid; grid-template-columns: auto 64px 1fr auto; gap: 14px; align-items: center; padding: 8px 14px 8px 12px; border-radius: var(--r-l);
+.rs-row { display: grid; grid-template-columns: auto 64px minmax(0, 1fr) auto auto; gap: 14px; align-items: center; padding: 8px 14px 8px 12px; border-radius: var(--r-l);
   background: var(--surface-c-lowest); box-shadow: var(--e1); cursor: pointer; transition: box-shadow .2s, transform .3s var(--spring); }
 .rs-row:hover { box-shadow: var(--e2); }
 .rs-row.sel { box-shadow: 0 0 0 2px var(--primary), var(--e2); }
