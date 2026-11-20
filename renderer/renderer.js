@@ -37,6 +37,30 @@ const prefs = () => ({ theme: 'system', zoom: 1, cards: 230, accent: '#3c6e5f', 
 
 // ---------------------------------------------------------------- utilidades
 window.CFG_AI_READY = () => !!CFG.aiConfigured;
+// Diálogo de confirmación con el estilo de Ecos (en lugar del cuadro de Windows). Devuelve true/false.
+function ask(message, { ok = t('Continuar'), cancel = t('Cancelar'), danger = false } = {}) {
+  return new Promise((resolve) => {
+    const prev = document.activeElement;
+    const d = document.createElement('div');
+    d.className = 'dlg-scrim';
+    d.innerHTML = `<div class="dlg" role="alertdialog" aria-modal="true">
+      <span class="dlg-silk vinyl-only"><span class="silk"><i class="led"></i><span>SYS · CONFIRM</span></span><span class="silk"><span>DLG-01</span><span class="jp">確認</span></span></span>
+      <span class="ms fill dlg-ic${danger ? ' danger' : ''}">${danger ? 'warning' : 'help'}</span>
+      <p class="dlg-msg"></p>
+      <div class="dlg-actions"><button class="btn text" data-r="0"></button><button class="btn filled${danger ? ' danger-fill' : ''}" data-r="1"></button></div></div>`;
+    $('.dlg-msg', d).textContent = message;
+    $('[data-r="0"]', d).textContent = cancel; $('[data-r="1"]', d).textContent = ok;
+    const close = (v) => { d.classList.add('out'); setTimeout(() => d.remove(), 160); document.removeEventListener('keydown', key, true); prev?.focus?.(); resolve(v); };
+    const key = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(false); } if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); close(true); } };
+    $$('[data-r]', d).forEach((b) => (b.onclick = () => close(b.dataset.r === '1')));
+    d.addEventListener('mousedown', (e) => { if (e.target === d) close(false); });
+    document.addEventListener('keydown', key, true);
+    document.body.appendChild(d);
+    $('[data-r="1"]', d).focus();
+  });
+}
+window.ask = ask;
+
 function toast(msg, isError) {
   const el = $('#toast');
   el.textContent = msg; el.className = 'show' + (isError ? ' error' : '');
@@ -250,7 +274,7 @@ $('#ai-save').onclick = (e) => busy(e.target, async () => {
   renderAi(); toast(t('Guardado'));
 });
 $('#ai-remove').onclick = async () => {
-  if (!confirm(t('¿Quitar la clave guardada de {p}?', { p: CFG.ai.providers[aiSel].name }))) return;
+  if (!await ask(t('¿Quitar la clave guardada de {p}?', { p: CFG.ai.providers[aiSel].name }), { danger: true })) return;
   CFG.ai = await window.api.aiRemove(aiSel); renderAi();
 };
 $('#ai-getkey').onclick = (e) => { e.preventDefault(); window.api.open(CFG.ai.providers[aiSel].keyUrl); };
@@ -454,7 +478,7 @@ $('#sum-go').onclick = (e) => busy(e.target, async () => {
 async function makeDraft() {
   const chosen = posts.filter((p) => selected.has(keyOf(p)));
   const already = chosen.filter(liveExport);
-  if (already.length && !confirm(t('{n} de las publicaciones elegidas ya están en el blog. ¿Crear otra entrada de todos modos?', { n: already.length }))) return;
+  if (already.length && !await ask(t('{n} de las publicaciones elegidas ya están en el blog. ¿Crear otra entrada de todos modos?', { n: already.length }))) return;
   toast(t('Subiendo fotos a WordPress…'));
   draft = await window.api.buildDraft(chosen);
   draft.excerpt = ''; draft.postId = null; draft.extraMedia = []; // postId: borrador ya guardado en WordPress
@@ -510,8 +534,8 @@ function openEditor() {
 const autoTitle = () => { const el = $('#d-title'); el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; };
 $('#d-title').oninput = autoTitle;
 $('#d-title').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); const first = $('#d-blocks [contenteditable]'); first?.focus(); } };
-const closeEditor = () => {
-  if (!$('#sent').classList.contains('hidden') || confirm(t('¿Cerrar el editor? Lo que no hayas enviado se perderá.'))) {
+const closeEditor = async () => {
+  if (!$('#sent').classList.contains('hidden') || await ask(t('¿Cerrar el editor? Lo que no hayas enviado se perderá.'))) {
     $('#editor').classList.add('hidden'); document.body.classList.remove('editing'); updateCount();
   }
 };
@@ -561,7 +585,7 @@ $('#d-template').onchange = () => {
 // IA en el editor: el texto se reescribe y las fotos, vídeos y su orden se conservan
 $('#ai-article').onclick = (e) => busy(e.target, async () => {
   const TEXT = ['paragraph', 'heading', 'quote', 'list'];
-  if (draft.blocks.some((b) => TEXT.includes(b.type)) && !confirm(t('La IA reescribirá los textos de la entrada (las fotos y vídeos se quedan). ¿Continuar?'))) return;
+  if (draft.blocks.some((b) => TEXT.includes(b.type)) && !await ask(t('La IA reescribirá los textos de la entrada (las fotos y vídeos se quedan). ¿Continuar?'))) return;
   const text = draft.sourceText || window.BlockEditor.plainText();
   const r = await window.api.aiArticle({ title: $('#d-title').value, text });
   $('#d-title').value = r.title;
@@ -599,7 +623,7 @@ const draftPayload = (status) => ({
 $('#send').onclick = (e) => busy(e.target, async () => {
   const when = $('input[name="d-when"]:checked').value;
   if (!$('#d-title').value.trim()) throw new Error(t('Escribe un título'));
-  if (when === 'publish' && !confirm(t('Se publicará ahora y será visible en la web. ¿Continuar?'))) return;
+  if (when === 'publish' && !await ask(t('Se publicará ahora y será visible en la web. ¿Continuar?'))) return;
   const res = await window.api.publish(draftPayload(when));
   exported = res.exported; lastSent = res; draft.postId = res.postId || draft.postId; draft.previewOnly = false;
   $('#sent-text').textContent = res.status === 'publish' ? t('¡Entrada publicada!')
@@ -757,16 +781,16 @@ function renderBlog(items) {
     if (it.status !== 'trash') btn(t('Editar'), async () => window.api.open(await window.api.blogEditUrl(it.id, it.type)));
     if (it.status === 'publish') btn(t('Ver'), async () => window.api.open(it.url));
     if (['draft', 'pending', 'private'].includes(it.status)) btn(t('Publicar'), async () => {
-      if (!confirm(t('¿Publicar «{x}»? Será visible en la web.', { x: title }))) return;
+      if (!await ask(t('¿Publicar «{x}»? Será visible en la web.', { x: title }))) return;
       exported = await window.api.blogSetStatus(it.id, 'publish', it.type); toast(t('Publicada')); loadBlog(); renderFeed();
     }, 'primary');
     if (it.status === 'publish') btn(t('Pasar a borrador'), async () => {
-      if (!confirm(t('¿Retirar «{x}» de la web y dejarla como borrador?', { x: title }))) return;
+      if (!await ask(t('¿Retirar «{x}» de la web y dejarla como borrador?', { x: title }), { danger: true })) return;
       exported = await window.api.blogSetStatus(it.id, 'draft', it.type); toast(t('Ahora es un borrador')); loadBlog(); renderFeed();
     });
     if (it.status === 'trash') btn(t('Restaurar como borrador'), async () => { exported = await window.api.blogSetStatus(it.id, 'draft', it.type); toast(t('Restaurada como borrador')); loadBlog(); renderFeed(); });
     else btn(t('Papelera'), async () => {
-      if (!confirm(t('¿Mover «{x}» a la papelera? Podrás recuperarla durante 30 días.', { x: title }))) return;
+      if (!await ask(t('¿Mover «{x}» a la papelera? Podrás recuperarla durante 30 días.', { x: title }), { danger: true })) return;
       exported = await window.api.blogTrash(it.id, it.type); toast(t('Movida a la papelera')); loadBlog(); renderFeed();
     }, 'danger');
     list.appendChild(row);
@@ -917,12 +941,12 @@ $('#mode-normal').onclick = () => { toast(t('Reiniciando Ecos…')); window.api.
 $('#open-logs').onclick = () => window.api.openData();
 $('#wizard-again').onclick = () => openWizard();
 $('#forget-exported').onclick = async () => {
-  if (!confirm(t('Ecos dejará de marcar publicaciones como «En el blog». Las entradas de tu web no se tocan. ¿Continuar?'))) return;
+  if (!await ask(t('Ecos dejará de marcar publicaciones como «En el blog». Las entradas de tu web no se tocan. ¿Continuar?'))) return;
   exported = await window.api.clearExported(); renderFeed(); toast(t('Hecho'));
 };
-$('#reset-all').onclick = () => {
-  if (!confirm(t('Se borrarán todas las conexiones, claves, ajustes y plantillas de Ecos en este ordenador. Tu blog y tus redes no se tocan. ¿Continuar?'))) return;
-  if (!confirm(t('¿Seguro? Esta acción no se puede deshacer. Si quieres, exporta antes una copia de seguridad.'))) return;
+$('#reset-all').onclick = async () => {
+  if (!await ask(t('Se borrarán todas las conexiones, claves, ajustes y plantillas de Ecos en este ordenador. Tu blog y tus redes no se tocan. ¿Continuar?'), { danger: true })) return;
+  if (!await ask(t('¿Seguro? Esta acción no se puede deshacer. Si quieres, exporta antes una copia de seguridad.'), { danger: true })) return;
   window.api.resetAll();
 };
 
@@ -953,9 +977,9 @@ function renderWizard() {
     CFG.wpConnected ? '✓ ' + t('Blog conectado: {s}', { s: CFG.wpSiteLabel || CFG.wpSite }) : '• ' + t('Blog sin conectar'),
   ].join('  ');
 }
-$('#wz-next').onclick = () => {
-  if (wzStep === 1 && !CFG.metaConnected && !confirm(t('Todavía no has conectado Meta. ¿Seguir de todos modos?'))) return;
-  if (wzStep === 2 && !CFG.wpConnected && !confirm(t('Todavía no has conectado WordPress. Sin él no se pueden crear entradas. ¿Seguir de todos modos?'))) return;
+$('#wz-next').onclick = async () => {
+  if (wzStep === 1 && !CFG.metaConnected && !await ask(t('Todavía no has conectado Meta. ¿Seguir de todos modos?'))) return;
+  if (wzStep === 2 && !CFG.wpConnected && !await ask(t('Todavía no has conectado WordPress. Sin él no se pueden crear entradas. ¿Seguir de todos modos?'))) return;
   if (wzStep === 3) { closeWizard(true); showTab('posts'); return; }
   wzStep++; renderWizard();
 };
@@ -1084,7 +1108,7 @@ async function rsRestore() {
   if (!CFG.wpConnected) throw new Error(t('Primero conecta tu WordPress en «Conexiones».'));
   const keys = rs.data.posts.filter((p) => rs.sel.has(p.key)).map((p) => p.key);
   const asDraft = $('#rs-status').value === 'draft';
-  if (!confirm(t(asDraft ? 'Se crearán {n} entradas como borrador en tu web, con sus fotos. ¿Continuar?' : 'Se crearán {n} entradas en tu web con su estado original (las publicadas serán visibles). ¿Continuar?', { n: keys.length }))) return;
+  if (!await ask(t(asDraft ? 'Se crearán {n} entradas como borrador en tu web, con sus fotos. ¿Continuar?' : 'Se crearán {n} entradas en tu web con su estado original (las publicadas serán visibles). ¿Continuar?', { n: keys.length }))) return;
   const res = await window.api.backupRestore(keys, { status: $('#rs-status').value, skipExisting: $('#rs-skip').checked, createCategories: true, download: true });
   const ok = res.filter((r) => r.state === 'ok').length, ex = res.filter((r) => r.state === 'exists').length, err = res.filter((r) => r.state === 'error').length;
   for (const r of res) if (r.state === 'ok') { const p = rs.data.posts.find((x) => x.key === r.key); p.restored = r; rs.sel.delete(r.key); }
