@@ -93,6 +93,7 @@
     root.dataset.vinyl = vinyl ? 'on' : 'off';
     root.dataset.silk = vinyl && silkOn !== false ? 'on' : 'off';
     if (vinyl) { root.dataset.theme = 'dark'; decorate(); }
+    window.VinylNav?.apply(!!vinyl);
   }
 
   document.addEventListener('click', (e) => { if (e.target.closest('.appbar .logo')) tapLogo(); });
