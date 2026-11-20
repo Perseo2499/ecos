@@ -225,3 +225,16 @@ test('tablas de maquetación (foto + pie) de entradas antiguas: imagen con su pi
   // una tabla de datos sigue siendo tabla
   assert.equal(parseBlocks('<table><tr><td>a</td><td>b</td></tr></table>')[0].type, 'table');
 });
+
+test('las fotos se amplían al pulsarlas y las fotos sin número no rompen el bloque', () => {
+  const html = T.composeBlocks([{ id: 'i', type: 'image', img: { id: 7, url: 'https://x/a.jpg', alt: '' }, caption: '' }, { id: 'j', type: 'image', img: { id: 'https://x/b.jpg', url: 'https://x/b.jpg', alt: '' }, caption: '' }]);
+  const attrs = [...html.matchAll(/<!-- wp:image (\{.*?\}) -->/g)].map((m) => JSON.parse(m[1]));
+  assert.equal(attrs.length, 2);
+  assert.deepEqual(attrs[0].lightbox, { enabled: true });
+  assert.equal(attrs[0].id, 7);
+  assert.equal(attrs[1].id, undefined);
+  const back = require('../src/parseblocks').parseBlocks(html);
+  assert.deepEqual(back.map((b) => b.img.url), ['https://x/a.jpg', 'https://x/b.jpg']);
+  const mos = require('../src/parseblocks').parseBlocks(T.composeBlocks([{ id: 'm', type: 'gallery', layout: 'mosaic', images: [{ id: 1, url: 'a.jpg' }, { id: 2, url: 'b.jpg' }] }]))[0];
+  assert.equal(mos.images.length, 2);
+});

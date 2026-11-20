@@ -114,9 +114,17 @@ function sanitizeParagraphs(html) {
   return h.split(/\n\s*\n/).map((p) => p.trim()).filter((p) => p.replace(/<[^>]+>|&nbsp;|\s/g, '')).map((p) => p.replace(/\n/g, '<br>'));
 }
 
+// Imagen de WordPress que se amplía al pulsarla («Ampliar al hacer clic», de serie desde WordPress 6.4).
+// Las fotos de entradas antiguas a veces no tienen número en la biblioteca (solo su dirección): entonces
+// van sin «id» (si no, el bloque quedaría roto).
+const imgId = (img) => (Number(img.id) > 0 ? Number(img.id) : 0);
+function imageBlockAttrs(img) {
+  return JSON.stringify({ ...(imgId(img) ? { id: imgId(img) } : {}), sizeSlug: 'large', linkDestination: 'none', lightbox: { enabled: true } });
+}
+const imgClass = (img) => (imgId(img) ? ` class="wp-image-${imgId(img)}"` : '');
 function imageBlockAlt(img) {
   const alt = img.alt ? ` alt="${esc(img.alt)}"` : '';
-  return `<!-- wp:image {"id":${img.id},"sizeSlug":"large"} -->\n<figure class="wp-block-image size-large"><img src="${img.url}"${alt} class="wp-image-${img.id}"/></figure>\n<!-- /wp:image -->`;
+  return `<!-- wp:image ${imageBlockAttrs(img)} -->\n<figure class="wp-block-image size-large"><img src="${esc(img.url)}"${alt}${imgClass(img)}/></figure>\n<!-- /wp:image -->`;
 }
 
 function composeContent(sections) {
@@ -188,7 +196,7 @@ const caption = (c) => (c && inline(c) ? `<figcaption class="wp-element-caption"
 
 function imageBlockFull(img, cap = '') {
   const alt = img.alt ? ` alt="${esc(img.alt)}"` : ' alt=""';
-  return `<!-- wp:image {"id":${img.id},"sizeSlug":"large","linkDestination":"none"} -->\n<figure class="wp-block-image size-large"><img src="${esc(img.url)}"${alt} class="wp-image-${img.id}"/>${caption(cap)}</figure>\n<!-- /wp:image -->`;
+  return `<!-- wp:image ${imageBlockAttrs(img)} -->\n<figure class="wp-block-image size-large"><img src="${esc(img.url)}"${alt}${imgClass(img)}/>${caption(cap)}</figure>\n<!-- /wp:image -->`;
 }
 
 // Carrusel: diapositivas que se deslizan (scroll-snap, funciona sin JavaScript) con la foto activa
@@ -218,7 +226,7 @@ function spectraCarouselBlock(b) {
   const a = {
     block_id: hex, readyToRender: true, mediaGallery: media, mediaIDs: media.map((m) => m.id).filter(Boolean), feedLayout: 'carousel',
     columnsDesk: b.view === 'multi' ? 3 : 1, columnsTab: b.view === 'multi' ? 2 : 1, columnsMob: 1, carouselSquares: !!b.squares, carouselLoop: true, carouselAutoplay: b.autoplay !== false, carouselAutoplaySpeed: 5000,
-    carouselPauseOnHover: true, paginateUseArrows: true, paginateUseDots: true, imageDisplayCaption: !!b.captions, galleryImageSize: 'large', className: 'ecos-carrusel' + (b.view === 'peek' ? ' ecos-peek' : ''),
+    carouselPauseOnHover: true, imageClickEvent: 'lightbox', paginateUseArrows: true, paginateUseDots: true, imageDisplayCaption: !!b.captions, galleryImageSize: 'large', className: 'ecos-carrusel' + (b.view === 'peek' ? ' ecos-peek' : ''),
   };
   return `<!-- wp:uagb/image-gallery ${JSON.stringify(a).replace(/--/g, '\\u002d\\u002d')} /-->`;
 }
@@ -350,6 +358,8 @@ function mediaTag(i, style, { controls = false } = {}) {
   }
   return `<img src="${esc(i.url)}" alt="${esc(i.alt || '')}" loading="lazy"${Number(i.id) ? ` class="wp-image-${i.id}"` : ''} style="${style}"/>`;
 }
+// Foto que abre su versión completa al pulsarla (los vídeos tienen sus propios controles)
+const zoomLink = (i, tag) => (i.type === 'video' ? tag : `<a href="${esc(i.url)}" class="ec-zoom" style="display:block;width:100%;height:100%">${tag}</a>`);
 function mosaicBlock(b) {
   const id = 'ecos-m-' + b.id.replace(/[^a-z0-9]/gi, '');
   const S = `#${id}`;
@@ -361,7 +371,7 @@ function mosaicBlock(b) {
   const figs = b.images.map((i, k) => {
     const c = cells[k];
     return `<figure class="r${c.rows}" style="margin:0;overflow:hidden;border-radius:12px;background-color:#ddd;grid-column-start:${c.col};grid-column-end:span ${c.cols};grid-row-start:${c.row};grid-row-end:span ${c.rows};height:${hgt(c.rows, MOS_H)}px">`
-      + mediaTag(i, media) + '</figure>';
+      + zoomLink(i, mediaTag(i, media)) + '</figure>';
   }).join('');
   return `<!-- wp:html -->\n<div class="ecos-mosaico" id="${id}" style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));grid-auto-rows:${MOS_H}px;gap:${MOS_GAP}px;margin:2em 0"><style>${css}</style>${figs}</div>\n<!-- /wp:html -->`;
 }
@@ -370,7 +380,7 @@ function mixedGalleryBlock(b, cols) {
   const id = 'ecos-g-' + b.id.replace(/[^a-z0-9]/gi, '');
   const css = `@media (max-width:600px){#${id}{grid-template-columns:repeat(2,minmax(0,1fr))!important}#${id} figure{height:160px!important}}`;
   const media = 'display:block;width:100%;height:100%;object-fit:cover;margin:0';
-  const figs = b.images.map((i) => `<figure style="margin:0;overflow:hidden;border-radius:10px;background-color:#ddd;height:${cols >= 4 ? 170 : 230}px">${mediaTag(i, media, { controls: true })}</figure>`).join('');
+  const figs = b.images.map((i) => `<figure style="margin:0;overflow:hidden;border-radius:10px;background-color:#ddd;height:${cols >= 4 ? 170 : 230}px">${zoomLink(i, mediaTag(i, media, { controls: true }))}</figure>`).join('');
   return `<!-- wp:html -->\n<div class="ecos-galeria" id="${id}" data-cols="${cols}" style="display:grid;grid-template-columns:repeat(${cols},minmax(0,1fr));gap:8px;margin:2em 0"><style>${css}</style>${figs}</div>\n<!-- /wp:html -->`;
 }
 
