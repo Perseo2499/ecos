@@ -10,6 +10,7 @@
     var slides = Array.prototype.slice.call(root.querySelectorAll('.ec-slide'));
     if (!track || slides.length < 2) return;
     root.classList.add('ec-js');
+    Array.prototype.forEach.call(root.querySelectorAll('.ec-nav'), function (x) { x.style.display = 'none'; });
     function mk(tag, cls, text) { var e = doc.createElement(tag); e.className = cls; if (text) e.textContent = text; return e; }
     var prev = mk('button', 'ec-btn ec-prev', '‹'), next = mk('button', 'ec-btn ec-next', '›');
     prev.type = next.type = 'button';

@@ -200,7 +200,7 @@ const path = require('path');
 let CAROUSEL_JS = '';
 try {
   CAROUSEL_JS = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'carousel.js'), 'utf8')
-    .split('\n').filter((l) => !/^\s*\/\//.test(l)).map((l) => l.trim()).join('\n');
+    .split('\n').filter((l) => !/^\s*\/\//.test(l)).map((l) => l.trim()).join(' ');
 } catch { /* sin script: el carrusel se desliza igualmente */ }
 
 function carouselBlock(b) {
@@ -212,8 +212,7 @@ function carouselBlock(b) {
     + `${S}.ec-js .ec-track{cursor:grab}${S} .ec-track.ec-dragging{cursor:grabbing;scroll-snap-type:none;scroll-behavior:auto;user-select:none}`
     + `${S} .ec-slide img{-webkit-user-drag:none;user-select:none}`
     + `${S} .ec-slide{position:relative;flex:0 0 84%;margin:0;aspect-ratio:4/3;border-radius:var(--ec-r);overflow:hidden;scroll-snap-align:center;background:#111;box-shadow:0 10px 30px rgba(0,0,0,.18);transition:transform .5s cubic-bezier(.2,0,0,1),opacity .5s,filter .5s}`
-    + `${S} .ec-slide::before{content:"";position:absolute;inset:-40px;background:var(--bg) center/cover;filter:blur(28px) brightness(.75) saturate(1.2)}`
-    + `${S} .ec-slide img{position:relative;display:block;width:100%;height:100%;object-fit:contain;margin:0;border-radius:0}`
+    + `${S} .ec-bg{transform:scale(1.25)}${S} .ec-sbtn:hover{background-color:#fff}`
     + `${S} .ec-slide figcaption{position:absolute;left:0;right:0;bottom:0;padding:28px 18px 14px;color:#fff;font-size:.85em;background:linear-gradient(transparent,rgba(0,0,0,.65))}`
     + `${S}.ec-js .ec-slide:not(.ec-on){transform:scale(.9);opacity:.5;filter:saturate(.6)}`
     + `${S} .ec-btn{position:absolute;top:calc(50% - 18px);z-index:2;width:46px;height:46px;border:0;border-radius:50%;background:rgba(255,255,255,.88);color:#111;font-size:30px;line-height:1;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25);transition:transform .2s,background .2s;padding:0 0 4px}`
@@ -226,13 +225,26 @@ function carouselBlock(b) {
     + `${S} .ec-dot{width:8px;height:8px;padding:0;border:0;border-radius:8px;background:currentColor;opacity:.25;cursor:pointer;transition:width .3s,opacity .3s}`
     + `${S} .ec-dot.ec-on{width:26px;opacity:.85}`
     + `@media (max-width:600px){${S} .ec-slide{flex-basis:90%}${S} .ec-btn{display:none}}`;
-  const figs = b.images.map((i) => {
+  // Flechas y contador escritos en cada foto, con estilos en línea: funcionan aunque WordPress quite el
+  // <script> o el <style> (las flechas son enlaces a la foto anterior y siguiente)
+  const n = b.images.length;
+  const btn = 'position:absolute;top:50%;margin-top:-22px;z-index:2;width:44px;height:44px;border-radius:50%;background-color:rgba(255,255,255,.9);color:#111;'
+    + 'font-size:30px;line-height:40px;text-align:center;text-decoration:none;box-shadow:0 4px 14px rgba(0,0,0,.3)';
+  const figs = b.images.map((i, k) => {
     const alt = esc(i.alt || '');
-    return `<figure class="ec-slide" style="--bg:url('${esc(i.url)}')"><img src="${esc(i.url)}" alt="${alt}" loading="lazy"${Number(i.id) ? ` class="wp-image-${i.id}"` : ''}/>${b.captions && i.alt ? `<figcaption>${alt}</figcaption>` : ''}</figure>`;
+    const prev = `${id}-${((k - 1 + n) % n) + 1}`, next = `${id}-${((k + 1) % n) + 1}`;
+    return `<figure class="ec-slide" id="${id}-${k + 1}" style="position:relative;flex:0 0 84%;margin:0;aspect-ratio:4/3;border-radius:18px;overflow:hidden;background-color:#111">`
+      + `<img class="ec-bg" src="${esc(i.url)}" alt="" aria-hidden="true" loading="lazy" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;filter:blur(24px) brightness(.7);margin:0"/>`
+      + `<img src="${esc(i.url)}" alt="${alt}" loading="lazy"${Number(i.id) ? ` class="wp-image-${i.id}"` : ''} style="position:relative;display:block;width:100%;height:100%;object-fit:contain;margin:0;border-radius:0"/>`
+      + (n > 1 ? `<span class="ec-nav"><a class="ec-sbtn" href="#${prev}" aria-label="Anterior" style="${btn};left:12px">&#8249;</a>`
+        + `<a class="ec-sbtn" href="#${next}" aria-label="Siguiente" style="${btn};right:12px">&#8250;</a>`
+        + `<span class="ec-scount" style="position:absolute;top:12px;right:12px;z-index:2;padding:3px 11px;border-radius:999px;background-color:rgba(0,0,0,.6);color:#fff;font-size:12px;font-weight:600;line-height:1.5">${k + 1} / ${n}</span></span>` : '')
+      + (b.captions && i.alt ? `<figcaption>${alt}</figcaption>` : '')
+      + '</figure>';
   }).join('');
   const auto = b.autoplay === false ? 0 : 5000;
   const script = CAROUSEL_JS ? `<script>${CAROUSEL_JS}</script>` : '';
-  return `<!-- wp:html -->\n<div class="ecos-carrusel" id="${id}" data-ecos-carousel data-autoplay="${auto}"><style>${css}</style><div class="ec-track">${figs}</div></div>${script}\n<!-- /wp:html -->`;
+  return `<!-- wp:html -->\n<div class="ecos-carrusel" id="${id}" data-ecos-carousel data-autoplay="${auto}" style="position:relative;margin:2em 0"><style>${css}</style><div class="ec-track" style="display:flex;gap:14px;overflow-x:auto;padding:14px 8% 28px">${figs}</div></div>${script}\n<!-- /wp:html -->`;
 }
 
 // Estilos de bloque (alineación, tamaño, fuente, colores) con los atributos estándar de WordPress
@@ -316,9 +328,15 @@ function mosaicBlock(b) {
     + `${S} figure:nth-child(6n+1){grid-column:span 2;grid-row:span 2}${S} figure:nth-child(6n+4){grid-column:span 2}${S} figure:nth-child(6n+6){grid-row:span 2}`
     + `${S} img{display:block;width:100%;height:100%;object-fit:cover;margin:0;transition:transform .5s cubic-bezier(.2,0,0,1)}`
     + `${S} figure:hover img{transform:scale(1.05)}`
-    + `@media (max-width:600px){${S}{grid-template-columns:repeat(2,1fr);grid-auto-rows:130px}}`;
-  const figs = b.images.map((i) => `<figure><img src="${esc(i.url)}" alt="${esc(i.alt || '')}" loading="lazy" class="wp-image-${i.id}"/></figure>`).join('');
-  return `<!-- wp:html -->\n<div class="ecos-mosaico" id="${id}"><style>${css}</style>${figs}</div>\n<!-- /wp:html -->`;
+    + `@media (max-width:600px){${S}{grid-template-columns:repeat(2,1fr)!important}${S} figure{height:130px!important}${S} figure:nth-child(6n+1){height:268px!important}}`;
+  // estilos también en línea (por si WordPress quita el <style>): cada foto con su tamaño en la rejilla
+  const span = (k) => ({ 0: [2, 2], 3: [2, 1], 5: [1, 2] })[k % 6] || [1, 1];
+  const figs = b.images.map((i, k) => {
+    const [c, r] = span(k);
+    return `<figure style="margin:0;overflow:hidden;border-radius:12px;background-color:#ddd;grid-column:span ${c};grid-row:span ${r};height:${r * 170 + (r - 1) * 8}px">`
+      + `<img src="${esc(i.url)}" alt="${esc(i.alt || '')}" loading="lazy" class="wp-image-${i.id}" style="display:block;width:100%;height:100%;object-fit:cover;margin:0"/></figure>`;
+  }).join('');
+  return `<!-- wp:html -->\n<div class="ecos-mosaico" id="${id}" style="display:grid;grid-template-columns:repeat(4,1fr);grid-auto-flow:dense;gap:8px;margin:2em 0"><style>${css}</style>${figs}</div>\n<!-- /wp:html -->`;
 }
 
 function composeBlocks(blocks) {
