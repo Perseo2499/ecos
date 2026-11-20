@@ -23,7 +23,7 @@ jobs:
       - name: Windows Hello (compilar el ayudante y comprobarlo)
         shell: powershell
         run: |
-          $args2 = node -e "console.log(JSON.stringify(require('./src/winhello.js').cscArgs('src/winhello.cs','build/winhello.exe')))" | ConvertFrom-Json
+          $args2 = node -e "console.log(JSON.stringify(require('./src/winhello.js').cscArgs('src\\winhello.cs','build\\winhello.exe')))" | ConvertFrom-Json
           & "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe" @args2
           if (-not (Test-Path build\winhello.exe)) { Write-Error "No se pudo compilar winhello.exe"; exit 1 }
           $c = .\build\winhello.exe check; $t = .\build\winhello.exe selftest aG9sYQ==
