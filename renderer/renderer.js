@@ -550,6 +550,7 @@ const draftPayload = (status) => ({
   categories: $$('#d-cats input:checked').map((i) => i.value),
   status, scheduleAt: status === 'future' ? $('#d-schedule').value : null,
   featuredImageId: draft.featuredImageId, keepDate: $('#d-keepdate').checked, date: draft.date, keys: draftKeys,
+  recreate: !!draft.previewOnly,
 });
 
 // Enviar
@@ -558,7 +559,7 @@ $('#send').onclick = (e) => busy(e.target, async () => {
   if (!$('#d-title').value.trim()) throw new Error(t('Escribe un título'));
   if (when === 'publish' && !confirm(t('Se publicará ahora y será visible en la web. ¿Continuar?'))) return;
   const res = await window.api.publish(draftPayload(when));
-  exported = res.exported; lastSent = res; draft.postId = res.postId || draft.postId;
+  exported = res.exported; lastSent = res; draft.postId = res.postId || draft.postId; draft.previewOnly = false;
   $('#sent-text').textContent = res.status === 'publish' ? t('¡Entrada publicada!')
     : res.status === 'future' ? t('Entrada programada para el {d}.', { d: fmtDate(res.date) }) : t('Borrador creado en WordPress.');
   if (res.status !== 'future' && res.date) $('#sent-text').textContent += ' ' + t('Fecha de la entrada: {d}.', { d: fmtDate(res.date) });
@@ -666,7 +667,7 @@ $$('#pv-size button').forEach((b) => b.onclick = () => {
 $('#pv-close').onclick = () => $('#pv-modal').classList.add('hidden');
 $('#pv-web').onclick = (e) => busy(e.target, async () => {
   const r = await window.api.previewDraft(draftPayload('draft'));
-  draft.postId = r.postId;
+  draft.postId = r.postId; draft.previewOnly = true; // borrador solo para ver la vista previa
   window.api.open(r.previewUrl);
   toast(t('Guardado como borrador. La vista previa se abre en tu navegador.'));
 });

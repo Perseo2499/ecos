@@ -203,6 +203,8 @@ async function listPosts(cfg, { type = 'post', status = 'any', search = '', page
 const coll = (type) => (type === 'page' ? 'pages' : 'posts');
 const setPostStatus = (cfg, id, status, type) => req(cfg, `/wp/v2/${coll(type)}/${id}`, { method: 'POST', json: { status } });
 const trashPost = (cfg, id, type) => req(cfg, `/wp/v2/${coll(type)}/${id}`, { method: 'DELETE' });
+// Borrado definitivo (solo para el borrador de la vista previa, que Ecos vuelve a crear al enviar)
+const deletePost = (cfg, id, type) => req(cfg, `/wp/v2/${coll(type)}/${id}?force=true`, { method: 'DELETE' });
 
 // Estado actual de varias entradas: { id: 'publish' | 'draft' | 'trash' | … | 'deleted' }
 async function postStatuses(cfg, ids) {
@@ -231,4 +233,4 @@ const uploadNamed = (cfg, buf, name) => uploadBuffer(cfg, buf, name, MIME[path.e
 const publicBase = (cfg) => { try { return base(cfg); } catch { return null; } };
 const publicUrl = (_cfg, url) => url;
 
-module.exports = { findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, publicBase, publicUrl };
+module.exports = { findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, publicBase, publicUrl };

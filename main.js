@@ -372,7 +372,16 @@ handle('draft:publish', async (d) => {
   if (d.status === 'future' && (!d.scheduleAt || new Date(d.scheduleAt) <= new Date())) throw new Error('Elige una fecha y hora futuras para programar la entrada.');
   // Si ya se guardó como borrador para la vista previa, se actualiza esa misma entrada
   const fields = postFields(d, d.status || 'draft');
-  const post = await wpCall(() => (d.postId ? WP().updatePost(cfg, d.postId, fields) : WP().createPost(cfg, fields)));
+  // WordPress pone como «fecha de modificación» la de la entrada solo cuando se crea; cada vez que se
+  // actualiza pasa a ser la de ese momento (y muchos temas muestran esa). Por eso el borrador que se guardó
+  // para la vista previa se borra y la entrada se crea de nuevo, de una sola vez.
+  let post;
+  if (d.postId && d.recreate && WP().deletePost) {
+    await wpCall(() => WP().deletePost(cfg, d.postId)).catch((e) => log('No se pudo borrar el borrador de la vista previa', d.postId, e.message));
+    post = await wpCall(() => WP().createPost(cfg, fields));
+  } else {
+    post = await wpCall(() => (d.postId ? WP().updatePost(cfg, d.postId, fields) : WP().createPost(cfg, fields)));
+  }
   const editUrl = editUrlFor(post.ID);
   const url = WP().publicUrl(cfg, post.URL);
   cfg.exported = cfg.exported || {};
