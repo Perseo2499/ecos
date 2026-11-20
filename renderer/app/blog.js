@@ -230,7 +230,7 @@ async function runBulk(kind) {
 
 // ---------------------------------------------------------------- Buscar y reemplazar en todo el blog (WordPress propio)
 const bfr = { results: [], query: '', type: 'post' };
-function syncFindBtn() { $('#b-find').classList.toggle('hidden', CFG.wpMode !== 'selfhosted' || blog.type === 'structure' || blog.type === 'calendar'); }
+function syncFindBtn() { $('#b-find').classList.toggle('hidden', CFG.wpMode !== 'selfhosted' || blog.type === 'structure' || blog.type === 'calendar' || blog.type === 'media'); }
 const bfrOpts = () => ({ caseSensitive: $('#bfr-case').checked, wholeWord: $('#bfr-word').checked });
 function bfrOpen() {
   $('#bfr-scope [value="sel"]').disabled = !bsel.size;
