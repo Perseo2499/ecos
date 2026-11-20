@@ -266,6 +266,10 @@
     'Modelo (opcional: si lo dejas vacío, usa el de la CLI)': 'Model (optional: leave empty to use the CLI default)',
     'Los botones de IA usarán {c}. Pulsa «Probar» para comprobarlo.': 'The AI buttons will use {c}. Click "Try it" to check.',
     // 1.2 (editor completo)
+    'Abriendo la entrada de WordPress…': 'Opening the WordPress post…',
+    'Abrir la entrada en el editor de Ecos': 'Open the post in the Ecos editor',
+    'Editar entrada': 'Edit post',
+    'Editar en Ecos': 'Edit in Ecos',
     'Comprobar en WordPress si la entrada se ha publicado o cambiado allí y traer los cambios': 'Check in WordPress whether the post was published or changed there and bring the changes',
     'Esta entrada todavía no está en WordPress: envíala primero.': 'This post is not in WordPress yet: send it first.',
     'Esta entrada está en la papelera de WordPress.': 'This post is in the WordPress trash.',

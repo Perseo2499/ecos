@@ -205,8 +205,13 @@ const setPostStatus = (cfg, id, status, type) => req(cfg, `/wp/v2/${coll(type)}/
 const trashPost = (cfg, id, type) => req(cfg, `/wp/v2/${coll(type)}/${id}`, { method: 'DELETE' });
 // Entrada completa (contenido en bruto, para traer al editor los cambios hechos en WordPress)
 async function getPost(cfg, id, type) {
-  const p = await req(cfg, `/wp/v2/${coll(type)}/${id}?context=edit`);
+  const p = await req(cfg, `/wp/v2/${coll(type)}/${id}?context=edit&_embed=wp:term,wp:featuredmedia`);
+  const terms = (p._embedded?.['wp:term'] || []).flat();
+  const fm = p._embedded?.['wp:featuredmedia']?.[0];
   return {
+    categories: terms.filter((x) => x.taxonomy === 'category').map((x) => x.name),
+    tags: terms.filter((x) => x.taxonomy === 'post_tag').map((x) => x.name),
+    featuredImg: fm?.source_url ? { id: fm.id, url: fm.source_url, alt: fm.alt_text || '' } : null,
     id: p.id, status: p.status, url: p.link, date: p.date_gmt ? p.date_gmt + 'Z' : p.date, modified: p.modified_gmt ? p.modified_gmt + 'Z' : p.modified,
     title: p.title?.raw ?? '', excerpt: p.excerpt?.raw ?? '', content: p.content?.raw ?? '', featured: p.featured_media || null,
   };

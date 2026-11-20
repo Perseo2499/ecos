@@ -148,7 +148,10 @@ async function listPosts(cfg, { type = 'post', status = 'any', search = '', page
 }
 async function getPost(cfg, id) {
   const p = await call(cfg, `/posts/${id}?context=edit`);
-  return { id: p.ID, status: p.status, url: p.URL, date: p.date, modified: p.modified, title: p.title || '', excerpt: p.excerpt || '', content: p.content || '', featured: p.post_thumbnail?.ID || null };
+  return {
+    categories: Object.keys(p.categories || {}), tags: Object.keys(p.tags || {}),
+    featuredImg: p.post_thumbnail?.URL ? { id: p.post_thumbnail.ID, url: p.post_thumbnail.URL, alt: '' } : null,
+    id: p.ID, status: p.status, url: p.URL, date: p.date, modified: p.modified, title: p.title || '', excerpt: p.excerpt || '', content: p.content || '', featured: p.post_thumbnail?.ID || null };
 }
 const updateMedia = (cfg, id, fields) => call(cfg, `/media/${id}`, fields);
 async function postStatuses(cfg, ids) {

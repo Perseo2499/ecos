@@ -1112,3 +1112,7 @@ img.gl-copy { object-fit: contain; }
 .raw-box { display: flex; gap: 14px; align-items: flex-start; padding: 14px 18px; border-radius: var(--r-l); border: 1px dashed var(--outline-var); background: var(--surface-c-low); }
 .raw-box > .ms { font-size: 26px; color: var(--primary); }
 .raw-box .raw-text { margin-top: 6px; font-size: 13px; color: var(--on-surface-var); }
+
+/* «Editar entrada» en las publicaciones que ya tienen entrada */
+.post .edit-entry { margin: 0 8px 8px; width: calc(100% - 16px); justify-content: center; }
+.b-row.ecos-made { box-shadow: inset 3px 0 0 var(--primary); }

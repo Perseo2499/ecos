@@ -336,9 +336,11 @@ function renderFeed() {
         ${p.media.length ? `<button class="zoom" title="${t('Ver en grande')}"><span class="ms">open_in_full</span></button>` : ''}
       </div>
       <div class="meta">${badges} ${fmtDate(p.date)}${mediaCount(p)}</div>
-      <p></p>`;
+      <p></p>
+      ${ex && !GONE.includes(ex.status) && ex.postId ? `<button class="btn tonal small edit-entry" title="${t('Abrir la entrada en el editor de Ecos')}"><span class="ms">edit_square</span>${t('Editar entrada')}</button>` : ''}`;
     card.querySelector('p').textContent = p.text.slice(0, 220) + (p.text.length > 220 ? '…' : '');
     if (ex) card.querySelector('.done-badge').onclick = (e) => { e.stopPropagation(); window.api.open(ex.editUrl); };
+    card.querySelector('.edit-entry')?.addEventListener('click', (e) => { e.stopPropagation(); busy(e.currentTarget, () => openFromWp(ex.postId, keysOf(p))); });
     card.querySelector('.zoom')?.addEventListener('click', (e) => { e.stopPropagation(); openLightbox(mediaItemsOf(p), 0); });
     card.ondblclick = (e) => { e.preventDefault(); if (p.media.length) openLightbox(mediaItemsOf(p), 0); };
     const toggle = () => { selected.has(key) ? selected.delete(key) : selected.add(key); card.classList.toggle('sel'); updateCount(); feed.classList.toggle('selecting', selected.size > 0); };
@@ -490,6 +492,25 @@ async function makeDraft() {
 }
 $('#make').onclick = (e) => busy(e.target, makeDraft);
 
+// Abre en el editor de Ecos una entrada que ya está en WordPress (desde una publicación o desde el Blog).
+// Al enviar se actualiza esa misma entrada.
+async function openFromWp(postId, keys) {
+  toast(t('Abriendo la entrada de WordPress…'));
+  const r = await window.api.pullPost(postId);
+  exported = r.exported || exported;
+  const imgs = r.blocks.flatMap((b) => (b.img ? [b.img] : b.images || []));
+  const vids = r.blocks.filter((b) => b.type === 'video' && b.video?.id).map((b) => ({ ...b.video, type: 'video' }));
+  draft = {
+    title: r.title, excerpt: r.excerpt || '', tags: r.tags || [], categories: r.categories || [], blocks: r.blocks,
+    featuredImageId: r.featured || null, date: r.date, postId, previewOnly: false, wpStatus: r.status, sections: [], sourceText: '',
+    extraMedia: [...(r.featuredImg ? [{ ...r.featuredImg, type: 'image' }] : []), ...imgs.map((i) => ({ ...i, type: 'image' })), ...vids],
+  };
+  draftKeys = keys || Object.entries(exported).filter(([, v]) => v.postId === postId).map(([k]) => k);
+  openEditor();
+  renderWpState(r.status, r.url);
+}
+
+
 // Fotos y vídeos disponibles para la entrada (subidos a WordPress): alimentan la bandeja del editor
 function mediaPool() {
   const seen = new Set(), out = [];
@@ -507,8 +528,9 @@ function openEditor() {
   $('#d-tags').value = draft.tags.join(', ');
   const f = CFG.format || {};
   const defCats = (f.categories || '').split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
-  renderCats(defCats);
-  $$('input[name="d-when"]').forEach((r) => (r.checked = r.value === (f.status || 'draft')));
+  renderCats(draft.categories ? draft.categories.map((c) => c.toLowerCase()) : defCats);
+  const when = draft.wpStatus ? (draft.wpStatus === 'publish' ? 'publish' : draft.wpStatus === 'future' ? 'future' : 'draft') : f.status || 'draft';
+  $$('input[name="d-when"]').forEach((r) => (r.checked = r.value === when));
   $('#d-schedule').value = '';
   // Fecha original: activada por defecto y con la fecha a la vista
   $('#d-keepdate').checked = prefs().keepDate !== false;
@@ -808,6 +830,7 @@ function renderBlog(items) {
     // Fecha de la entrada (también en borradores); la de última modificación queda en el texto emergente
     const when = `<span title="${escHtml(t('Última modificación: {d}', { d: fmtDay(it.modified) }))}">${fmtDay(it.date)}</span>`;
     const fromEcos = Object.values(exported).some((r) => r.postId === it.id);
+    row.classList.toggle('ecos-made', fromEcos);
     row.innerHTML = `
       ${it.image ? `<img src="${escHtml(it.image)}" loading="lazy" alt="">` : `<div class="noimg"><span class="ms">image</span></div>`}
       <div><div class="b-title"></div>
@@ -823,7 +846,8 @@ function renderBlog(items) {
       b.className = 'btn ' + (cls === 'primary' ? 'tonal' : cls === 'danger' ? 'text danger' : 'text');
       b.textContent = label; b.onclick = () => busy(b, fn); actions.appendChild(b);
     };
-    if (it.status !== 'trash') btn(t('Editar'), async () => window.api.open(await window.api.blogEditUrl(it.id, it.type)));
+    if (fromEcos && it.status !== 'trash' && it.type !== 'page') btn(t('Editar en Ecos'), () => openFromWp(it.id), 'primary');
+    if (it.status !== 'trash') btn(fromEcos ? t('Editar en WordPress') : t('Editar'), async () => window.api.open(await window.api.blogEditUrl(it.id, it.type)));
     if (it.status === 'publish') btn(t('Ver'), async () => window.api.open(it.url));
     if (['draft', 'pending', 'private'].includes(it.status)) btn(t('Publicar'), async () => {
       if (!await ask(t('¿Publicar «{x}»? Será visible en la web.', { x: title }))) return;
