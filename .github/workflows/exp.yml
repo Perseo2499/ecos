@@ -1,0 +1,33 @@
+name: Prueba conversión WinRT
+on: { push: { branches: [exp-hello] } }
+jobs:
+  win:
+    runs-on: windows-latest
+    steps:
+      - name: Variantes
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Add-Type -AssemblyName System.Runtime.WindowsRuntime
+          $null = [Windows.Security.Cryptography.CryptographicBuffer, Windows.Security.Cryptography, ContentType = WindowsRuntime]
+          $null = [Windows.Storage.Streams.DataReader, Windows.Storage.Streams, ContentType = WindowsRuntime]
+          $null = [Windows.Storage.Streams.IBuffer, Windows.Storage.Streams, ContentType = WindowsRuntime]
+          $CB = [Windows.Security.Cryptography.CryptographicBuffer]
+          $b = $CB::DecodeFromBase64String('aG9sYQ==')
+          Write-Host "tipo: $($b.GetType().FullName) len=$($b.Length)"
+          try { Write-Host "A:" $CB::EncodeToBase64String($b) } catch { Write-Host "A falla:" $_.Exception.Message }
+          try { Write-Host "A2:" $CB::EncodeToBase64String([Windows.Storage.Streams.IBuffer]$b) } catch { Write-Host "A2 falla:" $_.Exception.Message }
+          try { $a = [System.Runtime.InteropServices.WindowsRuntime.WindowsRuntimeBufferExtensions]::ToArray([Windows.Storage.Streams.IBuffer]$b); Write-Host "B:" ([Convert]::ToBase64String($a)) } catch { Write-Host "B falla:" $_.Exception.Message }
+          try { $r = [Windows.Storage.Streams.DataReader]::FromBuffer($b); $arr = New-Object byte[] $b.Length; $r.ReadBytes($arr); Write-Host "C:" ([Convert]::ToBase64String($arr)) } catch { Write-Host "C falla:" $_.Exception.Message }
+          try { Write-Host "D:" $CB::EncodeToHexString($b) } catch { Write-Host "D falla:" $_.Exception.Message }
+          # E: C# compilado al vuelo con referencias a WinRT
+          $winmd = Get-ChildItem "$env:WINDIR\System32\WinMetadata" -Filter 'Windows.*.winmd' | % FullName
+          $rt = [System.Runtime.InteropServices.WindowsRuntime.WindowsRuntimeBufferExtensions].Assembly.Location
+          $facades = Join-Path ([System.Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory()) 'Facades'
+          try {
+            Add-Type -ReferencedAssemblies (@($rt, (Join-Path $facades 'System.Runtime.dll'), (Join-Path $facades 'System.Runtime.InteropServices.WindowsRuntime.dll'), (Join-Path $facades 'System.Threading.Tasks.dll')) + $winmd) -TypeDefinition @"
+          using System; using System.Runtime.InteropServices.WindowsRuntime;
+          public static class EcosBuf { public static string B64(object o) { var b = (Windows.Storage.Streams.IBuffer)o; return Convert.ToBase64String(b.ToArray()); } }
+          "@
+            Write-Host "E:" ([EcosBuf]::B64($b))
+          } catch { Write-Host "E falla:" $_.Exception.Message }
