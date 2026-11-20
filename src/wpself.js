@@ -246,4 +246,70 @@ const uploadNamed = (cfg, buf, name) => uploadBuffer(cfg, buf, name, MIME[path.e
 const publicBase = (cfg) => { try { return base(cfg); } catch { return null; } };
 const publicUrl = (_cfg, url) => url;
 
-module.exports = { findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, publicBase, publicUrl };
+// ---------------------------------------------------------------- Estructura de la web
+// Portada, menús (con sus elementos), árbol de páginas y categorías con sus entradas.
+async function all(cfg, route) {
+  const out = [];
+  for (let page = 1; page < 30; page++) {
+    const d = await req(cfg, `${route}${route.includes('?') ? '&' : '?'}per_page=100&page=${page}`).catch((e) => { if (page > 1) return []; throw e; });
+    out.push(...d);
+    if (d.length < 100) break;
+  }
+  return out;
+}
+const raw = (x) => (x?.raw ?? x?.rendered ?? '').replace(/&amp;/g, '&').replace(/&#8217;/g, '’').replace(/&#8211;/g, '–');
+async function siteStructure(cfg) {
+  const settings = await req(cfg, '/wp/v2/settings').catch(() => null);
+  const pages = (await all(cfg, '/wp/v2/pages?context=edit&status=publish,draft,private,pending,future&_fields=id,title,status,parent,menu_order,link'))
+    .map((p) => ({ id: p.id, title: raw(p.title) || '(sin título)', status: p.status, parent: p.parent || 0, order: p.menu_order || 0, link: p.link }));
+  const categories = (await all(cfg, '/wp/v2/categories?_fields=id,name,count,parent,link'))
+    .map((c) => ({ id: c.id, name: raw({ raw: c.name }), count: c.count, parent: c.parent || 0, link: c.link }));
+  const menus = [];
+  let menuNote = '';
+  try {
+    const ms = await req(cfg, '/wp/v2/menus?context=edit&per_page=100');
+    const locs = await req(cfg, '/wp/v2/menu-locations').catch(() => ({}));
+    for (const m of ms) {
+      const items = await all(cfg, `/wp/v2/menu-items?menus=${m.id}&context=edit`);
+      menus.push({
+        id: m.id, name: m.name, locations: Object.values(locs).filter((l) => l.menu === m.id).map((l) => l.description || l.name),
+        items: items.map((i) => ({ id: i.id, title: raw(i.title), parent: i.parent || 0, order: i.menu_order || 0, type: i.type, object: i.object, objectId: i.object_id, url: i.url })),
+      });
+    }
+  } catch (e) { menuNote = e.message; }
+  // temas de bloques: el menú es un bloque de navegación (se edita en el editor del sitio)
+  let navigation = [];
+  if (!menus.length) navigation = await req(cfg, '/wp/v2/navigation?context=edit&per_page=20&_fields=id,title').then((n) => n.map((x) => ({ id: x.id, title: raw(x.title) }))).catch(() => []);
+  return {
+    settings: settings && { title: settings.title, showOnFront: settings.show_on_front, pageOnFront: settings.page_on_front || 0, pageForPosts: settings.page_for_posts || 0 },
+    pages, categories, menus, menuNote, navigation,
+  };
+}
+async function categoryPosts(cfg, catId) {
+  return (await all(cfg, `/wp/v2/posts?categories=${catId}&context=edit&status=publish,draft,private,pending,future&_fields=id,title,status,sticky,categories,date`))
+    .map((p) => ({ id: p.id, title: raw(p.title) || '(sin título)', status: p.status, sticky: !!p.sticky, categories: p.categories, date: p.date }));
+}
+// ch: { settings, pages:[{id,parent,order,status}], menuDel:[id], menuAdd:[{tmp,menu,title,type,object,objectId,url,parent,order}],
+//       menuItems:[{id,parent,order}], posts:[{id,categories,sticky}] }  (los «tmp» son elementos de menú nuevos)
+async function saveStructure(cfg, ch, progress = () => {}) {
+  const errors = [];
+  const run = async (what, fn) => { try { await fn(); progress(what); } catch (e) { errors.push(`${what}: ${e.message}`); } };
+  if (ch.settings) await run('Portada', () => req(cfg, '/wp/v2/settings', { method: 'POST', json: { show_on_front: ch.settings.showOnFront, page_on_front: ch.settings.pageOnFront || 0, page_for_posts: ch.settings.pageForPosts || 0 } }));
+  for (const p of ch.pages || []) await run(`Página ${p.id}`, () => req(cfg, `/wp/v2/pages/${p.id}`, { method: 'POST', json: { parent: p.parent, menu_order: p.order, status: p.status } }));
+  for (const id of ch.menuDel || []) await run(`Menú ${id}`, () => req(cfg, `/wp/v2/menu-items/${id}?force=true`, { method: 'DELETE' }));
+  const ids = new Map();
+  const real = (x) => (typeof x === 'string' && ids.has(x) ? ids.get(x) : x);
+  for (const a of ch.menuAdd || []) {
+    await run(`Menú «${a.title}»`, async () => {
+      const r = await req(cfg, '/wp/v2/menu-items', { method: 'POST', json: {
+        title: a.title, type: a.type, object: a.object, ...(a.objectId ? { object_id: a.objectId } : {}), ...(a.url ? { url: a.url } : {}),
+        menus: a.menu, parent: Number(real(a.parent)) || 0, menu_order: a.order, status: 'publish' } });
+      ids.set(a.tmp, r.id);
+    });
+  }
+  for (const m of ch.menuItems || []) await run(`Menú ${m.id}`, () => req(cfg, `/wp/v2/menu-items/${m.id}`, { method: 'POST', json: { parent: Number(real(m.parent)) || 0, menu_order: m.order } }));
+  for (const p of ch.posts || []) await run(`Entrada ${p.id}`, () => req(cfg, `/wp/v2/posts/${p.id}`, { method: 'POST', json: { categories: p.categories, sticky: p.sticky } }));
+  return { errors };
+}
+
+module.exports = { siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, publicBase, publicUrl };

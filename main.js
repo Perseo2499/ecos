@@ -471,6 +471,11 @@ function markExported(postId, status) {
 }
 handle('blog:setStatus', async (id, status, type) => { await wpCall(() => WP().setPostStatus(cfg, id, status, type)); return markExported(id, status); });
 handle('blog:trash', async (id, type) => { await wpCall(() => WP().trashPost(cfg, id, type)); return markExported(id, 'trash'); });
+// Estructura de la web (solo WordPress propio: WordPress.com no da acceso a menús ni ajustes por esta vía)
+const needSelf = () => { if (!isSelf()) throw new Error('La estructura de la web solo está disponible con «Mi web (wp-admin)» en Conexiones → WordPress.'); };
+handle('site:structure', async () => { needSelf(); return wpCall(() => wpself.siteStructure(cfg)); });
+handle('site:catPosts', async (catId) => { needSelf(); return wpCall(() => wpself.categoryPosts(cfg, catId)); });
+handle('site:save', async (changes) => { needSelf(); return wpCall(() => wpself.saveStructure(cfg, changes)); });
 // Borrado definitivo (no se puede deshacer): la entrada desaparece también de la papelera
 handle('blog:delete', async (id, type) => { await wpCall(() => WP().deletePost(cfg, id, type)); if (cfg.sentContent) delete cfg.sentContent[id]; return markExported(id, 'deleted'); });
 

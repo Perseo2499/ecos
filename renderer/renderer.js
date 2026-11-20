@@ -85,7 +85,7 @@ new ResizeObserver(([e]) => document.documentElement.style.setProperty('--appbar
 function showTab(name) {
   $$('header nav button, .tab').forEach((x) => x.classList.remove('active'));
   $(`header nav button[data-tab="${name}"]`).classList.add('active'); $('#tab-' + name).classList.add('active');
-  if (name === 'blog' && !blog.loaded) loadBlog();
+  if (name === 'blog' && !blog.loaded && blog.type !== 'structure') loadBlog();
   if (name === 'posts') refreshExported();
   updateCount();
 }
@@ -494,6 +494,7 @@ $('#make').onclick = (e) => busy(e.target, makeDraft);
 
 // Abre en el editor de Ecos una entrada que ya está en WordPress (desde una publicación o desde el Blog).
 // Al enviar se actualiza esa misma entrada.
+window.openFromWp = (id, keys) => openFromWp(id, keys);
 async function openFromWp(postId, keys) {
   toast(t('Abriendo la entrada de WordPress…'));
   const r = await window.api.pullPost(postId);
@@ -882,7 +883,17 @@ function renderBlog(items) {
     list.appendChild(row);
   }
 }
-$$('#b-type button').forEach((b) => b.onclick = () => { $$('#b-type button').forEach((x) => x.classList.toggle('active', x === b)); blog.type = b.dataset.type; blog.page = 1; loadBlog(); });
+$$('#b-type button').forEach((b) => b.onclick = async () => {
+  if (blog.type === 'structure' && b.dataset.type !== 'structure' && window.SiteStructure.dirty() && !await ask(t('Tienes cambios de estructura sin guardar. ¿Salir sin guardarlos?'))) return;
+  $$('#b-type button').forEach((x) => x.classList.toggle('active', x === b));
+  const st = b.dataset.type === 'structure';
+  // Estructura: un esquema de la web en lugar de la lista
+  $$('#b-status, #tab-blog .field.search, #b-refresh, #b-new, #b-list, #tab-blog .pager').forEach((x) => x.classList.toggle('hidden', st));
+  $('#b-structure').classList.toggle('hidden', !st);
+  blog.type = b.dataset.type;
+  if (st) return window.SiteStructure.open();
+  blog.page = 1; loadBlog();
+});
 $('#b-status').onchange = () => { blog.page = 1; loadBlog(); };
 let bTimer; $('#b-search').oninput = () => { clearTimeout(bTimer); bTimer = setTimeout(() => { blog.page = 1; loadBlog(); }, 400); };
 $('#b-refresh').onclick = loadBlog;
