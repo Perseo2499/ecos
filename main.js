@@ -552,6 +552,48 @@ handle('blog:category', async (id, name, add) => {
   if (!WP().changeCategory) throw new Error('Solo disponible con WordPress propio');
   await wpCall(() => WP().changeCategory(cfg, id, name, add));
 });
+// Buscar y reemplazar texto en todo el blog (solo WordPress propio)
+handle('blog:findText', async ({ query, opts, type, ids }) => {
+  if (!isSelf()) throw new Error('Buscar y reemplazar en todo el blog solo está disponible con WordPress propio');
+  if (!String(query || '').trim()) throw new Error('Escribe el texto que quieres buscar');
+  const FR = require('./renderer/findreplace');
+  sendToast('Buscando en las entradas…');
+  const posts = await wpCall(() => wpself.allRaw(cfg, type, ids));
+  const results = [];
+  for (const p of posts) {
+    const title = p.title?.raw ?? p.title?.rendered ?? '';
+    const content = p.content?.raw ?? '';
+    const nc = FR.countInHtml(content, query, opts), nt = FR.countInHtml(title, query, opts);
+    if (!nc + nt) continue;
+    const snippets = [...FR.snippetsInHtml(title, query, opts, 60, 1), ...FR.snippetsInHtml(content, query, opts, 60, 3)].slice(0, 3);
+    results.push({ id: p.id, title: title || '(sin título)', status: p.status, url: p.link, count: nc + nt, snippets });
+  }
+  log(`Buscar y reemplazar: «${query}» → ${results.length} entradas`);
+  return { scanned: posts.length, results };
+});
+handle('blog:replaceText', async ({ query, replacement, opts, ids, type }) => {
+  if (!isSelf()) throw new Error('Buscar y reemplazar en todo el blog solo está disponible con WordPress propio');
+  if (!String(query || '').trim()) throw new Error('Escribe el texto que quieres buscar');
+  const FR = require('./renderer/findreplace');
+  let done = 0; const errors = [];
+  for (const [n, id] of (ids || []).entries()) {
+    try {
+      if (n && n % 5 === 0) sendToast(`Reemplazando… ${n} de ${ids.length}`);
+      const [p] = await wpCall(() => wpself.allRaw(cfg, type, [id]));
+      if (!p) throw new Error('no se encuentra');
+      const c = FR.replaceInHtml(p.content?.raw ?? '', query, replacement, opts);
+      const t = FR.replaceInHtml(p.title?.raw ?? '', query, replacement, opts);
+      const fields = {};
+      if (c.count) fields.content = c.html;
+      if (t.count) fields.title = t.html;
+      if (!Object.keys(fields).length) continue;
+      await wpCall(() => wpself.updateFields(cfg, id, fields, type));
+      done++;
+    } catch (e) { errors.push({ id, error: e.message }); }
+  }
+  log(`Buscar y reemplazar: «${query}» → «${replacement}» en ${done} entradas, ${errors.length} errores`);
+  return { done, errors };
+});
 handle('blog:editUrl', (id, type) => editUrlFor(id, type));
 
 // --- Restaurar entradas desde una copia de seguridad (src/backup.js) ---

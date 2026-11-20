@@ -1291,3 +1291,27 @@ body.locked > *:not(#lock):not(#toast):not(.dlg-scrim) { visibility: hidden; }
 /* Bloques estrechos (ventana pequeña): también la opción elegida solo con su icono */
 .blk-gallery, .blk-carousel { container-type: inline-size; }
 @container (max-width: 640px) { .blk-extra .lv .lbl { display: none; } }
+
+/* ---- Buscar y reemplazar (editor y Blog) ---- */
+.fr-bar { position: sticky; top: 8px; z-index: 30; margin: 0 auto 12px; width: min(560px, 100%); padding: 10px 12px; border-radius: var(--r-l); display: flex; flex-direction: column; gap: 8px;
+  background: var(--surface-c-high); box-shadow: var(--e2); border: 1px solid var(--outline-var); }
+.fr-bar.hidden { display: none; }
+.fr-row { display: flex; align-items: center; gap: 6px; }
+.fr-row input[type="text"] { flex: 1; min-width: 0; padding: 7px 10px; border-radius: var(--r-m); border: 1px solid var(--outline-var); background: var(--surface-c); color: var(--on-surface); font: inherit; }
+.fr-bar.none #fr-q { border-color: #d9534f; }
+.fr-count { font-size: 12px; color: var(--on-surface-var); white-space: nowrap; min-width: 62px; text-align: right; }
+.fr-row .btn.small { width: auto; margin: 0; }
+.fr-opts { gap: 16px; font-size: 13px; }
+.fr-chk { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; color: var(--on-surface-var); }
+::highlight(ecos-find) { background: rgba(255, 213, 0, .35); }
+::highlight(ecos-find-cur) { background: rgba(255, 140, 0, .75); color: #000; }
+.blk.fr-flash { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: var(--r-m); }
+#d-title.fr-cur, #d-excerpt.fr-cur { outline: 2px solid var(--primary); border-radius: var(--r-m); }
+.bfr-opts { align-items: center; gap: 16px; flex-wrap: wrap; margin: 6px 0 10px; }
+.bfr-opts .btn { width: auto; margin: 0; }
+.bfr-res { max-height: 46vh; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+.bfr-item { display: flex; gap: 10px; padding: 8px 10px; border-radius: var(--r-m); background: var(--surface-c); align-items: flex-start; }
+.bfr-item .bfr-t { font-weight: 600; }
+.bfr-item .bfr-m { font-size: 12px; color: var(--on-surface-var); }
+.bfr-item .bfr-s { font-size: 13px; color: var(--on-surface-var); margin-top: 3px; overflow-wrap: anywhere; }
+.bfr-item mark { background: rgba(255, 213, 0, .45); color: inherit; border-radius: 3px; padding: 0 1px; }

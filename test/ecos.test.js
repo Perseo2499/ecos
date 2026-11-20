@@ -167,3 +167,23 @@ test('mosaico: se adapta al número de piezas sin huecos y admite vídeos', () =
   assert.equal(car.view, 'peek');
   assert.equal(car.squares, true);
 });
+
+test('buscar y reemplazar: solo el texto visible, sin tocar etiquetas ni atributos', () => {
+  const F = require('../renderer/findreplace');
+  const html = '<p>Una img <img src="a.png" alt="img"> y <a href="/x">href</a> &amp; más Img</p>';
+  assert.deepEqual(F.replaceInHtml(html, 'img', 'foto'), { html: '<p>Una foto <img src="a.png" alt="img"> y <a href="/x">href</a> &amp; más foto</p>', count: 2 });
+  assert.equal(F.replaceInHtml(html, 'href', 'enlace').html, html.replace('>href<', '>enlace<'));
+  assert.equal(F.replaceInHtml(html, 'img', 'foto', { caseSensitive: true }).count, 1);
+  assert.equal(F.replaceInHtml('<p>casa casas Casa</p>', 'casa', 'X', { wholeWord: true }).html, '<p>X casas X</p>');
+  assert.equal(F.replaceInHtml('<p>Tom &amp; Jerry</p>', 'Tom & Jerry', 'A<B').html, '<p>A&lt;B</p>');
+  assert.equal(F.countInHtml('<p>a<b>b</b>a</p>', 'a'), 2);
+  const blocks = [
+    { id: 'a', type: 'paragraph', html: 'Hola mundo' }, { id: 'b', type: 'list', items: ['mundo', 'nada'] },
+    { id: 'c', type: 'image', img: { alt: 'un mundo' }, caption: '<em>mundo</em>' }, { id: 'd', type: 'table', rows: [['x', 'mundo']] },
+  ];
+  const hits = F.findInBlocks(blocks, 'mundo');
+  assert.deepEqual(hits.map((h) => h.blockId + h.field), ['ahtml', 'bitems', 'ccaption', 'calt', 'drows']);
+  assert.equal(F.replaceInBlocks(blocks, 'mundo', 'sol', {}, hits[1]).count, 1);
+  assert.equal(blocks[1].items[0], 'sol'); assert.equal(blocks[0].html, 'Hola mundo');
+  assert.equal(F.replaceInBlocks(blocks, 'mundo', 'sol').count, 4);
+});

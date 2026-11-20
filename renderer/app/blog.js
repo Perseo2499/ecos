@@ -55,7 +55,7 @@ async function loadBlog() {
   list.innerHTML = `<p class="hint pad">${t('Cargando…')}</p>`;
   try {
     const r = await window.api.blogList({ type: blog.type, status: $('#b-status').value, search: $('#b-search').value.trim(), page: blog.page, number: blog.per });
-    blog.loaded = true; blog.found = r.found;
+    blog.loaded = true; blog.found = r.found; syncFindBtn();
     renderBlog(r.items);
   } catch (e) { list.innerHTML = `<div class="empty"><span class="ms">cloud_off</span><span>${escHtml(e.message)}</span></div>`; }
 }
@@ -138,6 +138,7 @@ $$('#b-type button').forEach((b) => b.onclick = async () => {
   $('#b-structure').classList.toggle('hidden', !st);
   $('#b-calendar').classList.toggle('hidden', !cal);
   blog.type = b.dataset.type;
+  syncFindBtn();
   bsel.clear();
   if (st) return window.SiteStructure.open();
   if (cal) return renderCalendar();
@@ -246,3 +247,53 @@ async function runBulk(kind) {
   bsel.clear();
   loadBlog(); renderFeed();
 }
+
+// ---------------------------------------------------------------- Buscar y reemplazar en todo el blog (WordPress propio)
+const bfr = { results: [], query: '', type: 'post' };
+function syncFindBtn() { $('#b-find').classList.toggle('hidden', CFG.wpMode !== 'selfhosted' || blog.type === 'structure' || blog.type === 'calendar'); }
+const bfrOpts = () => ({ caseSensitive: $('#bfr-case').checked, wholeWord: $('#bfr-word').checked });
+function bfrOpen() {
+  $('#bfr-scope [value="sel"]').disabled = !bsel.size;
+  $('#bfr-scope [value="sel"]').textContent = bsel.size ? t('Solo las seleccionadas') + ` (${bsel.size})` : t('Solo las seleccionadas');
+  $('#bfr-scope').value = bsel.size ? 'sel' : blog.type === 'page' ? 'page' : 'post';
+  $('#bfr-res').innerHTML = ''; $('#bfr-apply').classList.add('hidden'); bfr.results = [];
+  $('#bfr-modal').classList.remove('hidden'); $('#bfr-q').focus();
+}
+const bfrClose = () => $('#bfr-modal').classList.add('hidden');
+function bfrMark(s) { return escHtml(s.before) + '<mark>' + escHtml(s.match) + '</mark>' + escHtml(s.after); }
+function bfrRender() {
+  const box = $('#bfr-res'), rs = bfr.results;
+  if (!rs.length) { box.innerHTML = `<p class="hint pad">${t('No se ha encontrado ese texto.')}</p>`; $('#bfr-apply').classList.add('hidden'); return; }
+  box.innerHTML = rs.map((r, k) => `<label class="bfr-item"><input type="checkbox" data-k="${k}" checked>
+    <div><div class="bfr-t">${escHtml(r.title)}</div>
+    <div class="bfr-m">${escHtml(STATUS()[r.status] || r.status)} · ${t('{n} coincidencias', { n: r.count })}</div>
+    ${r.snippets.map((s) => `<div class="bfr-s">${bfrMark(s)}</div>`).join('')}</div></label>`).join('');
+  $$('input', box).forEach((c) => (c.onchange = bfrCount));
+  bfrCount();
+}
+const bfrChecked = () => $$('#bfr-res input:checked').map((c) => bfr.results[Number(c.dataset.k)]);
+function bfrCount() {
+  const n = bfrChecked().length, b = $('#bfr-apply');
+  b.classList.remove('hidden'); b.disabled = !n;
+  b.textContent = t('Reemplazar en {n} entradas', { n });
+}
+$('#b-find').onclick = bfrOpen;
+$('#bfr-close').onclick = bfrClose;
+$('#bfr-modal').addEventListener('keydown', (e) => { if (e.key === 'Escape') bfrClose(); if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.type === 'text') $('#bfr-go').click(); });
+$('#bfr-go').onclick = (e) => busy(e.currentTarget, async () => {
+  const query = $('#bfr-q').value;
+  if (!query.trim()) throw new Error(t('Escribe el texto que quieres buscar'));
+  const sc = $('#bfr-scope').value;
+  bfr.query = query; bfr.type = sc === 'page' ? 'page' : 'post';
+  const r = await window.api.blogFindText({ query, opts: bfrOpts(), type: bfr.type, ids: sc === 'sel' ? [...bsel.keys()] : undefined });
+  bfr.results = r.results; bfrRender();
+});
+$('#bfr-apply').onclick = (e) => busy(e.currentTarget, async () => {
+  const sel = bfrChecked(), n = sel.length, rep = $('#bfr-r').value;
+  if (!n) return;
+  if (!await ask(t('¿Reemplazar «{a}» por «{b}» en {n} entradas? Se guardará directamente en tu web y no se puede deshacer desde Ecos.', { a: bfr.query, b: rep, n }), { danger: true, ok: t('Reemplazar') })) return;
+  const r = await window.api.blogReplaceText({ query: bfr.query, replacement: rep, opts: bfrOpts(), ids: sel.map((x) => x.id), type: bfr.type });
+  bfrClose();
+  toast(r.errors.length ? t('{n} entradas cambiadas; {e} con error', { n: r.done, e: r.errors.length }) : t('{n} entradas cambiadas', { n: r.done }), !!r.errors.length);
+  loadBlog();
+});
