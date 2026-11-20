@@ -132,7 +132,7 @@ const publicCfg = () => ({
   lastSeenAt: cfg.lastSeenAt || null,
   wizardDone: !!cfg.wizardDone || (!!cfg.metaUserToken && wpIsConnected()),
   ai: aiPublic(),
-  aiConfigured: (() => { try { ai.PROVIDERS && aiReady(); return true; } catch { return false; } })(),
+  aiConfigured: (() => { try { if (!ai) ai = require('./src/ai'); aiReady(); return true; } catch { return false; } })(),
   startMode: { level: mode, name: MODES[mode].name },
 });
 
@@ -140,6 +140,7 @@ const publicCfg = () => ({
 function aiPublic() {
   const provs = cfg.ai?.providers || {};
   return {
+    configured: (() => { try { aiReady(); return true; } catch { return false; } })(),
     active: cfg.ai?.active || 'anthropic',
     providers: Object.fromEntries(Object.entries(ai.PROVIDERS).map(([id, d]) => [id, {
       name: d.name, label: d.label, keyUrl: d.keyUrl, needsKey: d.needsKey, defaultBase: d.base || '', defaultModel: d.defaultModel || '',

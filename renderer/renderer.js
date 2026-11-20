@@ -162,6 +162,11 @@ let aiSel = null; // proveedor activo (el que se ve y se usa)
 const logoOf = (id) => `assets/ai/${id}-${document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'}.png`;
 function renderAi() {
   const A = CFG.ai; if (!A) return;
+  // los botones de IA del editor se activan en cuanto hay una IA lista (sin reiniciar la app)
+  if (A.configured !== undefined) {
+    CFG.aiConfigured = A.configured;
+    $$('#ai-article, #ai-alts').forEach((b) => { b.disabled = !CFG.aiConfigured; b.parentElement.title = CFG.aiConfigured ? '' : t('Configura una IA en «Conexiones» para usar estos botones.'); });
+  }
   aiSel = A.active;
   const act = A.providers[A.active];
   const CLI_NAMES = { claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini CLI' };
