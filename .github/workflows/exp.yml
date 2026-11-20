@@ -13,7 +13,7 @@ jobs:
           $sr = (Get-ChildItem "$env:WINDIR\Microsoft.NET\assembly\GAC_MSIL\System.Runtime" -Recurse -Filter System.Runtime.dll | Select-Object -First 1).FullName
           $tt = (Get-ChildItem "$env:WINDIR\Microsoft.NET\assembly\GAC_MSIL\System.Threading.Tasks" -Recurse -Filter System.Threading.Tasks.dll | Select-Object -First 1).FullName
           Write-Host "fachadas: $sr | $tt"
-          & "$fw\csc.exe" /nologo /target:exe /platform:anycpu /out:winhello.exe /r:"$md\Windows.Security.winmd" /r:"$md\Windows.Foundation.winmd" /r:"$md\Windows.Storage.winmd" /r:"$fw\System.Runtime.WindowsRuntime.dll" /r:"$sr" /r:"$tt" build\winhello.cs
+          & "$fw\csc.exe" /nologo /target:exe /platform:anycpu /out:winhello.exe /r:"$md\Windows.Security.winmd" /r:"$md\Windows.Foundation.winmd" /r:"$md\Windows.Storage.winmd" /r:"$sr" build\winhello.cs
           Write-Host "compilado: $(Test-Path winhello.exe) $((Get-Item winhello.exe -ErrorAction SilentlyContinue).Length) bytes"
           Write-Host "check: $(.\winhello.exe check)"
           Write-Host "selftest: $(.\winhello.exe selftest aG9sYQ==)"
