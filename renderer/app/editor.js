@@ -262,6 +262,11 @@ $('#ai-alts').onclick = (e) => busy(e.target, async () => {
   toast(t('Descripciones añadidas. Puedes corregirlas debajo de cada foto.'));
 });
 
+// Dirección de la imagen destacada (por si en WordPress hay que buscarla o subirla)
+function featuredUrl() {
+  const all = [...(draft.blocks || []).flatMap((b) => (b.img ? [b.img] : b.images || [])), ...(window.BlockEditor?.media || []), ...(draft.extraMedia || [])];
+  return all.find((i) => i.id === draft.featuredImageId)?.url || '';
+}
 // Datos de la entrada para enviar o previsualizar
 const draftPayload = (status) => ({
   postId: draft.postId,
@@ -269,7 +274,7 @@ const draftPayload = (status) => ({
   tags: $('#d-tags').value.split(',').map((x) => x.trim()).filter(Boolean),
   categories: $$('#d-cats input:checked').map((i) => i.value),
   status, scheduleAt: status === 'future' ? $('#d-schedule').value : null,
-  featuredImageId: draft.featuredImageId, keepDate: $('#d-keepdate').checked, date: draft.date, keys: draftKeys,
+  featuredImageId: draft.featuredImageId, featuredImageUrl: featuredUrl(), keepDate: $('#d-keepdate').checked, date: draft.date, keys: draftKeys,
   slug: slugify($('#d-slug').value),
   recreate: !!draft.previewOnly,
 });

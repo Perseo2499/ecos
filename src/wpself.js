@@ -129,6 +129,17 @@ async function uploadFile(cfg, filePath) {
   const ext = path.extname(filePath).slice(1).toLowerCase();
   return uploadBuffer(cfg, fs.readFileSync(filePath), path.basename(filePath), MIME[ext] || 'application/octet-stream');
 }
+// ¿Existe este medio en la biblioteca?
+const mediaExists = (cfg, id) => req(cfg, `/wp/v2/media/${id}?_fields=id`).then((m) => !!m?.id, () => false);
+// Busca en la biblioteca un medio por su dirección (también por la de alguno de sus tamaños)
+async function findMediaByUrl(cfg, url) {
+  const name = decodeURIComponent(new URL(url).pathname.split('/').pop() || '').replace(/\.[^.]*$/, '').replace(/-\d+x\d+$/, '').replace(/-scaled$/, '');
+  if (!name) return null;
+  const list = await req(cfg, `/wp/v2/media?search=${encodeURIComponent(name)}&per_page=30&_fields=id,source_url,media_details`);
+  const same = (u) => u && u.split('?')[0].replace(/^https?:/, '') === url.split('?')[0].replace(/^https?:/, '');
+  const m = (list || []).find((x) => same(x.source_url) || Object.values(x.media_details?.sizes || {}).some((s) => same(s.source_url)));
+  return m ? m.id : null;
+}
 // Los archivos de Meta se descargan en el ordenador y se suben (WordPress propio no los descarga por URL)
 async function uploadFromUrls(cfg, urls) {
   const out = [];
@@ -316,4 +327,4 @@ async function saveStructure(cfg, ch, progress = () => {}) {
   return { errors };
 }
 
-module.exports = { siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, updateContent, publicBase, publicUrl };
+module.exports = { mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, updateContent, publicBase, publicUrl };

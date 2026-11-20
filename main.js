@@ -393,13 +393,36 @@ handle('site:styles', async () => {
 
 // d: { title, blocks, tags, categories, status ('draft'|'publish'|'future'), date, scheduleAt, excerpt,
 //      featuredImageId, keepDate, keys }. El contenido se genera aquí a partir de las secciones del editor.
+// La imagen destacada tiene que ser un medio de la biblioteca de WordPress. Las fotos de entradas antiguas o
+// restauradas a veces solo tienen su dirección (o un número que ya no existe): se busca por la dirección y,
+// si no está, se sube a la biblioteca.
+async function resolveFeatured(d) {
+  const id = d.featuredImageId;
+  if (!id) return null;
+  const url = d.featuredImageUrl || (/^https?:\/\//.test(String(id)) ? String(id) : '');
+  const n = Number(id);
+  if (Number.isInteger(n) && n > 0 && (!isSelf() || await WP().mediaExists(cfg, n))) return n;
+  if (!url) { log('Imagen destacada sin dirección; se envía sin ella', id); return null; }
+  try {
+    const found = isSelf() ? await WP().findMediaByUrl(cfg, url).catch(() => null) : null;
+    if (found) return found;
+    const [m] = await wpCall(() => WP().uploadFromUrls(cfg, [url]));
+    log('Imagen destacada subida a la biblioteca', m.id);
+    return m.id;
+  } catch (e) {
+    log('No se pudo preparar la imagen destacada', url, e.message);
+    sendToast('No se pudo usar la imagen destacada (' + e.message + '); la entrada se envía sin ella.', true);
+    return null;
+  }
+}
 handle('draft:publish', async (d) => {
   // Texto alternativo: se guarda también en la biblioteca de medios
   for (const img of d.blocks ? blockImages(d.blocks) : d.sections.flatMap((x) => x.images)) {
-    if (img.alt) await wpCall(() => WP().updateMedia(cfg, img.id, { alt: img.alt })).catch((e) => log('No se pudo guardar el alt', img.id, e.message));
+    if (img.alt && Number(img.id) > 0) await wpCall(() => WP().updateMedia(cfg, img.id, { alt: img.alt })).catch((e) => log('No se pudo guardar el alt', img.id, e.message));
   }
   if (d.status === 'future' && (!d.scheduleAt || new Date(d.scheduleAt) <= new Date())) throw new Error('Elige una fecha y hora futuras para programar la entrada.');
   // Si ya se guardó como borrador para la vista previa, se actualiza esa misma entrada
+  d.featuredImageId = await resolveFeatured(d);
   const fields = postFields(d, d.status || 'draft');
   // WordPress pone como «fecha de modificación» la de la entrada solo cuando se crea; cada vez que se
   // actualiza pasa a ser la de ese momento (y muchos temas muestran esa). Por eso el borrador que se guardó
