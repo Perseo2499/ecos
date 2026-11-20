@@ -28,7 +28,7 @@ function current(aiCfg) {
   const p = aiCfg?.providers?.[id] || {};
   const def = PROVIDERS[id];
   if (!def) throw new Error('Proveedor de IA desconocido');
-  if (def.needsKey && !p.key) throw new Error(`Falta la clave de ${def.name} (Conexiones → IA)`);
+  if (def.needsKey && !p.key) throw new Error(`La IA elegida es ${def.name} y le falta la clave. Pon su clave en Conexiones → IA, o elige allí «CLI local» → «Claude Code» para usar tu sesión de Claude Code (necesita el modo desarrollador).`);
   const model = (p.model || def.defaultModel || '').trim();
   if (def.cli) {
     if (!p.tool) throw new Error('Elige qué CLI usar (Conexiones → IA → CLI local)');

@@ -810,10 +810,10 @@ body.dragging-internal .g-grid .drop-zone.small, body.dragging-internal .g-car .
 .cli-tools button:disabled { opacity: .45; cursor: help; }
 
 /* ---- Editor completo: barra de formato ---- */
-.fmt-bar { position: sticky; top: -32px; z-index: 20; display: flex; flex-wrap: wrap; align-items: center; gap: 2px; max-width: 860px; margin: -16px auto 18px;
+.fmt-bar { position: sticky; top: -24px; z-index: 20; display: flex; flex-wrap: wrap; align-items: center; gap: 2px; max-width: 860px; margin: -16px auto 18px;
   padding: 6px 8px; border-radius: var(--r-xl); background: var(--surface-c-lowest); box-shadow: var(--e2); transition: opacity .2s; }
 :root[data-theme="dark"] .fmt-bar { background: var(--surface-c-high); }
-.fmt-bar.off { opacity: .55; }
+.fmt-bar.off > * { opacity: .45; }
 .fmt-bar select { height: 34px; padding: 0 26px 0 10px; border: 0; border-radius: var(--r-full); background-color: var(--surface-c-high); color: var(--on-surface);
   font: 500 13px/1 inherit; max-width: 150px; }
 .fmt-bar select:disabled, .fmt-bar button:disabled { opacity: .35; pointer-events: none; }
