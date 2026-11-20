@@ -156,8 +156,28 @@ async function toRest(cfg, f) {
   };
 }
 const fromRest = (p) => ({ ID: p.id, URL: p.link, status: p.status, date: p.date_gmt ? p.date_gmt + 'Z' : p.date });
-const createPost = async (cfg, f) => fromRest(await req(cfg, `/wp/v2/${f.type === 'page' ? 'pages' : 'posts'}`, { method: 'POST', json: await toRest(cfg, f) }));
-const updatePost = async (cfg, id, f) => fromRest(await req(cfg, `/wp/v2/posts/${id}`, { method: 'POST', json: await toRest(cfg, f) }));
+// Guarda la entrada y comprueba que WordPress se ha quedado con la fecha pedida. En los borradores,
+// WordPress puede dejar la fecha «sin fijar» y entonces, al publicarlos desde wp-admin, les pone la de ese
+// momento; si la fecha guardada no coincide, se vuelve a enviar (local y UTC) para dejarla fijada.
+async function savePost(cfg, route, f) {
+  const body = await toRest(cfg, f);
+  let p = await req(cfg, route, { method: 'POST', json: body });
+  if (body.date_gmt) {
+    const want = new Date(body.date_gmt + 'Z').getTime();
+    const got = p.date_gmt ? new Date(p.date_gmt + 'Z').getTime() : NaN;
+    if (!(Math.abs(got - want) < 60000)) {
+      const coll = f.type === 'page' ? 'pages' : 'posts';
+      // la hora local de la web se calcula con su diferencia horaria (Ajustes → Generales → Zona horaria)
+      const site = await req(cfg, '/').catch(() => ({}));
+      const offset = p.date && p.date_gmt ? new Date(p.date + 'Z') - new Date(p.date_gmt + 'Z') : (Number(site.gmt_offset) || 0) * 3600000;
+      const local = new Date(want + offset).toISOString().slice(0, 19);
+      p = await req(cfg, `/wp/v2/${coll}/${p.id}`, { method: 'POST', json: { date: local, date_gmt: body.date_gmt } });
+    }
+  }
+  return fromRest(p);
+}
+const createPost = (cfg, f) => savePost(cfg, `/wp/v2/${f.type === 'page' ? 'pages' : 'posts'}`, f);
+const updatePost = (cfg, id, f) => savePost(cfg, `/wp/v2/${f.type === 'page' ? 'pages' : 'posts'}/${id}`, f);
 
 async function listPosts(cfg, { type = 'post', status = 'any', search = '', page = 1, number = 20 } = {}) {
   const coll = type === 'page' ? 'pages' : 'posts';

@@ -57,6 +57,7 @@ async function savePrefs(patch) { CFG = await window.api.setConfig({ prefs: { ..
 $$('[data-copy]').forEach((b) => b.onclick = () => { navigator.clipboard.writeText($(b.dataset.copy).value); toast(t('Copiado')); });
 
 // ---------------------------------------------------------------- pestañas
+new ResizeObserver(([e]) => document.documentElement.style.setProperty('--appbar-h', Math.round(e.target.getBoundingClientRect().height) + 'px')).observe($('.appbar'));
 function showTab(name) {
   $$('header nav button, .tab').forEach((x) => x.classList.remove('active'));
   $(`header nav button[data-tab="${name}"]`).classList.add('active'); $('#tab-' + name).classList.add('active');
@@ -560,6 +561,7 @@ $('#send').onclick = (e) => busy(e.target, async () => {
   exported = res.exported; lastSent = res; draft.postId = res.postId || draft.postId;
   $('#sent-text').textContent = res.status === 'publish' ? t('¡Entrada publicada!')
     : res.status === 'future' ? t('Entrada programada para el {d}.', { d: fmtDate(res.date) }) : t('Borrador creado en WordPress.');
+  if (res.status !== 'future' && res.date) $('#sent-text').textContent += ' ' + t('Fecha de la entrada: {d}.', { d: fmtDate(res.date) });
   $('#sent').classList.remove('hidden');
   selected.clear(); updateCount(); renderFeed(); blog.loaded = false;
 });
@@ -653,6 +655,7 @@ $('#preview').onclick = (e) => busy(e.target, async () => {
       ${featured ? `<img class="ecos-featured wp-post-image" src="${escHtml(featured.url)}" alt="">` : ''}
       <div class="entry-content wp-block-post-content is-layout-constrained">${content}</div>
     </article></main></body></html>`;
+  $('#pv-frame').onload = () => $('#pv-frame').contentDocument.querySelectorAll('[data-ecos-carousel]').forEach((el) => window.ecosCarousel(el));
   $('#pv-modal').classList.remove('hidden');
   if (!site.css) toast(t('No se pudieron leer los estilos de tu web; la vista previa usa un estilo genérico.'));
 });

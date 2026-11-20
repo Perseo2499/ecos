@@ -9,7 +9,7 @@
   const root = document.documentElement;
   const TABS = ['posts', 'blog', 'connections', 'settings'];
   const n = TABS.length;
-  const STEP = 56, PILL = 200, PAD = 6; // hueco de cada icono, ancho de la píldora, relleno de la pista
+  const STEP = 50, PILL = 190, PAD = 5; // hueco de cada icono, ancho de la píldora, relleno de la pista
   const INNER = (n - 1) * STEP + PILL;
   const DUR = 400;
   // Iconos de puntos (pares x,y de 0 a 1): rombo, triángulo, cruz y aspa
@@ -39,7 +39,7 @@
     bar.className = 'vnav';
     bar.style.width = INNER + PAD * 2 + 'px';
     bar.innerHTML = `<div class="vnav-pill"></div>` + TABS.map((k) => `<div class="vnav-item" data-tab="${k}"><span class="vnav-ic">${dotIcon(k)}</span><span class="vnav-lbl"><span></span></span></div>`).join('');
-    document.body.appendChild(bar);
+    $('.appbar nav.tabs').insertAdjacentElement('beforebegin', bar);
     pill = $('.vnav-pill', bar);
     pill.style.width = PILL + 'px';
     items = $$('.vnav-item', bar);

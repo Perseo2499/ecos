@@ -191,16 +191,46 @@ function imageBlockFull(img, cap = '') {
   return `<!-- wp:image {"id":${img.id},"sizeSlug":"large","linkDestination":"none"} -->\n<figure class="wp-block-image size-large"><img src="${esc(img.url)}"${alt} class="wp-image-${img.id}"/>${caption(cap)}</figure>\n<!-- /wp:image -->`;
 }
 
-// Carrusel sin JavaScript (desplazamiento con «scroll-snap»): se ve igual en cualquier tema.
-// Usa un bloque HTML, que WordPress conserva si el usuario puede publicar HTML (administradores).
+// Carrusel: diapositivas que se deslizan (scroll-snap, funciona sin JavaScript) con la foto activa
+// destacada, fondo desenfocado de la propia foto (los carteles no se recortan), flechas, puntos, contador
+// y paso automático, que añade renderer/carousel.js incrustado en la entrada.
+// Va en un bloque HTML, que WordPress conserva si quien publica puede usar HTML (administradores).
+const fs = require('fs');
+const path = require('path');
+let CAROUSEL_JS = '';
+try {
+  CAROUSEL_JS = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'carousel.js'), 'utf8')
+    .split('\n').filter((l) => !/^\s*\/\//.test(l)).map((l) => l.trim()).join('\n');
+} catch { /* sin script: el carrusel se desliza igualmente */ }
+
 function carouselBlock(b) {
   const id = 'ecos-c-' + b.id.replace(/[^a-z0-9]/gi, '');
-  const css = `#${id}{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:8px;margin:1.5em 0}`
-    + `#${id} figure{flex:0 0 88%;margin:0;scroll-snap-align:center}`
-    + `#${id} img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:14px;display:block}`
-    + `#${id} figcaption{font-size:.85em;opacity:.75;margin-top:6px}`;
-  const figs = b.images.map((i) => `<figure><img src="${esc(i.url)}" alt="${esc(i.alt || '')}" loading="lazy"/></figure>`).join('');
-  return `<!-- wp:html -->\n<div class="ecos-carrusel" id="${id}"><style>${css}</style>${figs}</div>\n<!-- /wp:html -->`;
+  const S = `#${id}`;
+  const css = `${S}{position:relative;margin:2em 0;outline:none;--ec-r:18px}`
+    + `${S} .ec-track{position:relative;display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;padding:4px 8%;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-top:14px;padding-bottom:28px}`
+    + `${S} .ec-track::-webkit-scrollbar{display:none}`
+    + `${S} .ec-slide{position:relative;flex:0 0 84%;margin:0;aspect-ratio:4/3;border-radius:var(--ec-r);overflow:hidden;scroll-snap-align:center;background:#111;box-shadow:0 10px 30px rgba(0,0,0,.18);transition:transform .5s cubic-bezier(.2,0,0,1),opacity .5s,filter .5s}`
+    + `${S} .ec-slide::before{content:"";position:absolute;inset:-40px;background:var(--bg) center/cover;filter:blur(28px) brightness(.75) saturate(1.2)}`
+    + `${S} .ec-slide img{position:relative;display:block;width:100%;height:100%;object-fit:contain;margin:0;border-radius:0}`
+    + `${S} .ec-slide figcaption{position:absolute;left:0;right:0;bottom:0;padding:28px 18px 14px;color:#fff;font-size:.85em;background:linear-gradient(transparent,rgba(0,0,0,.65))}`
+    + `${S}.ec-js .ec-slide:not(.ec-on){transform:scale(.9);opacity:.5;filter:saturate(.6)}`
+    + `${S} .ec-btn{position:absolute;top:calc(50% - 18px);z-index:2;width:46px;height:46px;border:0;border-radius:50%;background:rgba(255,255,255,.88);color:#111;font-size:30px;line-height:1;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25);transition:transform .2s,background .2s;padding:0 0 4px}`
+    + `${S} .ec-btn:hover{transform:scale(1.1);background:#fff}`
+    + `${S} .ec-prev{left:calc(8% - 23px)}${S} .ec-next{right:calc(8% - 23px)}`
+    + `${S} .ec-count{position:absolute;top:16px;right:calc(8% + 14px);z-index:2;padding:4px 11px;border-radius:999px;background:rgba(0,0,0,.55);color:#fff;font:600 12px/1.4 system-ui,sans-serif;letter-spacing:.5px;backdrop-filter:blur(6px)}`
+    + `${S} .ec-bar{display:block;height:3px;margin:-6px 8% 0;border-radius:3px;background:currentColor;opacity:.35;transform:scaleX(0);transform-origin:left}`
+    + `${S}.ec-static .ec-bar{display:none}`
+    + `${S} .ec-dots{display:flex;justify-content:center;gap:7px;margin-top:12px}`
+    + `${S} .ec-dot{width:8px;height:8px;padding:0;border:0;border-radius:8px;background:currentColor;opacity:.25;cursor:pointer;transition:width .3s,opacity .3s}`
+    + `${S} .ec-dot.ec-on{width:26px;opacity:.85}`
+    + `@media (max-width:600px){${S} .ec-slide{flex-basis:90%}${S} .ec-btn{display:none}}`;
+  const figs = b.images.map((i) => {
+    const alt = esc(i.alt || '');
+    return `<figure class="ec-slide" style="--bg:url('${esc(i.url)}')"><img src="${esc(i.url)}" alt="${alt}" loading="lazy"/>${b.captions && i.alt ? `<figcaption>${alt}</figcaption>` : ''}</figure>`;
+  }).join('');
+  const auto = b.autoplay === false ? 0 : 5000;
+  const script = CAROUSEL_JS ? `<script>${CAROUSEL_JS}</script>` : '';
+  return `<!-- wp:html -->\n<div class="ecos-carrusel" id="${id}" data-ecos-carousel data-autoplay="${auto}"><style>${css}</style><div class="ec-track">${figs}</div></div>${script}\n<!-- /wp:html -->`;
 }
 
 // Estilos de bloque (alineación, tamaño, fuente, colores) con los atributos estándar de WordPress
