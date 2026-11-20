@@ -143,3 +143,27 @@ test('carrusel en la web propia: galería de Spectra que se lee de vuelta como c
   assert.equal(back[0].type, 'carousel');
   assert.deepEqual(back[0].images.map((i) => i.id), [1, 2]);
 });
+
+test('mosaico: se adapta al número de piezas sin huecos y admite vídeos', () => {
+  const { mosaicLayout } = require('../renderer/mosaic');
+  for (let n = 2; n <= 16; n++) {
+    const { cells, rows } = mosaicLayout(n);
+    assert.equal(cells.length, n);
+    const used = new Set();
+    for (const c of cells) for (let r = c.row; r < c.row + c.rows; r++) for (let k = c.col; k < c.col + c.cols; k++) { assert.ok(!used.has(r + ':' + k), `solape con ${n}`); used.add(r + ':' + k); }
+    assert.equal(used.size, rows * 6, `huecos con ${n}`);
+  }
+  const { parseBlocks } = require('../src/parseblocks');
+  const items = [{ id: 1, url: 'a.jpg', alt: '' }, { type: 'video', id: 5, url: 'v.mp4' }, { id: 2, url: 'b.jpg', alt: '' }];
+  const back = parseBlocks(T.composeBlocks([{ id: 'm1', type: 'gallery', layout: 'mosaic', images: items }]))[0];
+  assert.equal(back.layout, 'mosaic');
+  assert.deepEqual(back.images.map((i) => i.type || 'image'), ['image', 'video', 'image']);
+  const grid = parseBlocks(T.composeBlocks([{ id: 'g1', type: 'gallery', columns: 2, images: items }]))[0];
+  assert.equal(grid.columns, 2);
+  assert.equal(grid.images[1].url, 'v.mp4');
+  // el carrusel solo lleva fotos; el estilo se conserva
+  const car = parseBlocks(T.composeBlocks([{ id: 'c2', type: 'carousel', view: 'peek', squares: true, images: items }], { spectra: true }))[0];
+  assert.equal(car.images.length, 2);
+  assert.equal(car.view, 'peek');
+  assert.equal(car.squares, true);
+});

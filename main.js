@@ -334,6 +334,7 @@ handle('draft:preview', async (d) => {
   return { postId: post.ID, previewUrl: `${base}/?p=${post.ID}&preview=true` };
 });
 handle('draft:compose', (blocks) => composeBlocks(blocks));
+handle('draft:peekCss', () => require('./src/transform').PEEK_CSS);
 // Autoguardado del borrador en curso (para recuperarlo si se cierra el editor o la app)
 const autosaveFile = () => path.join(app.getPath('userData'), 'borrador-autoguardado.json');
 handle('draft:autosave', (data) => { fs.writeFileSync(autosaveFile(), store.seal(cfg, { ...data, savedAt: new Date().toISOString() })); return true; });

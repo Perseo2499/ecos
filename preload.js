@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('api', {
   publish: (d) => call('draft:publish', d),
   previewDraft: (d) => call('draft:preview', d),
   composeDraft: (blocks) => call('draft:compose', blocks),
+  peekCss: () => call('draft:peekCss'),
   pullPost: (id) => call('post:pull', id),
   autosave: (d) => call('draft:autosave', d),
   autosaved: () => call('draft:autosaved'),

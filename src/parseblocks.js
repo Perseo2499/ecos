@@ -91,15 +91,24 @@ function toBlock(t) {
       // galería de Spectra: en carrusel es el carrusel de Ecos; si no, una galería
       const images = (a.mediaGallery || []).filter((m) => m && m.url).map((m) => ({ id: Number(m.id) || m.url, url: m.url, alt: m.alt || '' }));
       if (!images.length) return raw();
-      return a.feedLayout === 'carousel' ? { id: bid(), type: 'carousel', images, ...(a.carouselAutoplay === false ? { autoplay: false } : {}), ...(a.imageDisplayCaption ? { captions: true } : {}) }
+      const view = /\becos-peek\b/.test(a.className || '') ? 'peek' : (a.columnsDesk || 1) > 1 ? 'multi' : 'single';
+      return a.feedLayout === 'carousel' ? { id: bid(), type: 'carousel', images, view, ...(a.carouselSquares ? { squares: true } : {}), ...(a.carouselAutoplay === false ? { autoplay: false } : {}), ...(a.imageDisplayCaption ? { captions: true } : {}) }
         : { id: bid(), type: 'gallery', images, columns: a.columnsDesk || 3 };
     }
     case 'html': {
       // carrusel y mosaico de Ecos
-      if (/class="ecos-(carrusel|mosaico)"/.test(h)) {
-        // (sin las imágenes de fondo desenfocado del carrusel, que repiten cada foto)
-        const images = [...h.matchAll(/<img\b[^>]*>/gi)].filter((m) => !/class="ec-bg"/.test(m[0])).map((m) => imgOf(m[0])).filter(Boolean);
-        if (images.length) return /ecos-carrusel/.test(h) ? { id: bid(), type: 'carousel', images } : { id: bid(), type: 'gallery', layout: 'mosaic', images, columns: 3 };
+      if (/class="ecos-(carrusel|mosaico|galeria)"/.test(h)) {
+        // fotos y vídeos en orden (sin las imágenes de fondo desenfocado del carrusel, que repiten cada foto)
+        const images = [...h.matchAll(/<(img|video)\b[^>]*>/gi)].filter((m) => !/class="ec-bg"/.test(m[0])).map((m) => {
+          if (m[1].toLowerCase() !== 'video') return imgOf(m[0]);
+          const url = attr(m[0], 'src');
+          return url ? { type: 'video', id: Number(attr(m[0], 'data-id')) || url, url, ...(attr(m[0], 'poster') ? { poster: attr(m[0], 'poster') } : {}) } : null;
+        }).filter(Boolean);
+        if (images.length) {
+          if (/ecos-carrusel/.test(h)) return { id: bid(), type: 'carousel', images };
+          if (/ecos-galeria/.test(h)) return { id: bid(), type: 'gallery', images, columns: Number((h.match(/data-cols="(\d)"/) || [])[1]) || 3 };
+          return { id: bid(), type: 'gallery', layout: 'mosaic', images, columns: 3 };
+        }
       }
       return raw();
     }

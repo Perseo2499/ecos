@@ -60,8 +60,8 @@
     draft: null, media: [], onChange: () => {}, onOpenMedia: () => {},
     undo: [], redo: [],
 
-    mount(draft, { media, onChange, onOpenMedia }) {
-      this.draft = draft; this.media = media; this.onChange = onChange || (() => {}); this.onOpenMedia = onOpenMedia || (() => {});
+    mount(draft, { media, onChange, onOpenMedia, onPeekCss }) {
+      this.draft = draft; this.media = media; this.onChange = onChange || (() => {}); this.onOpenMedia = onOpenMedia || (() => {}); this.onPeekCss = onPeekCss;
       this.undo = []; this.redo = [];
       this.liftFeatured(); // la destacada va arriba y sale del cuerpo
       this.render(); this.renderMedia();
@@ -166,7 +166,9 @@
     // --- Arrastrar fotos ---------------------------------------------------------------
     // drag = { kind: 'media', media } desde la bandeja · { kind: 'photo', block, index } desde un bloque
     //        (index: posición en galería/carrusel; null en imagen e imagen y texto) · { kind: 'block', id }
-    isPhoto(d) { return d && (d.kind === 'photo' || (d.kind === 'media' && d.media.type !== 'video')); },
+    isPhoto(d) { return !!d && (d.kind === 'photo' ? this.peek(d)?.type !== 'video' : d.kind === 'media' && d.media.type !== 'video'); },
+    // foto o vídeo (para galerías y mosaicos)
+    isItem(d) { return !!d && (d.kind === 'photo' || d.kind === 'media'); },
     peek(d) {
       if (d.kind === 'media') return { ...d.media };
       const b = this.draft.blocks.find((x) => x.id === d.block);
@@ -174,7 +176,10 @@
     },
     // Saca la foto de donde estaba (si viene de un bloque) y la devuelve; llamar dentro de change()
     take(d) {
-      if (d.kind === 'media') { const { type, poster, ...img } = d.media; return { ...img, alt: img.alt || '' }; }
+      if (d.kind === 'media') {
+        const { type, poster, ...m } = d.media;
+        return type === 'video' ? { ...m, type: 'video', ...(poster ? { poster } : {}) } : { ...m, alt: m.alt || '' };
+      }
       const i = this.draft.blocks.findIndex((x) => x.id === d.block);
       const b = this.draft.blocks[i];
       if (!b) return null;
@@ -184,12 +189,13 @@
       return img;
     },
     // Hace que un elemento acepte fotos soltadas; onDrop(img) se ejecuta ya dentro de change()
-    acceptPhoto(el, onDrop, { sameOk = () => true } = {}) {
-      el.addEventListener('dragover', (e) => { if (this.isPhoto(drag) && sameOk(drag)) { e.preventDefault(); e.stopPropagation(); el.classList.add('over'); } });
+    acceptPhoto(el, onDrop, { sameOk = () => true, video = false } = {}) {
+      const ok = (d) => (video ? this.isItem(d) : this.isPhoto(d)) && sameOk(d);
+      el.addEventListener('dragover', (e) => { if (ok(drag)) { e.preventDefault(); e.stopPropagation(); el.classList.add('over'); } });
       el.addEventListener('dragleave', (e) => { if (!el.contains(e.relatedTarget)) el.classList.remove('over'); });
       el.addEventListener('drop', (e) => {
         el.classList.remove('over');
-        if (!this.isPhoto(drag) || !sameOk(drag)) return;
+        if (!ok(drag)) return;
         e.preventDefault(); e.stopPropagation();
         const d = drag; drag = null; endDrag();
         this.change(() => { const img = this.take(d); if (img) onDrop(img, d); });
@@ -245,7 +251,11 @@
           this.change(() => this.draft.blocks.splice(at(), 0, this.create('video', { video: d.media })));
         } else {
           // foto de la bandeja o sacada de un bloque → bloque de imagen propio en esa posición
-          this.change(() => { const img = this.take(d); if (img) this.draft.blocks.splice(at(), 0, this.create('image', { img })); });
+          this.change(() => {
+            const it = this.take(d);
+            if (!it) return;
+            if (it.type === 'video') { const { type, ...video } = it; this.draft.blocks.splice(at(), 0, this.create('video', { video })); } else this.draft.blocks.splice(at(), 0, this.create('image', { img: it }));
+          });
         }
       };
       return el;
@@ -287,7 +297,7 @@
       };
       $$('.blk-tools [data-a]', el).forEach((btn) => (btn.onclick = act[btn.dataset.a]));
       const handle = $('.blk-handle', el);
-      handle.ondragstart = (e) => { drag = { kind: 'block', id: b.id }; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/x-ecos', 'block'); e.dataTransfer.setDragImage(el, 20, 20); startDrag(el, 'dragging-block'); };
+      handle.ondragstart = (e) => { drag = { kind: 'block', id: b.id }; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/x-ecos', 'block'); ghost(e, `<span class="ms">${T.icon}</span>${esc(T.name)}`); startDrag(el, 'dragging-block'); };
       handle.ondragend = () => { drag = null; endDrag(); };
       this.body(b, i, $('.blk-body', el), $('.blk-extra', el));
       return el;
@@ -457,22 +467,47 @@
 
         case 'gallery': case 'carousel': {
           const grid = document.createElement('div');
-          grid.className = b.type === 'gallery' ? 'g-grid' + (b.layout === 'mosaic' ? ' mosaic' : '') : 'g-car';
+          grid.className = b.type === 'gallery' ? 'g-grid' + (b.layout === 'mosaic' ? ' mosaic' : '') : `g-car v-${b.view || 'single'}${b.squares ? ' squares' : ''}`;
           if (b.type === 'gallery') grid.style.setProperty('--cols', b.columns);
-          b.images.forEach((img, k) => grid.appendChild(this.photo(img, () => this.change(() => b.images.splice(k, 1)), b, k)));
-          const add = this.dropZone(b.images.length ? t('Suelta más fotos aquí') : t('Arrastra aquí fotos'), (m) => this.change(() => b.images.push({ ...m })), true);
+          const vids = b.type === 'gallery'; // los vídeos van en galerías y mosaicos (el carrusel de la web solo muestra fotos)
+          const cells = b.layout === 'mosaic' && b.type === 'gallery' ? window.Mosaic.mosaicLayout(b.images.length).cells : null;
+          b.images.forEach((img, k) => {
+            const ph = this.photo(img, () => this.change(() => b.images.splice(k, 1)), b, k);
+            if (cells) Object.assign(ph.style, { gridColumn: `${cells[k].col} / span ${cells[k].cols}`, gridRow: `${cells[k].row} / span ${cells[k].rows}` });
+            grid.appendChild(ph);
+          });
+          const add = this.dropZone(b.images.length ? (vids ? t('Suelta más fotos o vídeos aquí') : t('Suelta más fotos aquí')) : (vids ? t('Arrastra aquí fotos o vídeos') : t('Arrastra aquí fotos')),
+            (m) => this.change(() => b.images.push(this.take({ kind: 'media', media: m }))), true, vids ? 'any' : 'image');
           grid.appendChild(add);
           body.appendChild(grid);
-          this.acceptPhoto(body, (img) => b.images.push(img)); // soltar en un hueco: al final
+          this.acceptPhoto(body, (img) => b.images.push(img), { video: vids }); // soltar en un hueco: al final
           // Colocación: cuadrícula (con columnas), mosaico o carrusel
           const lay = b.type === 'carousel' ? 'carousel' : b.layout === 'mosaic' ? 'mosaic' : 'grid';
           extra.innerHTML = [['grid', 'grid_view', t('Cuadrícula')], ['mosaic', 'dashboard', t('Mosaico')], ['carousel', 'view_carousel', t('Carrusel')]]
             .map(([k, ic, n]) => `<button class="lv ${lay === k ? 'on' : ''}" data-lay="${k}" title="${n}"><span class="ms">${ic}</span>${n}</button>`).join('')
-            + (lay === 'grid' ? '<span class="lv-sep"></span>' + [2, 3, 4].map((c) => `<button class="lv ${b.columns === c ? 'on' : ''}" data-c="${c}" title="${t('{n} columnas', { n: c })}">${c}<span class="ms">view_column</span></button>`).join('') : '');
+            + (lay === 'grid' ? '<span class="lv-sep"></span>' + [2, 3, 4].map((c) => `<button class="lv ${b.columns === c ? 'on' : ''}" data-c="${c}" title="${t('{n} columnas', { n: c })}">${c}<span class="ms">view_column</span></button>`).join('') : '')
+            // estilo del carrusel
+            + (lay === 'carousel' ? '<span class="lv-sep"></span>' + [['single', 'crop_landscape', t('Una a una')], ['multi', 'view_week', t('Varias a la vez')], ['peek', 'view_carousel', t('Vecinas asomando')]]
+              .map(([k, ic, n]) => `<button class="lv ${(b.view || 'single') === k ? 'on' : ''}" data-view="${k}" title="${n}"><span class="ms">${ic}</span>${n}</button>`).join('')
+              + `<button class="lv ${b.squares ? 'on' : ''}" data-sq="1" title="${t('Recorta todas las fotos en cuadrado')}"><span class="ms">crop_square</span>${t('Cuadradas')}</button>`
+              + (b.view === 'peek' ? `<button class="lv" data-peekcss="1" title="${t('Copia el estilo que hay que pegar una vez en tu web')}"><span class="ms">content_copy</span>${t('Estilo para la web')}</button>` : '') : '');
           $$('[data-c]', extra).forEach((x) => (x.onclick = () => this.change(() => (b.columns = Number(x.dataset.c)))));
+          $$('[data-view]', extra).forEach((x) => (x.onclick = () => this.change(() => (b.view = x.dataset.view))));
+          $$('[data-sq]', extra).forEach((x) => (x.onclick = () => this.change(() => (b.squares = !b.squares))));
+          $$('[data-peekcss]', extra).forEach((x) => (x.onclick = () => this.onPeekCss?.()));
           $$('[data-lay]', extra).forEach((x) => (x.onclick = () => this.change(() => {
             const k = x.dataset.lay;
-            if (k === 'carousel') { b.type = 'carousel'; } else { b.type = 'gallery'; b.layout = k; b.columns = b.columns || 3; }
+            if (k === 'carousel') {
+              // los vídeos no caben en el carrusel: salen como bloques de vídeo justo después
+              const vs = b.images.filter((i) => i.type === 'video');
+              if (vs.length) {
+                b.images = b.images.filter((i) => i.type !== 'video');
+                const at = this.draft.blocks.indexOf(b) + 1;
+                this.draft.blocks.splice(at, 0, ...vs.map(({ type, ...video }) => this.create('video', { video })));
+                toast(t('Los vídeos no van en el carrusel: se han puesto debajo como bloques de vídeo.'));
+              }
+              b.type = 'carousel';
+            } else { b.type = 'gallery'; b.layout = k; b.columns = b.columns || 3; }
           })));
           break;
         }
@@ -618,9 +653,10 @@
     // Foto dentro de un bloque: ★ destacada, × quitar, alt; se arrastra a cualquier sitio
     photo(img, remove, block, index = null) {
       const fig = document.createElement('div');
-      fig.className = 'ph' + (this.draft.featuredImageId === img.id ? ' featured' : '');
+      const isVid = img.type === 'video';
+      fig.className = 'ph' + (isVid ? ' vid' : '') + (this.draft.featuredImageId === img.id ? ' featured' : '');
       fig.draggable = true;
-      fig.innerHTML = `<img src="${esc(img.url)}" alt="" draggable="false">
+      fig.innerHTML = `${isVid ? `<video src="${esc(img.url)}"${img.poster ? ` poster="${esc(img.poster)}"` : ''} muted preload="metadata" draggable="false"></video><span class="ms fill play">play_circle</span>` : `<img src="${esc(img.url)}" alt="" draggable="false">`}
         <button class="star" title="${t('Usar como imagen destacada (sale del cuerpo y va arriba)')}"><span class="ms fill">star</span></button>
         <button class="del" title="${t('Quitar')}"><span class="ms">close</span></button>
         <input class="alt" placeholder="${t('Descripción (alt)')}" draggable="false">`;
@@ -628,13 +664,15 @@
       $('.alt', fig).oninput = (e) => { img.alt = e.target.value; this.onChange(); };
       $('.star', fig).onclick = () => this.change(() => { this.draft.featuredImageId = img.id; this.liftFeatured(); });
       $('.del', fig).onclick = remove;
-      $('img', fig).onclick = () => this.onOpenMedia(img);
+      $(isVid ? 'video' : 'img', fig).onclick = () => this.onOpenMedia(img);
+      if (isVid) { $('.star', fig).remove(); $('.alt', fig).remove(); }
       fig.ondragstart = (e) => {
         if (e.target.tagName === 'INPUT') { e.preventDefault(); return; }
         e.stopPropagation();
         drag = { kind: 'photo', block: block.id, index };
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/x-ecos', 'photo');
+        ghost(e, isVid ? `<span class="ms">movie</span>${esc(t('Vídeo'))}` : `<img src="${esc(img.url)}" alt="">`);
         startDrag(fig);
       };
       fig.ondragend = () => { drag = null; endDrag(); };
@@ -645,7 +683,7 @@
           let at = index;
           if (d.kind === 'photo' && d.block === block.id && d.index < index) at -= 1; // ya se sacó de antes
           b.images.splice(at + (d.kind === 'photo' && d.block === block.id && d.index < index ? 1 : 0), 0, got);
-        });
+        }, { video: block.type === 'gallery' });
       }
       return fig;
     },
@@ -681,7 +719,7 @@
     pickFromTray(onMedia, kind) {
       const tray = $('#d-media');
       tray.classList.add('picking');
-      const items = $$('.tray-item', tray).filter((x) => (kind === 'video') === (x.dataset.type === 'video'));
+      const items = $$('.tray-item', tray).filter((x) => kind === 'any' || (kind === 'video') === (x.dataset.type === 'video'));
       const done = () => { tray.classList.remove('picking'); items.forEach((x) => (x.onclick = null)); };
       items.forEach((x) => (x.onclick = () => { done(); onMedia({ ...this.media[Number(x.dataset.i)] }); this.renderMedia(); }));
       setTimeout(() => document.addEventListener('mousedown', function off(e) { if (!tray.contains(e.target)) { done(); document.removeEventListener('mousedown', off); } }), 0);
@@ -700,7 +738,10 @@
         it.innerHTML = m.type === 'video'
           ? `${m.poster ? `<img src="${esc(m.poster)}" alt="" draggable="false">` : `<video src="${esc(m.url)}" muted preload="metadata"></video>`}<span class="ms fill play">play_circle</span>`
           : `<img src="${esc(m.url)}" alt="" draggable="false">`;
-        it.ondragstart = (e) => { drag = { kind: 'media', media: { ...m } }; e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('text/x-ecos', 'media'); startDrag(it); };
+        it.ondragstart = (e) => {
+          drag = { kind: 'media', media: { ...m } }; e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('text/x-ecos', 'media');
+          ghost(e, m.type === 'video' ? `<span class="ms">movie</span>${esc(t('Vídeo'))}` : `<img src="${esc(m.url)}" alt="">`); startDrag(it);
+        };
         it.ondragend = () => { drag = null; endDrag(); };
         it.ondblclick = () => this.onOpenMedia(m);
         tray.appendChild(it);
@@ -729,8 +770,41 @@
   let drag = null;
   let dragEl = null;
   // Marca visual mientras se arrastra (y avisa al resto de la app de que es un arrastre interno)
-  function startDrag(el, cls = 'dragging-media') { dragEl = el; el.classList.add('dragging'); document.body.classList.add(cls, 'dragging-internal'); }
+  function startDrag(el, cls = 'dragging-media') { dragEl = el; el.classList.add('dragging'); document.body.classList.add(cls, 'dragging-internal'); autoScroll.start(); }
+  // Imagen pequeña que acompaña al ratón al arrastrar (en vez del bloque entero, que tapaba la pantalla)
+  function ghost(e, html) {
+    const g = document.createElement('div');
+    g.className = 'drag-ghost';
+    g.innerHTML = html;
+    document.body.appendChild(g);
+    e.dataTransfer.setDragImage(g, 18, 18);
+    setTimeout(() => g.remove(), 0);
+  }
+  // Al arrastrar cerca del borde de arriba o de abajo, la página se desplaza sola (más rápido cuanto más cerca)
+  const autoScroll = {
+    y: -1, box: null, raf: 0,
+    start() { if (!this.raf) this.raf = requestAnimationFrame(() => this.tick()); },
+    stop() { cancelAnimationFrame(this.raf); this.raf = 0; this.y = -1; this.box = null; },
+    tick() {
+      this.raf = requestAnimationFrame(() => this.tick());
+      const box = this.box;
+      if (!box || this.y < 0) return;
+      const r = box.getBoundingClientRect(), edge = Math.min(110, r.height / 4);
+      const top = this.y - r.top, bottom = r.bottom - this.y;
+      if (top < edge) box.scrollTop -= Math.ceil(((edge - top) / edge) * 22);
+      else if (bottom < edge) box.scrollTop += Math.ceil(((edge - bottom) / edge) * 22);
+    },
+  };
+  const scroller = (el) => {
+    for (let n = el instanceof Element ? el : null; n && n !== document.body; n = n.parentElement) {
+      const oy = getComputedStyle(n).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight + 4) return n;
+    }
+    return document.getElementById('ed-canvas');
+  };
+  document.addEventListener('dragover', (e) => { if (!drag) return; autoScroll.y = e.clientY; autoScroll.box = scroller(e.target); }, true);
   function endDrag() {
+    autoScroll.stop();
     dragEl?.classList.remove('dragging'); dragEl = null;
     document.body.classList.remove('dragging-media', 'dragging-block', 'dragging-internal');
     $$('#editor .over').forEach((x) => x.classList.remove('over'));

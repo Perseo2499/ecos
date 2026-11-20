@@ -1078,10 +1078,8 @@ img.gl-copy { object-fit: contain; }
 :root[data-vinyl="on"] .dlg-ic.danger { color: var(--vinyl); }
 
 /* Galería en mosaico (editor) */
-.g-grid.mosaic { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 110px; grid-auto-flow: dense; }
-.g-grid.mosaic > .ph:nth-child(6n+1) { grid-column: span 2; grid-row: span 2; }
-.g-grid.mosaic > .ph:nth-child(6n+4) { grid-column: span 2; }
-.g-grid.mosaic > .ph:nth-child(6n+6) { grid-row: span 2; }
+.g-grid.mosaic { grid-template-columns: repeat(6, minmax(0, 1fr)); grid-auto-rows: 72px; }
+.g-grid.mosaic > .drop-zone { grid-column: 1 / -1; min-height: 72px; }
 .g-grid.mosaic .ph { height: 100%; }
 .g-grid.mosaic .ph img { height: 100%; aspect-ratio: auto; }
 .g-grid.mosaic .ph .alt { position: absolute; left: 6px; right: 6px; bottom: 6px; margin: 0; }
@@ -1250,3 +1248,18 @@ body.locked > *:not(#lock):not(#toast):not(.dlg-scrim) { visibility: hidden; }
 .cal-more { font-size: 11px; color: var(--on-surface-var); padding-left: 4px; }
 .cal-sum { margin: 0; }
 :root[data-vinyl="on"] .cal-day { background: #0b0b0b; border: 1px solid #262626; border-radius: 8px; }
+
+/* Vídeos dentro de galerías y mosaicos */
+.ph video { width: 100%; display: block; border-radius: var(--r-l); cursor: zoom-in; background: #000; }
+.g-grid .ph video { aspect-ratio: 1; object-fit: cover; border-radius: var(--r-m); }
+.g-grid.mosaic .ph video { height: 100%; aspect-ratio: auto; }
+.ph.vid .play { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 40px; color: #fff; pointer-events: none; filter: drop-shadow(0 2px 8px rgba(0,0,0,.5)); }
+/* Lo que acompaña al ratón al arrastrar */
+.drag-ghost { position: fixed; top: -200px; left: -200px; display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px;
+  background: var(--primary); color: var(--on-primary); font: 600 13px/1 system-ui, sans-serif; box-shadow: 0 6px 18px rgba(0,0,0,.35); }
+.drag-ghost img { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; margin: -4px -8px; }
+.drag-ghost .ms { font-size: 18px; }
+/* Estilos del carrusel en el editor (como se verán en la web) */
+.g-car.v-single .ph { flex-basis: 100%; }
+.g-car.v-multi .ph { flex-basis: calc((100% - 20px) / 3); }
+.g-car.squares .ph img { aspect-ratio: 1; }

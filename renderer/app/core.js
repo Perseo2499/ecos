@@ -50,6 +50,7 @@ function ask(message, { ok = t('Continuar'), cancel = t('Cancelar'), danger = fa
       <div class="dlg-actions"><button class="btn text" data-r="0"></button><button class="btn filled${danger ? ' danger-fill' : ''}" data-r="1"></button></div></div>`;
     $('.dlg-msg', d).textContent = message;
     $('[data-r="0"]', d).textContent = cancel; $('[data-r="1"]', d).textContent = ok;
+    if (cancel === null) $('[data-r="0"]', d).hidden = true; // solo «Aceptar»
     const close = (v) => { d.classList.add('out'); setTimeout(() => d.remove(), 160); document.removeEventListener('keydown', key, true); prev?.focus?.(); resolve(v); };
     const key = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(false); } if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); close(true); } };
     $$('[data-r]', d).forEach((b) => (b.onclick = () => close(b.dataset.r === '1')));

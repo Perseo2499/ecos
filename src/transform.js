@@ -205,13 +205,20 @@ try {
 
 // En la web propia, el carrusel va como galería de Spectra (que la web ya tiene): WordPress la dibuja
 // en el servidor con sus propias flechas, puntos y deslizamiento, sin depender de que deje pasar scripts.
+// Estilo «vecinas asomando» del carrusel de Spectra: se pega una vez en Apariencia → Personalizar → CSS adicional
+const PEEK_CSS = `/* Ecos: carrusel con las fotos vecinas asomando */
+.ecos-peek .slick-list{padding:0 14% !important;overflow:hidden}
+.ecos-peek .slick-slide{transition:transform .5s cubic-bezier(.2,0,0,1),opacity .5s,filter .5s;transform:scale(.88);opacity:.5;filter:saturate(.6)}
+.ecos-peek .slick-slide.slick-active{transform:none;opacity:1;filter:none}
+.ecos-peek .slick-slide img{border-radius:18px}
+@media (max-width:600px){.ecos-peek .slick-list{padding:0 8% !important}}`;
 function spectraCarouselBlock(b) {
   const hex = require('crypto').createHash('md5').update(String(b.id)).digest('hex').slice(0, 8);
   const media = b.images.map((i) => ({ id: Number(i.id) || 0, url: i.url, alt: i.alt || '', caption: b.captions ? (i.alt || '') : '' }));
   const a = {
     block_id: hex, readyToRender: true, mediaGallery: media, mediaIDs: media.map((m) => m.id).filter(Boolean), feedLayout: 'carousel',
-    columnsDesk: 1, columnsTab: 1, columnsMob: 1, carouselLoop: true, carouselAutoplay: b.autoplay !== false, carouselAutoplaySpeed: 5000,
-    carouselPauseOnHover: true, paginateUseArrows: true, paginateUseDots: true, imageDisplayCaption: !!b.captions, galleryImageSize: 'large', className: 'ecos-carrusel',
+    columnsDesk: b.view === 'multi' ? 3 : 1, columnsTab: b.view === 'multi' ? 2 : 1, columnsMob: 1, carouselSquares: !!b.squares, carouselLoop: true, carouselAutoplay: b.autoplay !== false, carouselAutoplaySpeed: 5000,
+    carouselPauseOnHover: true, paginateUseArrows: true, paginateUseDots: true, imageDisplayCaption: !!b.captions, galleryImageSize: 'large', className: 'ecos-carrusel' + (b.view === 'peek' ? ' ecos-peek' : ''),
   };
   return `<!-- wp:uagb/image-gallery ${JSON.stringify(a).replace(/--/g, '\\u002d\\u002d')} /-->`;
 }
@@ -333,23 +340,38 @@ function buttonsBlock(b) {
 }
 
 // Mosaico: fotos de distintos tamaños encajadas en una rejilla (la primera grande). Bloque HTML, como el carrusel.
+// Mosaico que se adapta al número de piezas (fotos y vídeos): ver renderer/mosaic.js
+const { mosaicLayout } = require('../renderer/mosaic');
+const MOS_H = 150, MOS_GAP = 8;
+// Foto o vídeo dentro de un mosaico o galería en HTML (los vídeos van en bucle y sin sonido, como en Instagram)
+function mediaTag(i, style, { controls = false } = {}) {
+  if (i.type === 'video') {
+    return `<video src="${esc(i.url)}"${i.poster ? ` poster="${esc(i.poster)}"` : ''}${Number(i.id) ? ` data-id="${i.id}"` : ''} ${controls ? 'controls ' : 'autoplay loop '}muted playsinline preload="metadata" style="${style}"></video>`;
+  }
+  return `<img src="${esc(i.url)}" alt="${esc(i.alt || '')}" loading="lazy"${Number(i.id) ? ` class="wp-image-${i.id}"` : ''} style="${style}"/>`;
+}
 function mosaicBlock(b) {
   const id = 'ecos-m-' + b.id.replace(/[^a-z0-9]/gi, '');
   const S = `#${id}`;
-  const css = `${S}{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:170px;grid-auto-flow:dense;gap:8px;margin:2em 0}`
-    + `${S} figure{margin:0;overflow:hidden;border-radius:12px;background:#ddd}`
-    + `${S} figure:nth-child(6n+1){grid-column:span 2;grid-row:span 2}${S} figure:nth-child(6n+4){grid-column:span 2}${S} figure:nth-child(6n+6){grid-row:span 2}`
-    + `${S} img{display:block;width:100%;height:100%;object-fit:cover;margin:0;transition:transform .5s cubic-bezier(.2,0,0,1)}`
-    + `${S} figure:hover img{transform:scale(1.05)}`
-    + `@media (max-width:600px){${S}{grid-template-columns:repeat(2,1fr)!important}${S} figure{height:130px!important}${S} figure:nth-child(6n+1){height:268px!important}}`;
-  // estilos también en línea (por si WordPress quita el <style>): cada foto con su tamaño en la rejilla
-  const span = (k) => ({ 0: [2, 2], 3: [2, 1], 5: [1, 2] })[k % 6] || [1, 1];
+  const { cells } = mosaicLayout(b.images.length);
+  const hgt = (r, h) => r * h + (r - 1) * MOS_GAP;
+  const css = `${S} figure{transition:box-shadow .3s}${S} img,${S} video{transition:transform .5s cubic-bezier(.2,0,0,1)}${S} figure:hover img,${S} figure:hover video{transform:scale(1.04)}`
+    + `@media (max-width:600px){${S}{grid-auto-rows:90px!important}${S} .r1{height:90px!important}${S} .r2{height:${hgt(2, 90)}px!important}}`;
+  const media = 'display:block;width:100%;height:100%;object-fit:cover;margin:0';
   const figs = b.images.map((i, k) => {
-    const [c, r] = span(k);
-    return `<figure style="margin:0;overflow:hidden;border-radius:12px;background-color:#ddd;grid-column:span ${c};grid-row:span ${r};height:${r * 170 + (r - 1) * 8}px">`
-      + `<img src="${esc(i.url)}" alt="${esc(i.alt || '')}" loading="lazy" class="wp-image-${i.id}" style="display:block;width:100%;height:100%;object-fit:cover;margin:0"/></figure>`;
+    const c = cells[k];
+    return `<figure class="r${c.rows}" style="margin:0;overflow:hidden;border-radius:12px;background-color:#ddd;grid-column-start:${c.col};grid-column-end:span ${c.cols};grid-row-start:${c.row};grid-row-end:span ${c.rows};height:${hgt(c.rows, MOS_H)}px">`
+      + mediaTag(i, media) + '</figure>';
   }).join('');
-  return `<!-- wp:html -->\n<div class="ecos-mosaico" id="${id}" style="display:grid;grid-template-columns:repeat(4,1fr);grid-auto-flow:dense;gap:8px;margin:2em 0"><style>${css}</style>${figs}</div>\n<!-- /wp:html -->`;
+  return `<!-- wp:html -->\n<div class="ecos-mosaico" id="${id}" style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));grid-auto-rows:${MOS_H}px;gap:${MOS_GAP}px;margin:2em 0"><style>${css}</style>${figs}</div>\n<!-- /wp:html -->`;
+}
+// Galería en cuadrícula con vídeos (la galería de WordPress solo admite fotos)
+function mixedGalleryBlock(b, cols) {
+  const id = 'ecos-g-' + b.id.replace(/[^a-z0-9]/gi, '');
+  const css = `@media (max-width:600px){#${id}{grid-template-columns:repeat(2,minmax(0,1fr))!important}#${id} figure{height:160px!important}}`;
+  const media = 'display:block;width:100%;height:100%;object-fit:cover;margin:0';
+  const figs = b.images.map((i) => `<figure style="margin:0;overflow:hidden;border-radius:10px;background-color:#ddd;height:${cols >= 4 ? 170 : 230}px">${mediaTag(i, media, { controls: true })}</figure>`).join('');
+  return `<!-- wp:html -->\n<div class="ecos-galeria" id="${id}" data-cols="${cols}" style="display:grid;grid-template-columns:repeat(${cols},minmax(0,1fr));gap:8px;margin:2em 0"><style>${css}</style>${figs}</div>\n<!-- /wp:html -->`;
 }
 
 function composeBlocks(blocks, opts = {}) {
@@ -410,12 +432,13 @@ function composeBlocks(blocks, opts = {}) {
       case 'gallery': {
         if (!b.images?.length) break;
         if (b.layout === 'mosaic' && b.images.length > 1) { out.push(mosaicBlock(b)); break; }
-        if (b.images.length === 1) { out.push(imageBlockFull(b.images[0])); break; }
+        if (b.images.length === 1) { out.push(b.images[0].type === 'video' ? videoBlock(b.images[0]) : imageBlockFull(b.images[0])); break; }
         const cols = Math.max(1, Math.min(6, b.columns || 3));
+        if (b.images.some((i) => i.type === 'video')) { out.push(mixedGalleryBlock(b, cols)); break; }
         out.push(`<!-- wp:gallery {"columns":${cols},"linkTo":"none"} -->\n<figure class="wp-block-gallery has-nested-images columns-${cols} is-cropped">\n${b.images.map((i) => imageBlockFull(i)).join('\n')}\n</figure>\n<!-- /wp:gallery -->`);
         break;
       }
-      case 'carousel': if (b.images?.length) out.push(opts.spectra ? spectraCarouselBlock(b) : carouselBlock(b)); break;
+      case 'carousel': { const c = { ...b, images: (b.images || []).filter((i) => i.type !== 'video') }; if (c.images.length) out.push(opts.spectra ? spectraCarouselBlock(c) : carouselBlock(c)); break; }
       case 'mediatext': {
         if (!b.img) break;
         const right = b.right ? ' has-media-on-the-right' : '';
@@ -434,7 +457,7 @@ function composeBlocks(blocks, opts = {}) {
 }
 
 // Todas las imágenes de los bloques (para el texto alternativo y la imagen destacada)
-const blockImages = (blocks) => blocks.flatMap((b) => (b.img ? [b.img] : b.images || []));
+const blockImages = (blocks) => blocks.flatMap((b) => (b.img ? [b.img] : b.images || [])).filter((i) => i && i.type !== 'video');
 
 // «Resumen de noviembre de 2026» / «Resumen del 3 al 16 de noviembre» / «Resumen de octubre y noviembre de 2026»
 function summaryTitle(from, to) {
@@ -470,4 +493,4 @@ function mergeDuplicates(posts) {
 // Claves de todas las versiones de una publicación (para marcarla como exportada)
 const postKeys = (p) => [p.source + ':' + p.id, ...(p.alsoOn || []).map((a) => a.source + ':' + a.id)];
 
-module.exports = { FONTS, VIDEO_PROVIDERS, composeBlocks, sectionsToBlocks, blockImages, buildDraft, composeContent, sanitizeParagraphs, summaryTitle, extractTags, mediaKey, makeTitle, tidyTitle, mergeDuplicates, postKeys, DEFAULT_FOOTER };
+module.exports = { PEEK_CSS, FONTS, VIDEO_PROVIDERS, composeBlocks, sectionsToBlocks, blockImages, buildDraft, composeContent, sanitizeParagraphs, summaryTitle, extractTags, mediaKey, makeTitle, tidyTitle, mergeDuplicates, postKeys, DEFAULT_FOOTER };

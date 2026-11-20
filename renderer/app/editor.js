@@ -32,7 +32,7 @@ async function openFromWp(postId, keys) {
   draft = {
     title: r.title, excerpt: r.excerpt || '', slug: r.slug || '', tags: r.tags || [], categories: r.categories || [], blocks: r.blocks,
     featuredImageId: r.featured || null, date: r.date, postId, previewOnly: false, wpStatus: r.status, sections: [], sourceText: '',
-    extraMedia: [...(r.featuredImg ? [{ ...r.featuredImg, type: 'image' }] : []), ...imgs.map((i) => ({ ...i, type: 'image' })), ...vids],
+    extraMedia: [...(r.featuredImg ? [{ ...r.featuredImg, type: 'image' }] : []), ...imgs.map((i) => ({ ...i, type: i.type || 'image' })), ...vids],
   };
   draftKeys = keys || Object.entries(exported).filter(([, v]) => v.postId === postId).map(([k]) => k);
   openEditor();
@@ -76,6 +76,11 @@ function openEditor() {
     onOpenMedia: (m) => {
       const pool = mediaPool();
       openLightbox(pool.map((x) => ({ type: x.type, src: x.url, poster: x.poster })), Math.max(0, pool.findIndex((x) => x.id === m.id)));
+    },
+    // Estilo «vecinas asomando»: se copia para pegarlo una vez en la web
+    onPeekCss: async () => {
+      navigator.clipboard.writeText(await window.api.peekCss());
+      await ask(t('Estilo copiado. Pégalo una sola vez en tu WordPress: Apariencia → Personalizar → CSS adicional, y pulsa «Publicar». Desde entonces todos los carruseles con «Vecinas asomando» se verán así (sin él, se ven de foto en foto).'), { ok: t('Entendido'), cancel: null });
     },
   });
   $('#editor').classList.remove('hidden');
@@ -250,7 +255,7 @@ $('#d-normalize').onclick = () => {
   toast(t('Formato normalizado: {w}. Puedes deshacerlo con Ctrl+Z.', { w: what }));
 };
 $('#ai-alts').onclick = (e) => busy(e.target, async () => {
-  const imgs = draft.blocks.flatMap((b) => (b.img ? [b.img] : b.images || []));
+  const imgs = draft.blocks.flatMap((b) => (b.img ? [b.img] : b.images || [])).filter((i) => i.type !== 'video');
   if (!imgs.length) throw new Error(t('Esta entrada no tiene fotos'));
   const alts = await window.api.aiAlts(imgs.map((i) => i.url), $('#d-title').value);
   window.BlockEditor.change(() => imgs.forEach((img, i) => { if (alts[i]) img.alt = alts[i]; }));
@@ -425,7 +430,7 @@ $('#preview').onclick = (e) => busy(e.target, async () => {
       const e = window.BlockEditor.detectEmbed(url.replace(/&amp;/g, '&'));
       return e?.player ? `<div class="wp-block-embed__wrapper"><iframe src="${escHtml(e.player)}" style="width:100%;aspect-ratio:${/spotify/.test(e.player) ? '16/5' : '16/9'};border:0" allowfullscreen></iframe></div>` : m;
     });
-  const featured = draft.blocks.flatMap((b) => (b.img ? [b.img] : b.images || [])).find((i) => i.id === draft.featuredImageId);
+  const featured = draft.blocks.flatMap((b) => (b.img ? [b.img] : b.images || [])).filter((i) => i.type !== 'video').find((i) => i.id === draft.featuredImageId);
   const cats = $$('#d-cats input:checked').map((i) => i.value);
   await showPreview({ title: $('#d-title').value, date: $('#d-keepdate').checked ? draft.date : Date.now(), cats, featured: featured?.url, content, web: true });
 });

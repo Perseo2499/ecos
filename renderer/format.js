@@ -215,7 +215,7 @@
       const { words, minutes } = ed.stats();
       const blocks = ed.draft.blocks;
       const heads = blocks.filter((b) => b.type === 'heading' && (b.html || '').replace(/<[^>]+>/g, '').trim());
-      const imgs = blocks.flatMap((b) => (b.img ? [b.img] : b.images || []));
+      const imgs = blocks.flatMap((b) => (b.img ? [b.img] : b.images || [])).filter((i) => i.type !== 'video');
       const noAlt = imgs.filter((i) => !(i.alt || '').trim()).length;
       const title = $('#d-title').value.trim();
       const checks = [
