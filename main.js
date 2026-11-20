@@ -94,6 +94,7 @@ try {
   ({ buildDraft, composeContent, composeBlocks, blockImages, mediaKey, DEFAULT_FOOTER, mergeDuplicates } = require('./src/transform'));
   ai = require('./src/ai');
   ai.setCliLog((...a) => log(...a));
+  require('./src/imgopt').setEnabled(() => cfg?.prefs?.optimizePhotos !== false);
   importers = require('./src/importers');
   updater = require('./src/updater');
 } catch (err) {
@@ -318,6 +319,7 @@ function postFields(d, status) {
     title: d.title, content: d.blocks ? composeBlocks(d.blocks) : composeContent(d.sections), status: scheduled ? 'future' : status,
     tags: d.tags.join(','), categories: d.categories.join(','),
     excerpt: d.excerpt || '',
+    ...(d.slug ? { slug: d.slug } : {}),
     ...(d.featuredImageId ? { featured_image: d.featuredImageId } : {}),
     ...(scheduled ? { date: new Date(d.scheduleAt).toISOString() } : d.keepDate ? { date: d.date } : {}),
   };
@@ -331,6 +333,11 @@ handle('draft:preview', async (d) => {
   return { postId: post.ID, previewUrl: `${base}/?p=${post.ID}&preview=true` };
 });
 handle('draft:compose', (blocks) => composeBlocks(blocks));
+// Autoguardado del borrador en curso (para recuperarlo si se cierra el editor o la app)
+const autosaveFile = () => path.join(app.getPath('userData'), 'borrador-autoguardado.json');
+handle('draft:autosave', (data) => { fs.writeFileSync(autosaveFile(), store.seal(cfg, { ...data, savedAt: new Date().toISOString() })); return true; });
+handle('draft:autosaved', () => { try { return store.unseal(cfg, fs.readFileSync(autosaveFile(), 'utf8')); } catch { return null; } });
+handle('draft:autosaveClear', () => { try { fs.unlinkSync(autosaveFile()); } catch { /* no había */ } return true; });
 // Actualizar desde WordPress: estado, fechas, título, extracto, destacada y contenido (ya en bloques de Ecos)
 handle('post:pull', async (id) => {
   const p = await wpCall(() => WP().getPost(cfg, id));

@@ -90,7 +90,8 @@ function toBlock(t) {
     case 'html': {
       // carrusel y mosaico de Ecos
       if (/class="ecos-(carrusel|mosaico)"/.test(h)) {
-        const images = [...h.matchAll(/<img\b[^>]*>/gi)].map((m) => imgOf(m[0])).filter(Boolean);
+        // (sin las imágenes de fondo desenfocado del carrusel, que repiten cada foto)
+        const images = [...h.matchAll(/<img\b[^>]*>/gi)].filter((m) => !/class="ec-bg"/.test(m[0])).map((m) => imgOf(m[0])).filter(Boolean);
         if (images.length) return /ecos-carrusel/.test(h) ? { id: bid(), type: 'carousel', images } : { id: bid(), type: 'gallery', layout: 'mosaic', images, columns: 3 };
       }
       return raw();

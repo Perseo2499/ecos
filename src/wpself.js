@@ -118,6 +118,7 @@ const decode = (s) => String(s || '').replace(/&amp;/g, '&').replace(/&#8217;/g,
 // --- Medios -----------------------------------------------------------------------
 const MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm' };
 async function uploadBuffer(cfg, buf, filename, type) {
+  ({ buf, type, name: filename } = require('./imgopt').optimize(buf, type, filename)); // fotos más ligeras
   const m = await req(cfg, '/wp/v2/media', {
     method: 'POST', body: buf,
     headers: { 'Content-Type': type, 'Content-Disposition': `attachment; filename="${filename.replace(/["\r\n]/g, '')}"` },
@@ -150,6 +151,7 @@ async function toRest(cfg, f) {
   const isPage = f.type === 'page'; // las páginas no tienen categorías ni etiquetas
   return {
     title: f.title, content: f.content, status: f.status, excerpt: f.excerpt || '',
+    ...(f.slug ? { slug: f.slug } : {}),
     ...(f.featured_image ? { featured_media: f.featured_image } : {}),
     ...(f.date ? { date_gmt: new Date(f.date).toISOString().slice(0, 19) } : {}),
     ...(isPage ? {} : { categories: await categoryIds(cfg, split(f.categories), !!f.createCategories), tags: await tagIds(cfg, split(f.tags)) }),
@@ -179,12 +181,12 @@ async function savePost(cfg, route, f) {
 const createPost = (cfg, f) => savePost(cfg, `/wp/v2/${f.type === 'page' ? 'pages' : 'posts'}`, f);
 const updatePost = (cfg, id, f) => savePost(cfg, `/wp/v2/${f.type === 'page' ? 'pages' : 'posts'}/${id}`, f);
 
-async function listPosts(cfg, { type = 'post', status = 'any', search = '', page = 1, number = 20 } = {}) {
+async function listPosts(cfg, { type = 'post', status = 'any', search = '', page = 1, number = 20, after, before } = {}) {
   const coll = type === 'page' ? 'pages' : 'posts';
   const q = new URLSearchParams({
     status: status === 'any' ? 'publish,future,draft,pending,private' : status, per_page: String(number), page: String(page),
-    orderby: 'modified', order: 'desc', context: 'edit', _embed: 'wp:featuredmedia',
-    ...(search ? { search } : {}),
+    orderby: after ? 'date' : 'modified', order: 'desc', context: 'edit', _embed: 'wp:featuredmedia',
+    ...(search ? { search } : {}), ...(after ? { after } : {}), ...(before ? { before } : {}),
   });
   const { data, res } = await req(cfg, `/wp/v2/${coll}?${q}`, { raw: true });
   const cats = catCache || (await categories(cfg).catch(() => []));
@@ -213,7 +215,7 @@ async function getPost(cfg, id, type) {
     tags: terms.filter((x) => x.taxonomy === 'post_tag').map((x) => x.name),
     featuredImg: fm?.source_url ? { id: fm.id, url: fm.source_url, alt: fm.alt_text || '' } : null,
     id: p.id, status: p.status, url: p.link, date: p.date_gmt ? p.date_gmt + 'Z' : p.date, modified: p.modified_gmt ? p.modified_gmt + 'Z' : p.modified,
-    title: p.title?.raw ?? '', excerpt: p.excerpt?.raw ?? '', content: p.content?.raw ?? '', featured: p.featured_media || null,
+    title: p.title?.raw ?? '', excerpt: p.excerpt?.raw ?? '', content: p.content?.raw ?? '', featured: p.featured_media || null, slug: p.slug || '',
   };
 }
 // Borrado definitivo (solo para el borrador de la vista previa, que Ecos vuelve a crear al enviar)

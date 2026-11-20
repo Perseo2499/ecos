@@ -92,4 +92,8 @@ function clearPassword(cfg) { delete cfg.lock; delete cfg.__totp; delete cfg.__r
 // Contraseña olvidada: se quita la protección y se pierden las claves (hay que volver a conectar)
 function resetForgotten(cfg) { delete cfg.lock; wipeSecrets(cfg); key = null; vaultBlob = null; cfg.wpSelfOk = false; save(cfg); }
 
-module.exports = { load, save, isLocked, open, unlock, lockNow, setPassword, clearPassword, resetForgotten, SECRET_KEYS };
+// Datos aparte (p. ej. el borrador autoguardado): cifrados con la bóveda si hay contraseña
+const seal = (cfg, obj) => (cfg.lock && key ? 'ENC:' + V.encrypt(obj, key) : JSON.stringify(obj));
+const unseal = (cfg, text) => { if (!text) return null; if (text.startsWith('ENC:')) return key ? V.decrypt(text.slice(4), key) : null; return JSON.parse(text); };
+
+module.exports = { seal, unseal, load, save, isLocked, open, unlock, lockNow, setPassword, clearPassword, resetForgotten, SECRET_KEYS };

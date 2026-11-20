@@ -97,7 +97,8 @@ async function uploadFile(cfg, filePath) {
   const fs = require('fs');
   const path = require('path');
   const form = new FormData();
-  form.append('media[]', new Blob([fs.readFileSync(filePath)]), path.basename(filePath));
+  const o = require('./imgopt').optimize(fs.readFileSync(filePath), '', path.basename(filePath)); // fotos más ligeras
+  form.append('media[]', new Blob([o.buf]), o.name);
   const res = await fetch(`${API}/sites/${siteRef(cfg)}/media/new`, {
     method: 'POST', headers: { Authorization: `Bearer ${cfg.wpToken}` }, body: form,
   });
@@ -130,11 +131,11 @@ const updatePost = (cfg, id, post) => call(cfg, `/posts/${id}`, post);
 
 // --- Gestión del blog (pestaña «Blog») ------------------------------------------
 // type: 'post' | 'page'; status: 'any' | 'publish' | 'draft' | 'pending' | 'future' | 'private' | 'trash'
-async function listPosts(cfg, { type = 'post', status = 'any', search = '', page = 1, number = 20 } = {}) {
+async function listPosts(cfg, { type = 'post', status = 'any', search = '', page = 1, number = 20, after, before } = {}) {
   const q = new URLSearchParams({
-    type, status, number: String(number), page: String(page), order_by: 'modified', order: 'DESC',
+    type, status, number: String(number), page: String(page), order_by: after ? 'date' : 'modified', order: 'DESC',
     fields: 'ID,title,status,date,modified,URL,type,featured_image,categories,excerpt',
-    ...(search ? { search } : {}),
+    ...(search ? { search } : {}), ...(after ? { after } : {}), ...(before ? { before } : {}),
   });
   const json = await call(cfg, '/posts/?' + q);
   return {
@@ -151,7 +152,7 @@ async function getPost(cfg, id) {
   return {
     categories: Object.keys(p.categories || {}), tags: Object.keys(p.tags || {}),
     featuredImg: p.post_thumbnail?.URL ? { id: p.post_thumbnail.ID, url: p.post_thumbnail.URL, alt: '' } : null,
-    id: p.ID, status: p.status, url: p.URL, date: p.date, modified: p.modified, title: p.title || '', excerpt: p.excerpt || '', content: p.content || '', featured: p.post_thumbnail?.ID || null };
+    id: p.ID, status: p.status, url: p.URL, slug: p.slug || '', date: p.date, modified: p.modified, title: p.title || '', excerpt: p.excerpt || '', content: p.content || '', featured: p.post_thumbnail?.ID || null };
 }
 const updateMedia = (cfg, id, fields) => call(cfg, `/media/${id}`, fields);
 async function postStatuses(cfg, ids) {

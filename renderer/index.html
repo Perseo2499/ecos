@@ -159,6 +159,8 @@
             <div id="d-review" class="review"></div>
             <div class="field"><label data-i18n>Plantilla</label><select id="d-template"><option value="" data-i18n>Sin plantilla</option></select></div>
             <div class="field"><label data-i18n>Extracto</label><textarea id="d-excerpt" rows="3" data-i18n-ph placeholder="Resumen corto (opcional)"></textarea></div>
+            <div class="field slug-field"><label data-i18n>Dirección de la entrada</label><div class="slug-row"><span class="slug-base" id="d-slug-base"></span><input id="d-slug" spellcheck="false"></div></div>
+            <div class="share-card" id="d-share" title=""></div>
             <details class="ai-opts" id="ai-opts">
               <summary><span class="ms">tune</span><span data-i18n>Cómo convertir en artículo</span><span class="ai-opts-sum" id="ai-opts-sum"></span></summary>
               <div class="ai-opt"><label data-i18n>Extensión</label>
@@ -208,6 +210,7 @@
       <div class="seg" id="b-type">
         <button data-type="post" class="active"><span class="ms">article</span><span data-i18n>Entradas</span></button>
         <button data-type="page"><span class="ms">description</span><span data-i18n>Páginas</span></button>
+        <button data-type="calendar"><span class="ms">calendar_month</span><span data-i18n>Calendario</span></button>
         <button data-type="structure"><span class="ms">account_tree</span><span data-i18n>Estructura</span></button>
       </div>
       <select id="b-status">
@@ -226,6 +229,7 @@
     </div>
     <div id="b-list" class="blog-list"></div>
     <div id="b-structure" class="st-wrap hidden"></div>
+    <div id="b-calendar" class="cal hidden"></div>
     <div class="pager"><button id="b-prev" class="btn text icon-only"><span class="ms">chevron_left</span></button><span id="b-info" class="hint"></span><button id="b-next" class="btn text icon-only"><span class="ms">chevron_right</span></button></div>
   </section>
 
@@ -429,6 +433,7 @@
         <form class="card" id="f-format">
           <div class="card-head"><span class="ms fill ic">format_paint</span><h2 data-i18n>Formato de las entradas</h2></div>
           <label class="switch"><input type="checkbox" name="cleanTitle"><span data-i18n>Limpiar el título</span></label>
+          <label class="switch"><input type="checkbox" id="s-optphotos"><span data-i18n>Reducir las fotos al subirlas (máx. 2560 px, más ligeras)</span></label>
           <div class="field"><label data-i18n>Pie de cada entrada</label><input name="footer" data-i18n-ph placeholder="Vacío = sin pie"></div>
           <div class="field"><label data-i18n>Etiquetas fijas</label><input name="extraTags" data-i18n-ph placeholder="p. ej. asociación, ceuta"></div>
           <div class="field"><label data-i18n>Categorías por defecto</label><input name="categories" data-i18n-ph placeholder="Separadas por comas"></div>
@@ -683,6 +688,14 @@
 <script src="structure.js"></script>
 <script src="vinyl.js"></script>
 <script src="navbar.js"></script>
-<script src="renderer.js"></script>
+<script src="app/core.js"></script>
+<script src="app/connections.js"></script>
+<script src="app/posts.js"></script>
+<script src="app/editor.js"></script>
+<script src="app/blog.js"></script>
+<script src="app/settings.js"></script>
+<script src="app/restore.js"></script>
+<script src="app/devcli.js"></script>
+<script src="app/boot.js"></script>
 </body>
 </html>
