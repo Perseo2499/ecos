@@ -134,7 +134,7 @@ const updateContent = (cfg, id, content) => call(cfg, `/posts/${id}`, { content 
 // type: 'post' | 'page'; status: 'any' | 'publish' | 'draft' | 'pending' | 'future' | 'private' | 'trash'
 async function listPosts(cfg, { type = 'post', status = 'any', search = '', page = 1, number = 20, after, before } = {}) {
   const q = new URLSearchParams({
-    type, status, number: String(number), page: String(page), order_by: after ? 'date' : 'modified', order: 'DESC',
+    type, status, number: String(number), page: String(page), order_by: 'date', order: 'DESC',
     fields: 'ID,title,status,date,modified,URL,type,featured_image,categories,excerpt',
     ...(search ? { search } : {}), ...(after ? { after } : {}), ...(before ? { before } : {}),
   });

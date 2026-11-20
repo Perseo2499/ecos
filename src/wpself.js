@@ -277,7 +277,7 @@ async function listPosts(cfg, { type = 'post', status = 'any', search = '', page
   const coll = type === 'page' ? 'pages' : 'posts';
   const q = new URLSearchParams({
     status: status === 'any' ? 'publish,future,draft,pending,private' : status, per_page: String(number), page: String(page),
-    orderby: after ? 'date' : 'modified', order: 'desc', context: 'edit', _embed: 'wp:featuredmedia',
+    orderby: 'date', order: 'desc', context: 'edit', _embed: 'wp:featuredmedia',
     ...(search ? { search } : {}), ...(after ? { after } : {}), ...(before ? { before } : {}),
   });
   const { data, res } = await req(cfg, `/wp/v2/${coll}?${q}`, { raw: true });
