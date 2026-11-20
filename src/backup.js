@@ -148,7 +148,9 @@ function wpFromSql(sql) {
 }
 
 // ---------------------------------------------------------------- exportación XML (WXR)
-function wpFromWxr(xml) {
+function wpFromWxr(xmlOrList) {
+  const xmls = Array.isArray(xmlOrList) ? xmlOrList : [xmlOrList];
+  const xml = xmls[0];
   const cdata = (s) => (s || '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/\]\]\]\]><!\[CDATA\[>/g, ']]>');
   const tag = (block, name) => { const m = new RegExp(`<${name}>([\\s\\S]*?)</${name}>`).exec(block); return m ? cdata(m[1]).trim() : ''; };
   const decode = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, '&');
@@ -156,9 +158,16 @@ function wpFromWxr(xml) {
   const posts = [], meta = [], terms = [], tax = [], rel = [];
   let termId = 1;
   const termIds = new Map();
-  for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
+  const seen = new Set();
+  for (const m of xmls.flatMap((x) => [...x.matchAll(/<item>([\s\S]*?)<\/item>/g)])) {
     const b = m[1];
     const id = tag(b, 'wp:post_id');
+    const key = tag(b, 'wp:post_type') + ':' + id;
+    if (seen.has(key)) continue; // el mismo elemento en otro archivo (p. ej. «todo-en-uno.xml»)
+    seen.add(key);
+    // la misma imagen repetida con otro número en otro archivo: se usa la primera
+    const attUrl = tag(b, 'wp:post_type') === 'attachment' && tag(b, 'wp:attachment_url');
+    if (attUrl) { if (seen.has('url:' + attUrl)) continue; seen.add('url:' + attUrl); }
     posts.push({
       ID: id, post_title: decode(tag(b, 'title')), post_content: tag(b, 'content:encoded'), post_excerpt: tag(b, 'excerpt:encoded'),
       post_date: tag(b, 'wp:post_date'), post_date_gmt: tag(b, 'wp:post_date_gmt'), post_status: tag(b, 'wp:status'),
@@ -172,7 +181,7 @@ function wpFromWxr(xml) {
       rel.push({ object_id: id, term_taxonomy_id: termIds.get(key) });
     }
   }
-  return { prefix: '', siteUrl: tag(channel, 'wp:base_blog_url') || tag(channel, 'link'), siteName: decode(tag(channel, 'title')), posts, meta, terms, tax, rel };
+  return { prefix: '', siteUrl: tag(channel, 'wp:base_blog_url') || tag(channel, 'link'), siteName: decode(tag(channel, 'title')).replace(/\s*\((páginas|entradas[^)]*)\)$/i, ''), posts, meta, terms, tax, rel };
 }
 
 // ---------------------------------------------------------------- análisis
@@ -198,6 +207,7 @@ async function analyze(paths, progress = () => {}) {
   // Índice de archivos multimedia: «2017/03/foto.jpg» → { source, name, size }
   const files = new Map();
   let db = null, dbFile = '';
+  const wxrs = [], wxrNames = [];
   for (const src of sources) {
     for (const name of src.list()) {
       const low = name.toLowerCase();
@@ -208,16 +218,18 @@ async function analyze(paths, progress = () => {}) {
       }
       const isSql = /\.sql$|\.sql\.gz$|[-_]db\.gz$|database\.sql$/i.test(name);
       const isXml = /\.xml$/i.test(name);
-      if (!db && (isSql || isXml) && src.size(name) > 0) {
+      if ((isXml || (!db && isSql)) && src.size(name) > 0) {
         progress({ step: 'leer', file: name });
         let buf = await src.read(name);
         if (/\.gz$/i.test(name) || (buf[0] === 0x1f && buf[1] === 0x8b)) buf = zlib.gunzipSync(buf);
         const text = buf.toString('utf8');
-        db = isXml || /<rss[\s\S]{0,400}wxr_version/.test(text.slice(0, 3000)) ? wpFromWxr(text) : wpFromSql(text);
-        if (db) dbFile = `${src.label} → ${name}`;
+        if (/<rss[\s\S]{0,600}wxr_version|<wp:wxr_version>/.test(text.slice(0, 4000))) { wxrs.push(text); wxrNames.push(name.split('/').pop()); }
+        else if (isSql && !db) { db = wpFromSql(text); if (db) dbFile = `${src.label} → ${name}`; }
       }
     }
   }
+  // Exportaciones de WordPress (.xml): se juntan todas (una copia puede venir en varios archivos)
+  if (!db && wxrs.length) { db = wpFromWxr(wxrs); dbFile = wxrNames.length > 1 ? `${wxrNames.length} exportaciones .xml (${wxrNames.join(', ')})` : wxrNames[0]; }
   if (!db) {
     for (const s of sources) s.close();
     throw new Error('No se encontró la base de datos de WordPress en la copia (un archivo .sql, .sql.gz o la exportación .xml). Si tu copia viene en varios archivos, ábrelos todos a la vez.');
