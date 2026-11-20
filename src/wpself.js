@@ -239,6 +239,13 @@ async function getPost(cfg, id, type) {
     title: p.title?.raw ?? '', excerpt: p.excerpt?.raw ?? '', content: p.content?.raw ?? '', featured: p.featured_media || null, slug: p.slug || '',
   };
 }
+// Versiones anteriores que WordPress ha guardado de una entrada (las más recientes primero)
+async function listRevisions(cfg, id) {
+  const list = await req(cfg, `/wp/v2/posts/${id}/revisions?context=edit&per_page=50`);
+  return (Array.isArray(list) ? list : []).map((r) => ({
+    id: r.id, date: r.date_gmt ? r.date_gmt + 'Z' : r.date, title: r.title?.raw ?? '', content: r.content?.raw ?? '', excerpt: r.excerpt?.raw ?? '',
+  })).sort((a, b) => new Date(b.date) - new Date(a.date));
+}
 // Solo el contenido (sin tocar categorías, etiquetas ni nada más)
 const updateContent = (cfg, id, content, type) => req(cfg, `/wp/v2/${coll(type)}/${id}`, { method: 'POST', json: { content } });
 // Borrado definitivo (solo para el borrador de la vista previa, que Ecos vuelve a crear al enviar)
@@ -337,4 +344,4 @@ async function saveStructure(cfg, ch, progress = () => {}) {
   return { errors };
 }
 
-module.exports = { changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, updateContent, publicBase, publicUrl };
+module.exports = { changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl };

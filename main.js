@@ -340,6 +340,16 @@ const autosaveFile = () => path.join(app.getPath('userData'), 'borrador-autoguar
 handle('draft:autosave', (data) => { fs.writeFileSync(autosaveFile(), store.seal(cfg, { ...data, savedAt: new Date().toISOString() })); return true; });
 handle('draft:autosaved', () => { try { return store.unseal(cfg, fs.readFileSync(autosaveFile(), 'utf8')); } catch { return null; } });
 handle('draft:autosaveClear', () => { try { fs.unlinkSync(autosaveFile()); } catch { /* no había */ } return true; });
+// Historial de versiones de una entrada (revisiones de WordPress), ya en bloques de Ecos
+handle('post:revisions', async (postId) => {
+  if (!isSelf()) throw new Error('El historial de versiones solo está disponible con WordPress propio.');
+  const { parseBlocks } = require('./src/parseblocks');
+  const revs = await wpCall(() => WP().listRevisions(cfg, postId));
+  return revs.map((r) => {
+    const text = String(r.content || '').replace(/<!--[\s\S]*?-->/g, ' ').replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]*>/g, ' ');
+    return { ...r, blocks: parseBlocks(r.content), words: text.split(/\s+/).filter(Boolean).length };
+  });
+});
 // Actualizar desde WordPress: estado, fechas, título, extracto, destacada y contenido (ya en bloques de Ecos)
 handle('post:pull', async (id) => {
   const p = await wpCall(() => WP().getPost(cfg, id));
