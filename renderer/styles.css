@@ -1291,3 +1291,43 @@ body.locked > *:not(#lock):not(#toast):not(.dlg-scrim) { visibility: hidden; }
 /* Bloques estrechos (ventana pequeña): también la opción elegida solo con su icono */
 .blk-gallery, .blk-carousel { container-type: inline-size; }
 @container (max-width: 640px) { .blk-extra .lv .lbl { display: none; } }
+
+/* ===== Biblioteca de medios (Blog → Medios y selector del editor) ===== */
+.mg { display: flex; flex-direction: column; gap: 10px; }
+.mg-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
+.mg-tools .seg button { padding: 6px 14px; }
+.mg-tools .field.search { flex: 1 1 180px; max-width: 320px; }
+.mg-bar { position: sticky; top: 134px; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 8px 12px; border-radius: var(--r-l); background: var(--surface-c); color: var(--on-surface-var); font-size: 13px; }
+.mg-bar.on { background: var(--surface-c-high); box-shadow: var(--e2); color: var(--on-surface); }
+.mg-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.mg-acts .btn.small { width: auto; margin: 0; height: 34px; padding: 0 12px; white-space: nowrap; }
+.mg-acts .btn .ms { font-size: 18px; }
+.mg-acts .btn.danger { color: var(--error); }
+.mg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.mg-card { position: relative; border-radius: var(--r-m); background: var(--surface-c); overflow: hidden; cursor: pointer; outline: 2px solid transparent; transition: outline-color .15s, box-shadow .15s; user-select: none; }
+.mg-card:hover { box-shadow: var(--e2); }
+.mg-card.sel { outline-color: var(--primary); }
+.mg-th { position: relative; aspect-ratio: 1; background: var(--surface-c-high); }
+.mg-th img, .mg-th video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mg-th .play { position: absolute; inset: 0; display: grid; place-items: center; font-size: 36px; color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,.5); pointer-events: none; }
+.mg-check { position: absolute; top: 6px; left: 6px; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: rgba(0,0,0,.45); }
+.mg-check input { margin: 0; accent-color: var(--primary); pointer-events: none; }
+.mg-tag { position: absolute; top: 8px; right: 6px; padding: 2px 8px; border-radius: var(--r-full); font-size: 11px; font-weight: 600; background: rgba(0,0,0,.6); color: #fff; }
+.mg-tag.free { background: var(--primary); color: var(--on-primary, #fff); }
+.mg-meta { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px 10px; min-width: 0; }
+.mg-meta b { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--on-surface); }
+.mg-meta span { font-size: 11.5px; color: var(--on-surface-var); }
+.mg-more { display: flex; justify-content: center; margin-top: 14px; }
+.mg-more .btn.small { width: auto; margin: 0; }
+.mg-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 16px; text-align: center; color: var(--on-surface-var); }
+.mg-empty .ms { font-size: 40px; opacity: .6; }
+.mg-empty p { margin: 0; max-width: 420px; }
+.mg-empty .btn.small { width: auto; margin: 0; }
+.mg-modal .modal-box.wide { width: min(900px, 94vw); }
+.mg-modal .modal-actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+.mg-modal .mg-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+.mg-dlg { align-items: stretch; text-align: left; }
+.mg-dlg .dlg-ic { align-self: center; }
+.mg-dlg .dlg-title { text-align: center; }
+.mg-dlg textarea { width: 100%; resize: vertical; }
+#d-media-lib { margin-top: 6px; }

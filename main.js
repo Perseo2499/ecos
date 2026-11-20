@@ -535,6 +535,27 @@ const needSelf = () => { if (!isSelf()) throw new Error('La estructura de la web
 handle('site:structure', async () => { needSelf(); return wpCall(() => wpself.siteStructure(cfg)); });
 handle('site:catPosts', async (catId) => { needSelf(); return wpCall(() => wpself.categoryPosts(cfg, catId)); });
 handle('site:save', async (changes) => { needSelf(); return wpCall(() => wpself.saveStructure(cfg, changes)); });
+// Biblioteca de medios (solo WordPress propio)
+const needSelfMedia = () => { if (!isSelf()) throw new Error('La biblioteca de medios solo está disponible con «Mi web (wp-admin)» en Conexiones → WordPress.'); };
+let mediaUsageCache = null; // { at, data }
+handle('media:list', async (opts) => { needSelfMedia(); return wpCall(() => wpself.listMedia(cfg, opts || {})); });
+handle('media:usage', async (force) => {
+  needSelfMedia();
+  if (!force && mediaUsageCache && Date.now() - mediaUsageCache.at < 5 * 60000) return mediaUsageCache.data;
+  const data = await wpCall(() => wpself.mediaUsage(cfg));
+  mediaUsageCache = { at: Date.now(), data };
+  return data;
+});
+handle('media:delete', async (ids) => {
+  needSelfMedia();
+  const done = [], failed = [];
+  for (const id of ids || []) {
+    try { await wpCall(() => wpself.deleteMedia(cfg, id)); done.push(id); } catch (e) { log('No se pudo borrar el medio', id, e.message); failed.push({ id, error: e.message }); }
+  }
+  mediaUsageCache = null;
+  return { done, failed };
+});
+handle('media:alt', async (id, alt) => { needSelfMedia(); await wpCall(() => wpself.updateMedia(cfg, id, { alt: String(alt || '') })); return true; });
 // Borrado definitivo (no se puede deshacer): la entrada desaparece también de la papelera
 handle('blog:delete', async (id, type) => { await wpCall(() => WP().deletePost(cfg, id, type)); if (cfg.sentContent) delete cfg.sentContent[id]; return markExported(id, 'deleted'); });
 
