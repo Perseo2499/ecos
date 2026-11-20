@@ -1291,3 +1291,37 @@ body.locked > *:not(#lock):not(#toast):not(.dlg-scrim) { visibility: hidden; }
 /* Bloques estrechos (ventana pequeña): también la opción elegida solo con su icono */
 .blk-gallery, .blk-carousel { container-type: inline-size; }
 @container (max-width: 640px) { .blk-extra .lv .lbl { display: none; } }
+
+/* Calendario reutilizable: modos mes/año, miniaturas y mapa de calor */
+.cal-modes { display: inline-flex; gap: 4px; margin-left: 6px; }
+.cal-modes .chip { height: 30px; padding: 0 12px; font-size: 12.5px; }
+.cal-item.thumb { display: flex; align-items: center; gap: 5px; padding: 2px 5px 2px 2px; }
+.cal-item.thumb img { width: 26px; height: 26px; object-fit: cover; border-radius: 5px; flex: none; }
+.cal-item .cal-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.cal-src { display: inline-flex; gap: 2px; flex: none; }
+.cal-src .badge { font-size: 9px; padding: 1px 4px; }
+.cal-legend i.pend, .cal-item.st-pend { background: var(--surface-c-highest); }
+.cal-legend i.sel { background: var(--primary); }
+.cal-item.sel { box-shadow: inset 0 0 0 2px var(--primary); }
+.cal-day.has { background: var(--surface-c); }
+.cal-year { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.cal-month { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 0; border-radius: var(--r-l); background: var(--surface-c-low);
+  color: var(--on-surface); text-align: left; cursor: pointer; transition: background .2s, transform .2s; font: inherit; }
+.cal-month:hover { background: var(--surface-c); transform: translateY(-2px); }
+.cal-mh { display: flex; align-items: baseline; justify-content: space-between; }
+.cal-mc { font-size: 20px; font-weight: 700; color: var(--primary); }
+.cal-bar-n { display: block; height: 4px; border-radius: 4px; background: var(--surface-c-highest); overflow: hidden; }
+.cal-bar-n span { display: block; height: 100%; border-radius: 4px; background: var(--primary); }
+.cal-heat { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.cal-heat i, .cal-scale i { display: block; aspect-ratio: 1; border-radius: 3px; background: var(--surface-c-highest); }
+.cal-heat i.o { background: none; }
+.cal-heat i.l1, .cal-scale i.l1 { background: color-mix(in srgb, var(--primary) 35%, var(--surface-c-highest)); }
+.cal-heat i.l2, .cal-scale i.l2 { background: color-mix(in srgb, var(--primary) 60%, var(--surface-c-highest)); }
+.cal-heat i.l3, .cal-scale i.l3 { background: color-mix(in srgb, var(--primary) 82%, var(--surface-c-highest)); }
+.cal-heat i.l4, .cal-scale i.l4 { background: var(--primary); }
+.cal-heat i.td { outline: 2px solid var(--on-surface); outline-offset: -1px; }
+.cal-scale { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 10px; font-size: 12px; color: var(--on-surface-var); }
+.cal-scale i { width: 12px; }
+.f-view { gap: 2px; }
+.f-view .chip { height: 34px; padding: 0 10px; }
+#feed-cal { margin-top: 4px; }

@@ -75,6 +75,7 @@
         <option value="done" data-i18n>Ya en el blog</option>
       </select>
       <label class="switch" data-i18n-title title="Juntar la misma publicación de Instagram y Facebook"><input type="checkbox" id="f-merge" checked><span data-i18n>Juntar duplicados</span></label>
+      <span class="f-view chips" id="f-view"><button class="chip active" data-v="list" data-i18n-title title="Lista"><span class="ms">grid_view</span></button><button class="chip" data-v="cal" data-i18n-title title="Calendario"><span class="ms">calendar_month</span></button></span>
       <button id="summary" class="btn text"><span class="ms">date_range</span><span data-i18n>Resumen</span></button>
       <button id="clear" class="btn text icon-only" data-i18n-title title="Vaciar lista"><span class="ms">delete_sweep</span></button>
     </div>
@@ -82,6 +83,7 @@
     <div class="split">
       <div class="feed-col">
         <div id="feed" class="feed"></div>
+        <div id="feed-cal" class="cal hidden"></div>
         <div class="more"><button id="more" class="btn tonal hidden"><span class="ms">expand_more</span><span data-i18n>Cargar más</span></button></div>
       </div>
 
@@ -707,6 +709,7 @@
 <script src="navbar.js"></script>
 <script src="app/core.js"></script>
 <script src="app/connections.js"></script>
+<script src="app/calview.js"></script>
 <script src="app/posts.js"></script>
 <script src="app/editor.js"></script>
 <script src="app/blog.js"></script>

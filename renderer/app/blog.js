@@ -3,48 +3,26 @@
 
 // ---------------------------------------------------------------- Calendario de publicaciones
 // Un mes de un vistazo: publicadas, programadas y borradores en su día; se abren en Ecos o en WordPress.
-const calState = { month: new Date(new Date().getFullYear(), new Date().getMonth(), 1) };
-async function renderCalendar() {
-  const box = $('#b-calendar');
-  const m = calState.month, y = m.getFullYear(), mo = m.getMonth();
-  const loc = prefs().lang === 'en' ? 'en-GB' : 'es-ES';
-  const first = new Date(y, mo, 1), last = new Date(y, mo + 1, 0);
-  box.innerHTML = `<div class="cal-bar">
-      <button class="btn text icon-only" data-c="-1"><span class="ms">chevron_left</span></button>
-      <b class="cal-title">${escHtml(first.toLocaleDateString(loc, { month: 'long', year: 'numeric' }).replace(/^./, (c) => c.toUpperCase()))}</b>
-      <button class="btn text icon-only" data-c="1"><span class="ms">chevron_right</span></button>
-      <button class="btn text" data-c="0">${t('Hoy')}</button>
-      <span class="spacer"></span>
-      <span class="cal-legend"><i class="publish"></i>${t('Publicada')}<i class="future"></i>${t('Programada')}<i class="draft"></i>${t('Borrador')}</span>
-    </div><div class="cal-grid"><p class="hint pad">${t('Cargando…')}</p></div>`;
-  $$('[data-c]', box).forEach((b) => (b.onclick = () => { const d = Number(b.dataset.c); calState.month = d ? new Date(y, mo + d, 1) : new Date(new Date().getFullYear(), new Date().getMonth(), 1); renderCalendar(); }));
-  let items = [];
-  try {
-    for (let page = 1; page <= 5; page++) {
-      const r = await window.api.blogList({ type: 'post', status: 'any', page, number: 100, after: new Date(y, mo, 1).toISOString(), before: new Date(y, mo + 1, 1).toISOString() });
-      items.push(...r.items);
-      if (items.length >= r.found || !r.items.length) break;
-    }
-  } catch (e) { $('.cal-grid', box).innerHTML = `<div class="empty"><span class="ms">cloud_off</span><span>${escHtml(e.message)}</span></div>`; return; }
-  if (calState.month !== m) return; // se cambió de mes mientras cargaba
-  const byDay = new Map();
-  for (const it of items) { const d = new Date(it.date); if (d.getMonth() !== mo) continue; const k = d.getDate(); if (!byDay.has(k)) byDay.set(k, []); byDay.get(k).push(it); }
-  const weekdays = [...Array(7)].map((_, i) => new Date(2024, 0, 1 + i).toLocaleDateString(loc, { weekday: 'short' })); // lunes primero
-  const lead = (first.getDay() + 6) % 7, today = new Date();
-  let cells = weekdays.map((w) => `<div class="cal-wd">${escHtml(w)}</div>`).join('');
-  for (let i = 0; i < lead; i++) cells += '<div class="cal-day out"></div>';
-  for (let d = 1; d <= last.getDate(); d++) {
-    const list = (byDay.get(d) || []).sort((a, b) => new Date(a.date) - new Date(b.date));
-    const isToday = today.getFullYear() === y && today.getMonth() === mo && today.getDate() === d;
-    cells += `<div class="cal-day ${isToday ? 'today' : ''}"><span class="cal-n">${d}</span>${list.slice(0, 4).map((it) => `<button class="cal-item st-${escHtml(it.status)}" data-id="${it.id}" title="${escHtml(decodeEntities(it.title))} · ${escHtml(STATUS()[it.status] || it.status)}">${escHtml(decodeEntities(it.title))}</button>`).join('')}${list.length > 4 ? `<span class="cal-more">+${list.length - 4}</span>` : ''}</div>`;
-  }
-  $('.cal-grid', box).innerHTML = cells;
-  $('.cal-grid', box).insertAdjacentHTML('afterend', `<p class="hint cal-sum">${t('{n} entradas este mes · pulsa una para editarla en Ecos (con Ctrl, en WordPress).', { n: items.length })}</p>`);
-  $$('.cal-item', box).forEach((b) => (b.onclick = (e) => busy(b, async () => {
-    const id = Number(b.dataset.id);
-    if (e.ctrlKey || e.metaKey) return window.api.open(await window.api.blogEditUrl(id, 'post'));
-    await openFromWp(id);
-  })));
+const calState = { month: new Date(new Date().getFullYear(), new Date().getMonth(), 1), mode: 'month' };
+function renderCalendar() {
+  return calendarView($('#b-calendar'), calState, {
+    legend: `<i class="publish"></i>${t('Publicada')}<i class="future"></i>${t('Programada')}<i class="draft"></i>${t('Borrador')}`,
+    async load(from, to) {
+      const items = [];
+      for (let page = 1; page <= 10; page++) {
+        const r = await window.api.blogList({ type: 'post', status: 'any', page, number: 100, after: from.toISOString(), before: to.toISOString() });
+        items.push(...r.items);
+        if (items.length >= r.found || !r.items.length) break;
+      }
+      return items.map((it) => ({ id: it.id, date: it.date, title: decodeEntities(it.title), cls: 'st-' + it.status, thumb: it.image || '' }));
+    },
+    footer: (items, from, to, year) => (year ? t('{n} entradas en {y} · pulsa un mes para verlo.', { n: items.length, y: from.getFullYear() })
+      : t('{n} entradas este mes · pulsa una para editarla en Ecos (con Ctrl, en WordPress).', { n: items.length })),
+    onItem: (it, e, b) => busy(b, async () => {
+      if (e.ctrlKey || e.metaKey) return window.api.open(await window.api.blogEditUrl(it.id, 'post'));
+      await openFromWp(it.id);
+    }),
+  });
 }
 
 // ---------------------------------------------------------------- Pestaña Blog

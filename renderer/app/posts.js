@@ -56,6 +56,49 @@ function renderFeed() {
     feed.appendChild(card);
   }
 }
+// ---------------------------------------------------------------- Publicaciones: calendario
+const feedCal = { month: new Date(new Date().getFullYear(), new Date().getMonth(), 1), mode: 'month', on: false };
+function renderFeedCal() {
+  if (!feedCal.on) return;
+  return calendarView($('#feed-cal'), feedCal, {
+    legend: `<i class="pend"></i>${t('Sin pasar al blog')}<i class="publish"></i>${t('Ya en el blog')}<i class="sel"></i>${t('Seleccionada')}`,
+    // Si el mes que se mira es anterior a lo cargado, se traen más publicaciones de Meta hasta llegar a él
+    async beforeLoad(from) {
+      if (!CFG.metaConnected || !$('#page').value || !cursors) return;
+      for (let i = 0; i < 15 && cursors && (cursors.facebook || cursors.instagram); i++) {
+        const oldest = rawPosts.length ? new Date(rawPosts[rawPosts.length - 1].date) : new Date();
+        if (oldest < from) break;
+        await loadMore();
+      }
+    },
+    async load() {
+      return visiblePosts().map((p) => {
+        const ex = liveExport(p), first = p.media.find((m) => m.type === 'image') || p.media[0];
+        const thumb = first && (first.url || (first.type === 'image' ? fileUrl(first.path) : null));
+        const src = [p, ...(p.alsoOn || [])].map((x) => `<span class="badge ${x.source}">${x.source === 'instagram' ? 'IG' : 'FB'}</span>`).join('');
+        return { p, date: p.date, title: (p.text || t('Sin texto')).slice(0, 80), thumb, badge: `<span class="cal-src">${src}</span>`, cls: (ex ? 'st-publish' : 'st-pend') + (selected.has(keyOf(p)) ? ' sel' : '') };
+      });
+    },
+    footer: (items, from, to, year) => (!rawPosts.length ? t('Carga publicaciones arriba para verlas en el calendario.')
+      : t(year ? '{n} publicaciones en {y}; {d} ya en el blog.' : '{n} publicaciones este mes; {d} ya en el blog. Pulsa una para seleccionarla (con Ctrl, verla en grande).',
+        { n: items.length, y: from.getFullYear(), d: items.filter((i) => liveExport(i.p)).length })),
+    onItem: (it, e, b) => {
+      if (e.ctrlKey || e.metaKey) { if (it.p.media.length) openLightbox(mediaItemsOf(it.p), 0); return; }
+      const key = keyOf(it.p);
+      selected.has(key) ? selected.delete(key) : selected.add(key);
+      b.classList.toggle('sel', selected.has(key));
+      updateCount(); renderFeed();
+    },
+  });
+}
+$$('#f-view [data-v]').forEach((b) => (b.onclick = () => {
+  feedCal.on = b.dataset.v === 'cal';
+  $$('#f-view [data-v]').forEach((x) => x.classList.toggle('active', x === b));
+  $('#feed').classList.toggle('hidden', feedCal.on);
+  $('#feed-cal').classList.toggle('hidden', !feedCal.on);
+  renderFeedCal();
+}));
+
 function updateCount() {
   $('#sel-count').textContent = t(selected.size === 1 ? '{n} seleccionada' : '{n} seleccionadas', { n: selected.size });
   $('#make').disabled = selected.size === 0;
@@ -77,7 +120,7 @@ async function rebuildView() {
   const valid = new Set(posts.map(keyOf));
   for (const k of [...selected]) if (!valid.has(k)) selected.delete(k);
   $('#more').classList.toggle('hidden', !(cursors && (cursors.facebook || cursors.instagram)));
-  updateCount(); renderFeed();
+  updateCount(); renderFeed(); renderFeedCal();
 }
 const metaSources = () => [$('#src-ig').checked && 'instagram', $('#src-fb').checked && 'facebook'].filter(Boolean);
 async function loadFirst() { const r = await window.api.metaPosts($('#page').value, metaSources()); cursors = r.cursors; await addPosts(r.posts); return r.posts.length; }
@@ -85,8 +128,8 @@ async function loadMore() { const r = await window.api.metaPosts($('#page').valu
 $('#load').onclick = (e) => busy(e.target, async () => toast(t('{n} publicaciones cargadas', { n: await loadFirst() })));
 $('#more').onclick = (e) => busy(e.target, loadMore);
 $('#f-merge').onchange = async () => { CFG = await window.api.setConfig({ format: { ...CFG.format, mergeDuplicates: $('#f-merge').checked } }); rebuildView(); };
-$('#f-search').oninput = renderFeed;
-$('#f-show').onchange = renderFeed;
+$('#f-search').oninput = () => { renderFeed(); renderFeedCal(); };
+$('#f-show').onchange = () => { renderFeed(); renderFeedCal(); };
 $('#clear').onclick = () => { rawPosts = []; posts = []; cursors = null; selected.clear(); $('#more').classList.add('hidden'); updateCount(); renderFeed(); };
 
 // Selector de origen
