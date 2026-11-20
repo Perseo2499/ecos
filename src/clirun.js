@@ -114,4 +114,37 @@ const MODELS = {
   gemini: ['auto', 'pro', 'flash', 'flash-lite'],
 };
 
-module.exports = { ask, TOOLS, MODELS, extractJson };
+// Investigar en internet con la CLI: devuelve texto (con sus fuentes). Solo herramientas de búsqueda y lectura web.
+async function search({ tool, model }, prompt, log = () => {}) {
+  const T = TOOLS[tool];
+  if (!T) throw new Error('Elige una CLI (Claude Code, Codex o Gemini CLI)');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ecos-cli-'));
+  const started = Date.now();
+  try {
+    let res, text;
+    if (tool === 'claude') {
+      res = await run(T.bin, ['-p', 'Sigue exactamente las instrucciones recibidas por la entrada estándar.', '--output-format', 'json', '--tools', 'WebSearch,WebFetch',
+        '--allowedTools', 'WebSearch,WebFetch', '--strict-mcp-config', '--no-session-persistence', ...(model ? ['--model', model] : [])], { cwd: dir, input: prompt, timeout: 300000 });
+      let j; try { j = JSON.parse(res.out); } catch { j = null; }
+      if (res.code !== 0 || !j || j.is_error) throw new Error(`Claude Code: ${(j?.result || res.err || res.out || 'error').toString().trim().slice(0, 300)}.${loginHint(tool, res.err + res.out)}`);
+      text = j.result;
+    } else if (tool === 'codex') {
+      res = await run(T.bin, ['--search', 'exec', '--skip-git-repo-check', '--sandbox', 'read-only', '--ephemeral', '--color', 'never', '-o', 'respuesta.txt', ...(model ? ['-m', model] : []), '-'], { cwd: dir, input: prompt, timeout: 300000 });
+      const outFile = path.join(dir, 'respuesta.txt');
+      if (res.code !== 0 || !fs.existsSync(outFile)) throw new Error(`Codex: ${(res.err || res.out || 'error').trim().split('\n').slice(-3).join(' ').slice(0, 300)}.${loginHint(tool, res.err + res.out)}`);
+      text = fs.readFileSync(outFile, 'utf8');
+    } else {
+      res = await run(T.bin, ['-p', 'Sigue exactamente las instrucciones recibidas por la entrada estándar. Usa la búsqueda web de Google.', '--output-format', 'json', '--approval-mode', 'plan', '--skip-trust', ...(model ? ['-m', model] : [])], { cwd: dir, input: prompt, timeout: 300000 });
+      let j = null;
+      for (const txt of [res.out, res.err]) { try { j = extractJson(txt); if (j.response !== undefined || j.error) break; } catch { /* siguiente */ } }
+      if (res.code !== 0 || !j || j.error) throw new Error(`Gemini CLI: ${(j?.error?.message || res.err || res.out || 'error').toString().trim().split('\n').slice(-3).join(' ').slice(0, 300)}.${loginHint(tool, (j?.error?.message || '') + res.err + res.out)}`);
+      text = j.response;
+    }
+    log(`CLI ${T.name}: búsqueda en ${((Date.now() - started) / 1000).toFixed(1)} s`);
+    return String(text || '');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+module.exports = { ask, search, TOOLS, MODELS, extractJson };

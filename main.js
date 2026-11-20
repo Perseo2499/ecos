@@ -405,7 +405,20 @@ handle('draft:publish', async (d) => {
 });
 
 // --- IA ---
-handle('ai:article', (input) => ai.improveArticle(cfg.ai, { ...input, extra: cfg.aiInstructions || '' }));
+const sendToast = (msg) => { try { mainWin?.webContents.send('toast', msg); } catch { /* ventana cerrada */ } };
+handle('ai:article', async (input) => {
+  const opts = { ...(input.opts || {}) };
+  let sources = [];
+  // primero, si se pide, buscar en internet (cada IA con su propia búsqueda web)
+  if (opts.web) {
+    sendToast('Buscando información en internet…');
+    const r = await ai.research(cfg.ai, { title: input.title, text: input.text });
+    opts.research = r.notes; sources = r.sources;
+    sendToast('Escribiendo el artículo…');
+  }
+  const art = await ai.improveArticle(cfg.ai, { ...input, opts, extra: cfg.aiInstructions || '' });
+  return { ...art, sources };
+});
 handle('ai:alts', (urls, context) => ai.altTexts(cfg.ai, urls, context));
 handle('ai:rewrite', (input) => ai.rewrite(cfg.ai, { ...input, extra: cfg.aiInstructions || '' }));
 

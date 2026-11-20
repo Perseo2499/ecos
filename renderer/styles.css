@@ -1171,3 +1171,18 @@ img.gl-copy { object-fit: contain; }
 
 #rs-cancel { margin-top: 14px; }
 .btn.outlined.danger { color: var(--error); border-color: color-mix(in srgb, var(--error) 50%, transparent); }
+
+/* Opciones de «Convertir en artículo» */
+.ai-opts { border-radius: var(--r-l); background: var(--surface-c-low); padding: 4px 12px; margin: 6px 0 4px; }
+.ai-opts[open] { padding-bottom: 12px; }
+.ai-opts summary { display: flex; align-items: center; gap: 8px; padding: 8px 0; cursor: pointer; font-size: 13px; font-weight: 600; list-style: none; }
+.ai-opts summary::-webkit-details-marker { display: none; }
+.ai-opts summary .ms { font-size: 18px; color: var(--primary); }
+.ai-opts-sum { margin-left: auto; font-weight: 400; font-size: 11.5px; color: var(--on-surface-var); text-align: right; }
+.ai-opt { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 8px; }
+.ai-opt label { font-size: 12px; color: var(--on-surface-var); }
+.ai-opts .seg.mini { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; }
+.ai-opts .seg.mini button { padding: 6px 4px; font-size: 12px; justify-content: center; }
+.ai-opts select { width: 100%; height: auto; min-height: 40px; padding-top: 8px; padding-bottom: 8px; line-height: 1.3; }
+.ai-opts .switch { margin: 4px 0; font-size: 12.5px; }
+.ai-opts textarea { width: 100%; margin-top: 6px; font: inherit; font-size: 12.5px; padding: 8px 10px; border-radius: var(--r-m); border: 0; background: var(--surface-c-high); color: var(--on-surface); resize: vertical; }

@@ -159,6 +159,17 @@
             <div id="d-review" class="review"></div>
             <div class="field"><label data-i18n>Plantilla</label><select id="d-template"><option value="" data-i18n>Sin plantilla</option></select></div>
             <div class="field"><label data-i18n>Extracto</label><textarea id="d-excerpt" rows="3" data-i18n-ph placeholder="Resumen corto (opcional)"></textarea></div>
+            <details class="ai-opts" id="ai-opts">
+              <summary><span class="ms">tune</span><span data-i18n>Cómo convertir en artículo</span><span class="ai-opts-sum" id="ai-opts-sum"></span></summary>
+              <div class="ai-opt"><label data-i18n>Extensión</label>
+                <div class="seg mini" data-opt="length"><button data-v="shorter" data-i18n>Más breve</button><button data-v="same" data-i18n>Igual</button><button data-v="longer" data-i18n>Más extensa</button></div></div>
+              <div class="ai-opt"><label data-i18n>Tono</label>
+                <select data-opt="tone"><option value="same" data-i18n>El del original</option><option value="friendly" data-i18n>Más cercano</option><option value="formal" data-i18n>Más formal</option><option value="activist" data-i18n>Reivindicativo</option></select></div>
+              <label class="switch small"><input type="checkbox" data-opt="web"><span data-i18n>Ampliar con información de internet (con fuentes)</span></label>
+              <label class="switch small"><input type="checkbox" data-opt="headings"><span data-i18n>Ordenar en secciones con subtítulos</span></label>
+              <label class="switch small"><input type="checkbox" data-opt="spelling"><span data-i18n>Corregir ortografía y gramática</span></label>
+              <textarea data-opt="notes" rows="3" data-i18n-ph placeholder="Indicaciones propias (p. ej., «menciona la campaña de invierno», «termina con una llamada a colaborar»)"></textarea>
+            </details>
             <div class="ai-row">
               <button id="ai-article" class="btn ai"><span class="ms">auto_awesome</span><span data-i18n>Convertir en artículo</span></button>
               <button id="ai-alts" class="btn ai"><span class="ms">image_search</span><span data-i18n>Describir fotos</span></button>

@@ -210,29 +210,154 @@ async function testConnection(aiCfg) {
 }
 
 // --- Publicación → artículo de blog ------------------------------------------------
+// opts (preconfigurables en el editor): length 'shorter'|'same'|'longer' · tone 'same'|'friendly'|'formal'|'activist'
+// · headings (subtítulos) · spelling (corregir) · notes (indicaciones de la persona) · research (lo hallado en internet)
 const Article = z.object({
   title: z.string().describe('Titular claro y atractivo, sin emojis, máximo 90 caracteres'),
   excerpt: z.string().describe('Resumen de 1-2 frases para el extracto del blog y buscadores'),
-  paragraphs: z.array(z.string()).describe('Cuerpo del artículo: párrafos en texto plano, sin hashtags'),
+  blocks: z.array(z.object({
+    kind: z.enum(['h2', 'p']).describe('h2 = subtítulo de sección; p = párrafo'),
+    text: z.string().describe('Texto plano, sin HTML ni Markdown ni hashtags'),
+  })).describe('Cuerpo del artículo en orden: párrafos y, si se piden, subtítulos'),
   tags: z.array(z.string()).describe('Entre 3 y 8 etiquetas en minúsculas, sin #'),
 });
 
-function improveArticle(aiCfg, { title, text, extra = '' }) {
-  const prompt = `Eres editor del blog de una asociación. Convierte esta publicación de redes sociales en una entrada de blog.
+const LENGTH = {
+  shorter: 'Hazlo más breve que el original: quédate con lo esencial (aprox. la mitad).',
+  same: 'Mantén una extensión parecida a la del original; si es muy corto, desarrolla un poco el contexto con lo que ya dice.',
+  longer: 'Desarróllalo más: explica el contexto, las causas y las consecuencias y añade transiciones, sin inventar hechos.',
+};
+const TONE = {
+  same: 'Mantén el tono del original (reivindicativo o cercano).',
+  friendly: 'Usa un tono cercano y cálido, en un lenguaje sencillo.',
+  formal: 'Usa un tono formal e institucional, propio de un comunicado o una memoria.',
+  activist: 'Usa un tono reivindicativo y movilizador, firme y respetuoso.',
+};
+
+function improveArticle(aiCfg, { title, text, extra = '', opts = {} }) {
+  const o = { length: 'same', tone: 'same', headings: true, spelling: true, ...opts };
+  const rules = [
+    'Mantén los hechos, nombres, fechas y lugares del original. No inventes datos, citas ni cifras.',
+    'Quita hashtags, emojis decorativos y fórmulas propias de redes («link en bio», «MÁXIMA DIFUSIÓN»…).',
+    LENGTH[o.length] || LENGTH.same,
+    TONE[o.tone] || TONE.same,
+    o.headings ? 'Organiza el cuerpo en secciones con subtítulos (kind = "h2") cuando el texto tenga más de tres párrafos; no pongas subtítulo antes del primer párrafo.' : 'No uses subtítulos: solo párrafos (kind = "p").',
+    o.spelling ? 'Corrige la ortografía, la gramática y la puntuación.' : '',
+    'Escribe en el mismo idioma que el original.',
+    o.research ? 'Usa la información de internet de abajo para ampliar y contextualizar el artículo: incorpora solo los datos relevantes y verificables, atribúyelos en el texto («según…») y no copies frases literales. Si algo no encaja con el original, no lo uses.' : '',
+    extra ? `Indicaciones generales de la asociación: ${extra}` : '',
+    o.notes ? `Indicaciones para esta entrada: ${o.notes}` : '',
+  ].filter(Boolean).map((r) => '- ' + r).join('\n');
+  const prompt = `Eres editor del blog de una asociación. Convierte esta publicación de redes sociales en una entrada de blog de calidad.
 
 Reglas:
-- Mantén los hechos, nombres, fechas, lugares y el tono reivindicativo o cercano del original. No inventes datos, citas ni cifras.
-- Quita hashtags, emojis decorativos y fórmulas propias de redes («link en bio», «MÁXIMA DIFUSIÓN»…).
-- Si el original es corto, desarrolla un poco el contexto con lo que ya dice, sin añadir información nueva. Si es largo, ordénalo en párrafos claros.
-- Escribe en el mismo idioma que el original.
-${extra ? `- Indicaciones de la asociación: ${extra}\n` : ''}
+${rules}
+
 Título actual: ${title}
 
 Publicación original:
-"""
+<<<
 ${text}
-"""`;
+>>>${o.research ? `
+
+Información de internet (con sus fuentes):
+<<<
+${o.research}
+>>>` : ''}`;
   return askStructured(aiCfg, [{ type: 'text', text: prompt }], Article, { effort: 'medium' });
+}
+
+// --- Buscar en internet para ampliar un artículo ------------------------------------
+// Devuelve { notes, sources: [{ title, url }] }. Cada proveedor usa su propia búsqueda web.
+const RESEARCH_PROMPT = (title, text) => `Busca en internet información fiable y actual que sirva para ampliar y contextualizar esta publicación de una asociación (contexto, datos oficiales, antecedentes, informes de ONG o prensa reconocida).
+Devuelve entre 4 y 10 puntos breves con hechos verificables, cada uno con su fuente. No inventes nada; si no encuentras información fiable, dilo.
+Al final, añade una línea «FUENTES:» y debajo una fuente por línea con el formato «Título — URL».
+
+Título: ${title}
+Publicación:
+<<<
+${String(text).slice(0, 4000)}
+>>>`;
+
+const urlsIn = (text) => [...new Set((String(text).match(/https?:\/\/[^\s)\]>"'»]+/g) || []).map((u) => u.replace(/[.,;:]+$/, '')))];
+function sourcesFrom(text, extra = []) {
+  const out = new Map(extra.filter((s) => s?.url).map((s) => [s.url, { title: s.title || s.url, url: s.url }]));
+  for (const line of String(text).split('\n')) {
+    const u = urlsIn(line)[0];
+    if (u && !out.has(u)) out.set(u, { title: line.replace(u, '').replace(/^[\s\-–—*•\d.]+|[\s\-–—:]+$/g, '').trim() || u, url: u });
+  }
+  return [...out.values()].slice(0, 12);
+}
+
+async function research(aiCfg, { title, text }) {
+  const c = current(aiCfg);
+  const prompt = RESEARCH_PROMPT(title, text);
+  let notes = '', found = [];
+
+  if (c.def.cli) {
+    notes = await require('./clirun').search({ tool: c.tool, model: c.model }, prompt, cliLog);
+  } else if (c.id === 'anthropic') {
+    const client = new Anthropic({ apiKey: c.key, ...(c.base ? { baseURL: c.base } : {}) });
+    const fallback = CLAUDE_FALLBACK.test(c.model);
+    const run = async (toolType) => {
+      const messages = [{ role: 'user', content: prompt }];
+      for (let i = 0; i < 4; i++) { // la búsqueda puede pausar el turno (pause_turn): se reanuda tal cual
+        const r = await client.beta.messages.create({
+          model: c.model, max_tokens: 16000,
+          ...(fallback ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' } : {}),
+          ...(CLAUDE_EFFORT.test(c.model) ? { output_config: { effort: 'low' } } : {}),
+          tools: [{ type: toolType, name: 'web_search', max_uses: 5 }],
+          messages,
+        });
+        if (r.stop_reason === 'refusal') throw new Error('La IA no ha podido hacer esta búsqueda');
+        for (const blk of r.content) {
+          if (blk.type === 'text') { notes += blk.text; for (const ci of blk.citations || []) if (ci.url) found.push({ title: ci.title, url: ci.url }); }
+          if (blk.type === 'web_search_tool_result' && Array.isArray(blk.content)) for (const w of blk.content) if (w.url) found.push({ title: w.title, url: w.url });
+        }
+        if (r.stop_reason !== 'pause_turn') break;
+        messages.push({ role: 'assistant', content: r.content });
+      }
+    };
+    try {
+      try { await run('web_search_20260209'); } catch (err) {
+        // modelos antiguos: la búsqueda básica
+        if (err instanceof Anthropic.BadRequestError && /web_search/.test(err.message)) { notes = ''; found = []; await run('web_search_20250305'); } else throw err;
+      }
+    } catch (err) {
+      if (err instanceof Anthropic.AuthenticationError) throw new Error('La clave de Anthropic no es válida');
+      if (err instanceof Anthropic.RateLimitError) throw new Error('Claude: límite de uso alcanzado; espera un momento');
+      if (err instanceof Anthropic.APIError) throw new Error(`Claude (búsqueda en internet): ${err.message}`);
+      throw err;
+    }
+  } else if (c.id === 'openai') {
+    const json = await httpJson(`${c.base}/responses`, {
+      method: 'POST', headers: { Authorization: `Bearer ${c.key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: c.model, tools: [{ type: 'web_search' }], input: prompt }),
+    }, 'openai');
+    for (const item of json.output || []) for (const part of item.content || []) {
+      if (part.type === 'output_text') { notes += part.text; for (const an of part.annotations || []) if (an.url) found.push({ title: an.title, url: an.url }); }
+    }
+  } else if (c.id === 'gemini') {
+    const json = await httpJson(`${c.base}/models/${encodeURIComponent(c.model)}:generateContent`, {
+      method: 'POST', headers: { 'x-goog-api-key': c.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], tools: [{ google_search: {} }] }),
+    }, 'gemini');
+    const cand = json.candidates?.[0];
+    notes = (cand?.content?.parts || []).map((p) => p.text || '').join('');
+    for (const ch of cand?.groundingMetadata?.groundingChunks || []) if (ch.web?.uri) found.push({ title: ch.web.title, url: ch.web.uri });
+  } else if (c.id === 'openrouter') {
+    const json = await httpJson(`${c.base}/chat/completions`, {
+      method: 'POST', headers: { Authorization: `Bearer ${c.key}`, 'Content-Type': 'application/json', 'X-Title': 'Ecos' },
+      body: JSON.stringify({ model: c.model.endsWith(':online') ? c.model : c.model + ':online', messages: [{ role: 'user', content: prompt }] }),
+    }, 'openrouter');
+    const m = json.choices?.[0]?.message;
+    notes = m?.content || '';
+    for (const an of m?.annotations || []) if (an.url_citation?.url) found.push({ title: an.url_citation.title, url: an.url_citation.url });
+  } else {
+    throw new Error(`${c.def.name} no puede buscar en internet. Desmarca «Ampliar con información de internet» o usa Claude, ChatGPT, Gemini, OpenRouter o la CLI.`);
+  }
+  if (!notes.trim()) throw new Error('La búsqueda en internet no ha devuelto resultados');
+  return { notes: notes.trim(), sources: sourcesFrom(notes, found) };
 }
 
 // --- Texto alternativo de imágenes -------------------------------------------------
@@ -281,4 +406,4 @@ ${html}
   return askStructured(aiCfg, [{ type: 'text', text: prompt }], Rewrite).then((r) => r.html);
 }
 
-module.exports = { rewrite, setCliLog, PROVIDERS, askStructured, listModels, testConnection, improveArticle, altTexts };
+module.exports = { research, rewrite, setCliLog, PROVIDERS, askStructured, listModels, testConnection, improveArticle, altTexts };

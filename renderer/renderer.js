@@ -607,19 +607,51 @@ $('#d-template').onchange = () => {
   toast(t('Plantilla «{p}» aplicada', { p: tp.name }));
 };
 
-// IA en el editor: el texto se reescribe y las fotos, vídeos y su orden se conservan
+// Opciones de «Convertir en artículo» (se configuran antes de pulsar y se recuerdan)
+const AI_OPTS_DEF = { length: 'same', tone: 'same', web: false, headings: true, spelling: true, notes: '' };
+const aiOpts = () => ({ ...AI_OPTS_DEF, ...(prefs().aiArticle || {}) });
+function renderAiOpts() {
+  const o = aiOpts();
+  $$('#ai-opts [data-opt]').forEach((el) => {
+    const k = el.dataset.opt;
+    if (el.classList.contains('seg')) $$('button', el).forEach((b) => b.classList.toggle('active', b.dataset.v === o[k]));
+    else if (el.type === 'checkbox') el.checked = !!o[k];
+    else el.value = o[k] || '';
+  });
+  const L = { shorter: t('más breve'), longer: t('más extensa') }, T = { friendly: t('cercano'), formal: t('formal'), activist: t('reivindicativo') };
+  $('#ai-opts-sum').textContent = [L[o.length], T[o.tone], o.web && t('con internet')].filter(Boolean).join(' · ');
+}
+const saveAiOpts = (patch) => savePrefs({ aiArticle: { ...aiOpts(), ...patch } }).then(renderAiOpts);
+$$('#ai-opts [data-opt]').forEach((el) => {
+  const k = el.dataset.opt;
+  if (el.classList.contains('seg')) $$('button', el).forEach((b) => (b.onclick = () => saveAiOpts({ [k]: b.dataset.v })));
+  else if (el.type === 'checkbox') el.onchange = () => saveAiOpts({ [k]: el.checked });
+  else el.onchange = () => saveAiOpts({ [k]: el.value.trim() });
+});
+renderAiOpts();
+
+// IA en el editor: el texto se reescribe con las opciones elegidas; las fotos, vídeos y su orden se conservan
 $('#ai-article').onclick = (e) => busy(e.target, async () => {
   const TEXT = ['paragraph', 'heading', 'quote', 'list'];
   if (draft.blocks.some((b) => TEXT.includes(b.type)) && !await ask(t('La IA reescribirá los textos de la entrada (las fotos y vídeos se quedan). ¿Continuar?'))) return;
   const text = draft.sourceText || window.BlockEditor.plainText();
-  const r = await window.api.aiArticle({ title: $('#d-title').value, text });
+  const opts = { ...aiOpts(), notes: $('#ai-opts [data-opt="notes"]').value.trim() };
+  const r = await window.api.aiArticle({ title: $('#d-title').value, text, opts });
   $('#d-title').value = r.title; autoTitle();
   $('#d-excerpt').value = r.excerpt;
   window.BlockEditor.change(() => {
     const media = draft.blocks.filter((b) => !TEXT.includes(b.type));
-    const paras = r.paragraphs.map((p) => window.BlockEditor.create('paragraph', { html: escHtml(p) }));
-    // primero el texto; las fotos se reparten tras el primer párrafo para que no queden todas al final
-    draft.blocks = paras.length ? [paras[0], ...media.slice(0, 1), ...paras.slice(1), ...media.slice(1)] : media;
+    const E = window.BlockEditor;
+    const body = r.blocks.filter((b) => b.text.trim()).map((b) => (b.kind === 'h2' ? E.create('heading', { level: 2, html: escHtml(b.text) }) : E.create('paragraph', { html: escHtml(b.text) })));
+    // las fotos se reparten tras el primer párrafo para que no queden todas al final
+    const firstP = Math.max(0, body.findIndex((b) => b.type === 'paragraph'));
+    let blocks = body.length ? [...body.slice(0, firstP + 1), ...media.slice(0, 1), ...body.slice(firstP + 1), ...media.slice(1)] : media;
+    // fuentes de internet al final, como lista de enlaces
+    if (r.sources?.length) {
+      blocks = [...blocks, E.create('heading', { level: 3, html: escHtml(t('Fuentes')) }),
+        E.create('list', { items: r.sources.map((s) => `<a href="${escHtml(s.url)}">${escHtml(s.title || s.url)}</a>`) })];
+    }
+    draft.blocks = blocks;
   });
   const cur = $('#d-tags').value.split(',').map((x) => x.trim()).filter(Boolean);
   $('#d-tags').value = [...new Set([...cur, ...r.tags])].join(', ');
@@ -921,6 +953,7 @@ function applyPrefs() {
   window.api.setZoom(Number(p.zoom) || 1);
   for (const [id, v] of [['#s-theme', p.theme], ['#s-zoom', String(p.zoom)], ['#s-cards', String(p.cards)], ['#s-accent', p.accent]]) $$(id + ' button').forEach((b) => b.classList.toggle('active', b.dataset.v === v));
   $('#s-lang').value = p.lang;
+  renderAiOpts();
   $$('#s-lang-seg button').forEach((b) => b.classList.toggle('active', b.dataset.v === p.lang));
   const preset = $$('#s-accent button').some((b) => b.dataset.v === p.accent);
   $('.custom-color').classList.toggle('active', !preset);
@@ -1382,7 +1415,7 @@ async function afterConfigLoaded() {
   if (CFG.startMode) renderMode(CFG.startMode);
   applyPrefs();
 }
-window.api.onToast((m) => toast(m));
+window.api.onToast((m) => toast(t(m)));
 window.api.onConfigChanged((c) => { CFG = { ...CFG, ...c }; renderStatus(); });
 
 (async () => {
