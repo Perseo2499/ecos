@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('api', {
   publish: (d) => call('draft:publish', d),
   previewDraft: (d) => call('draft:preview', d),
   composeDraft: (blocks) => call('draft:compose', blocks),
+  pullPost: (id) => call('post:pull', id),
   siteStyles: () => call('site:styles'),
   uploadMedia: () => call('media:upload'),
   forgetExported: (keys) => call('exported:forget', keys),

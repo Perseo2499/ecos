@@ -209,6 +209,8 @@ function carouselBlock(b) {
   const css = `${S}{position:relative;margin:2em 0;outline:none;--ec-r:18px}`
     + `${S} .ec-track{position:relative;display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;padding:4px 8%;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-top:14px;padding-bottom:28px}`
     + `${S} .ec-track::-webkit-scrollbar{display:none}`
+    + `${S}.ec-js .ec-track{cursor:grab}${S} .ec-track.ec-dragging{cursor:grabbing;scroll-snap-type:none;scroll-behavior:auto;user-select:none}`
+    + `${S} .ec-slide img{-webkit-user-drag:none;user-select:none}`
     + `${S} .ec-slide{position:relative;flex:0 0 84%;margin:0;aspect-ratio:4/3;border-radius:var(--ec-r);overflow:hidden;scroll-snap-align:center;background:#111;box-shadow:0 10px 30px rgba(0,0,0,.18);transition:transform .5s cubic-bezier(.2,0,0,1),opacity .5s,filter .5s}`
     + `${S} .ec-slide::before{content:"";position:absolute;inset:-40px;background:var(--bg) center/cover;filter:blur(28px) brightness(.75) saturate(1.2)}`
     + `${S} .ec-slide img{position:relative;display:block;width:100%;height:100%;object-fit:contain;margin:0;border-radius:0}`
@@ -226,7 +228,7 @@ function carouselBlock(b) {
     + `@media (max-width:600px){${S} .ec-slide{flex-basis:90%}${S} .ec-btn{display:none}}`;
   const figs = b.images.map((i) => {
     const alt = esc(i.alt || '');
-    return `<figure class="ec-slide" style="--bg:url('${esc(i.url)}')"><img src="${esc(i.url)}" alt="${alt}" loading="lazy"/>${b.captions && i.alt ? `<figcaption>${alt}</figcaption>` : ''}</figure>`;
+    return `<figure class="ec-slide" style="--bg:url('${esc(i.url)}')"><img src="${esc(i.url)}" alt="${alt}" loading="lazy"${Number(i.id) ? ` class="wp-image-${i.id}"` : ''}/>${b.captions && i.alt ? `<figcaption>${alt}</figcaption>` : ''}</figure>`;
   }).join('');
   const auto = b.autoplay === false ? 0 : 5000;
   const script = CAROUSEL_JS ? `<script>${CAROUSEL_JS}</script>` : '';
@@ -305,6 +307,20 @@ function buttonsBlock(b) {
   return `<!-- wp:buttons${just ? ' ' + JSON.stringify(just) : ''} -->\n<div class="wp-block-buttons"><!-- wp:button${outline ? ' {"className":"is-style-outline"}' : ''} -->\n<div class="wp-block-button${outline ? ' is-style-outline' : ''}"><a class="wp-block-button__link wp-element-button"${href}>${text}</a></div>\n<!-- /wp:button --></div>\n<!-- /wp:buttons -->`;
 }
 
+// Mosaico: fotos de distintos tamaños encajadas en una rejilla (la primera grande). Bloque HTML, como el carrusel.
+function mosaicBlock(b) {
+  const id = 'ecos-m-' + b.id.replace(/[^a-z0-9]/gi, '');
+  const S = `#${id}`;
+  const css = `${S}{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:170px;grid-auto-flow:dense;gap:8px;margin:2em 0}`
+    + `${S} figure{margin:0;overflow:hidden;border-radius:12px;background:#ddd}`
+    + `${S} figure:nth-child(6n+1){grid-column:span 2;grid-row:span 2}${S} figure:nth-child(6n+4){grid-column:span 2}${S} figure:nth-child(6n+6){grid-row:span 2}`
+    + `${S} img{display:block;width:100%;height:100%;object-fit:cover;margin:0;transition:transform .5s cubic-bezier(.2,0,0,1)}`
+    + `${S} figure:hover img{transform:scale(1.05)}`
+    + `@media (max-width:600px){${S}{grid-template-columns:repeat(2,1fr);grid-auto-rows:130px}}`;
+  const figs = b.images.map((i) => `<figure><img src="${esc(i.url)}" alt="${esc(i.alt || '')}" loading="lazy" class="wp-image-${i.id}"/></figure>`).join('');
+  return `<!-- wp:html -->\n<div class="ecos-mosaico" id="${id}"><style>${css}</style>${figs}</div>\n<!-- /wp:html -->`;
+}
+
 function composeBlocks(blocks) {
   const out = [];
   const anchors = headingAnchors(blocks);
@@ -362,6 +378,7 @@ function composeBlocks(blocks) {
       case 'image': if (b.img) out.push(imageBlockFull(b.img, b.caption)); break;
       case 'gallery': {
         if (!b.images?.length) break;
+        if (b.layout === 'mosaic' && b.images.length > 1) { out.push(mosaicBlock(b)); break; }
         if (b.images.length === 1) { out.push(imageBlockFull(b.images[0])); break; }
         const cols = Math.max(1, Math.min(6, b.columns || 3));
         out.push(`<!-- wp:gallery {"columns":${cols},"linkTo":"none"} -->\n<figure class="wp-block-gallery has-nested-images columns-${cols} is-cropped">\n${b.images.map((i) => imageBlockFull(i)).join('\n')}\n</figure>\n<!-- /wp:gallery -->`);
@@ -377,6 +394,7 @@ function composeBlocks(blocks) {
       }
       case 'video': if (b.video) out.push(videoBlock(b.video, b.caption)); break;
       case 'embed': if (b.url) out.push(b.provider === 'instagram' || b.provider === 'facebook' || !b.provider ? embedBlock(b.url, b.provider || 'instagram') : embedFull(b)); break;
+      case 'raw': if (b.markup) out.push(b.markup); break; // bloque de WordPress que Ecos conserva sin tocar
       case 'separator': out.push('<!-- wp:separator -->\n<hr class="wp-block-separator has-alpha-channel-opacity"/>\n<!-- /wp:separator -->'); break;
       default: break;
     }

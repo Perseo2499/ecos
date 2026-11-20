@@ -481,6 +481,7 @@ async function makeDraft() {
   if (already.length && !await ask(t('{n} de las publicaciones elegidas ya están en el blog. ¿Crear otra entrada de todos modos?', { n: already.length }))) return;
   toast(t('Subiendo fotos a WordPress…'));
   draft = await window.api.buildDraft(chosen);
+  renderWpState(null);
   draft.excerpt = ''; draft.postId = null; draft.extraMedia = []; // postId: borrador ya guardado en WordPress
   draftKeys = chosen.flatMap(keysOf);
   openEditor();
@@ -501,7 +502,7 @@ function mediaPool() {
 function openEditor() {
   $('#sent').classList.add('hidden'); $('#send').classList.remove('hidden');
   $('#d-title').value = draft.title;
-  requestAnimationFrame(autoTitle);
+  requestAnimationFrame(autoTitle); document.fonts?.ready.then(autoTitle);
   $('#d-excerpt').value = draft.excerpt || '';
   $('#d-tags').value = draft.tags.join(', ');
   const f = CFG.format || {};
@@ -533,6 +534,7 @@ function openEditor() {
 // El título crece en varias líneas (y no admite saltos de línea)
 const autoTitle = () => { const el = $('#d-title'); el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; };
 $('#d-title').oninput = autoTitle;
+new ResizeObserver(() => autoTitle()).observe($('#ed-canvas')); // al cambiar el ancho, el título vuelve a encajar
 $('#d-title').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); const first = $('#d-blocks [contenteditable]'); first?.focus(); } };
 const closeEditor = async () => {
   if (!$('#sent').classList.contains('hidden') || await ask(t('¿Cerrar el editor? Lo que no hayas enviado se perderá.'))) {
@@ -588,7 +590,7 @@ $('#ai-article').onclick = (e) => busy(e.target, async () => {
   if (draft.blocks.some((b) => TEXT.includes(b.type)) && !await ask(t('La IA reescribirá los textos de la entrada (las fotos y vídeos se quedan). ¿Continuar?'))) return;
   const text = draft.sourceText || window.BlockEditor.plainText();
   const r = await window.api.aiArticle({ title: $('#d-title').value, text });
-  $('#d-title').value = r.title;
+  $('#d-title').value = r.title; autoTitle();
   $('#d-excerpt').value = r.excerpt;
   window.BlockEditor.change(() => {
     const media = draft.blocks.filter((b) => !TEXT.includes(b.type));
@@ -619,13 +621,56 @@ const draftPayload = (status) => ({
   recreate: !!draft.previewOnly,
 });
 
+// Actualizar desde WordPress (la app envía y también recibe cambios)
+const WP_STATE = () => ({ publish: [t('Publicada'), 'public'], draft: [t('Borrador'), 'draft'], future: [t('Programada'), 'schedule'], pending: [t('Pendiente'), 'pending'], private: [t('Privada'), 'lock'], trash: [t('En la papelera'), 'delete'] });
+function renderWpState(st, url) {
+  const el = $('#ed-wp');
+  if (!st) { el.classList.add('hidden'); return; }
+  const [name, ic] = WP_STATE()[st] || [st, 'help'];
+  el.className = 'ed-wp st-' + st;
+  el.innerHTML = `<span class="ms">${ic}</span>${escHtml(name)}${st === 'publish' && url ? ` · <a href="#">${t('Ver')}</a>` : ''}`;
+  $('a', el)?.addEventListener('click', (e) => { e.preventDefault(); window.api.open(url); });
+}
+$('#ed-pull').onclick = (e) => busy(e.currentTarget, async () => {
+  if (!draft.postId) return toast(t('Esta entrada todavía no está en WordPress: envíala primero.'), true);
+  const r = await window.api.pullPost(draft.postId);
+  exported = r.exported || exported;
+  renderWpState(r.status, r.url);
+  if (r.status === 'trash') return toast(t('Esta entrada está en la papelera de WordPress.'), true);
+  $$('input[name="d-when"]').forEach((x) => (x.checked = x.value === (r.status === 'publish' ? 'publish' : r.status === 'future' ? 'future' : 'draft')));
+  const changes = [];
+  if (r.title.trim() !== $('#d-title').value.trim()) changes.push(t('el título'));
+  if ((r.excerpt || '').trim() !== $('#d-excerpt').value.trim()) changes.push(t('el extracto'));
+  if (r.featured && r.featured !== draft.featuredImageId) changes.push(t('la imagen destacada'));
+  if (r.contentChanged === null) { // enviada con una versión anterior de Ecos: se compara con lo que hay en el editor
+    const norm = (x) => String(x || '').replace(/ecos-[cm]-[a-z0-9]+/g, '').replace(/\s+/g, ' ').trim();
+    r.contentChanged = norm(await window.api.composeDraft(draft.blocks)) !== norm(r.content);
+  }
+  if (r.contentChanged) changes.push(t('el contenido'));
+  const stName = (WP_STATE()[r.status] || [r.status])[0];
+  if (!changes.length) { toast(t('Al día. En WordPress: {s}.', { s: stName })); renderFeed(); return; }
+  if (!await ask(t('En WordPress han cambiado {c}. ¿Traer esos cambios al editor? (Se puede deshacer con Ctrl+Z.)', { c: changes.join(', ') }), { ok: t('Traer cambios') })) return;
+  $('#d-title').value = r.title; autoTitle();
+  $('#d-excerpt').value = r.excerpt || '';
+  window.BlockEditor.change(() => {
+    if (r.contentChanged) draft.blocks = r.blocks;
+    if (r.featured) { draft.featuredImageId = r.featured; window.BlockEditor.liftFeatured(); }
+  });
+  // las fotos que ahora usa la entrada, también en la bandeja
+  const known = new Set(window.BlockEditor.media.map((m) => m.id));
+  const extra = window.BlockEditor.bodyImages().filter((i) => !known.has(i.id)).map((i) => ({ ...i, type: 'image' }));
+  if (extra.length) { draft.extraMedia = [...(draft.extraMedia || []), ...extra]; window.BlockEditor.media = mediaPool(); window.BlockEditor.renderMedia(); }
+  renderFeed();
+  toast(t('Cambios traídos de WordPress. En WordPress: {s}.', { s: stName }));
+});
+
 // Enviar
 $('#send').onclick = (e) => busy(e.target, async () => {
   const when = $('input[name="d-when"]:checked').value;
   if (!$('#d-title').value.trim()) throw new Error(t('Escribe un título'));
   if (when === 'publish' && !await ask(t('Se publicará ahora y será visible en la web. ¿Continuar?'))) return;
   const res = await window.api.publish(draftPayload(when));
-  exported = res.exported; lastSent = res; draft.postId = res.postId || draft.postId; draft.previewOnly = false;
+  exported = res.exported; lastSent = res; draft.postId = res.postId || draft.postId; draft.previewOnly = false; renderWpState(res.status, res.url);
   $('#sent-text').textContent = res.status === 'publish' ? t('¡Entrada publicada!')
     : res.status === 'future' ? t('Entrada programada para el {d}.', { d: fmtDate(res.date) }) : t('Borrador creado en WordPress.');
   if (res.status !== 'future' && res.date) $('#sent-text').textContent += ' ' + t('Fecha de la entrada: {d}.', { d: fmtDate(res.date) });

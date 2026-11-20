@@ -146,6 +146,10 @@ async function listPosts(cfg, { type = 'post', status = 'any', search = '', page
     })),
   };
 }
+async function getPost(cfg, id) {
+  const p = await call(cfg, `/posts/${id}?context=edit`);
+  return { id: p.ID, status: p.status, url: p.URL, date: p.date, modified: p.modified, title: p.title || '', excerpt: p.excerpt || '', content: p.content || '', featured: p.post_thumbnail?.ID || null };
+}
 const updateMedia = (cfg, id, fields) => call(cfg, `/media/${id}`, fields);
 async function postStatuses(cfg, ids) {
   const out = {};
@@ -158,4 +162,4 @@ async function postStatuses(cfg, ids) {
 const setPostStatus = (cfg, id, status) => call(cfg, `/posts/${id}`, { status });
 const trashPost = (cfg, id) => call(cfg, `/posts/${id}/delete`, {});
 
-module.exports = { findExisting, uploadNamed, postStatuses, REDIRECT, AuthError, login, siteInfo, publicUrl, publicBase, updatePost, categories, uploadFromUrls, uploadFile, createPost, updateMedia, listPosts, setPostStatus, trashPost };
+module.exports = { getPost, findExisting, uploadNamed, postStatuses, REDIRECT, AuthError, login, siteInfo, publicUrl, publicBase, updatePost, categories, uploadFromUrls, uploadFile, createPost, updateMedia, listPosts, setPostStatus, trashPost };

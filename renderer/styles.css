@@ -1076,3 +1076,39 @@ img.gl-copy { object-fit: contain; }
 .dlg .btn:focus { outline: none; }
 .dlg .btn:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 40%, transparent); }
 :root[data-vinyl="on"] .dlg-ic.danger { color: var(--vinyl); }
+
+/* Galería en mosaico (editor) */
+.g-grid.mosaic { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 110px; grid-auto-flow: dense; }
+.g-grid.mosaic > .ph:nth-child(6n+1) { grid-column: span 2; grid-row: span 2; }
+.g-grid.mosaic > .ph:nth-child(6n+4) { grid-column: span 2; }
+.g-grid.mosaic > .ph:nth-child(6n+6) { grid-row: span 2; }
+.g-grid.mosaic .ph { height: 100%; }
+.g-grid.mosaic .ph img { height: 100%; aspect-ratio: auto; }
+.g-grid.mosaic .ph .alt { position: absolute; left: 6px; right: 6px; bottom: 6px; margin: 0; }
+.g-grid.mosaic > .drop-zone { aspect-ratio: auto; height: 100%; }
+.blk-extra .lv-sep { width: 1px; height: 18px; margin: 0 4px; background: var(--outline-var); align-self: center; }
+
+/* Publicación: el texto no se sale (icono encima del nombre, tres huecos iguales) */
+.ed-side .seg.when { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-radius: var(--r-l); }
+.ed-side .seg.when label { flex-direction: column; gap: 2px; padding: 9px 4px; font-size: 12.5px; border-radius: var(--r-m); text-align: center; white-space: nowrap; min-width: 0; }
+.ed-side .seg.when .ms { font-size: 20px; }
+/* El «+» entre bloques, centrado */
+.ins-btn { padding: 0; line-height: 0; }
+.ins-btn .ms { display: block; width: 18px; height: 18px; line-height: 18px; text-align: center; }
+/* Barra de formato con texto e iconos claros */
+.fmt-bar select { color: var(--on-surface); }
+.fmt-bar button { color: var(--on-surface); }
+:root[data-theme="dark"] .fmt-bar select, :root[data-theme="dark"] .fmt-bar button { color: #fff; }
+.fmt-bar.off > * { opacity: .6; }
+
+/* Estado en WordPress y bloques que vienen de WordPress */
+.ed-wp { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: var(--r-full); font-size: 12.5px; font-weight: 600;
+  background: var(--surface-c-high); color: var(--on-surface-var); }
+.ed-wp .ms { font-size: 17px; }
+.ed-wp.st-publish { background: color-mix(in srgb, #2e7d32 16%, transparent); color: #3c9a46; }
+.ed-wp.st-future { background: color-mix(in srgb, #1565c0 16%, transparent); color: #5b9be0; }
+.ed-wp.st-trash { background: color-mix(in srgb, var(--error) 16%, transparent); color: var(--error); }
+.ed-wp a { color: inherit; }
+.raw-box { display: flex; gap: 14px; align-items: flex-start; padding: 14px 18px; border-radius: var(--r-l); border: 1px dashed var(--outline-var); background: var(--surface-c-low); }
+.raw-box > .ms { font-size: 26px; color: var(--primary); }
+.raw-box .raw-text { margin-top: 6px; font-size: 13px; color: var(--on-surface-var); }

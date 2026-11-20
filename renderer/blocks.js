@@ -18,6 +18,7 @@
     separator: { icon: 'horizontal_rule', name: t('Separador') }, table: { icon: 'table', name: t('Tabla') },
     buttons: { icon: 'smart_button', name: t('Botón') }, spacer: { icon: 'height', name: t('Espacio') },
     details: { icon: 'expand_circle_down', name: t('Desplegable') }, toc: { icon: 'toc', name: t('Índice') },
+    raw: { icon: 'code_blocks', name: t('De WordPress') },
   });
   const TEXT_TYPES = ['paragraph', 'heading', 'quote', 'list'];
 
@@ -62,7 +63,22 @@
     mount(draft, { media, onChange, onOpenMedia }) {
       this.draft = draft; this.media = media; this.onChange = onChange || (() => {}); this.onOpenMedia = onOpenMedia || (() => {});
       this.undo = []; this.redo = [];
+      this.liftFeatured(); // la destacada va arriba y sale del cuerpo
       this.render(); this.renderMedia();
+    },
+    // Fotos del cuerpo de la entrada
+    bodyImages() { return this.draft.blocks.flatMap((b) => (b.img ? [b.img] : b.images || [])); },
+    // Saca la imagen destacada del cuerpo (si está) para que no salga dos veces en la web
+    liftFeatured() {
+      const id = this.draft.featuredImageId;
+      if (id == null) return false;
+      let found = false;
+      for (let i = this.draft.blocks.length - 1; i >= 0; i--) {
+        const b = this.draft.blocks[i];
+        if (b.img?.id === id) { found = true; if (b.type === 'image') this.draft.blocks.splice(i, 1); else b.img = null; }
+        if (b.images?.some((x) => x.id === id)) { found = true; b.images = b.images.filter((x) => x.id !== id); }
+      }
+      return found;
     },
 
     // --- Historial (deshacer / rehacer) -------------------------------------------
@@ -80,10 +96,23 @@
     },
     doUndo() { this.restore(this.undo, this.redo); },
     doRedo() { this.restore(this.redo, this.undo); },
-    change(fn, rerender = true) { this.snapshot(); fn(); if (rerender) this.render(); this.onChange(); },
+    change(fn, rerender = true) {
+      this.snapshot();
+      const before = this.draft.featuredImageId;
+      fn();
+      // si la destacada se ha metido en el cuerpo, deja de ser la destacada (no puede estar en los dos sitios)
+      const id = this.draft.featuredImageId;
+      if (id != null && id === before && this.bodyImages().some((x) => x.id === id)) {
+        this.draft.featuredImageId = null;
+        toast(t('La foto ha pasado al cuerpo de la entrada y ya no es la imagen destacada.'));
+      }
+      if (rerender) this.render();
+      this.onChange();
+    },
 
     // --- Bloques nuevos ------------------------------------------------------------
     create(type, extra = {}) {
+      if (type === 'mosaic') return this.create('gallery', { layout: 'mosaic', ...extra });
       const b = { id: bid(), type };
       if (type === 'paragraph' || type === 'quote') b.html = '';
       if (type === 'heading') { b.html = ''; b.level = 2; }
@@ -176,7 +205,7 @@
       box.className = 'cover' + (img ? ' has' : '');
       box.innerHTML = img
         ? `<img src="${esc(img.url)}" alt=""><span class="cover-tag"><span class="ms fill">star</span>${t('Imagen destacada')}</span><button class="cover-del" title="${t('Quitar imagen destacada')}"><span class="ms">close</span></button>`
-        : `<span class="ms">add_photo_alternate</span>${t('Arrastra aquí la imagen destacada')}`;
+        : `<span class="ms">add_photo_alternate</span>${t('Arrastra aquí la imagen destacada (se quita del cuerpo)')}`;
       $('.cover-del', box)?.addEventListener('click', () => this.change(() => (this.draft.featuredImageId = null)));
       if (!box.dataset.wired) {
         box.dataset.wired = '1';
@@ -187,8 +216,8 @@
           box.classList.remove('over');
           if (!this.isPhoto(drag)) return;
           e.preventDefault();
-          const img = this.peek(drag); drag = null; endDrag();
-          if (img) this.change(() => (this.draft.featuredImageId = img.id));
+          const d = drag; drag = null; endDrag();
+          this.change(() => { const img = this.take(d); if (img) { this.draft.featuredImageId = img.id; this.liftFeatured(); } });
         });
       }
     },
@@ -428,19 +457,23 @@
 
         case 'gallery': case 'carousel': {
           const grid = document.createElement('div');
-          grid.className = b.type === 'gallery' ? 'g-grid' : 'g-car';
+          grid.className = b.type === 'gallery' ? 'g-grid' + (b.layout === 'mosaic' ? ' mosaic' : '') : 'g-car';
           if (b.type === 'gallery') grid.style.setProperty('--cols', b.columns);
           b.images.forEach((img, k) => grid.appendChild(this.photo(img, () => this.change(() => b.images.splice(k, 1)), b, k)));
           const add = this.dropZone(b.images.length ? t('Suelta más fotos aquí') : t('Arrastra aquí fotos'), (m) => this.change(() => b.images.push({ ...m })), true);
           grid.appendChild(add);
           body.appendChild(grid);
           this.acceptPhoto(body, (img) => b.images.push(img)); // soltar en un hueco: al final
-          // Convertir galería ↔ carrusel y elegir columnas
-          extra.innerHTML = (b.type === 'gallery'
-            ? [2, 3, 4].map((c) => `<button class="lv ${b.columns === c ? 'on' : ''}" data-c="${c}" title="${t('{n} columnas', { n: c })}">${c}<span class="ms">view_column</span></button>`).join('')
-            : '') + `<button class="lv" data-sw="1" title="${b.type === 'gallery' ? t('Convertir en carrusel') : t('Convertir en galería')}"><span class="ms">${b.type === 'gallery' ? 'view_carousel' : 'grid_view'}</span></button>`;
+          // Colocación: cuadrícula (con columnas), mosaico o carrusel
+          const lay = b.type === 'carousel' ? 'carousel' : b.layout === 'mosaic' ? 'mosaic' : 'grid';
+          extra.innerHTML = [['grid', 'grid_view', t('Cuadrícula')], ['mosaic', 'dashboard', t('Mosaico')], ['carousel', 'view_carousel', t('Carrusel')]]
+            .map(([k, ic, n]) => `<button class="lv ${lay === k ? 'on' : ''}" data-lay="${k}" title="${n}"><span class="ms">${ic}</span>${n}</button>`).join('')
+            + (lay === 'grid' ? '<span class="lv-sep"></span>' + [2, 3, 4].map((c) => `<button class="lv ${b.columns === c ? 'on' : ''}" data-c="${c}" title="${t('{n} columnas', { n: c })}">${c}<span class="ms">view_column</span></button>`).join('') : '');
           $$('[data-c]', extra).forEach((x) => (x.onclick = () => this.change(() => (b.columns = Number(x.dataset.c)))));
-          $('[data-sw]', extra).onclick = () => this.change(() => { b.type = b.type === 'gallery' ? 'carousel' : 'gallery'; b.columns = b.columns || 3; });
+          $$('[data-lay]', extra).forEach((x) => (x.onclick = () => this.change(() => {
+            const k = x.dataset.lay;
+            if (k === 'carousel') { b.type = 'carousel'; } else { b.type = 'gallery'; b.layout = k; b.columns = b.columns || 3; }
+          })));
           break;
         }
 
@@ -572,6 +605,11 @@
         }
 
         case 'separator': body.innerHTML = '<hr>'; break;
+        case 'raw': {
+          const text = (b.markup || '').replace(/<!--[\s\S]*?-->/g, '').replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+          body.innerHTML = `<div class="raw-box"><span class="ms">code_blocks</span><div><b>${t('Bloque de WordPress «{n}»', { n: esc(b.label || 'html') })}</b><div class="hint">${t('Se hizo en WordPress; Ecos lo conserva tal cual al enviar.')}</div>${text ? `<div class="raw-text">${esc(text.slice(0, 220))}${text.length > 220 ? '…' : ''}</div>` : ''}</div></div>`;
+          break;
+        }
         default: body.textContent = b.type;
       }
     },
@@ -583,12 +621,12 @@
       fig.className = 'ph' + (this.draft.featuredImageId === img.id ? ' featured' : '');
       fig.draggable = true;
       fig.innerHTML = `<img src="${esc(img.url)}" alt="" draggable="false">
-        <button class="star" title="${t('Usar como imagen destacada')}"><span class="ms fill">star</span></button>
+        <button class="star" title="${t('Usar como imagen destacada (sale del cuerpo y va arriba)')}"><span class="ms fill">star</span></button>
         <button class="del" title="${t('Quitar')}"><span class="ms">close</span></button>
         <input class="alt" placeholder="${t('Descripción (alt)')}" draggable="false">`;
       $('.alt', fig).value = img.alt || '';
       $('.alt', fig).oninput = (e) => { img.alt = e.target.value; this.onChange(); };
-      $('.star', fig).onclick = () => this.change(() => (this.draft.featuredImageId = img.id));
+      $('.star', fig).onclick = () => this.change(() => { this.draft.featuredImageId = img.id; this.liftFeatured(); });
       $('.del', fig).onclick = remove;
       $('img', fig).onclick = () => this.onOpenMedia(img);
       fig.ondragstart = (e) => {

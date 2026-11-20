@@ -41,6 +41,37 @@
     track.addEventListener('scroll', function () { cancelAnimationFrame(raf); raf = requestAnimationFrame(update); }, { passive: true });
     prev.onclick = function () { go(cur - 1); hold(); };
     next.onclick = function () { go(cur + 1); hold(); };
+    // Arrastrar con el ratón (con el dedo ya se desliza solo): se sigue al puntero y al soltar se va a la
+    // foto siguiente o anterior según el sentido, o a la más cercana si el gesto fue corto
+    var win = doc.defaultView || window, grab = null;
+    track.addEventListener('dragstart', function (e) { e.preventDefault(); });
+    track.addEventListener('pointerdown', function (e) {
+      if (e.pointerType !== 'mouse' || e.button !== 0) return;
+      grab = { x: e.clientX, left: track.scrollLeft, from: cur, moved: false };
+      paused = true;
+    });
+    win.addEventListener('pointermove', function (e) {
+      if (!grab) return;
+      var dx = e.clientX - grab.x;
+      if (!grab.moved && Math.abs(dx) < 5) return;
+      if (!grab.moved) { grab.moved = true; track.classList.add('ec-dragging'); }
+      e.preventDefault();
+      track.scrollLeft = grab.left - dx;
+    });
+    win.addEventListener('pointerup', function (e) {
+      if (!grab) return;
+      var g = grab; grab = null; paused = false;
+      if (!g.moved) return;
+      var dx = e.clientX - g.x;
+      track.classList.remove('ec-dragging');
+      update();
+      var to = dx < -40 ? Math.max(g.from + 1, cur) : dx > 40 ? Math.min(g.from - 1, cur) : cur;
+      go(Math.max(0, Math.min(slides.length - 1, to)));
+      hold();
+      // que soltar no cuente como clic sobre la foto
+      track.addEventListener('click', function stop(ev) { ev.preventDefault(); ev.stopPropagation(); track.removeEventListener('click', stop, true); }, true);
+      setTimeout(function () { track.classList.remove('ec-dragging'); }, 0);
+    });
     root.tabIndex = 0;
     root.addEventListener('keydown', function (e) {
       if (e.key === 'ArrowLeft') { e.preventDefault(); go(cur - 1); hold(); }

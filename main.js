@@ -322,6 +322,16 @@ handle('draft:preview', async (d) => {
   return { postId: post.ID, previewUrl: `${base}/?p=${post.ID}&preview=true` };
 });
 handle('draft:compose', (blocks) => composeBlocks(blocks));
+// Actualizar desde WordPress: estado, fechas, título, extracto, destacada y contenido (ya en bloques de Ecos)
+handle('post:pull', async (id) => {
+  const p = await wpCall(() => WP().getPost(cfg, id));
+  const sent = cfg.sentContent?.[id];
+  const norm = (s) => String(s || '').replace(/ecos-[cm]-[a-z0-9]+/g, '').replace(/\s+/g, ' ').trim();
+  // estado al día en las publicaciones exportadas
+  for (const e of Object.values(cfg.exported || {})) if (e.postId === id) e.status = p.status;
+  store.save(cfg);
+  return { ...p, contentChanged: sent !== undefined ? norm(sent) !== norm(p.content) : null, blocks: require('./src/parseblocks').parseBlocks(p.content), exported: cfg.exported };
+});
 
 // Bandeja del editor: subir fotos o vídeos del ordenador a la biblioteca de WordPress
 handle('media:upload', async () => {
@@ -383,6 +393,9 @@ handle('draft:publish', async (d) => {
   } else {
     post = await wpCall(() => (d.postId ? WP().updatePost(cfg, d.postId, fields) : WP().createPost(cfg, fields)));
   }
+  cfg.sentContent = cfg.sentContent || {};
+  cfg.sentContent[post.ID] = fields.content;
+  const ids = Object.keys(cfg.sentContent); if (ids.length > 200) delete cfg.sentContent[ids[0]];
   const editUrl = editUrlFor(post.ID);
   const url = WP().publicUrl(cfg, post.URL);
   cfg.exported = cfg.exported || {};

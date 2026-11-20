@@ -203,6 +203,14 @@ async function listPosts(cfg, { type = 'post', status = 'any', search = '', page
 const coll = (type) => (type === 'page' ? 'pages' : 'posts');
 const setPostStatus = (cfg, id, status, type) => req(cfg, `/wp/v2/${coll(type)}/${id}`, { method: 'POST', json: { status } });
 const trashPost = (cfg, id, type) => req(cfg, `/wp/v2/${coll(type)}/${id}`, { method: 'DELETE' });
+// Entrada completa (contenido en bruto, para traer al editor los cambios hechos en WordPress)
+async function getPost(cfg, id, type) {
+  const p = await req(cfg, `/wp/v2/${coll(type)}/${id}?context=edit`);
+  return {
+    id: p.id, status: p.status, url: p.link, date: p.date_gmt ? p.date_gmt + 'Z' : p.date, modified: p.modified_gmt ? p.modified_gmt + 'Z' : p.modified,
+    title: p.title?.raw ?? '', excerpt: p.excerpt?.raw ?? '', content: p.content?.raw ?? '', featured: p.featured_media || null,
+  };
+}
 // Borrado definitivo (solo para el borrador de la vista previa, que Ecos vuelve a crear al enviar)
 const deletePost = (cfg, id, type) => req(cfg, `/wp/v2/${coll(type)}/${id}?force=true`, { method: 'DELETE' });
 
@@ -233,4 +241,4 @@ const uploadNamed = (cfg, buf, name) => uploadBuffer(cfg, buf, name, MIME[path.e
 const publicBase = (cfg) => { try { return base(cfg); } catch { return null; } };
 const publicUrl = (_cfg, url) => url;
 
-module.exports = { findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, publicBase, publicUrl };
+module.exports = { findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, publicBase, publicUrl };
