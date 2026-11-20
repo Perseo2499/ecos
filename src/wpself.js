@@ -140,6 +140,16 @@ async function findMediaByUrl(cfg, url) {
   const m = (list || []).find((x) => same(x.source_url) || Object.values(x.media_details?.sizes || {}).some((s) => same(s.source_url)));
   return m ? m.id : null;
 }
+// Añade o quita una categoría de una entrada (sin tocar nada más)
+async function changeCategory(cfg, id, name, add = true) {
+  const [cid] = await categoryIds(cfg, [name], false);
+  if (!cid) throw new Error(`No existe la categoría «${name}»`);
+  const p = await req(cfg, `/wp/v2/posts/${id}?context=edit&_fields=categories`);
+  const cur = p.categories || [];
+  const next = add ? [...new Set([...cur, cid])] : cur.filter((c) => c !== cid);
+  if (next.length === cur.length && next.every((c, i) => c === cur[i])) return;
+  await req(cfg, `/wp/v2/posts/${id}`, { method: 'POST', json: { categories: next } });
+}
 // Los archivos de Meta se descargan en el ordenador y se suben (WordPress propio no los descarga por URL)
 async function uploadFromUrls(cfg, urls) {
   const out = [];
@@ -327,4 +337,4 @@ async function saveStructure(cfg, ch, progress = () => {}) {
   return { errors };
 }
 
-module.exports = { mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, updateContent, publicBase, publicUrl };
+module.exports = { changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, updateContent, publicBase, publicUrl };

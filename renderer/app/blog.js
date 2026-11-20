@@ -64,8 +64,10 @@ function renderBlog(items) {
   const pages = Math.max(1, Math.ceil(blog.found / blog.per));
   $('#b-info').textContent = t(blog.type === 'page' ? '{n} páginas · página {p} de {t}' : '{n} entradas · página {p} de {t}', { n: blog.found, p: blog.page, t: pages });
   $('#b-prev').disabled = blog.page <= 1; $('#b-next').disabled = blog.page >= pages;
-  if (!items.length) { list.innerHTML = `<div class="empty"><span class="ms">inbox</span><span>${t('No hay nada con estos filtros.')}</span></div>`; return; }
+  if (!items.length) { bItems = []; renderBulk(); list.innerHTML = `<div class="empty"><span class="ms">inbox</span><span>${t('No hay nada con estos filtros.')}</span></div>`; return; }
   list.innerHTML = '';
+  bItems = items; bLast = -1;
+  renderBulk();
   for (const it of items) {
     const row = document.createElement('div');
     row.className = 'b-row';
@@ -74,7 +76,10 @@ function renderBlog(items) {
     const fromEcos = Object.values(exported).some((r) => r.postId === it.id);
     const restored = !fromEcos && Object.values(CFG.restored || {}).some((r) => r.postId === it.id);
     row.classList.toggle('ecos-made', fromEcos || restored);
+    row.dataset.id = it.id;
+    row.classList.toggle('sel', bsel.has(it.id));
     row.innerHTML = `
+      <label class="b-check"><input type="checkbox"${bsel.has(it.id) ? ' checked' : ''}></label>
       ${it.image ? `<img src="${escHtml(it.image)}" loading="lazy" alt="">` : `<div class="noimg"><span class="ms">image</span></div>`}
       <div><div class="b-title"></div>
         <div class="b-meta"><span class="st ${escHtml(it.status)}">${STATUS()[it.status] || escHtml(it.status)}</span>${fromEcos ? `<span class="st ecos" title="${t('Entrada creada desde Ecos')}"><img src="assets/logo-mark.svg" alt="">${t('Creada con Ecos')}</span>` : ''}${restored ? `<span class="st restored" title="${t('Recuperada de una copia de seguridad con Ecos')}"><span class="ms">settings_backup_restore</span>${t('Restaurada')}</span>` : ''}${when}${it.categories.length ? ' · ' + escHtml(it.categories.join(', ')) : ''}</div>
@@ -82,6 +87,15 @@ function renderBlog(items) {
       <div class="b-actions"></div>`;
     const title = decodeEntities(it.title);
     row.querySelector('.b-title').textContent = title;
+    // selección (Mayús + clic selecciona un tramo)
+    row.querySelector('.b-check input').onclick = (e) => {
+      const rows = $$('#b-list .b-row'), idx = rows.indexOf(row);
+      const on = e.target.checked;
+      const from = e.shiftKey && bLast >= 0 ? Math.min(bLast, idx) : idx, to = e.shiftKey && bLast >= 0 ? Math.max(bLast, idx) : idx;
+      for (let k = from; k <= to; k++) { const it2 = bItems[k]; if (on) bsel.set(it2.id, it2); else bsel.delete(it2.id); }
+      bLast = idx;
+      renderBulk();
+    };
     row.querySelector('.b-ex').textContent = decodeEntities(it.excerpt);
     const actions = row.querySelector('.b-actions');
     const btn = (label, fn, cls = '') => {
@@ -124,6 +138,7 @@ $$('#b-type button').forEach((b) => b.onclick = async () => {
   $('#b-structure').classList.toggle('hidden', !st);
   $('#b-calendar').classList.toggle('hidden', !cal);
   blog.type = b.dataset.type;
+  bsel.clear();
   if (st) return window.SiteStructure.open();
   if (cal) return renderCalendar();
   blog.page = 1; loadBlog();
@@ -140,3 +155,94 @@ $('#b-new').onclick = () => {
   }
   window.api.open(`https://wordpress.com/${blog.type === 'page' ? 'page' : 'post'}/${CFG.wpSite}`);
 };
+
+// --- Selección y acciones en lote --------------------------------------------------
+const bsel = new Map(); // id → entrada (se mantiene al cambiar de página)
+let bItems = [], bLast = -1;
+function renderBulk() {
+  const n = bsel.size, bar = $('#b-bulk');
+  bar.classList.toggle('hidden', !bItems.length && !n);
+  bar.classList.toggle('on', n > 0);
+  $$('#b-list .b-row').forEach((r) => { const on = bsel.has(Number(r.dataset.id)); r.classList.toggle('sel', on); const c = r.querySelector('.b-check input'); if (c) c.checked = on; });
+  const here = bItems.filter((x) => bsel.has(x.id)).length;
+  $('#b-all').checked = here > 0 && here === bItems.length;
+  $('#b-all').indeterminate = here > 0 && here < bItems.length;
+  $('#b-count').textContent = n ? t('{n} seleccionadas', { n }) : t('Seleccionar');
+  const items = [...bsel.values()];
+  const has = (f) => items.some(f);
+  const acts = [];
+  if (n) {
+    if (has((i) => ['draft', 'pending', 'private', 'trash'].includes(i.status))) acts.push(['publish', 'public', t('Publicar')]);
+    if (has((i) => ['publish', 'future', 'pending', 'private'].includes(i.status))) acts.push(['draft', 'edit_note', t('Pasar a borrador')]);
+    if (has((i) => i.status === 'trash')) acts.push(['restore', 'restore_from_trash', t('Restaurar como borrador')]);
+    if (blog.type !== 'page' && CFG.wpMode === 'selfhosted') acts.push(['cat-add', 'new_label', t('Añadir categoría')], ['cat-del', 'label_off', t('Quitar categoría')]);
+    if (blog.type !== 'page' && has((i) => i.status !== 'trash')) acts.push(['normalize', 'format_paint', t('Normalizar formato')]);
+    if (has((i) => i.status !== 'trash')) acts.push(['trash', 'delete', t('Papelera')]);
+    acts.push(['delete', 'delete_forever', t('Borrar definitivamente')]);
+  }
+  $('#b-bulk-actions').innerHTML = acts.map(([k, ic, l]) => `<button class="btn ${k === 'delete' || k === 'trash' ? 'text danger' : 'tonal'} small" data-bulk="${k}"><span class="ms">${ic}</span>${escHtml(l)}</button>`).join('');
+  $$('[data-bulk]').forEach((b) => (b.onclick = () => busy(b, () => runBulk(b.dataset.bulk))));
+}
+$('#b-all').onclick = (e) => { for (const it of bItems) { if (e.target.checked) bsel.set(it.id, it); else bsel.delete(it.id); } renderBulk(); };
+$('#b-clear').onclick = () => { bsel.clear(); renderBulk(); };
+
+// Elegir una categoría de la web
+async function pickCategory(title) {
+  const cats = await window.api.wpCategories();
+  return new Promise((resolve) => {
+    const d = document.createElement('div');
+    d.className = 'dlg-scrim';
+    d.innerHTML = `<div class="dlg"><span class="ms fill dlg-ic">label</span><p class="dlg-msg"></p>
+      <div class="b-catlist">${cats.map((c) => `<button class="chip" data-n="${escHtml(c.name)}">${escHtml(c.name)}</button>`).join('')}</div>
+      <div class="dlg-actions"><button class="btn text" data-x>${t('Cancelar')}</button></div></div>`;
+    $('.dlg-msg', d).textContent = title;
+    const close = (v) => { d.remove(); resolve(v); };
+    $$('[data-n]', d).forEach((b) => (b.onclick = () => close(b.dataset.n)));
+    $('[data-x]', d).onclick = () => close(null);
+    d.addEventListener('mousedown', (e) => { if (e.target === d) close(null); });
+    document.body.appendChild(d);
+  });
+}
+
+async function runBulk(kind) {
+  let items = [...bsel.values()];
+  const n = items.length;
+  let cat = null;
+  if (kind === 'cat-add' || kind === 'cat-del') {
+    cat = await pickCategory(kind === 'cat-add' ? t('¿Qué categoría quieres añadir a las {n} entradas?', { n }) : t('¿Qué categoría quieres quitar de las {n} entradas?', { n }));
+    if (!cat) return;
+  }
+  if (kind === 'publish') { items = items.filter((i) => i.status !== 'publish'); if (!await ask(t('¿Publicar {n} entradas? Serán visibles en la web.', { n: items.length }))) return; }
+  if (kind === 'draft') { items = items.filter((i) => i.status !== 'draft' && i.status !== 'trash'); if (!await ask(t('¿Pasar {n} entradas a borrador? Dejarán de verse en la web.', { n: items.length }), { danger: true })) return; }
+  if (kind === 'restore') items = items.filter((i) => i.status === 'trash');
+  if (kind === 'trash') { items = items.filter((i) => i.status !== 'trash'); if (!await ask(t('¿Mover {n} entradas a la papelera? Podrás recuperarlas durante 30 días.', { n: items.length }), { danger: true })) return; }
+  if (kind === 'normalize') { items = items.filter((i) => i.status !== 'trash'); if (!await ask(t('Se normalizará el formato de {n} entradas en tu web (bloques de WordPress y formato habitual; el texto no cambia). ¿Continuar?', { n: items.length }))) return; }
+  if (kind === 'delete') {
+    if (!await ask(t('¿Borrar {n} entradas definitivamente? Desaparecerán de tu web y de la papelera, y no se podrán recuperar. (Las fotos se quedan en la biblioteca de medios.)', { n }), { danger: true, ok: t('Borrar definitivamente') })) return;
+    const pub = items.filter((i) => i.status === 'publish').length;
+    if (pub && !await ask(t('{n} de ellas están publicadas y visibles en la web. ¿Seguro que quieres borrarlas para siempre?', { n: pub }), { danger: true, ok: t('Sí, borrarlas') })) return;
+  }
+  const errors = [];
+  let done = 0;
+  const label = $('#b-count');
+  if (kind === 'normalize') {
+    label.textContent = t('Normalizando {n}…', { n: items.length });
+    const r = await window.api.backupNormalize(items.map((i) => i.id));
+    done = r.done; errors.push(...r.errors);
+  } else {
+    for (const it of items) {
+      label.textContent = t('{a} de {b}…', { a: done + 1, b: items.length });
+      try {
+        if (kind === 'publish') exported = await window.api.blogSetStatus(it.id, 'publish', it.type);
+        else if (kind === 'draft' || kind === 'restore') exported = await window.api.blogSetStatus(it.id, 'draft', it.type);
+        else if (kind === 'trash') exported = await window.api.blogTrash(it.id, it.type);
+        else if (kind === 'delete') exported = await window.api.blogDelete(it.id, it.type);
+        else if (kind === 'cat-add' || kind === 'cat-del') await window.api.blogCategory(it.id, cat, kind === 'cat-add');
+        done++;
+      } catch (e) { errors.push(`«${decodeEntities(it.title)}»: ${e.message}`); }
+    }
+  }
+  toast(t('Hecho en {n} entradas.', { n: done }) + (errors.length ? ' ' + t('{e} con error: {m}', { e: errors.length, m: errors.slice(0, 2).join(' · ') }) : ''), errors.length > 0);
+  bsel.clear();
+  loadBlog(); renderFeed();
+}

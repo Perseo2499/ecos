@@ -548,6 +548,10 @@ handle('exported:refresh', async () => {
   store.save(cfg);
   return cfg.exported;
 });
+handle('blog:category', async (id, name, add) => {
+  if (!WP().changeCategory) throw new Error('Solo disponible con WordPress propio');
+  await wpCall(() => WP().changeCategory(cfg, id, name, add));
+});
 handle('blog:editUrl', (id, type) => editUrlFor(id, type));
 
 // --- Restaurar entradas desde una copia de seguridad (src/backup.js) ---
