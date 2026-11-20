@@ -210,3 +210,18 @@ test('buscar y reemplazar: solo el texto visible, sin tocar etiquetas ni atribut
   assert.equal(blocks[1].items[0], 'sol'); assert.equal(blocks[0].html, 'Hola mundo');
   assert.equal(F.replaceInBlocks(blocks, 'mundo', 'sol').count, 4);
 });
+
+test('tablas de maquetación (foto + pie) de entradas antiguas: imagen con su pie', () => {
+  const { parseBlocks } = require('../src/parseblocks');
+  const html = '<p>Intro</p><table><tbody><tr><td style="text-align:center"><a href="x.jpg"><img src="https://x/f.jpg" alt=""></a></td></tr><tr><td><span>Adama y su compañero<br>un «dúo dinámico».</span></td></tr></tbody></table><p><strong>Otra cosa</strong></p>';
+  const b = parseBlocks(html);
+  assert.deepEqual(b.map((x) => x.type), ['paragraph', 'image', 'paragraph']);
+  assert.equal(b[1].img.url, 'https://x/f.jpg');
+  assert.match(b[1].caption, /Adama y su compañero<br>un «dúo dinámico»\./);
+  // tabla de WordPress (bloque) con foto dentro
+  const wp = '<!-- wp:table --><figure class="wp-block-table"><table><tbody><tr><td><img src="https://x/g.jpg"></td></tr><tr><td>Pie</td></tr></tbody></table></figure><!-- /wp:table -->';
+  const b2 = parseBlocks(wp);
+  assert.deepEqual(b2.map((x) => x.type + ':' + (x.caption || '')), ['image:Pie']);
+  // una tabla de datos sigue siendo tabla
+  assert.equal(parseBlocks('<table><tr><td>a</td><td>b</td></tr></table>')[0].type, 'table');
+});

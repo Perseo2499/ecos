@@ -77,6 +77,7 @@ function toBlock(t) {
     case 'separator': return { id: bid(), type: 'separator' };
     case 'spacer': return { id: bid(), type: 'spacer', height: parseInt(a.height, 10) || 40 };
     case 'table': {
+      if (/<img\b/i.test(h)) return layoutTable(h);
       const rows = all(h, 'tr').map((tr) => [...tr.matchAll(/<t[hd]\b[^>]*>([\s\S]*?)<\/t[hd]>/gi)].map((c) => c[1].trim()));
       return rows.length ? { id: bid(), type: 'table', rows, head: /<thead/i.test(h), stripes: /is-style-stripes/.test(a.className || ''), caption: inner(h, 'figcaption') } : raw();
     }
@@ -152,6 +153,28 @@ function topLevel(html) {
   return merged;
 }
 
+// Tablas usadas para maquetar fotos (muy habitual en entradas antiguas): una celda con la foto y otra
+// con su pie. No son tablas de datos: cada foto pasa a ser un bloque de imagen con su pie, y el resto de
+// texto, párrafos normales. Devuelve null si la tabla no tiene fotos (entonces es una tabla de verdad).
+function layoutTable(html) {
+  if (!/<img\b/i.test(html)) return null;
+  const out = [];
+  const plain = (h) => h.replace(/<[^>]+>|&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+  const cells = [...String(html).matchAll(/<t[hd]\b[^>]*>([\s\S]*?)<\/t[hd]>/gi)].map((c) => c[1]);
+  for (const cell of cells) {
+    const imgs = (cell.match(/<img\b[^>]*>/gi) || []).map(imgOf).filter(Boolean);
+    for (const img of imgs) out.push({ id: bid(), type: 'image', img, caption: '' });
+    const text = cell.replace(/<a\b[^>]*>\s*(<img\b[^>]*>)\s*<\/a>/gi, '').replace(/<img\b[^>]*>/gi, '').trim();
+    if (!plain(text)) continue;
+    const last = out[out.length - 1];
+    // texto corto justo después de una foto (o en su misma celda): es su pie
+    if (last?.type === 'image' && !last.caption && plain(text).length <= 300 && !/<(p|div|h\d|ul|ol)\b[\s\S]*<(p|div|h\d|ul|ol)\b/i.test(text)) {
+      last.caption = text.replace(/<\/?(p|div|span|font|center)[^>]*>/gi, ' ').replace(/^(\s|<br\s*\/?>)+|(\s|<br\s*\/?>)+$/gi, '').replace(/\s{2,}/g, ' ').trim();
+    } else out.push(...classicBlocks(text));
+  }
+  return out;
+}
+
 function classicBlocks(html) {
   const blocks = [];
   const raw = (h, label = 'html') => blocks.push({ id: bid(), type: 'raw', markup: `<!-- wp:html -->\n${h.trim()}\n<!-- /wp:html -->`, label });
@@ -207,6 +230,8 @@ function classicBlocks(html) {
       }
       case 'br': break;
       case 'table': {
+        const lay = layoutTable(el.html);
+        if (lay) { blocks.push(...lay); break; }
         const rows = all(el.html, 'tr').map((tr) => [...tr.matchAll(/<t[hd]\b[^>]*>([\s\S]*?)<\/t[hd]>/gi)].map((c) => c[1].trim()));
         if (rows.length && rows.every((r) => r.length)) blocks.push({ id: bid(), type: 'table', rows, head: /<th\b/i.test(el.html), stripes: false, caption: '' });
         else raw(el.html, 'table');
@@ -221,7 +246,7 @@ function classicBlocks(html) {
 function parseBlocks(content) {
   const out = [];
   for (const t of tokenize(String(content || ''))) {
-    if (t.name === 'freeform') out.push(...classicBlocks(t.inner)); else out.push(toBlock(t));
+    if (t.name === 'freeform') out.push(...classicBlocks(t.inner)); else { const b = toBlock(t); if (Array.isArray(b)) out.push(...b); else out.push(b); }
   }
   return out.filter((b) => b.type !== 'paragraph' || (b.html || '').replace(/<[^>]+>|&nbsp;|\s/g, ''));
 }
