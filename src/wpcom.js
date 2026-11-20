@@ -164,5 +164,7 @@ async function postStatuses(cfg, ids) {
 }
 const setPostStatus = (cfg, id, status) => call(cfg, `/posts/${id}`, { status });
 const trashPost = (cfg, id) => call(cfg, `/posts/${id}/delete`, {});
+// En WordPress.com, borrar una entrada que ya está en la papelera la elimina para siempre
+const deletePost = async (cfg, id) => { const p = await call(cfg, `/posts/${id}?fields=status`); if (p.status !== 'trash') await trashPost(cfg, id); return trashPost(cfg, id); };
 
-module.exports = { getPost, findExisting, uploadNamed, postStatuses, REDIRECT, AuthError, login, siteInfo, publicUrl, publicBase, updatePost, categories, uploadFromUrls, uploadFile, createPost, updateMedia, listPosts, setPostStatus, trashPost };
+module.exports = { deletePost, getPost, findExisting, uploadNamed, postStatuses, REDIRECT, AuthError, login, siteInfo, publicUrl, publicBase, updatePost, categories, uploadFromUrls, uploadFile, createPost, updateMedia, listPosts, setPostStatus, trashPost };

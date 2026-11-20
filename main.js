@@ -471,6 +471,8 @@ function markExported(postId, status) {
 }
 handle('blog:setStatus', async (id, status, type) => { await wpCall(() => WP().setPostStatus(cfg, id, status, type)); return markExported(id, status); });
 handle('blog:trash', async (id, type) => { await wpCall(() => WP().trashPost(cfg, id, type)); return markExported(id, 'trash'); });
+// Borrado definitivo (no se puede deshacer): la entrada desaparece también de la papelera
+handle('blog:delete', async (id, type) => { await wpCall(() => WP().deletePost(cfg, id, type)); if (cfg.sentContent) delete cfg.sentContent[id]; return markExported(id, 'deleted'); });
 
 // Consulta en WordPress el estado real de todas las entradas creadas desde Ecos
 handle('exported:refresh', async () => {

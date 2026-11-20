@@ -266,6 +266,11 @@
     'Modelo (opcional: si lo dejas vacío, usa el de la CLI)': 'Model (optional: leave empty to use the CLI default)',
     'Los botones de IA usarán {c}. Pulsa «Probar» para comprobarlo.': 'The AI buttons will use {c}. Click "Try it" to check.',
     // 1.2 (editor completo)
+    'Borrar definitivamente': 'Delete permanently',
+    'Sí, borrarla': 'Yes, delete it',
+    'Borrada definitivamente': 'Permanently deleted',
+    '¿Borrar «{x}» definitivamente? Desaparecerá de tu web y de la papelera, y no se podrá recuperar. (Las fotos se quedan en la biblioteca de medios.)': 'Delete "{x}" permanently? It will disappear from your site and the trash and cannot be recovered. (Photos stay in the media library.)',
+    '«{x}» está publicada y visible en la web. ¿Seguro que quieres borrarla para siempre?': '"{x}" is published and visible on the site. Are you sure you want to delete it forever?',
     'Abriendo la entrada de WordPress…': 'Opening the WordPress post…',
     'Abrir la entrada en el editor de Ecos': 'Open the post in the Ecos editor',
     'Editar entrada': 'Edit post',

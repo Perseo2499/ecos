@@ -52,6 +52,7 @@ contextBridge.exposeInMainWorld('api', {
   blogList: (opts) => call('blog:list', opts),
   blogSetStatus: (id, status, type) => call('blog:setStatus', id, status, type),
   blogTrash: (id, type) => call('blog:trash', id, type),
+  blogDelete: (id, type) => call('blog:delete', id, type),
   blogEditUrl: (id, type) => call('blog:editUrl', id, type),
 
   // Restaurar desde copia de seguridad

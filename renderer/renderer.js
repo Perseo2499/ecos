@@ -873,6 +873,12 @@ function renderBlog(items) {
       if (!await ask(t('¿Mover «{x}» a la papelera? Podrás recuperarla durante 30 días.', { x: title }), { danger: true })) return;
       exported = await window.api.blogTrash(it.id, it.type); toast(t('Movida a la papelera')); loadBlog(); renderFeed();
     }, 'danger');
+    // Borrar para siempre (también sin pasar por la papelera); pide confirmación dos veces si está publicada
+    btn(t('Borrar definitivamente'), async () => {
+      if (!await ask(t('¿Borrar «{x}» definitivamente? Desaparecerá de tu web y de la papelera, y no se podrá recuperar. (Las fotos se quedan en la biblioteca de medios.)', { x: title }), { danger: true, ok: t('Borrar definitivamente') })) return;
+      if (it.status === 'publish' && !await ask(t('«{x}» está publicada y visible en la web. ¿Seguro que quieres borrarla para siempre?', { x: title }), { danger: true, ok: t('Sí, borrarla') })) return;
+      exported = await window.api.blogDelete(it.id, it.type); toast(t('Borrada definitivamente')); loadBlog(); renderFeed();
+    }, 'danger');
     list.appendChild(row);
   }
 }
