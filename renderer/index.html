@@ -97,6 +97,7 @@
           <span id="ed-wp" class="ed-wp hidden"></span>
           <button id="ed-pull" class="btn text" data-i18n-title title="Comprobar en WordPress si la entrada se ha publicado o cambiado allí y traer los cambios"><span class="ms">sync</span><span data-i18n>Actualizar</span></button>
           <button id="ed-history" class="btn text hidden" data-i18n-title title="Ver y recuperar versiones anteriores de esta entrada"><span class="ms">history</span><span data-i18n>Historial</span></button>
+          <button id="ed-find" class="btn text icon-only" data-i18n-title title="Buscar y reemplazar"><span class="ms">find_replace</span></button>
           <button id="ed-undo" class="btn text icon-only" data-i18n-title title="Deshacer"><span class="ms">undo</span></button>
           <button id="ed-redo" class="btn text icon-only" data-i18n-title title="Rehacer"><span class="ms">redo</span></button>
           <button id="preview" class="btn outlined"><span class="ms">preview</span><span data-i18n>Vista previa</span></button>
@@ -113,6 +114,24 @@
           </div>
           <!-- Lienzo -->
           <div class="ed-canvas" id="ed-canvas">
+            <div id="fr-bar" class="fr-bar hidden">
+              <div class="fr-row">
+                <input id="fr-q" type="text" data-i18n-ph placeholder="Buscar" autocomplete="off">
+                <span id="fr-count" class="fr-count"></span>
+                <button id="fr-prev" class="btn text icon-only small" data-i18n-title title="Anterior"><span class="ms">keyboard_arrow_up</span></button>
+                <button id="fr-next" class="btn text icon-only small" data-i18n-title title="Siguiente"><span class="ms">keyboard_arrow_down</span></button>
+                <button id="fr-close" class="btn text icon-only small" data-i18n-title title="Cerrar"><span class="ms">close</span></button>
+              </div>
+              <div class="fr-row">
+                <input id="fr-r" type="text" data-i18n-ph placeholder="Reemplazar por" autocomplete="off">
+                <button id="fr-one" class="btn tonal small" data-i18n>Reemplazar</button>
+                <button id="fr-all" class="btn tonal small" data-i18n>Reemplazar todo</button>
+              </div>
+              <div class="fr-row fr-opts">
+                <label class="fr-chk"><input type="checkbox" id="fr-case"><span data-i18n>Mayúsculas/minúsculas</span></label>
+                <label class="fr-chk"><input type="checkbox" id="fr-word"><span data-i18n>Palabra completa</span></label>
+              </div>
+            </div>
             <div id="fmt" class="fmt-bar off">
               <select id="fmt-type" data-i18n-title title="Tipo de bloque">
                 <option value="paragraph" data-i18n>Párrafo</option><option value="h2" data-i18n>Título 2</option><option value="h3" data-i18n>Título 3</option>
@@ -230,6 +249,7 @@
       </select>
       <div class="field search"><span class="ms">search</span><input id="b-search" type="search" data-i18n-ph placeholder="Buscar…"></div>
       <button id="b-refresh" class="btn text icon-only" data-i18n-title title="Actualizar"><span class="ms">refresh</span></button>
+      <button id="b-find" class="btn text hidden"><span class="ms">find_replace</span><span data-i18n>Buscar y reemplazar</span></button>
       <span class="spacer"></span>
       <button id="b-new" class="btn filled"><span class="ms">add</span><span data-i18n>Nueva</span></button>
     </div>
@@ -519,6 +539,29 @@
   </section>
 </main>
 
+<!-- Buscar y reemplazar en todo el blog -->
+<div id="bfr-modal" class="modal hidden">
+  <div class="modal-box wide">
+    <h2><span class="ms">find_replace</span><span data-i18n>Buscar y reemplazar</span></h2>
+    <div class="row">
+      <div class="field"><label data-i18n>Buscar</label><input id="bfr-q" type="text" autocomplete="off"></div>
+      <div class="field"><label data-i18n>Reemplazar por</label><input id="bfr-r" type="text" autocomplete="off"></div>
+    </div>
+    <div class="row bfr-opts">
+      <label class="fr-chk"><input type="checkbox" id="bfr-case"><span data-i18n>Mayúsculas/minúsculas</span></label>
+      <label class="fr-chk"><input type="checkbox" id="bfr-word"><span data-i18n>Palabra completa</span></label>
+      <select id="bfr-scope">
+        <option value="post" data-i18n>Todas las entradas</option>
+        <option value="sel" data-i18n>Solo las seleccionadas</option>
+        <option value="page" data-i18n>Páginas</option>
+      </select>
+      <button id="bfr-go" class="btn tonal"><span class="ms">search</span><span data-i18n>Buscar</span></button>
+    </div>
+    <div id="bfr-res" class="bfr-res"></div>
+    <div class="modal-actions"><button id="bfr-close" class="btn text" data-i18n>Cerrar</button><button id="bfr-apply" class="btn filled hidden"></button></div>
+  </div>
+</div>
+
 <!-- Resumen de un periodo -->
 <div id="summary-modal" class="modal hidden">
   <div class="modal-box">
@@ -705,6 +748,7 @@
 <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
 <script src="carousel.js"></script>
 <script src="normalize.js"></script>
+<script src="findreplace.js"></script>
 <script src="mosaic.js"></script>
 <script src="blocks.js"></script>
 <script src="format.js"></script>

@@ -319,6 +319,26 @@ async function listRevisions(cfg, id) {
 }
 // Solo el contenido (sin tocar categorías, etiquetas ni nada más)
 const updateContent = (cfg, id, content, type) => req(cfg, `/wp/v2/${coll(type)}/${id}`, { method: 'POST', json: { content } });
+// Cambia solo los campos indicados (p. ej. { content, title })
+const updateFields = (cfg, id, fields, type) => req(cfg, `/wp/v2/${coll(type)}/${id}`, { method: 'POST', json: fields });
+// Todas las entradas (o páginas) con contenido en bruto, para buscar y reemplazar texto; ids opcional
+async function allRaw(cfg, type, ids) {
+  const out = [];
+  const q0 = { context: 'edit', per_page: '100', _fields: 'id,title,content,status,link', status: 'publish,future,draft,pending,private' };
+  if (ids?.length) {
+    for (let i = 0; i < ids.length; i += 100) {
+      const q = new URLSearchParams({ ...q0, include: ids.slice(i, i + 100).join(',') });
+      out.push(...await req(cfg, `/wp/v2/${coll(type)}?${q}`));
+    }
+    return out;
+  }
+  for (let page = 1; page <= 200; page++) {
+    const { data, res } = await req(cfg, `/wp/v2/${coll(type)}?${new URLSearchParams({ ...q0, page: String(page) })}`, { raw: true });
+    out.push(...data);
+    if (page >= Number(res.headers.get('x-wp-totalpages') || 1) || !data.length) break;
+  }
+  return out;
+}
 // Borrado definitivo (solo para el borrador de la vista previa, que Ecos vuelve a crear al enviar)
 const deletePost = (cfg, id, type) => req(cfg, `/wp/v2/${coll(type)}/${id}?force=true`, { method: 'DELETE' });
 
@@ -415,4 +435,4 @@ async function saveStructure(cfg, ch, progress = () => {}) {
   return { errors };
 }
 
-module.exports = { listMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl };
+module.exports = { listMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw };
