@@ -1193,3 +1193,22 @@ img.gl-copy { object-fit: contain; }
 
 .conn-arrow { box-shadow: none; outline: none; }
 .conn-arrow:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* ---- Pantalla de acceso ---- */
+.lock { position: fixed; inset: 0; z-index: 500; display: grid; place-items: center; background: var(--surface); }
+body.locked > *:not(#lock):not(#toast):not(.dlg-scrim) { visibility: hidden; }
+.lock-box { width: min(380px, calc(100vw - 32px)); display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.lock-box h1 { margin: 6px 0 0; font-size: 28px; }
+.lock-box form { width: 100%; display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.lock-box .field { width: 100%; }
+.lock-box .btn.filled { justify-content: center; height: 46px; }
+.lock-err { min-height: 18px; margin: 0; font-size: 13px; color: var(--error); }
+:root[data-vinyl="on"] .lock-box h1 { font-family: 'Doto', monospace; letter-spacing: 4px; text-transform: uppercase; }
+.dlg-form { text-align: left; align-items: stretch; }
+.dlg-form .dlg-ic, .dlg-form .dlg-msg { align-self: center; text-align: center; }
+.dlg-form .field input { width: 100%; }
+.dlg-form .qr { align-self: center; width: 200px; height: 200px; border-radius: 12px; background: #fff; padding: 8px; }
+.dlg-form code { user-select: all; font-size: 12px; }
+.dlg-form .codes { margin: 6px 0; padding: 12px; border-radius: var(--r-m); background: var(--surface-c-high); font: 600 15px/1.7 'Silk Mono', ui-monospace, monospace; text-align: center; user-select: all; }
+.sec-2fa { display: flex; align-items: center; gap: 12px; margin: 10px 0; padding: 12px 14px; border-radius: var(--r-l); background: var(--surface-c-high); }
+#set-security .row { gap: 8px; margin: 6px 0 10px; }

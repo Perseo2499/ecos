@@ -114,14 +114,17 @@ function createWindow() {
   win.removeMenu(); // sin la barra File/Edit/View de Windows (los atajos de copiar y pegar siguen funcionando)
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   if (IS_DEV) win.on('page-title-updated', (e) => e.preventDefault()); // que se note que es la versión de desarrollo
-  win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
+  win.webContents.setWindowOpenHandler(({ url }) => { openSafe(url); return { action: 'deny' }; });
+  // la ventana de la app nunca navega a otra página (un enlace malicioso no puede sustituir la interfaz)
+  win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('file:')) { e.preventDefault(); openSafe(url); } });
 }
 
 const publicCfg = () => ({
   ...cfg,
   metaAppSecret: cfg.metaAppSecret ? '••••••' : '', wpClientSecret: cfg.wpClientSecret ? '••••••' : '',
   anthropicKey: cfg.anthropicKey ? '••••••' : '',
-  metaUserToken: undefined, wpToken: undefined,
+  metaUserToken: undefined, wpToken: undefined, __totp: undefined, __recovery: undefined, vault: undefined, sentContent: undefined,
+  lock: cfg.lock ? { auto: cfg.lock.auto ?? 15, twoFactor: !!cfg.__totp, recoveryLeft: (cfg.__recovery || []).length } : null,
   metaConnected: !!cfg.metaUserToken, wpConnected: wpIsConnected(),
   wpMode: cfg.wpMode || 'wpcom', wpAppPassword: cfg.wpAppPassword ? '••••••' : '', wpSiteLabel: wpLabel(),
   metaRedirectUri: meta.REDIRECT, wpRedirectUri: wp.REDIRECT, wpBlogId: undefined,
@@ -164,10 +167,15 @@ const wpLabel = () => (isSelf() ? (cfg.wpUrl || '').replace(/^https?:\/\//, '').
 const wpCall = async (fn) => { try { return await fn(); } catch (e) { throw e instanceof wp.AuthError ? wpAuthFailed(e) : e; } };
 
 // Envuelve los manejadores para devolver errores legibles al renderer
+// Con la app bloqueada solo responden estas peticiones (entrar y lo imprescindible para la pantalla de acceso)
+const LOCK_OK = new Set(['lock:state', 'lock:unlock', 'lock:reset', 'app:info', 'update:status', 'update:check', 'update:install']);
+const isLocked = () => !!cfg && store.isLocked(cfg);
 const handle = (name, fn) => ipcMain.handle(name, async (_e, ...args) => {
+  if (isLocked() && !LOCK_OK.has(name)) return { ok: false, error: 'Ecos está bloqueada' };
   try { return { ok: true, data: await fn(...args) }; } catch (err) { return { ok: false, error: err.message }; }
 });
 
+const PROTECTED_KEYS = new Set(['lock', 'vault', '__totp', '__recovery', 'metaUserToken', 'wpToken', 'sentContent', 'restored', 'exported']);
 handle('config:get', () => publicCfg());
 handle('config:set', (changes) => {
   // Si cambian los datos de la web propia, hay que volver a pulsar «Conectar»
@@ -176,6 +184,7 @@ handle('config:set', (changes) => {
   }
   for (const [k, v] of Object.entries(changes)) {
     if (v === '••••••') continue; // secreto sin cambios
+    if (PROTECTED_KEYS.has(k)) continue; // la contraseña, la bóveda y los tokens solo los cambia el proceso principal
     cfg[k] = typeof v === 'string' ? v.trim() : v; // sin espacios sobrantes al pegar claves
   }
   store.save(cfg);
@@ -608,9 +617,11 @@ handle('dev:pickDir', async () => {
 handle('dev:checkDir', (dir) => {
   try { return JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).name === 'ecos'; } catch { return false; }
 });
-handle('pty:spawn', (opts) => devterm().spawn({ ...opts, cwd: opts.cwd || cfg.devDir }, sendWin));
-ipcMain.on('pty:write', (_e, id, data) => devterm().write(id, data));
-ipcMain.on('pty:resize', (_e, id, cols, rows) => devterm().resize(id, cols, rows));
+// La terminal solo existe con el modo desarrollador activado (se comprueba aquí, no solo en la interfaz)
+const devOn = () => !!cfg.prefs?.devMode && !isLocked();
+handle('pty:spawn', (opts) => { if (!devOn()) throw new Error('Activa el modo desarrollador en Ajustes para usar la terminal'); return devterm().spawn({ ...opts, cwd: opts.cwd || cfg.devDir }, sendWin); });
+ipcMain.on('pty:write', (_e, id, data) => { if (devOn()) devterm().write(id, data); });
+ipcMain.on('pty:resize', (_e, id, cols, rows) => { if (devOn()) devterm().resize(id, cols, rows); });
 handle('pty:kill', (id) => devterm().kill(id));
 app.on('before-quit', () => { try { devterm().killAll(); } catch { /* sin terminales */ } });
 
@@ -634,9 +645,91 @@ handle('mode:tryNormal', () => {
   app.relaunch(); app.exit(0);
 });
 
-handle('open', (url) => shell.openExternal(url));
+// Solo se abren en el navegador direcciones web y de correo (nunca file:, ms-… u otros protocolos del sistema)
+function openSafe(url) {
+  let u; try { u = new URL(String(url)); } catch { return false; }
+  if (!['https:', 'http:', 'mailto:'].includes(u.protocol)) { log('Enlace bloqueado:', u.protocol); return false; }
+  shell.openExternal(u.href); return true;
+}
+handle('open', (url) => { if (!openSafe(url)) throw new Error('Ese enlace no se puede abrir desde Ecos'); });
 
 handle('update:status', () => updater.current());
+// ---------------------------------------------------------------- Acceso con contraseña y doble factor
+const vault = require('./src/vault');
+const lockGuard = { fails: 0, until: 0 };
+let pendingOpen = null; // contraseña buena a falta del código del doble factor
+const lockPrefs = () => { const p = cfg.prefs || {}; return { theme: p.theme, accent: p.accent, lang: p.lang, vinyl: p.vinyl, silk: p.silk, zoom: p.zoom }; };
+handle('lock:state', () => ({ locked: isLocked(), enabled: !!cfg.lock, auto: cfg.lock?.auto ?? 15, prefs: lockPrefs(), needCode: !!pendingOpen }));
+function failedAttempt(msg) {
+  lockGuard.fails++;
+  if (lockGuard.fails >= 3) lockGuard.until = Date.now() + Math.min(5 * 60000, 2000 * 2 ** (lockGuard.fails - 3)); // espera creciente
+  log('Acceso: intento fallido', lockGuard.fails);
+  throw new Error(msg);
+}
+handle('lock:unlock', async ({ password, code } = {}) => {
+  if (!isLocked()) return { ok: true };
+  const wait = Math.ceil((lockGuard.until - Date.now()) / 1000);
+  if (wait > 0) throw new Error(`Demasiados intentos. Espera ${wait} s.`);
+  let opened = pendingOpen;
+  if (password !== undefined) { try { opened = store.open(cfg, password); } catch (e) { pendingOpen = null; failedAttempt(e.message); } }
+  if (!opened) throw new Error('Escribe la contraseña');
+  if (opened.secrets.totp) {
+    if (!code) { pendingOpen = opened; return { needCode: true }; } // falta el código del móvil
+    const c = String(code).trim();
+    const okTotp = vault.checkTotp(opened.secrets.totp, c);
+    const rIdx = okTotp ? -1 : (opened.secrets.recovery || []).indexOf(vault.hashCode(c));
+    if (!okTotp && rIdx < 0) failedAttempt('Código incorrecto');
+    if (rIdx >= 0) opened.secrets.recovery.splice(rIdx, 1); // los códigos de recuperación valen una vez
+  }
+  pendingOpen = null; lockGuard.fails = 0; lockGuard.until = 0;
+  store.unlock(cfg, opened);
+  store.save(cfg);
+  log('Acceso: desbloqueada');
+  return { ok: true };
+});
+function lockApp(reason) {
+  if (!cfg?.lock || isLocked()) return;
+  store.lockNow(cfg);
+  pendingOpen = null;
+  try { devterm().killAll(); } catch { /* sin terminal */ }
+  if (backupAn) { backupAn.sources.forEach((x) => x.close()); backupAn = null; }
+  log('Acceso: bloqueada', reason || '');
+  mainWin?.webContents.reload(); // fuera de la memoria de la ventana todo lo que se estaba viendo
+}
+handle('lock:lock', () => { lockApp('a mano'); return true; });
+const needPassword = (pw) => { if (cfg.lock) store.open(cfg, pw); }; // lanza «Contraseña incorrecta»
+handle('lock:set', ({ password, current } = {}) => {
+  if (String(password || '').length < 8) throw new Error('La contraseña debe tener al menos 8 caracteres');
+  if (cfg.lock) needPassword(current);
+  const keep = { totp: cfg.__totp, recovery: cfg.__recovery };
+  store.setPassword(cfg, password);
+  cfg.__totp = keep.totp || null; cfg.__recovery = keep.recovery || []; store.save(cfg);
+  log('Acceso: contraseña', keep.totp ? 'cambiada' : 'activada');
+  return publicCfg();
+});
+handle('lock:disable', ({ current } = {}) => { needPassword(current); store.clearPassword(cfg); log('Acceso: contraseña quitada'); return publicCfg(); });
+handle('lock:auto', (minutes) => { if (cfg.lock) { cfg.lock.auto = Math.max(0, Math.min(240, Number(minutes) || 0)); store.save(cfg); } return publicCfg(); });
+// Contraseña olvidada: se quita la protección y se borran las claves (hay que volver a conectar)
+handle('lock:reset', () => { if (!cfg.lock) return true; store.resetForgotten(cfg); pendingOpen = null; log('Acceso: restablecida (claves borradas)'); mainWin?.webContents.reload(); return true; });
+// Doble factor: 1) se genera el secreto y el QR; 2) con un código bueno se activa y se dan los códigos de recuperación
+let totpDraft = null;
+handle('totp:begin', async () => {
+  if (!cfg.lock) throw new Error('Primero activa la contraseña');
+  totpDraft = vault.newTotpSecret();
+  const url = vault.otpauthUrl(totpDraft, cfg.wpSite || 'Ecos', 'Ecos');
+  return { secret: totpDraft.replace(/(.{4})/g, '$1 ').trim(), qr: await require('qrcode').toDataURL(url, { margin: 1, width: 220 }) };
+});
+handle('totp:confirm', (code) => {
+  if (!totpDraft) throw new Error('Vuelve a empezar la activación');
+  if (!vault.checkTotp(totpDraft, code)) throw new Error('El código no coincide. Comprueba la hora del móvil y vuelve a probar.');
+  const codes = vault.newRecoveryCodes();
+  cfg.__totp = totpDraft; cfg.__recovery = codes.map(vault.hashCode); totpDraft = null;
+  store.save(cfg);
+  log('Acceso: doble factor activado');
+  return { codes, cfg: publicCfg() };
+});
+handle('totp:disable', ({ current } = {}) => { needPassword(current); cfg.__totp = null; cfg.__recovery = []; store.save(cfg); log('Acceso: doble factor quitado'); return publicCfg(); });
+
 handle('update:check', () => { updater.check(); return updater.current(); });
 handle('update:install', () => updater.install());
 
@@ -652,6 +745,7 @@ app.whenReady().then(() => {
     delete cfg.anthropicKey; store.save(cfg);
   }
   createWindow();
+  try { const { powerMonitor } = require('electron'); powerMonitor.on('lock-screen', () => lockApp('pantalla bloqueada')); powerMonitor.on('suspend', () => lockApp('suspensión')); } catch { /* sin powerMonitor */ }
   mainWin.webContents.on('render-process-gone', (_e, d) => { if (d.reason !== 'clean-exit') escalate(`la ventana se ha cerrado (${d.reason}, código ${d.exitCode})`); });
   // Si la ventana no termina de cargar en 20 s (pantalla en blanco), también se pasa al modo compatible
   const loadTimer = setTimeout(() => escalate('la ventana no ha cargado en 20 segundos'), 20000);

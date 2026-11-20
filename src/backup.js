@@ -303,6 +303,24 @@ async function analyze(paths, progress = () => {}) {
 // ---------------------------------------------------------------- restauración de una entrada
 // upload(buffer, filename) → { id, url } en el WordPress de destino.
 // Devuelve los campos listos para crear la entrada, con los enlaces antiguos cambiados por los nuevos.
+// Limpia el contenido de una copia antes de subirlo: una web infectada suele llevar código escondido en las
+// entradas. Fuera <script>, formularios, objetos incrustados, atributos on…, enlaces javascript:/data: e
+// iframes que no sean de vídeo o mapas conocidos.
+const IFRAME_OK = /^https:\/\/(www\.)?(youtube(-nocookie)?\.com|player\.vimeo\.com|www\.dailymotion\.com|open\.spotify\.com|w\.soundcloud\.com|drive\.google\.com|docs\.google\.com|www\.google\.com\/maps|maps\.google\.com)\//i;
+function sanitizeRestored(html) {
+  let h = String(html || '');
+  const before = h.length;
+  h = h.replace(/<(script|style|noscript|template|object|embed|applet|form|base|meta|link)\b[\s\S]*?<\/\1\s*>/gi, '')
+    .replace(/<(script|object|embed|applet|form|input|button|select|textarea|base|meta|link)\b[^>]*\/?>/gi, '')
+    .replace(/<\/(script|form|object|button|select|textarea)\s*>/gi, '')
+    .replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/\s(href|src|action|formaction|xlink:href)\s*=\s*("|')\s*(javascript|vbscript|data):[^"']*\2/gi, ' $1="#"')
+    .replace(/\s(href|src)\s*=\s*(javascript|vbscript|data):[^\s>]*/gi, ' $1="#"')
+    .replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>|<iframe\b[^>]*\/?>/gi, (m) => { const src = (m.match(/\ssrc\s*=\s*["']([^"']+)/i) || [])[1] || ''; return IFRAME_OK.test(src) ? m : ''; })
+    .replace(/<!--(?!\s*\/?wp:)[\s\S]*?-->/g, ''); // comentarios HTML (se conservan los de bloques de WordPress)
+  return { html: h, removed: before - h.length };
+}
+
 async function prepare(an, post, upload, { download = true, job = null } = {}) {
   const map = new Map();      // URL o ruta antigua → { id, url } nueva
   const idMap = new Map();    // ID de adjunto antiguo → ID nuevo (para [gallery ids])
@@ -327,7 +345,9 @@ async function prepare(an, post, upload, { download = true, job = null } = {}) {
     } catch (e) { problems.push(`${name}: ${e.message}`); }
   }
   // Cambiar enlaces: cualquier URL de «uploads» cuya ruta (sin tamaño) coincida con un archivo subido
-  let content = post.content.replace(/(https?:\/\/[^\s"'<>)]+)/g, (u) => {
+  const clean = sanitizeRestored(post.content);
+  if (clean.removed) problems.push(`Se quitó código potencialmente peligroso (${clean.removed} caracteres)`);
+  let content = clean.html.replace(/(https?:\/\/[^\s"'<>)]+)/g, (u) => {
     const rel = uploadsRel(u); if (!rel) return u;
     const hit = map.get(original(rel)) || map.get(rel) || map.get(u);
     return hit ? hit.url : u;
@@ -366,7 +386,7 @@ async function previewContent(an, post, nativeImage) {
     cache.set(rel, url);
     return url;
   };
-  let content = String(post.content || '');
+  let content = sanitizeRestored(post.content).html;
   // contenido del editor clásico (sin bloques): los saltos de línea dobles son párrafos
   if (!/<!-- wp:/.test(content) && !/<p[\s>]/i.test(content)) content = content.split(/\n\s*\n/).map((p) => (/^\s*<(h\d|ul|ol|figure|div|blockquote|table|\[)/i.test(p) ? p : `<p>${p.trim().replace(/\n/g, '<br>')}</p>`)).join('\n\n');
   const urls = [...new Set(content.match(/https?:\/\/[^\s"'<>)]+/g) || [])];
@@ -389,4 +409,4 @@ async function thumbnail(an, rel, nativeImage) {
   return img.resize({ width: 120 }).toDataURL();
 }
 
-module.exports = { previewContent, analyze, prepare, thumbnail, parseSql, wpFromSql, wpFromWxr, uploadsRel, original };
+module.exports = { sanitizeRestored, previewContent, analyze, prepare, thumbnail, parseSql, wpFromSql, wpFromWxr, uploadsRel, original };

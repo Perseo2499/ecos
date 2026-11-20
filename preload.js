@@ -67,6 +67,16 @@ contextBridge.exposeInMainWorld('api', {
   backupRestore: (keys, opts) => call('backup:restore', keys, opts),
   backupClose: () => call('backup:close'),
   backupCancel: () => call('backup:cancel'),
+  lockState: () => call('lock:state'),
+  lockUnlock: (x) => call('lock:unlock', x),
+  lockNow: () => call('lock:lock'),
+  lockSet: (x) => call('lock:set', x),
+  lockDisable: (x) => call('lock:disable', x),
+  lockAuto: (m) => call('lock:auto', m),
+  lockReset: () => call('lock:reset'),
+  totpBegin: () => call('totp:begin'),
+  totpConfirm: (c) => call('totp:confirm', c),
+  totpDisable: (x) => call('totp:disable', x),
   onBackupProgress: on('backup:progress'),
 
   // Modo desarrollador: terminal integrada

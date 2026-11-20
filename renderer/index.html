@@ -367,6 +367,7 @@
         <a href="#set-restore"><span class="ms">settings_backup_restore</span><span data-i18n>Restaurar entradas</span></a>
         <a href="#set-updates"><span class="ms">system_update</span><span data-i18n>Actualizaciones</span></a>
         <a href="#set-advanced"><span class="ms">build</span><span data-i18n>Avanzado</span></a>
+        <a href="#set-security"><span class="ms">shield_lock</span><span data-i18n>Seguridad</span></a>
         <a href="#set-about"><span class="ms">info</span><span data-i18n>Acerca de</span></a>
       </nav>
       <div class="set-body">
@@ -402,6 +403,21 @@
               <button data-v="#984061" style="--c:#984061"></button>
               <label class="custom-color" data-i18n-title title="Otro color"><input type="color" id="s-accent-custom"><span class="ms">colorize</span></label>
             </div></div>
+        </div>
+
+        <div class="card" id="set-security">
+          <div class="card-head"><span class="ms fill ic">shield_lock</span><h2 data-i18n>Seguridad</h2></div>
+          <p class="hint" id="sec-status"></p>
+          <div class="row wrap" id="sec-pass-actions"></div>
+          <div id="sec-more" class="hidden">
+            <div class="set-row"><span data-i18n>Bloquear tras un tiempo sin usar Ecos</span>
+              <select id="sec-auto"><option value="5">5 min</option><option value="15">15 min</option><option value="30">30 min</option><option value="60">1 h</option><option value="0" data-i18n>Nunca</option></select></div>
+            <div class="sec-2fa">
+              <div><b data-i18n>Doble factor</b><div class="hint" id="sec-2fa-status"></div></div>
+              <span class="spacer"></span><div id="sec-2fa-actions"></div>
+            </div>
+            <p class="hint" data-i18n>Ecos también se bloquea al bloquear Windows o suspender el ordenador. Atajo: Ctrl+L.</p>
+          </div>
         </div>
 
         <div class="card" id="set-lang">
@@ -643,6 +659,20 @@
 <div id="fmt-pop" class="fmt-pop hidden"></div>
 <div id="selbar" class="selbar"><span id="sel-count"></span><button id="sel-clear" class="btn text" data-i18n>Quitar selección</button><button id="make" class="btn filled" disabled><span class="ms">post_add</span><span data-i18n>Crear entrada</span></button></div>
 <div id="drop" class="drop hidden"><div><span class="ms fill">file_download</span><span data-i18n>Suelta aquí</span></div></div>
+<div id="lock" class="lock hidden">
+  <div class="lock-box">
+    <span class="logo big"><img src="assets/logo-mark.svg" alt=""></span>
+    <h1>Ecos</h1>
+    <p class="hint" id="lock-msg" data-i18n>Ecos está bloqueada. Escribe tu contraseña para entrar.</p>
+    <form id="lock-form" autocomplete="off">
+      <div id="lock-pass-row" class="field"><span class="ms">key</span><input id="lock-pass" type="password" data-i18n-ph placeholder="Contraseña" autocomplete="current-password"></div>
+      <div id="lock-code-row" class="field hidden"><span class="ms">phonelink_lock</span><input id="lock-code" inputmode="numeric" maxlength="11" data-i18n-ph placeholder="Código de 6 cifras de tu app"></div>
+      <p class="lock-err" id="lock-err"></p>
+      <button class="btn filled" id="lock-go" type="submit"><span class="ms">lock_open</span><span data-i18n>Entrar</span></button>
+    </form>
+    <a href="#" id="lock-forgot" class="hint" data-i18n>¿Has olvidado la contraseña?</a>
+  </div>
+</div>
 <div id="toast"></div>
 <script src="i18n.js"></script>
 <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>

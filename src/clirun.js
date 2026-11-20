@@ -70,9 +70,11 @@ async function ask({ tool, model, web = false }, parts, schema, log = () => {}) 
 
     if (tool === 'claude') {
       // Solo la herramienta de lectura (para ver las imágenes); sin MCP ni sesiones guardadas
-      const allow = [...(images.length ? ['Read'] : []), ...(web ? ['WebSearch'] : [])].join(',');
+      // la lectura, solo dentro de la carpeta temporal de la petición (un texto malicioso no puede pedirle leer otros archivos)
+      const tools = [...(images.length ? ['Read'] : []), ...(web ? ['WebSearch'] : [])].join(',');
+      const allow = [...(images.length ? ['Read(./**)'] : []), ...(web ? ['WebSearch'] : [])];
       const args = ['-p', 'Sigue exactamente las instrucciones recibidas por la entrada estándar.', '--output-format', 'json',
-        '--tools', allow, ...(allow ? ['--allowedTools', allow] : []),
+        '--tools', tools, ...(allow.length ? ['--allowedTools', ...allow] : []),
         '--strict-mcp-config', '--no-session-persistence', ...(model ? ['--model', model] : [])];
       res = await run(T.bin, args, { cwd: dir, input: text + imgNote + rules, ...(web ? { timeout: 300000 } : {}) });
       let j; try { j = JSON.parse(res.out); } catch { j = null; }
