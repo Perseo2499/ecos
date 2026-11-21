@@ -766,6 +766,27 @@
         };
         it.ondragend = () => { drag = null; endDrag(); };
         it.ondblclick = () => this.onOpenMedia(m);
+        // ✕: quitar de la bandeja (y de la entrada, si está en ella). No se borra de la biblioteca de la web.
+        const del = document.createElement('button');
+        del.className = 'tray-del'; del.title = t('Quitar de la bandeja'); del.innerHTML = '<span class="ms">close</span>';
+        del.draggable = false;
+        del.onmousedown = (e) => e.stopPropagation();
+        del.onclick = async (e) => {
+          e.stopPropagation();
+          const inBody = used.has(`"id":${m.id}`) || this.draft.featuredImageId === m.id;
+          if (inBody && !await window.ask(t('Esta foto está puesta en la entrada. ¿Quitarla de la bandeja y también de la entrada? (Sigue en la biblioteca de medios de tu web.)'), { ok: t('Quitar'), danger: true })) return;
+          this.change(() => {
+            const d = this.draft, same = (x) => x && x.id === m.id;
+            d.hiddenMedia = [...new Set([...(d.hiddenMedia || []), m.id])];
+            d.extraMedia = (d.extraMedia || []).filter((x) => !same(x));
+            if (d.featuredImageId === m.id) d.featuredImageId = null;
+            d.blocks = d.blocks.filter((b) => !(['image', 'video'].includes(b.type) && (same(b.img) || same(b.video))));
+            for (const b of d.blocks) { if (b.images) b.images = b.images.filter((x) => !same(x)); if (same(b.img)) b.img = null; }
+          });
+          this.media = this.media.filter((x) => x.id !== m.id);
+          this.renderMedia();
+        };
+        it.appendChild(del);
         tray.appendChild(it);
       });
       // Soltar en la bandeja una foto de la entrada la quita del contenido

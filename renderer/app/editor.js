@@ -73,7 +73,8 @@ function mediaPool() {
   const add = (m) => { if (m && m.id && !seen.has(m.id)) { seen.add(m.id); out.push(m); } };
   for (const s of draft.sections || []) { s.images.forEach((i) => add({ ...i, type: 'image' })); s.videos.forEach((v) => add({ ...v, type: 'video' })); }
   for (const m of draft.extraMedia || []) add(m);
-  return out;
+  const hidden = new Set(draft.hiddenMedia || []); // quitadas de la bandeja con su ✕
+  return out.filter((m) => !hidden.has(m.id));
 }
 
 function openEditor() {

@@ -266,6 +266,8 @@
     'Modelo (opcional: si lo dejas vacío, usa el de la CLI)': 'Model (optional: leave empty to use the CLI default)',
     'Los botones de IA usarán {c}. Pulsa «Probar» para comprobarlo.': 'The AI buttons will use {c}. Click "Try it" to check.',
     // 1.2 (editor completo)
+    'Quitar de la bandeja': 'Remove from the tray',
+    'Esta foto está puesta en la entrada. ¿Quitarla de la bandeja y también de la entrada? (Sigue en la biblioteca de medios de tu web.)': 'This photo is in the post. Remove it from the tray and from the post too? (It stays in your site’s media library.)',
     'A todo el ancho': 'Full width',
     'A la izquierda, con el texto alrededor': 'Left, with text around it',
     'Centrada': 'Centred',
