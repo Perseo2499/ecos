@@ -1732,7 +1732,8 @@ button.dp-item:not(.keep) b { color: var(--error, #e5484d); }
 .blk-image .lv-sep { width: 1px; height: 18px; margin: 0 4px; background: var(--outline-var); align-self: center; }
 /* La columna de bloques en flujo normal (no flex) para que el texto pueda rodear las fotos colocadas a un lado */
 .blocks { display: flow-root; }
-.blocks > .blk, .blocks > .ins { display: block; }
+.blocks > .blk { display: block; }
+.blocks > .ins { display: flex; }
 .blk.blk-image.img-left + .ins, .blk.blk-image.img-right + .ins { display: none; }
 .blk.blk-image.img-left, .blk.blk-image.img-right { position: relative; z-index: 4; }
 /* ===== Mapa: entrar en una página (vista de página, botones y enlaces) ===== */
