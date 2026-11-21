@@ -146,7 +146,13 @@ async function changeCategory(cfg, id, name, add = true) {
   if (!cid) throw new Error(`No existe la categoría «${name}»`);
   const p = await req(cfg, `/wp/v2/posts/${id}?context=edit&_fields=categories`);
   const cur = p.categories || [];
-  const next = add ? [...new Set([...cur, cid])] : cur.filter((c) => c !== cid);
+  let next = add ? [...new Set([...cur, cid])] : cur.filter((c) => c !== cid);
+  // al añadir una categoría real se quita «Sin categoría» (la que WordPress pone por defecto)
+  if (add && !require('../renderer/blogcheck').isDefaultCat(name)) {
+    const defs = new Set((catCache || []).filter((c) => require('../renderer/blogcheck').isDefaultCat(c.name)).map((c) => c.id));
+    const kept = next.filter((c) => !defs.has(c));
+    if (kept.length) next = kept;
+  }
   if (next.length === cur.length && next.every((c, i) => c === cur[i])) return;
   await req(cfg, `/wp/v2/posts/${id}`, { method: 'POST', json: { categories: next } });
 }
@@ -283,12 +289,13 @@ async function savePost(cfg, route, f) {
 const createPost = (cfg, f) => savePost(cfg, `/wp/v2/${f.type === 'page' ? 'pages' : 'posts'}`, f);
 const updatePost = (cfg, id, f) => savePost(cfg, `/wp/v2/${f.type === 'page' ? 'pages' : 'posts'}/${id}`, f);
 
-async function listPosts(cfg, { type = 'post', status = 'any', search = '', page = 1, number = 20, after, before } = {}) {
+async function listPosts(cfg, { type = 'post', status = 'any', search = '', page = 1, number = 20, after, before, include } = {}) {
   const coll = type === 'page' ? 'pages' : 'posts';
   const q = new URLSearchParams({
     status: status === 'any' ? 'publish,future,draft,pending,private' : status, per_page: String(number), page: String(page),
     orderby: 'date', order: 'desc', context: 'edit', _embed: 'wp:featuredmedia',
     ...(search ? { search } : {}), ...(after ? { after } : {}), ...(before ? { before } : {}),
+    ...(include?.length ? { include: include.join(',') } : {}),
   });
   const { data, res } = await req(cfg, `/wp/v2/${coll}?${q}`, { raw: true });
   const cats = catCache || (await categories(cfg).catch(() => []));
@@ -297,11 +304,55 @@ async function listPosts(cfg, { type = 'post', status = 'any', search = '', page
     items: data.map((p) => ({
       id: p.id, type, status: p.status, date: p.date_gmt ? p.date_gmt + 'Z' : p.date, modified: p.modified_gmt ? p.modified_gmt + 'Z' : p.modified,
       title: p.title?.raw || p.title?.rendered || '(sin título)', url: p.link,
-      image: p._embedded?.['wp:featuredmedia']?.[0]?.source_url || '',
+      image: p._embedded?.['wp:featuredmedia']?.[0]?.source_url || '', featured: p.featured_media || 0,
       categories: (p.categories || []).map((id) => cats.find((c) => c.id === id)?.name).filter(Boolean),
       excerpt: (p.excerpt?.raw || p.excerpt?.rendered || '').replace(/<[^>]+>/g, '').trim().slice(0, 160),
     })),
   };
+}
+// Revisión del blog: recorre todas las entradas (menos la papelera) con campos ligeros y dice cuáles no tienen
+// categoría o imagen destacada, y de las que no tienen destacada, cuáles tienen alguna foto en el contenido.
+async function blogHealth(cfg, { onProgress } = {}) {
+  const BC = require('../renderer/blogcheck');
+  const cats = await categories(cfg).catch(() => []);
+  const byId = new Map(cats.map((c) => [c.id, c.name]));
+  const rows = await allParallel(cfg, '/wp/v2/posts?context=edit&status=publish,draft,private,pending,future&_fields=id,title,status,date,categories,featured_media', { onProgress });
+  const sum = (p, extra = {}) => ({ id: p.id, title: p.title?.raw || p.title?.rendered || '(sin título)', status: p.status, date: p.date, ...extra });
+  const noCat = rows.filter((p) => BC.isUncategorized((p.categories || []).map((id) => byId.get(id)))).map((p) => sum(p));
+  const noImgRows = rows.filter((p) => !p.featured_media);
+  // contenido solo de las que no tienen destacada, en lotes con include
+  const withPhoto = new Set();
+  const chunks = [];
+  for (let i = 0; i < noImgRows.length; i += 50) chunks.push(noImgRows.slice(i, i + 50).map((p) => p.id));
+  let next = 0;
+  const work = async () => {
+    while (next < chunks.length) {
+      const ids = chunks[next++];
+      const got = await req(cfg, `/wp/v2/posts?context=edit&status=publish,draft,private,pending,future&include=${ids.join(',')}&per_page=50&_fields=id,content`).catch(() => []);
+      for (const p of got) if (BC.firstPhotoHtml(p.content?.raw || '')) withPhoto.add(p.id);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, chunks.length) }, work));
+  const noImg = noImgRows.map((p) => sum(p, { photo: withPhoto.has(p.id) }));
+  return { total: rows.length, noCat, noImg, at: Date.now() };
+}
+// Título, extracto y un trozo del texto de muchas entradas (para sugerir o recomendar categorías)
+async function postsText(cfg, ids) {
+  const out = [];
+  const list = ids ? ids : null;
+  if (list) {
+    for (let i = 0; i < list.length; i += 50) {
+      const got = await req(cfg, `/wp/v2/posts?context=edit&status=publish,draft,private,pending,future&include=${list.slice(i, i + 50).join(',')}&per_page=50&_fields=id,title,excerpt,content,categories`);
+      out.push(...got);
+    }
+  } else out.push(...await allParallel(cfg, '/wp/v2/posts?context=edit&status=publish,draft,private,pending,future&_fields=id,title,excerpt,content,categories'));
+  const cats = catCache || await categories(cfg).catch(() => []);
+  const plain = (h) => String(h || '').replace(/<!--[\s\S]*?-->/g, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+  return out.map((p) => ({
+    id: p.id, title: decode(p.title?.raw || p.title?.rendered || ''), excerpt: plain(p.excerpt?.raw || p.excerpt?.rendered).slice(0, 300),
+    text: plain(p.content?.raw).slice(0, 1500),
+    categories: (p.categories || []).map((id) => cats.find((c) => c.id === id)?.name).filter(Boolean),
+  }));
 }
 // Páginas de la web (id, título y página superior), para elegir la «Página superior» en el editor
 async function listPagesLite(cfg) {
@@ -494,6 +545,7 @@ async function createPage(cfg, { title, parent = 0, status = 'draft' }) {
 }
 async function createCategory(cfg, { name, parent = 0 }) {
   const c = await req(cfg, '/wp/v2/categories', { method: 'POST', json: { name, parent: parent || 0 } });
+  if (catCache) catCache.push({ id: c.id, name: decode(c.name), slug: c.slug }); // para que se pueda asignar enseguida
   return { id: c.id, name: raw({ raw: c.name }), count: 0, parent: c.parent || 0, link: c.link };
 }
 const trashPage = (cfg, id) => req(cfg, `/wp/v2/pages/${id}`, { method: 'DELETE' }).then(() => true);
@@ -522,4 +574,4 @@ async function saveStructure(cfg, ch, progress = () => {}) {
   return { errors };
 }
 
-module.exports = { allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost };
+module.exports = { blogHealth, postsText, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost };

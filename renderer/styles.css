@@ -1621,3 +1621,51 @@ button.dp-item:not(.keep) b { color: var(--error, #e5484d); }
 .b-new-menu button:last-child { border-top: 1px solid var(--outline-var); border-radius: 0 0 8px 8px; margin-top: 4px; color: var(--on-surface-var); }
 .b-new-menu .ms { font-size: 20px; color: var(--primary); }
 #d-parent-field select { width: 100%; }
+
+/* ---- Blog: Revisión (entradas sin categoría o sin imagen destacada) y recomendar categorías ---- */
+.b-health { margin: 0 0 10px; border: 1px solid var(--outline-var); border-radius: var(--r-m); background: var(--surface-c); }
+.b-health.hidden { display: none; }
+.b-health:not(.ok) { border-color: color-mix(in srgb, #e8a33d 55%, var(--outline-var)); }
+.b-health.ok { background: transparent; }
+.b-health.ok .bh-head { color: var(--on-surface-var); }
+.bh-head { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; cursor: pointer; min-height: 40px; }
+.bh-head > .ms:first-child { font-size: 20px; color: var(--primary); }
+.b-health:not(.ok) .bh-head > .ms:first-child { color: #b87100; }
+.bh-sum { font-size: 13px; color: var(--on-surface-var); }
+.bh-head .btn.small { width: auto; margin: 0; }
+.bh-chev { transition: transform .15s; color: var(--on-surface-var); }
+.b-health.open .bh-chev { transform: rotate(180deg); }
+.bh-body { display: none; padding: 2px 12px 10px; }
+.b-health.open .bh-body { display: block; }
+.bh-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 0; border-top: 1px solid var(--outline-var); }
+.bh-row > .ms { font-size: 20px; color: var(--on-surface-var); }
+.bh-t { flex: 1 1 220px; font-size: 14px; }
+.bh-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.bh-acts .btn.small { width: auto; margin: 0; }
+.bh-filter { display: flex; align-items: center; gap: 8px; padding: 4px 12px 8px; font-size: 13px; color: var(--primary); }
+.bh-filter .btn.small { width: auto; margin: 0; }
+.st.warn { white-space: nowrap; display: inline-flex; align-items: center; gap: 3px; margin-right: 6px; background: color-mix(in srgb, #e8a33d 20%, transparent); color: color-mix(in srgb, #b87100 85%, var(--on-surface)); }
+.st.warn .ms { font-size: 13px; }
+.st.new { background: color-mix(in srgb, var(--primary) 18%, transparent); color: var(--primary); }
+.st.ex { background: var(--surface-c-high); }
+.dlg.bh-dlg.wide { width: min(760px, 94vw); max-width: none; max-height: 86vh; display: flex; flex-direction: column; text-align: left; }
+.bh-dlg .dlg-actions { margin-top: 12px; }
+.bh-rv, .bh-cards { overflow: auto; flex: 1; min-height: 80px; display: flex; flex-direction: column; gap: 8px; }
+.bh-rv-row { display: flex; align-items: center; gap: 10px; padding: 6px 4px; border-bottom: 1px solid var(--outline-var); }
+.bh-rv-t { flex: 1 1 40%; font-size: 13.5px; }
+.bh-rv-c { flex: 1 1 55%; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.bh-chip { height: 26px; padding: 0 8px 0 10px; gap: 2px; font-size: 12.5px; margin: 0; cursor: default; }
+.bh-chip button { display: inline-flex; border: 0; background: transparent; color: inherit; cursor: pointer; padding: 0; }
+.bh-chip .ms { font-size: 15px; }
+.bh-rv-c select { height: 26px; border-radius: var(--r-full); font-size: 12.5px; }
+.bh-card { border: 1px solid var(--outline-var); border-radius: var(--r-m); padding: 10px 12px; }
+.bh-card-h { display: flex; align-items: center; gap: 10px; }
+.bh-name { flex: 1; font: inherit; font-weight: 600; padding: 4px 8px; border: 1px solid var(--outline-var); border-radius: 8px; background: var(--surface-c-high); color: var(--on-surface); }
+.bh-kw { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.bh-posts { max-height: 140px; overflow: auto; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.bh-posts label { display: flex; gap: 8px; align-items: baseline; cursor: pointer; }
+.dlg.bh-dlg.wide { align-items: stretch; }
+.bh-dlg .dlg-ic, .bh-dlg .dlg-msg { align-self: center; }
+.bh-rv, .bh-cards { width: 100%; }
+.bh-rv-c select { width: auto; min-width: 110px; padding: 0 8px; color: var(--on-surface); background: var(--surface-c-high); border: 1px solid var(--outline-var); }
+.bh-dlg .dlg-actions { justify-content: flex-end; }

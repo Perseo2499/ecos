@@ -806,6 +806,59 @@ handle('blog:category', async (id, name, add) => {
   if (!WP().changeCategory) throw new Error('Solo disponible con WordPress propio');
   await wpCall(() => WP().changeCategory(cfg, id, name, add));
 });
+// --- Revisión del blog: entradas sin categoría o sin imagen destacada ---
+let healthCache = null;
+handle('blog:health', async (force) => {
+  needSelf();
+  if (!force && healthCache && Date.now() - healthCache.at < 5 * 60 * 1000) return healthCache;
+  healthCache = await wpCall(() => WP().blogHealth(cfg));
+  return healthCache;
+});
+// La primera foto del contenido pasa a ser la destacada (y se queda también en el cuerpo)
+handle('blog:autoFeatured', async (ids) => {
+  needSelf();
+  const done = [], skipped = [], errors = [];
+  for (const id of ids || []) {
+    try {
+      const p = await wpCall(() => WP().getPost(cfg, id));
+      if (p.featured) { skipped.push(id); continue; }
+      const af = await autoFeatured(p.content, { first: true });
+      if (!af) { skipped.push(id); continue; }
+      await wpCall(() => WP().updateFields(cfg, id, { featured_media: af.mediaId }));
+      done.push(id);
+    } catch (e) { log('Primera foto como destacada', id, e.message); errors.push({ id, message: e.message }); }
+  }
+  healthCache = null;
+  return { done, skipped, errors };
+});
+// La IA elige entre las categorías que ya existen (nunca inventa)
+handle('blog:suggestCategories', async (ids) => {
+  needSelf();
+  if (!ai) ai = require('./src/ai');
+  aiReady();
+  const [posts, cats] = await Promise.all([wpCall(() => WP().postsText(cfg, ids)), wpCall(() => WP().categories(cfg))]);
+  const names = cats.map((c) => c.name).filter((n) => !require('./renderer/blogcheck').isDefaultCat(n));
+  const sug = await ai.suggestCategories(cfg.ai, posts, names);
+  const title = new Map(posts.map((p) => [p.id, p.title]));
+  return sug.map((s) => ({ ...s, title: title.get(s.id) || '' }));
+});
+// Recomendar categorías a partir del contenido (algoritmo sin IA)
+let topicPosts = null;
+handle('blog:recommendCategories', async () => {
+  needSelf();
+  const [posts, cats] = await Promise.all([wpCall(() => WP().postsText(cfg)), wpCall(() => WP().categories(cfg))]);
+  topicPosts = posts;
+  const real = cats.filter((c) => !require('./renderer/blogcheck').isDefaultCat(c.name));
+  return { proposals: require('./src/topics').recommend(posts, real), total: posts.length };
+});
+handle('blog:refineCategories', async (proposals) => {
+  needSelf();
+  if (!ai) ai = require('./src/ai');
+  aiReady();
+  const cats = (await wpCall(() => WP().categories(cfg))).map((c) => c.name);
+  const refined = await ai.refineTopics(cfg.ai, proposals, topicPosts || [], cats);
+  return refined.length ? refined : proposals;
+});
 // Buscar y reemplazar texto en todo el blog (solo WordPress propio)
 handle('blog:findText', async ({ query, opts, type, ids }) => {
   if (!isSelf()) throw new Error('Buscar y reemplazar en todo el blog solo está disponible con WordPress propio');
@@ -1028,11 +1081,12 @@ handle('backup:restore', async (keys, opts = {}) => {
 });
 // Entrada sin imagen destacada y con una sola foto: esa foto pasa a ser también la destacada (así se ve en la
 // lista del blog) y se queda en el cuerpo, para que el texto no pierda sentido. Devuelve { content, mediaId } o null.
-async function autoFeatured(content) {
+// Con { first: true } sirve con cualquier número de fotos y elige la primera (revisión del blog).
+async function autoFeatured(content, { first = false } = {}) {
   const blocks = require('./src/parseblocks').parseBlocks(content);
   const imgs = blocks.flatMap((b) => (b.img ? [b.img] : b.images || [])).filter((i) => i && i.type !== 'video' && i.url);
-  if (imgs.length !== 1) return null;
-  const img = imgs[0];
+  if (first ? !imgs.length : imgs.length !== 1) return null;
+  const img = first ? require('./renderer/blogcheck').firstImage(blocks) : imgs[0];
   let mediaId = Number(img.id) > 0 ? Number(img.id) : 0;
   if (mediaId && isSelf() && !(await WP().mediaExists(cfg, mediaId))) mediaId = 0;
   if (!mediaId && isSelf()) mediaId = await WP().findMediaByUrl(cfg, img.url).catch(() => null);

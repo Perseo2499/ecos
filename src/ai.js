@@ -379,6 +379,58 @@ async function altTexts(aiCfg, imageUrls, context = '') {
   return imageUrls.map((_, i) => r.alts.find((a) => a.index === i)?.alt || '');
 }
 
+// --- Categorías para entradas (revisión del blog) -----------------------------------
+const CatSuggest = z.object({
+  suggestions: z.array(z.object({
+    id: z.number().int().describe('ID de la entrada'),
+    categories: z.array(z.string()).describe('Nombres de categorías EXISTENTES (máx. 3), copiados tal cual de la lista'),
+  })),
+});
+// posts: [{ id, title, excerpt, text }]; cats: nombres existentes. Por lotes de ~10; nunca inventa categorías.
+async function suggestCategories(aiCfg, posts, cats, { batch = 10, conc = 3 } = {}) {
+  const valid = new Map(cats.map((c) => [String(c).toLowerCase(), c]));
+  const out = new Map();
+  const chunks = [];
+  for (let i = 0; i < posts.length; i += batch) chunks.push(posts.slice(i, i + batch));
+  let next = 0;
+  const work = async () => {
+    while (next < chunks.length) {
+      const ch = chunks[next++];
+      const prompt = `Elige para cada entrada de un blog de una asociación las categorías que mejor le encajan, SOLO entre estas categorías existentes (cópialas exactamente, no inventes ninguna; entre 1 y 3 por entrada, y ninguna si no encaja):\n${cats.map((c) => '- ' + c).join('\n')}\n\nEntradas:\n`
+        + ch.map((p) => `[id ${p.id}] ${p.title}\n${(p.excerpt || '').slice(0, 200)}\n${(p.text || '').slice(0, 600)}`).join('\n---\n');
+      const r = await askStructured(aiCfg, [{ type: 'text', text: prompt }], CatSuggest);
+      for (const s of r.suggestions || []) {
+        const names = [...new Set((s.categories || []).map((n) => valid.get(String(n).toLowerCase())).filter(Boolean))].slice(0, 3);
+        out.set(s.id, names);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(conc, chunks.length) }, work));
+  return posts.map((p) => ({ id: p.id, categories: out.get(p.id) || [] }));
+}
+// Afina las propuestas del algoritmo: mejores nombres, fusionar o descartar grupos y reasignar entradas
+const TopicRefine = z.object({
+  groups: z.array(z.object({
+    name: z.string().describe('Nombre corto y claro de la categoría, en español'),
+    existing: z.boolean().describe('true solo si es exactamente una de las categorías existentes'),
+    postIds: z.array(z.number().int()).describe('IDs de las entradas que encajan (mínimo 3)'),
+  })),
+});
+async function refineTopics(aiCfg, proposals, posts, cats) {
+  const titles = new Map(posts.map((p) => [p.id, p]));
+  const ids = new Set(proposals.flatMap((g) => g.posts.map((p) => p.id)));
+  const prompt = `Una asociación de Ceuta tiene un blog. Un algoritmo ha propuesto estas categorías para agrupar sus entradas. Mejora los nombres, fusiona grupos parecidos, descarta los que no tengan sentido y reasigna entradas si hace falta. Máximo 10 grupos, cada uno con 3 entradas o más. Si una categoría ya existe, usa su nombre exacto y marca existing = true. Usa solo IDs de entradas de la lista.\n\nCategorías existentes: ${cats.join(', ') || '(ninguna)'}\n\nPropuestas:\n`
+    + proposals.map((g) => `* ${g.name} (${g.isNew ? 'nueva' : 'existente'}; palabras: ${g.keywords.join(', ')}) → ${g.posts.map((p) => p.id).join(', ')}`).join('\n')
+    + '\n\nEntradas:\n' + [...ids].map((id) => { const p = titles.get(id); return p ? `[${id}] ${p.title} — ${(p.excerpt || '').slice(0, 120)}` : null; }).filter(Boolean).join('\n');
+  const r = await askStructured(aiCfg, [{ type: 'text', text: prompt }], TopicRefine);
+  const existing = new Map(cats.map((c) => [String(c).toLowerCase(), c]));
+  return (r.groups || []).map((g) => {
+    const ex = existing.get(String(g.name).toLowerCase());
+    const list = [...new Set(g.postIds)].filter((id) => ids.has(id)).map((id) => ({ id, title: titles.get(id)?.title || '', score: proposals.flatMap((x) => x.posts).find((p) => p.id === id)?.score ?? 0.5 }));
+    return { name: ex || g.name.trim(), isNew: !ex, keywords: proposals.find((x) => x.name === g.name)?.keywords || [], posts: list };
+  }).filter((g) => g.name && g.posts.length >= 3);
+}
+
 // --- Reescribir un bloque del editor ----------------------------------------------
 const Rewrite = z.object({ html: z.string().describe('El texto resultante en HTML en línea: solo <strong>, <em>, <a href> y <br>; sin <p> ni otras etiquetas') });
 const REWRITE = {
@@ -411,4 +463,4 @@ ${html}
 
 const isCli = (aiCfg) => !!PROVIDERS[aiCfg?.active]?.cli;
 
-module.exports = { isCli, research, rewrite, setCliLog, PROVIDERS, askStructured, listModels, testConnection, improveArticle, altTexts };
+module.exports = { suggestCategories, refineTopics, isCli, research, rewrite, setCliLog, PROVIDERS, askStructured, listModels, testConnection, improveArticle, altTexts };
