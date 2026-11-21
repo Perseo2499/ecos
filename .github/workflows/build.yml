@@ -46,6 +46,7 @@ jobs:
           if (Test-Path "$d\out.png") { Write-Host "Motor de IA OK (con tarjeta gráfica)" }
           elseif ($o -match 'vkCreateInstance|invalid gpu') { Write-Host "Motor de IA OK: arranca; aquí no hay tarjeta gráfica (esperado)" }
           else { Write-Error "El motor de IA no arranca"; exit 1 }
+          exit 0
       - name: Compilar (y firmar si hay certificado)
         shell: bash
         env:
