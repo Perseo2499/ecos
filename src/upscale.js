@@ -157,11 +157,10 @@ async function upscale(buf, { onProgress } = {}) {
       if (!fs.existsSync(outp)) throw new Error('sin resultado');
     } catch (e) {
       if (e.killed) throw new Error('La mejora ha tardado demasiado y se ha cancelado.');
-      // Sin GPU compatible con Vulkan: se reintenta con el procesador (más lento)
-      onProgress?.({ text: 'Usando el procesador (más lento)…' });
-      try { await run(exe, [...args, '-g', '-1'], cwd); } catch (e2) {
-        throw new Error(e2.killed ? 'La mejora ha tardado demasiado y se ha cancelado.' : 'No se pudo mejorar la foto con la IA: ' + (String(e2.stderr || '').trim().split('\n').pop() || e2.message));
-      }
+      const why = String(e.stderr || '') + ' ' + String(e.message || '');
+      // El motor necesita una tarjeta gráfica con Vulkan (casi todas las de Intel, AMD y NVIDIA de los últimos años)
+      if (/vkCreateInstance|invalid gpu|vulkan/i.test(why)) throw new Error('Este ordenador no tiene una tarjeta gráfica compatible con la IA (Vulkan). Actualiza los controladores de la tarjeta gráfica (Intel, AMD o NVIDIA, desde su web o Windows Update) y vuelve a intentarlo.');
+      throw new Error('No se pudo mejorar la foto con la IA: ' + (why.trim().split('\n').pop() || 'error desconocido'));
       if (!fs.existsSync(outp)) throw new Error('La IA no ha generado ninguna imagen.');
     }
     let img = nativeImage.createFromPath(outp);
