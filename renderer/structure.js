@@ -594,10 +594,10 @@
       if (!c.hasAttribute('data-pill')) { c.onclick = go; c.onkeydown = (e) => { if (e.key === 'Enter') go(); }; }
       else c.onclick = () => { const x = d?.targets?.find((y) => y.type === type && y.id === Number(id)); if (x) addButton(x).catch(fail); };
       // soltar el conector aquí: abre el diálogo con este destino
-      c.ondragover = (e) => { if (pvDrag) { e.preventDefault(); c.classList.add('drop'); } };
-      c.ondragleave = () => c.classList.remove('drop');
+      c.ondragover = (e) => { if (pvDrag) { e.preventDefault(); c.classList.add('pv-over'); } };
+      c.ondragleave = () => c.classList.remove('pv-over');
       c.ondrop = (e) => {
-        c.classList.remove('drop'); if (!pvDrag) return; e.preventDefault(); pvDrag = false;
+        c.classList.remove('pv-over'); if (!pvDrag) return; e.preventDefault(); pvDrag = false;
         const x = d?.targets?.find((y) => y.type === type && y.id === Number(id));
         if (x && !(x.type === z.type && x.id === z.id)) addButton(x).catch(fail);
       };
@@ -605,8 +605,8 @@
     $$('[data-ext]', root).forEach((c) => (c.onclick = () => window.api.open(c.dataset.ext)));
     const conn = $('[data-pv-conn]', root);
     if (conn) {
-      conn.ondragstart = (e) => { pvDrag = true; e.dataTransfer.effectAllowed = 'link'; e.dataTransfer.setData('text/x-ecos', 'pv'); root.classList.add('pv-dragging'); };
-      conn.ondragend = () => { pvDrag = false; root.classList.remove('pv-dragging'); };
+      conn.ondragstart = (e) => { pvDrag = true; e.dataTransfer.effectAllowed = 'link'; e.dataTransfer.setData('text/x-ecos', 'pv'); root.classList.add('pv-dragging'); document.body.classList.add('dragging-internal'); };
+      conn.ondragend = () => { pvDrag = false; root.classList.remove('pv-dragging'); document.body.classList.remove('dragging-internal'); };
     }
     if (d && d.buttons) {
       drawLines();

@@ -1,6 +1,6 @@
 {
   "name": "ecos",
-  "version": "2.23.3",
+  "version": "2.23.4",
   "description": "Ecos: de tus redes a tu blog",
   "main": "main.js",
   "scripts": {
