@@ -266,6 +266,13 @@
     'Modelo (opcional: si lo dejas vacío, usa el de la CLI)': 'Model (optional: leave empty to use the CLI default)',
     'Los botones de IA usarán {c}. Pulsa «Probar» para comprobarlo.': 'The AI buttons will use {c}. Click "Try it" to check.',
     // 1.2 (editor completo)
+    'Primera página': 'First page',
+    'Página anterior': 'Previous page',
+    'Página siguiente': 'Next page',
+    'Última página': 'Last page',
+    'Ir a la página': 'Go to page',
+    'Ir': 'Go',
+    'Por página': 'Per page',
     'Entradas de un periodo': 'Posts from a period',
     'Todas las fechas': 'All dates',
     'Este mes': 'This month',

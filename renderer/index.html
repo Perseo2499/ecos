@@ -281,7 +281,16 @@
     <div id="b-structure" class="st-wrap hidden"></div>
     <div id="b-calendar" class="cal hidden"></div>
     <div id="b-media" class="mg hidden"></div>
-    <div class="pager"><button id="b-prev" class="btn text icon-only"><span class="ms">chevron_left</span></button><span id="b-info" class="hint"></span><button id="b-next" class="btn text icon-only"><span class="ms">chevron_right</span></button></div>
+    <div class="pager">
+      <button id="b-first" class="btn text icon-only" data-i18n-title title="Primera página"><span class="ms">first_page</span></button>
+      <button id="b-prev" class="btn text icon-only" data-i18n-title title="Página anterior"><span class="ms">chevron_left</span></button>
+      <span id="b-info" class="hint"></span>
+      <button id="b-next" class="btn text icon-only" data-i18n-title title="Página siguiente"><span class="ms">chevron_right</span></button>
+      <button id="b-last" class="btn text icon-only" data-i18n-title title="Última página"><span class="ms">last_page</span></button>
+      <span class="pager-sep"></span>
+      <label class="pager-go"><span data-i18n>Ir a la página</span><input id="b-goto" type="number" min="1" inputmode="numeric"><button id="b-go" class="btn tonal small" data-i18n>Ir</button></label>
+      <label class="pager-go"><span data-i18n>Por página</span><select id="b-per"><option>20</option><option>50</option><option>100</option></select></label>
+    </div>
   </section>
 
   <!-- ============================= CONEXIONES ============================= -->

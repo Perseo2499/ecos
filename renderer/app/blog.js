@@ -41,7 +41,8 @@ function renderBlog(items) {
   const list = $('#b-list');
   const pages = Math.max(1, Math.ceil(blog.found / blog.per));
   $('#b-info').textContent = t(blog.type === 'page' ? '{n} páginas · página {p} de {t}' : '{n} entradas · página {p} de {t}', { n: blog.found, p: blog.page, t: pages });
-  $('#b-prev').disabled = blog.page <= 1; $('#b-next').disabled = blog.page >= pages;
+  $('#b-prev').disabled = $('#b-first').disabled = blog.page <= 1; $('#b-next').disabled = $('#b-last').disabled = blog.page >= pages;
+  $('#b-goto').max = pages; $('#b-goto').placeholder = String(blog.page);
   if (!items.length) { bItems = []; renderBulk(); list.innerHTML = `<div class="empty"><span class="ms">inbox</span><span>${t('No hay nada con estos filtros.')}</span></div>`; return; }
   list.innerHTML = '';
   bItems = items; bLast = -1;
@@ -353,3 +354,22 @@ $('#b-selrange').onclick = (e) => busy(e.currentTarget, async () => {
   renderBulk();
   toast(t('{n} entradas seleccionadas', { n }));
 });
+
+// ---------------------------------------------------------------- Saltar de página
+const blogPages = () => Math.max(1, Math.ceil(blog.found / blog.per));
+function goToPage(n) {
+  const p = Math.min(blogPages(), Math.max(1, Math.round(Number(n) || 1)));
+  $('#b-goto').value = '';
+  if (p === blog.page) return;
+  blog.page = p; loadBlog();
+  $('#b-list').scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+$('#b-first').onclick = () => goToPage(1);
+$('#b-last').onclick = () => goToPage(blogPages());
+$('#b-go').onclick = () => { if ($('#b-goto').value) goToPage($('#b-goto').value); };
+$('#b-goto').onkeydown = (e) => { if (e.key === 'Enter' && e.target.value) goToPage(e.target.value); };
+$('#b-per').onchange = (e) => {
+  // se mantiene a la vista la primera entrada de la página actual
+  const first = (blog.page - 1) * blog.per;
+  blog.per = Number(e.target.value); blog.page = Math.floor(first / blog.per) + 1; loadBlog();
+};
