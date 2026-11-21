@@ -1814,3 +1814,17 @@ button.dp-item:not(.keep) b { color: var(--error, #e5484d); }
 .tray-del .ms { font-size: 15px; }
 .tray-item:hover .tray-del, .tray-del:focus-visible { opacity: 1; }
 .tray-del:hover { background: var(--error, #d93025); }
+
+/* Vista de página del mapa: explicación, aviso de botones de otro editor y lista para crear botones */
+.pv-help { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; padding: 10px 14px; border-radius: var(--r-l); background: var(--surface-c-low); font-size: 13.5px; line-height: 1.45; color: var(--on-surface-var); }
+.pv-help b { color: var(--on-surface); }
+.pv-help > .ms { color: var(--primary); flex: none; }
+.pv-help.warn > .ms { color: #c27a00; }
+.pv-help .btn.small { width: auto; margin: 0 0 0 auto; flex: none; }
+.pv-ico.lock { opacity: .7; cursor: help; }
+.pv-others { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; padding: 12px; border-radius: var(--r-l); background: var(--surface-c-low); }
+.pv-oh { flex-basis: 100%; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.pv-oh .ms { color: var(--primary); }
+span.pv-pill[data-pill] { display: inline-flex; align-items: center; gap: 4px; border: 0; font: inherit; color: inherit; cursor: pointer; }
+span.pv-pill[data-pill] .ms { font-size: 15px; opacity: .7; }
+span.pv-pill[data-pill]:hover { background: var(--primary); color: var(--on-primary); }

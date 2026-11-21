@@ -434,11 +434,14 @@
     const row = (l, i, isBtn) => `<div class="pv-row ${isBtn ? '' : 'sm'} ${S.fresh.has(l.text + '|' + l.href) ? 'fresh' : ''}" data-row="${isBtn ? 'b' : 'l'}${i}">
       <div class="pv-chip ${l.variant === 'outline' ? 'outline' : ''}" ${isBtn ? '' : 'data-plain="1"'}><span class="pv-ch-t">${esc(l.text || t('(sin texto)'))}</span>
         ${isBtn ? (l.editable ? `<button class="pv-ico" data-pv="edit" data-i="${i}" title="${t('Cambiar este botón')}"><span class="ms">edit</span></button><button class="pv-ico" data-pv="del" data-i="${i}" title="${t('Quitar este botón')}"><span class="ms">delete</span></button>`
-          : `<button class="pv-ico txt" data-pv="ecos" title="${t('Este botón no se puede cambiar desde aquí')}"><span class="ms">edit_square</span>${t('Editar en Ecos')}</button>`) : ''}</div>
+          : `<span class="pv-ico lock" title="${t('Este botón lo puso otro editor de la web (por ejemplo Elementor o el tema). Se cambia en WordPress.')}"><span class="ms">lock</span></span>`) : ''}</div>
       <span class="pv-arrow"><span class="ms">arrow_forward</span></span>${destCard(l.res, d, l.href)}</div>`;
     const lim = S.plAll ? 999 : 10;
     const others = S.data.pages.filter((p) => !(z.type === 'page' && p.id === z.id));
-    return `<div class="st-map st-pv ${S.pvAnim ? 'pv-in' : ''}">${top}${tools}
+    const locked = d.buttons.filter((b) => !b.editable).length;
+    const help = `<div class="pv-help"><span class="ms">info</span><span>${t('Aquí ves <b>adónde lleva cada botón</b> de «{p}» (derecha) y <b>desde qué páginas se llega</b> a ella (izquierda). Pulsa cualquier página para entrar en ella. Para unirla con otra, pulsa <b>«+ Añadir botón»</b> o elige la página en la lista de abajo.', { p: esc(d.title) })}</span></div>`
+      + (locked ? `<div class="pv-help warn"><span class="ms">lock</span><span>${t('{n} de sus botones los puso otro editor de la web (por ejemplo Elementor o el tema), así que Ecos los muestra pero no los cambia.', { n: locked })}</span><button class="btn text small" data-pv="wpedit"><span class="ms">open_in_new</span>${t('Cambiarlos en WordPress')}</button></div>` : '');
+    return `<div class="st-map st-pv ${S.pvAnim ? 'pv-in' : ''}">${top}${tools}${help}
       <div class="pv-stage"><svg class="pv-svg" aria-hidden="true"><defs><marker id="pvAr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="currentColor"/></marker></defs></svg>
         <div class="pv-col pv-inc"><div class="pv-h"><span class="ms">login</span>${t('Llegan aquí desde…')}</div>
           ${d.incoming.length ? d.incoming.map((x) => `<div class="pv-card pv-from" data-go="${x.type}:${x.id}" tabindex="0" role="button" title="${esc(x.title)}"><span class="ms">${x.type === 'post' ? 'article' : 'description'}</span><span class="pv-ct">${esc(x.title)}</span>${stBadge(x.status)}</div>`).join('') : `<div class="hint pv-none">${t('Ninguna otra página enlaza a esta con un botón o un enlace.')}</div>`}</div>
@@ -453,8 +456,8 @@
           ${d.links.length ? `<div class="pv-g">${t('Enlaces del texto')}</div>${d.links.slice(0, lim).map((l, i) => row(l, i, false)).join('')}
             ${d.links.length > lim ? `<button class="btn text small pv-more" data-pv="more">${t('Ver los {n} restantes', { n: d.links.length - lim })}</button>` : ''}` : ''}</div>
       </div>
-      <div class="pv-others"><span class="hint">${t('Arrastra el punto de la tarjeta hasta una página para unirlas:')}</span>
-        ${others.map((p) => `<span class="pv-pill" data-go="page:${p.id}" data-pill title="${esc(p.title)}">${esc(p.title)}</span>`).join('')}</div>
+      <div class="pv-others"><div class="pv-oh"><span class="ms">add_link</span><b>${t('Añadir un botón que lleve a otra página')}</b><span class="hint">${t('Pulsa la página de destino (o arrastra hasta ella el punto ⋮ de la tarjeta)')}</span></div>
+        ${others.map((p) => `<span class="pv-pill" role="button" tabindex="0" data-go="page:${p.id}" data-pill title="${esc(t('Añadir en «{a}» un botón que lleve a «{b}»', { a: d.title, b: p.title }))}"><span class="ms">add</span>${esc(p.title)}</span>`).join('')}</div>
     </div>`;
   }
 
@@ -581,6 +584,7 @@
         if (a === 'edit') return editBtn(i).catch(fail);
         if (a === 'del') return delBtn(i).catch(fail);
         if (a === 'ecos') return window.openFromWp?.(z.id, null, z.type);
+        if (a === 'wpedit') return window.api.blogEditUrl(z.id, z.type).then((u) => window.api.open(u)).catch(fail);
         if (a === 'web') { if (d?.link) window.api.open(d.link); }
       };
     });
@@ -588,7 +592,7 @@
       const [type, id] = c.dataset.go.split(':');
       const go = () => zoomTo(Number(id), type, c, false);
       if (!c.hasAttribute('data-pill')) { c.onclick = go; c.onkeydown = (e) => { if (e.key === 'Enter') go(); }; }
-      else c.onclick = go;
+      else c.onclick = () => { const x = d?.targets?.find((y) => y.type === type && y.id === Number(id)); if (x) addButton(x).catch(fail); };
       // soltar el conector aquí: abre el diálogo con este destino
       c.ondragover = (e) => { if (pvDrag) { e.preventDefault(); c.classList.add('drop'); } };
       c.ondragleave = () => c.classList.remove('drop');

@@ -266,6 +266,13 @@
     'Modelo (opcional: si lo dejas vacío, usa el de la CLI)': 'Model (optional: leave empty to use the CLI default)',
     'Los botones de IA usarán {c}. Pulsa «Probar» para comprobarlo.': 'The AI buttons will use {c}. Click "Try it" to check.',
     // 1.2 (editor completo)
+    'Este botón lo puso otro editor de la web (por ejemplo Elementor o el tema). Se cambia en WordPress.': 'This button was added by another editor on the site (for example Elementor or the theme). It is changed in WordPress.',
+    'Aquí ves <b>adónde lleva cada botón</b> de «{p}» (derecha) y <b>desde qué páginas se llega</b> a ella (izquierda). Pulsa cualquier página para entrar en ella. Para unirla con otra, pulsa <b>«+ Añadir botón»</b> o elige la página en la lista de abajo.': 'Here you see <b>where each button</b> of "{p}" leads (right) and <b>which pages link to it</b> (left). Click any page to go into it. To connect it to another, click <b>"+ Add button"</b> or choose the page in the list below.',
+    '{n} de sus botones los puso otro editor de la web (por ejemplo Elementor o el tema), así que Ecos los muestra pero no los cambia.': '{n} of its buttons were added by another editor on the site (for example Elementor or the theme), so Ecos shows them but does not change them.',
+    'Cambiarlos en WordPress': 'Change them in WordPress',
+    'Añadir un botón que lleve a otra página': 'Add a button that leads to another page',
+    'Pulsa la página de destino (o arrastra hasta ella el punto ⋮ de la tarjeta)': 'Click the destination page (or drag the card’s ⋮ dot onto it)',
+    'Añadir en «{a}» un botón que lleve a «{b}»': 'Add to "{a}" a button leading to "{b}"',
     'Quitar de la bandeja': 'Remove from the tray',
     'Esta foto está puesta en la entrada. ¿Quitarla de la bandeja y también de la entrada? (Sigue en la biblioteca de medios de tu web.)': 'This photo is in the post. Remove it from the tray and from the post too? (It stays in your site’s media library.)',
     'A todo el ancho': 'Full width',

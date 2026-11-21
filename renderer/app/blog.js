@@ -273,7 +273,8 @@ const bsel = new Map(); // id → entrada (se mantiene al cambiar de página)
 let bItems = [], bLast = -1;
 function renderBulk() {
   const n = bsel.size, bar = $('#b-bulk');
-  bar.classList.toggle('hidden', !bItems.length && !n);
+  const listView = blog.type === 'post' || blog.type === 'page'; // la selección solo tiene sentido en la lista de entradas o páginas
+  bar.classList.toggle('hidden', !listView || (!bItems.length && !n));
   bar.classList.toggle('on', n > 0);
   $$('#b-list .b-row').forEach((r) => { const on = bsel.has(Number(r.dataset.id)); r.classList.toggle('sel', on); const c = r.querySelector('.b-check input'); if (c) c.checked = on; });
   const here = bItems.filter((x) => bsel.has(x.id)).length;
