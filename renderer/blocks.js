@@ -484,6 +484,18 @@
             if (x.dataset.al === 'full') { delete b.align; delete b.width; } else { b.align = x.dataset.al; b.width = b.width || 50; }
           })));
           $$('[data-w]', extra).forEach((x) => (x.onclick = () => this.change(() => (b.width = Number(x.dataset.w)))));
+          // Convertir en galería, mosaico o carrusel (empieza con esta foto; luego se sueltan más)
+          extra.insertAdjacentHTML('beforeend', '<span class="lv-sep"></span>' + [['grid', 'grid_view', t('Convertir en galería')], ['mosaic', 'dashboard', t('Convertir en mosaico')], ['carousel', 'view_carousel', t('Convertir en carrusel')]]
+            .map(([k, ic, n]) => `<button class="lv" data-conv="${k}" title="${n}"><span class="ms">${ic}</span></button>`).join(''));
+          $$('[data-conv]', extra).forEach((x) => (x.onclick = () => {
+            this.change(() => {
+              const img = b.img, k = x.dataset.conv;
+              b.img = undefined; b.caption = undefined; b.align = undefined; b.width = undefined;
+              b.images = [img];
+              if (k === 'carousel') b.type = 'carousel'; else { b.type = 'gallery'; b.layout = k; b.columns = 2; }
+            });
+            toast(t('Ahora suelta aquí más fotos desde la bandeja (o pulsa el recuadro para elegirlas).'));
+          }));
           break;
         }
 

@@ -266,6 +266,8 @@
     'Modelo (opcional: si lo dejas vacío, usa el de la CLI)': 'Model (optional: leave empty to use the CLI default)',
     'Los botones de IA usarán {c}. Pulsa «Probar» para comprobarlo.': 'The AI buttons will use {c}. Click "Try it" to check.',
     // 1.2 (editor completo)
+    'Convertir en mosaico': 'Turn into mosaic',
+    'Ahora suelta aquí más fotos desde la bandeja (o pulsa el recuadro para elegirlas).': 'Now drop more photos here from the tray (or click the box to choose them).',
     'Este botón lo puso otro editor de la web (por ejemplo Elementor o el tema). Se cambia en WordPress.': 'This button was added by another editor on the site (for example Elementor or the theme). It is changed in WordPress.',
     'Aquí ves <b>adónde lleva cada botón</b> de «{p}» (derecha) y <b>desde qué páginas se llega</b> a ella (izquierda). Pulsa cualquier página para entrar en ella. Para unirla con otra, pulsa <b>«+ Añadir botón»</b> o elige la página en la lista de abajo.': 'Here you see <b>where each button</b> of "{p}" leads (right) and <b>which pages link to it</b> (left). Click any page to go into it. To connect it to another, click <b>"+ Add button"</b> or choose the page in the list below.',
     '{n} de sus botones los puso otro editor de la web (por ejemplo Elementor o el tema), así que Ecos los muestra pero no los cambia.': '{n} of its buttons were added by another editor on the site (for example Elementor or the theme), so Ecos shows them but does not change them.',
