@@ -533,7 +533,7 @@ const bhIds = (kind) => (bh.data ? (kind === 'nocat' ? bh.data.noCat : bh.data.n
 async function bhRefresh(force) {
   if (!bhOn() || bh.loading) return;
   bh.loading = true; bh.err = ''; bhRender();
-  try { bh.data = await window.api.blogHealth(!!force); } catch (e) { bh.err = e.message; }
+  try { const r = await window.api.blogHealth(!!force); bh.data = { total: 0, at: Date.now(), ...(r || {}), noCat: r?.noCat || [], noImg: r?.noImg || [] }; } catch (e) { bh.err = e.message; }
   bh.loading = false; bhRender();
   // si la lista está filtrada por un aviso, se pone al día
   if (blog.problem && bh.data) {
