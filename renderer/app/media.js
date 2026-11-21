@@ -214,18 +214,19 @@ function renderMediaLib() {
     const n = mediaLib.sel.size, sel = [...mediaLib.sel.values()];
     label.textContent = n ? t('{n} seleccionadas', { n }) : t('Pulsa una foto para seleccionarla; doble clic para verla en grande.');
     box.querySelector('.mg-bar').classList.toggle('on', n > 0);
-    acts.innerHTML = n ? `<button class="btn tonal small" data-a="copy"><span class="ms">link</span>${t('Copiar enlace')}</button>
+    acts.innerHTML = !n ? `<button class="btn tonal small" data-a="dupes" title="${escHtml(t('Busca la misma foto subida varias veces y deja solo la de mejor calidad'))}"><span class="ms">filter_none</span>${t('Buscar fotos repetidas')}</button>` : `<button class="btn tonal small" data-a="copy"><span class="ms">link</span>${t('Copiar enlace')}</button>
       ${n === 1 ? `<button class="btn tonal small" data-a="alt"><span class="ms">edit_note</span>${t('Editar descripción (alt)')}</button>` : ''}
       ${sel.some((m) => m.type !== 'video') ? `<button class="btn tonal small" data-a="ai"><span class="ms">auto_fix_high</span>${t('Mejorar con IA')}</button>` : ''}
       ${sel.some((m) => mediaLib.origDate(m) !== m.date) ? `<button class="btn tonal small" data-a="dates" title="${escHtml(t('Cambia la fecha de la foto en WordPress por la de la entrada donde se usa (así se ordenan bien también en wp-admin)'))}"><span class="ms">event</span>${t('Poner fecha original')}</button>` : ''}
       <button class="btn tonal small danger" data-a="del"><span class="ms">delete</span>${t('Borrar de la biblioteca')}</button>
-      <button class="btn text icon-only" data-a="clear" title="${escHtml(t('Quitar la selección'))}"><span class="ms">close</span></button>` : '';
+      <button class="btn text icon-only" data-a="clear" title="${escHtml(t('Quitar la selección'))}"><span class="ms">close</span></button>`;
   };
   mediaLib = mediaGrid(box.querySelector('.mg-host'), { usage: true, onChange: sync });
   acts.onclick = async (e) => {
     const b = e.target.closest('button'); if (!b) return;
     const sel = [...mediaLib.sel.values()];
     if (b.dataset.a === 'clear') return mediaLib.clear();
+    if (b.dataset.a === 'dupes') return busy(b, () => findDuplicates());
     if (b.dataset.a === 'copy') {
       try { await navigator.clipboard.writeText(sel.map((m) => m.url).join('\n')); toast(sel.length > 1 ? t('{n} enlaces copiados', { n: sel.length }) : t('Enlace copiado')); } catch { toast(t('No se pudo copiar'), true); }
     }
@@ -390,5 +391,42 @@ function upscaleDialog(m, remaining) {
       if (remaining > 0) q('[data-r="next"]').classList.remove('hidden');
       setClip(50);
     }).catch((e) => { if (!gone) { toast(e.message, true); finish('stop'); } });
+  });
+}
+
+// ---------------------------------------------------------------- Fotos repetidas
+async function findDuplicates() {
+  toast(t('Buscando fotos repetidas… (la primera vez tarda un poco)'));
+  const groups = await window.api.mediaDuplicates();
+  const usage = mediaLib?.st.usage || await window.api.mediaUsage(false).catch(() => ({}));
+  if (!groups.length) return toast(t('No hay fotos repetidas en la biblioteca.'));
+  const d = document.createElement('div');
+  d.className = 'dlg-scrim';
+  const card = (m, keep) => {
+    const u = usage?.[m.id] || [];
+    return `<div class="dp-item${keep ? ' keep' : ''}"><img src="${escHtml(m.thumb || m.url)}" alt="" loading="lazy">
+      <div class="dp-meta"><b>${keep ? t('Se queda') : t('Se borra')}</b><span>${m.width}×${m.height} · ${escHtml(fmtBytes(m.size) || '')}</span>
+      <span class="mg-tag ${u.length ? 'use' : 'free'}">${u.length ? t('En uso ({n})', { n: u.length }) : t('Sin usar')}</span></div></div>`;
+  };
+  d.innerHTML = `<div class="dlg dp-dlg" role="dialog" aria-modal="true">
+    <div class="dp-head"><span class="ms fill">filter_none</span><h2>${t('Fotos repetidas')}</h2></div>
+    <p class="hint">${t('Se ha encontrado la misma foto varias veces. Se queda la de mejor calidad: las entradas que usaban las otras pasan a usarla, y las otras se borran de la biblioteca.')}</p>
+    <div class="dp-list">${groups.map((g, i) => `<label class="dp-group"><input type="checkbox" data-g="${i}" checked><div class="dp-row">${card(g.keep, true)}${g.drop.map((m) => card(m, false)).join('')}</div></label>`).join('')}</div>
+    <div class="dlg-actions"><button class="btn text" data-x>${t('Cancelar')}</button><button class="btn filled" data-ok></button></div></div>`;
+  document.body.appendChild(d);
+  const ok = d.querySelector('[data-ok]');
+  const picked = () => [...d.querySelectorAll('[data-g]:checked')].map((c) => groups[Number(c.dataset.g)]);
+  const sync = () => { const n = picked().length; ok.disabled = !n; ok.textContent = t('Juntar {n} grupos', { n }); };
+  d.querySelectorAll('[data-g]').forEach((c) => (c.onchange = sync)); sync();
+  const close = () => d.remove();
+  d.querySelector('[data-x]').onclick = close;
+  d.addEventListener('mousedown', (e) => { if (e.target === d) close(); });
+  ok.onclick = () => busy(ok, async () => {
+    const sel = picked();
+    if (!await ask(t('Se borrarán {n} fotos repetidas de la biblioteca y las entradas pasarán a usar la de mejor calidad. ¿Continuar?', { n: sel.reduce((a, g) => a + g.drop.length, 0) }), { danger: true, ok: t('Juntar') })) return;
+    const r = await window.api.mediaMergeDuplicates(sel.map((g) => ({ keep: g.keep.id, drop: g.drop.map((m) => m.id) })));
+    close();
+    toast(t('{d} fotos repetidas borradas; {p} entradas actualizadas.', { d: r.deleted, p: r.posts }) + (r.errors.length ? ' ' + t('{e} con error.', { e: r.errors.length }) : ''), !!r.errors.length);
+    mediaLib?.reload(true);
   });
 }

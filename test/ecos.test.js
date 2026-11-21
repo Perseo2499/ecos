@@ -383,3 +383,16 @@ test('mejorar con IA: cambiar la foto en el contenido (direcciones, wp-image e i
   assert.ok(out.includes(`y ${old} visible`)); // el texto visible no se toca
   assert.ok(out.includes('wp-image-123') && out.includes('{"id":123}')); // otros ids intactos
 });
+
+test('fotos repetidas: misma foto en dos tamaños = un grupo; se queda la grande', () => {
+  const D = require('../src/dupes');
+  const g1 = Array.from({ length: 72 }, (_, i) => (i * 37) % 255), g2 = g1.map((v) => v + 1), g3 = g1.map((v, i) => (i % 2 ? 255 - v : v));
+  const h1 = D.dhash(g1), h2 = D.dhash(g2), h3 = D.dhash(g3);
+  assert.equal(D.hamming(h1, h2), 0);
+  assert.ok(D.hamming(h1, h3) > 6);
+  const groups = D.groupDuplicates([
+    { id: 1, hash: h1, width: 400, height: 267, size: 32000 }, { id: 2, hash: h2, width: 1000, height: 667, size: 75000 },
+    { id: 3, hash: h3, width: 1000, height: 667 }, { id: 4, hash: h1, width: 300, height: 300 }, // otra forma: no es la misma
+  ]);
+  assert.deepEqual(groups, [{ keep: 2, drop: [1] }]);
+});

@@ -177,7 +177,7 @@ const handle = (name, fn) => ipcMain.handle(name, async (_e, ...args) => {
   try { return { ok: true, data: await fn(...args) }; } catch (err) { return { ok: false, error: err.message }; }
 });
 
-const PROTECTED_KEYS = new Set(['lock', 'vault', '__totp', '__recovery', 'metaUserToken', 'wpToken', 'sentContent', 'restored', 'exported', 'origUploads']);
+const PROTECTED_KEYS = new Set(['lock', 'vault', '__totp', '__recovery', 'metaUserToken', 'wpToken', 'sentContent', 'restored', 'exported', 'origUploads', 'mediaHashes']);
 handle('config:get', () => publicCfg());
 handle('config:set', (changes) => {
   // Si cambian los datos de la web propia, hay que volver a pulsar «Conectar»
@@ -603,34 +603,93 @@ handle('media:upscale', async (id) => {
     from: { width: before.width, height: before.height }, to: { width: r.width, height: r.height }, bytes: r.buf.length,
   };
 });
+// Cambia un medio por otro en todas las entradas y páginas que lo usan (foto, sus tamaños, número e imagen
+// destacada). old: el medio de WordPress (con source_url y media_details); neu: { id, url }. Devuelve cuántas cambió.
+async function swapMediaEverywhere(old, neu, usage) {
+  const { swapMediaInHtml } = require('./src/upscale');
+  const oldUrls = [old.source_url, ...Object.values(old.media_details?.sizes || {}).map((s) => s.source_url)].filter(Boolean);
+  const used = usage || await wpCall(() => wpself.mediaUsage(cfg));
+  const ids = (used[old.id] || []).map((u) => u.id);
+  let posts = 0;
+  if (!ids.length) return 0;
+  for (const type of ['post', 'page']) {
+    for (const p of await wpCall(() => wpself.allRaw(cfg, type, ids))) {
+      const html = p.content?.raw ?? '';
+      const next = swapMediaInHtml(html, { oldUrls, newUrl: neu.url, oldId: old.id, newId: neu.id });
+      const fields = {};
+      if (next !== html) fields.content = next;
+      if (Number(p.featured_media) === Number(old.id)) fields.featured_media = neu.id;
+      if (!Object.keys(fields).length) continue;
+      await wpCall(() => wpself.updateFields(cfg, p.id, fields, type));
+      posts++;
+    }
+  }
+  return posts;
+}
+// Fotos repetidas: huella de cada foto (de su versión pequeña) y grupos de iguales
+handle('media:duplicates', async () => {
+  needSelfMedia();
+  const D = require('./src/dupes');
+  const { nativeImage } = require('electron');
+  cfg.mediaHashes = cfg.mediaHashes || {};
+  const all = [];
+  for (let page = 1; page <= 200; page++) {
+    const r = await wpCall(() => wpself.listMedia(cfg, { page, perPage: 100, type: 'image' }));
+    all.push(...r.items);
+    if (page >= (r.totalPages || 1)) break;
+  }
+  let done = 0, next = 0;
+  const work = async () => {
+    while (next < all.length) {
+      const m = all[next++];
+      const key = `${m.id}:${m.url}`;
+      if (!cfg.mediaHashes[key]) {
+        try {
+          const r = await fetch(m.thumb || m.url, { signal: AbortSignal.timeout(20000) });
+          const img = nativeImage.createFromBuffer(Buffer.from(await r.arrayBuffer()));
+          if (!img.isEmpty()) cfg.mediaHashes[key] = D.dhash(D.grayFromBGRA(img.resize({ width: 9, height: 8, quality: 'good' }).toBitmap()));
+        } catch (e) { log('Huella de foto', m.id, e.message); }
+      }
+      m.hash = cfg.mediaHashes[key];
+      if (++done % 25 === 0) sendToast(`Buscando fotos repetidas: ${done} de ${all.length}…`);
+    }
+  };
+  await Promise.all(Array.from({ length: 6 }, work));
+  store.save(cfg);
+  const groups = D.groupDuplicates(all);
+  const byId = new Map(all.map((m) => [m.id, m]));
+  return groups.map((g) => ({ keep: byId.get(g.keep), drop: g.drop.map((id) => byId.get(id)) }));
+});
+// Juntar repetidas: las entradas pasan a usar la de mejor calidad y las demás se borran de la biblioteca
+handle('media:mergeDuplicates', async (groups) => {
+  needSelfMedia();
+  const usage = await wpCall(() => wpself.mediaUsage(cfg));
+  let posts = 0, deleted = 0; const errors = [];
+  for (const g of groups || []) {
+    const keep = await wpCall(() => wpself.getMedia(cfg, g.keep)).catch(() => null);
+    if (!keep) { errors.push(`${g.keep}: no se encuentra`); continue; }
+    for (const id of g.drop) {
+      try {
+        const old = await wpCall(() => wpself.getMedia(cfg, id));
+        posts += await swapMediaEverywhere(old, { id: keep.id, url: keep.source_url }, usage);
+        await wpCall(() => wpself.deleteMedia(cfg, id));
+        deleted++;
+      } catch (e) { errors.push(`${id}: ${e.message}`); log('Juntar repetidas', id, e.message); }
+    }
+  }
+  mediaUsageCache = null;
+  return { posts, deleted, errors };
+});
 handle('media:upscaleApply', async ({ id, token }) => {
   needSelfMedia();
   const job = upscaleJobs.get(token);
   if (!job || !fs.existsSync(job.file)) throw new Error('La foto mejorada ya no está disponible. Vuelve a mejorarla.');
-  const { swapMediaInHtml } = require('./src/upscale');
   const old = await wpCall(() => wpself.getMedia(cfg, id));
-  const oldUrls = [old.source_url, ...Object.values(old.media_details?.sizes || {}).map((s) => s.source_url)].filter(Boolean);
   const ext = job.type === 'image/png' ? 'png' : 'jpg';
   const base = decodeURIComponent(path.basename(old.source_url.split(/[?#]/)[0])).replace(/\.[^.]+$/, '') || 'foto';
   const up = await wpCall(() => wpself.uploadNamed(cfg, fs.readFileSync(job.file), `${base}-mejorada.${ext}`, { keep: true }));
   if (old.alt_text) { try { await wpCall(() => wpself.updateMedia(cfg, up.id, { alt: old.alt_text })); } catch (e) { log('No se pudo copiar el texto alternativo', e.message); } }
-  const used = await wpCall(() => wpself.mediaUsage(cfg));
-  const ids = (used[id] || []).map((u) => u.id);
-  let posts = 0;
-  if (ids.length) {
-    for (const type of ['post', 'page']) {
-      for (const p of await wpCall(() => wpself.allRaw(cfg, type, ids))) {
-        const html = p.content?.raw ?? '';
-        const next = swapMediaInHtml(html, { oldUrls, newUrl: up.url, oldId: id, newId: up.id });
-        const fields = {};
-        if (next !== html) fields.content = next;
-        if (Number(p.featured_media) === Number(id)) fields.featured_media = up.id;
-        if (!Object.keys(fields).length) continue;
-        await wpCall(() => wpself.updateFields(cfg, p.id, fields, type));
-        posts++;
-      }
-    }
-  }
+  const posts = await swapMediaEverywhere(old, { id: up.id, url: up.url });
   mediaUsageCache = null;
   try { fs.rmSync(job.file, { force: true }); } catch { /* nada */ }
   upscaleJobs.delete(token);

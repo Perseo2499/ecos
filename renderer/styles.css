@@ -1510,3 +1510,18 @@ body.editing .b-bulk.on { display: none; }
 .ai-range { width: 100%; margin: 10px 0 4px; accent-color: var(--primary); }
 .ai-info { text-align: center; }
 @media (max-width: 600px) { .mg-ai .modal-box { padding: 18px; } .ai-ba { aspect-ratio: 1 / 1; } .mg-ai .modal-actions { flex-wrap: wrap; } }
+
+/* Fotos repetidas */
+.dp-dlg { width: min(900px, 94vw); max-height: 88vh; display: flex; flex-direction: column; text-align: left; }
+.dp-head { display: flex; align-items: center; gap: 10px; } .dp-head h2 { margin: 0; font-size: 20px; }
+.dp-list { overflow: auto; display: flex; flex-direction: column; gap: 10px; margin: 12px 0; padding-right: 4px; }
+.dp-group { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: var(--r-l); background: var(--surface-c-low); cursor: pointer; }
+.dp-group input { width: 20px; height: 20px; accent-color: var(--primary); flex: none; }
+.dp-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.dp-item { display: flex; gap: 10px; align-items: center; padding: 6px; border-radius: var(--r-m); background: var(--surface-c); opacity: .75; }
+.dp-item.keep { opacity: 1; box-shadow: inset 0 0 0 2px var(--primary); }
+.dp-item img { width: 84px; height: 64px; object-fit: cover; border-radius: 8px; }
+.dp-meta { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--on-surface-var); }
+.dp-meta b { color: var(--on-surface); font-size: 13px; }
+.dp-meta .mg-tag { position: static; align-self: flex-start; }
+.dp-list { align-items: stretch; } .dp-group { justify-content: flex-start; }
