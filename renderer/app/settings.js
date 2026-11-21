@@ -78,6 +78,33 @@ function renderTemplates() {
     row.querySelector('button').onclick = async () => { tpls.splice(i, 1); CFG = await window.api.setConfig({ templates: tpls }); renderTemplates(); };
     list.appendChild(row);
   });
+  if (typeof renderBlockTemplates === 'function') renderBlockTemplates();
+}
+// Plantillas de contenido propias (bloques): renombrar y borrar. Se crean desde el editor («Guardar como plantilla»)
+function renderBlockTemplates() {
+  const list = $('#btpl-list');
+  if (!list) return;
+  const tpls = CFG.blockTemplates || [];
+  list.innerHTML = tpls.length ? '' : `<p class="hint">${t('Todavía no has guardado ninguna.')}</p>`;
+  tpls.forEach((tp, i) => {
+    const row = document.createElement('div');
+    row.className = 'btpl';
+    row.innerHTML = `<span class="ms">${tp.type === 'page' ? 'description' : 'article'}</span>
+      <input maxlength="60" aria-label="${t('Nombre')}"><small>${t('{n} bloques', { n: (tp.blocks || []).length })} · ${tp.type === 'page' ? t('Página') : t('Entrada')}</small>
+      <button class="btn text icon-only danger" title="${t('Borrar plantilla')}"><span class="ms">delete</span></button>`;
+    const inp = row.querySelector('input'); inp.value = tp.name || '';
+    inp.onchange = async () => {
+      const name = inp.value.trim().slice(0, 60);
+      if (!name) { inp.value = tp.name; return; }
+      const next = (CFG.blockTemplates || []).map((x, k) => (k === i ? { ...x, name } : x));
+      CFG = await window.api.setConfig({ blockTemplates: next }); toast(t('Plantillas guardadas'));
+    };
+    row.querySelector('button').onclick = async () => {
+      CFG = await window.api.setConfig({ blockTemplates: (CFG.blockTemplates || []).filter((_, k) => k !== i) });
+      renderBlockTemplates();
+    };
+    list.appendChild(row);
+  });
 }
 async function saveTemplates() {
   const tpls = $$('#tpl-list .tpl').map((row) => Object.fromEntries($$('[data-k]', row).map((i) => [i.dataset.k, i.value.trim()])));

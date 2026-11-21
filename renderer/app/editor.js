@@ -42,11 +42,21 @@ async function openFromWp(postId, keys, type = 'post') {
 
 // Abre el editor de Ecos con un borrador en blanco (entrada o página). La usan el Blog y la pantalla Estructura.
 // Al enviar se crea en WordPress con el tipo correcto; la fecha es la de hoy (o la que se programe).
-function newDraft({ type = 'post', title = '', categories = [], parent = 0 } = {}) {
+function newDraft(opts = {}) {
+  // Antes de abrir el editor se elige una plantilla (o «En blanco»); si se cierra el selector, no se crea nada
+  return pickTemplate(opts.type === 'page' ? 'page' : 'post').then((tpl) => { if (tpl) startDraft(opts, tpl); });
+}
+function startDraft({ type = 'post', title = '', categories: preCats = [], parent = 0 } = {}, tpl = null) {
   const page = type === 'page';
+  const BE = window.BlockEditor;
+  const blocks = tpl && tpl.blocks && tpl.blocks.length ? tpl.blocks.map(({ type: ty, ...rest }) => BE.create(ty, JSON.parse(JSON.stringify(rest)))) : [BE.create('paragraph')];
+  let cats = page ? [] : (preCats && preCats.length ? [...preCats] : undefined);
+  // La plantilla marca su categoría solo si existe en el blog
+  const hit = !page && tpl && tpl.category ? categories.find((c) => c.name.toLowerCase() === tpl.category.toLowerCase()) : null;
+  if (hit && !(cats || []).some((c) => c.toLowerCase() === hit.name.toLowerCase())) cats = [...(cats || []), hit.name];
   draft = {
-    title, excerpt: '', slug: '', tags: [], categories: page ? [] : (categories && categories.length ? [...categories] : undefined),
-    blocks: [window.BlockEditor.create('paragraph')], featuredImageId: null, keepFeaturedInBody: true, date: null, postId: null,
+    title, excerpt: '', slug: '', tags: [], categories: cats,
+    blocks, featuredImageId: null, keepFeaturedInBody: true, date: null, postId: null,
     previewOnly: false, wpStatus: null, sections: [], sourceText: '', extraMedia: [], type: page ? 'page' : 'post', parent: Number(parent) || 0, isNew: true,
   };
   draftKeys = [];
