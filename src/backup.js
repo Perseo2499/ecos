@@ -427,7 +427,7 @@ async function prepare(an, post, upload, { download = true, job = null } = {}) {
       categories: post.categories.join(','), tags: post.tags.join(','),
       ...(featured && map.get(featured.rel || featured.url) ? { featured_image: map.get(featured.rel || featured.url).id } : {}),
     },
-    uploaded: map.size, problems,
+    uploaded: map.size, problems, mediaIds: [...new Set([...map.values()].map((x) => x.id).filter(Boolean))],
   };
 }
 

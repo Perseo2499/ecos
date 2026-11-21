@@ -549,6 +549,13 @@ handle('site:save', async (changes) => { needSelf(); return wpCall(() => wpself.
 const needSelfMedia = () => { if (!isSelf()) throw new Error('La biblioteca de medios solo está disponible con «Mi web (wp-admin)» en Conexiones → WordPress.'); };
 let mediaUsageCache = null; // { at, data }
 handle('media:list', async (opts) => { needSelfMedia(); return wpCall(() => wpself.listMedia(cfg, opts || {})); });
+handle('media:setDates', async (list) => {
+  needSelfMedia();
+  let done = 0, failed = 0;
+  for (const x of list || []) { try { await wpCall(() => wpself.setMediaDate(cfg, x.id, x.date)); done++; } catch (e) { failed++; log('Fecha de medio', x.id, e.message); } }
+  mediaUsageCache = null;
+  return { done, failed };
+});
 handle('media:usage', async (force) => {
   needSelfMedia();
   if (!force && mediaUsageCache && Date.now() - mediaUsageCache.at < 5 * 60000) return mediaUsageCache.data;
@@ -856,6 +863,8 @@ handle('backup:restore', async (keys, opts = {}) => {
       }
       const status = opts.status === 'original' ? (['publish', 'future', 'private', 'pending', 'draft'].includes(x.status) ? x.status : 'draft') : 'draft';
       const post = await wpCall(() => WP().createPost(cfg, { ...prep.fields, status, type: x.type, createCategories: opts.createCategories !== false }));
+      // las fotos subidas llevan la fecha de la entrada original (se ordenan bien en la biblioteca)
+      if (isSelf() && prep.fields.date) for (const mid of prep.mediaIds || []) await WP().setMediaDate(cfg, mid, new Date(prep.fields.date).toISOString()).catch(() => {});
       const url = WP().publicUrl(cfg, post.URL);
       cfg.restored[restoredKey(key)] = { postId: post.ID, url, editUrl: editUrlFor(post.ID, x.type), at: new Date().toISOString() };
       store.save(cfg);
@@ -967,6 +976,7 @@ handle('backup:restoreImages', async (ids) => {
           if (!f) { out.notFound++; continue; }
           const buf = await f.src.read(f.name);
           up = await wpCall(() => WP().uploadNamed(cfg, buf, path.basename(rel), { keep: true }));
+          if (raw.date) await WP().setMediaDate(cfg, up.id, raw.date).catch(() => {});
           cfg.origUploads[ck] = { id: up.id, url: up.url }; store.save(cfg);
         }
         if (up.url === src.replace(/&amp;/g, '&')) continue; // ya es la original

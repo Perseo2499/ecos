@@ -266,6 +266,13 @@
     'Modelo (opcional: si lo dejas vacío, usa el de la CLI)': 'Model (optional: leave empty to use the CLI default)',
     'Los botones de IA usarán {c}. Pulsa «Probar» para comprobarlo.': 'The AI buttons will use {c}. Click "Try it" to check.',
     // 1.2 (editor completo)
+    'Fecha de la entrada donde se usa (o de subida si no se usa)': 'Date of the post where it is used (or upload date if unused)',
+    'Fecha de subida': 'Upload date',
+    'página {p} de {t}': 'page {p} of {t}',
+    'Fecha de la entrada «{x}» · subida el {d}': 'Date of the post "{x}" · uploaded on {d}',
+    'Cambia la fecha de la foto en WordPress por la de la entrada donde se usa (así se ordenan bien también en wp-admin)': 'Changes the photo date in WordPress to the date of the post where it is used (so they also sort well in wp-admin)',
+    'Poner fecha original': 'Set original date',
+    'Fecha original puesta en {n} archivos.': 'Original date set on {n} files.',
     'Mejorar con IA': 'Enhance with AI',
     'Mejorar con IA solo funciona en Windows.': 'Enhance with AI only works on Windows.',
     'La primera vez se descargará el motor de IA (unos 45 MB, una sola vez). Todo se hace en este ordenador: las fotos no se suben a ningún servicio.': 'The first time, the AI engine will be downloaded (about 45 MB, only once). Everything happens on this computer: photos are not uploaded to any service.',

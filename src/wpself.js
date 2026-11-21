@@ -178,16 +178,20 @@ const normMedia = (m) => {
   };
 };
 // {page, perPage, type: 'all'|'image'|'video', search} → { items, total, totalPages }
-async function listMedia(cfg, { page = 1, perPage = 40, type = 'all', search = '' } = {}) {
+async function listMedia(cfg, { page = 1, perPage = 40, type = 'all', search = '', after, before } = {}) {
   const q = new URLSearchParams({ per_page: String(perPage), page: String(page), _fields: MEDIA_FIELDS, orderby: 'date', order: 'desc' });
   if (type === 'image' || type === 'video') q.set('media_type', type);
   if (search) q.set('search', search);
+  if (after) q.set('after', after);
+  if (before) q.set('before', before);
   const { data, res } = await req(cfg, `/wp/v2/media?${q}`, { raw: true });
   return {
     items: (data || []).filter((m) => m.media_type === 'image' || m.media_type === 'video').map(normMedia),
     total: Number(res.headers.get('x-wp-total') || 0), totalPages: Number(res.headers.get('x-wp-totalpages') || 1),
   };
 }
+// Cambia la fecha de un medio (p. ej. a la de la entrada donde se publicó)
+const setMediaDate = (cfg, id, date) => req(cfg, `/wp/v2/media/${Number(id)}`, { method: 'POST', json: { date: String(date).slice(0, 19) } });
 const getMedia = (cfg, id) => req(cfg, `/wp/v2/media/${Number(id)}?context=edit`);
 const deleteMedia = (cfg, id) => req(cfg, `/wp/v2/media/${Number(id)}?force=true`, { method: 'DELETE' });
 
@@ -207,7 +211,7 @@ function usedMediaIds(posts, media) {
     const list = (out[id] ||= []);
     const title = p.title?.raw ?? p.title?.rendered ?? p.title ?? '';
     const label = (typeof title === 'string' ? decode(title) : '') || `#${p.id}`;
-    if (!list.some((x) => x.id === p.id)) list.push({ id: p.id, title: label });
+    if (!list.some((x) => x.id === p.id)) list.push({ id: p.id, title: label, date: p.date || '' });
   };
   for (const p of posts || []) {
     const html = typeof p.content === 'string' ? p.content : (p.content?.raw ?? p.content?.rendered ?? '');
@@ -226,7 +230,7 @@ function usedMediaIds(posts, media) {
 async function mediaUsage(cfg) {
   const posts = [];
   for (const coll of ['posts', 'pages']) {
-    posts.push(...(await all(cfg, `/wp/v2/${coll}?context=edit&status=publish,draft,private,pending,future&_fields=id,title,content,featured_media`)));
+    posts.push(...(await all(cfg, `/wp/v2/${coll}?context=edit&status=publish,draft,private,pending,future&_fields=id,title,content,featured_media,date`)));
   }
   const media = [];
   for (let page = 1; page <= 200; page++) {
@@ -462,4 +466,4 @@ async function saveStructure(cfg, ch, progress = () => {}) {
   return { errors };
 }
 
-module.exports = { postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw };
+module.exports = { setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw };

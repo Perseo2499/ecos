@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('api', {
   uploadMedia: () => call('media:upload'),
   mediaList: (opts) => call('media:list', opts),
   mediaUsage: (force) => call('media:usage', force),
+  mediaSetDates: (list) => call('media:setDates', list),
   mediaDelete: (ids) => call('media:delete', ids),
   mediaSetAlt: (id, alt) => call('media:alt', id, alt),
   mediaUpscale: (id) => call('media:upscale', id),

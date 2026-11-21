@@ -4,9 +4,15 @@
 const fmtBytes = (n) => (!n ? '' : n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
 const mediaDate = (d) => { try { return new Date(d).toLocaleDateString(prefs().lang === 'en' ? 'en-GB' : 'es-ES', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return ''; } };
 
-// Rejilla con filtros, búsqueda, «Cargar más» y selección. o = { usage: boolean (etiquetas y filtro «Sin usar»), onChange() }
+// Rejilla de medios con filtros (tipo, nombre, fechas, «Sin usar»), páginas y selección.
+// o = { usage: boolean (biblioteca: etiquetas de uso, fecha original y filtro «Sin usar»), onChange() }
+// En la biblioteca se lee la lista entera una vez (es ligera) y se filtra y pagina aquí, para poder filtrar por
+// la fecha original (la de la entrada donde se usa cada foto) y por «Sin usar». En el selector del editor se
+// piden las páginas a WordPress.
 function mediaGrid(host, o = {}) {
-  const st = { type: 'all', search: '', unused: false, page: 0, totalPages: 1, total: 0, items: [], sel: new Map(), usage: null, usageErr: false, loading: false, err: '', gen: 0 };
+  const st = { type: 'all', search: '', unused: false, from: '', to: '', page: 1, per: 40, total: 0, items: [], pool: null,
+    sel: new Map(), usage: null, usageErr: false, loading: false, err: '', gen: 0 };
+  const yearOpts = (() => { const y = new Date().getFullYear(); let h = ''; for (let k = y; k >= 2005; k--) h += `<option value="y${k}">${k}</option>`; return h; })();
   host.innerHTML = `<div class="mg-tools">
       <div class="seg mg-type">
         <button data-t="all" class="active">${t('Todo')}</button>
@@ -19,25 +25,60 @@ function mediaGrid(host, o = {}) {
       <span class="spacer"></span>
       <span class="hint mg-count"></span>
     </div>
+    <div class="b-range mg-range">
+      <span class="ms">date_range</span>
+      <select class="mg-preset" title="${escHtml(t(o.usage ? 'Fecha de la entrada donde se usa (o de subida si no se usa)' : 'Fecha de subida'))}">
+        <option value="all">${t('Todas las fechas')}</option><option value="month">${t('Este mes')}</option><option value="year">${t('Este año')}</option>
+        ${yearOpts}<option value="custom">${t('De una fecha a otra…')}</option>
+      </select>
+      <label class="b-date"><span>${t('Desde')}</span><input type="date" class="mg-from"></label>
+      <label class="b-date"><span>${t('Hasta')}</span><input type="date" class="mg-to"></label>
+      <button class="btn text icon-only mg-range-clear hidden" title="${escHtml(t('Quitar el filtro de fechas'))}"><span class="ms">close</span></button>
+      ${o.usage ? `<span class="spacer"></span><button class="btn tonal mg-selall"><span class="ms">select_all</span><span class="mg-selall-l"></span></button>` : ''}
+    </div>
     <div class="mg-slot"></div>
-    <div class="mg-more"><button class="btn tonal small mg-more-btn"><span class="ms">expand_more</span>${t('Cargar más')}</button></div>`;
+    <div class="pager mg-pager">
+      <button class="btn text icon-only" data-pg="first" title="${escHtml(t('Primera página'))}"><span class="ms">first_page</span></button>
+      <button class="btn text icon-only" data-pg="prev" title="${escHtml(t('Página anterior'))}"><span class="ms">chevron_left</span></button>
+      <span class="hint mg-info"></span>
+      <button class="btn text icon-only" data-pg="next" title="${escHtml(t('Página siguiente'))}"><span class="ms">chevron_right</span></button>
+      <button class="btn text icon-only" data-pg="last" title="${escHtml(t('Última página'))}"><span class="ms">last_page</span></button>
+      <span class="pager-sep"></span>
+      <label class="pager-go"><span>${t('Ir a la página')}</span><input class="mg-goto" type="number" min="1" inputmode="numeric"><button class="btn tonal small mg-go">${t('Ir')}</button></label>
+      <label class="pager-go"><span>${t('Por página')}</span><select class="mg-per"><option>40</option><option>80</option><option>120</option></select></label>
+    </div>`;
   const q = (s) => host.querySelector(s);
-  const slot = q('.mg-slot'), moreBox = q('.mg-more');
-
+  const slot = q('.mg-slot');
   const changed = () => { o.onChange?.(); };
+  const pages = () => Math.max(1, Math.ceil(st.total / st.per));
+  // Fecha original de un medio: la de la primera entrada donde se usa (si se sabe); si no, la de subida
+  const origDate = (m) => { const u = st.usage?.[m.id]; const d = (u || []).map((x) => x.date).filter(Boolean).sort()[0]; return d || m.date; };
+  const range = () => {
+    const f = st.from ? new Date(st.from + 'T00:00:00') : null;
+    const tt = st.to ? new Date(st.to + 'T00:00:00') : null; if (tt) tt.setDate(tt.getDate() + 1);
+    return { f, tt };
+  };
+
   function render() {
-    const loadingFirst = st.loading && !st.items.length;
-    q('.mg-count').textContent = !st.items.length ? '' : st.unused ? t('{n} sin usar', { n: st.items.length }) : t('{n} de {total}', { n: st.items.length, total: st.total });
-    if (loadingFirst) { slot.innerHTML = `<p class="hint pad">${t('Cargando…')}</p>`; moreBox.classList.add('hidden'); return; }
+    q('.mg-count').textContent = st.total ? (st.unused ? t('{n} sin usar', { n: st.total }) : t('{n} archivos', { n: st.total })) : '';
+    q('.mg-info').textContent = st.total ? t('página {p} de {t}', { p: st.page, t: pages() }) : '';
+    q('[data-pg="first"]').disabled = q('[data-pg="prev"]').disabled = st.page <= 1 || st.loading;
+    q('[data-pg="next"]').disabled = q('[data-pg="last"]').disabled = st.page >= pages() || st.loading;
+    q('.mg-pager').classList.toggle('hidden', pages() <= 1 && st.per === 40);
+    q('.mg-goto').max = pages(); q('.mg-goto').placeholder = String(st.page);
+    const dated = !!(st.from || st.to);
+    if (q('.mg-selall')) { q('.mg-selall-l').textContent = st.total ? t('Seleccionar las {n}', { n: st.total }) : t('Seleccionar todas'); q('.mg-selall').disabled = !st.total || !st.pool; }
+    q('.mg-range').classList.toggle('active', dated); q('.mg-range-clear').classList.toggle('hidden', !dated);
+    if (st.loading && !st.items.length) { slot.innerHTML = `<p class="hint pad">${t('Cargando…')}</p>`; return; }
     if (st.err && !st.items.length) {
       slot.innerHTML = `<div class="mg-empty"><span class="ms">error</span><p></p><button class="btn tonal small mg-retry">${t('Reintentar')}</button></div>`;
       slot.querySelector('p').textContent = st.err;
-      slot.querySelector('.mg-retry').onclick = () => load(true);
-      moreBox.classList.add('hidden'); return;
+      slot.querySelector('.mg-retry').onclick = () => reload(true);
+      return;
     }
     if (!st.items.length) {
-      slot.innerHTML = `<div class="mg-empty"><span class="ms">photo_library</span><p>${st.unused ? t('No hay medios sin usar. ¡Todo está en alguna entrada!') : st.search ? t('No hay nada con ese nombre.') : t('Todavía no hay fotos ni vídeos en la biblioteca.')}</p></div>`;
-      moreBox.classList.add('hidden'); return;
+      slot.innerHTML = `<div class="mg-empty"><span class="ms">photo_library</span><p>${st.unused ? t('No hay medios sin usar. ¡Todo está en alguna entrada!') : st.search || dated ? t('No hay nada con estos filtros.') : t('Todavía no hay fotos ni vídeos en la biblioteca.')}</p></div>`;
+      return;
     }
     slot.innerHTML = '<div class="mg-grid"></div>';
     const grid = slot.firstChild;
@@ -52,70 +93,108 @@ function mediaGrid(host, o = {}) {
       const tag = !o.usage || !st.usage ? '' : uses?.length
         ? `<span class="mg-tag use" title="${escHtml(uses.map((u) => u.title).join('\n'))}">${t('En uso ({n})', { n: uses.length })}</span>`
         : `<span class="mg-tag free">${t('Sin usar')}</span>`;
-      const meta = [mediaDate(m.date), m.width ? `${m.width}×${m.height}` : '', fmtBytes(m.size)].filter(Boolean).join(' · ');
+      const od = origDate(m), isOrig = od !== m.date;
+      const dateTxt = isOrig ? `<span class="mg-orig" title="${escHtml(t('Fecha de la entrada «{x}» · subida el {d}', { x: uses[0]?.title || '', d: mediaDate(m.date) }))}"><span class="ms">event</span>${escHtml(mediaDate(od))}</span>` : escHtml(mediaDate(m.date));
+      const meta = [m.width ? `${m.width}×${m.height}` : '', fmtBytes(m.size)].filter(Boolean).join(' · ');
       card.innerHTML = `<div class="mg-th">${thumb}</div><label class="mg-check"><input type="checkbox" ${st.sel.has(m.id) ? 'checked' : ''}></label>${tag}
-        <div class="mg-meta"><b title="${escHtml(m.name)}">${escHtml(m.name)}</b><span>${escHtml(meta)}</span></div>`;
+        <div class="mg-meta"><b title="${escHtml(m.name)}">${escHtml(m.name)}</b><span>${dateTxt}${meta ? ' · ' + escHtml(meta) : ''}</span></div>`;
       const toggle = () => { st.sel.has(m.id) ? st.sel.delete(m.id) : st.sel.set(m.id, m); card.classList.toggle('sel', st.sel.has(m.id)); card.querySelector('input').checked = st.sel.has(m.id); changed(); };
       card.onclick = (e) => { if (e.target.closest('.mg-check')) { e.preventDefault(); } toggle(); };
       card.ondblclick = () => openLightbox(st.items.map((x) => ({ type: x.type, src: x.url, poster: x.thumb })), i);
       grid.appendChild(card);
     });
-    moreBox.classList.toggle('hidden', st.page >= st.totalPages);
-    q('.mg-more-btn').disabled = st.loading;
   }
 
-  async function load(reset) {
-    if (reset) { st.gen++; st.page = 0; st.totalPages = 1; st.total = 0; st.items = []; st.err = ''; }
-    const gen = st.gen;
-    st.loading = true; render();
+  // Biblioteca: toda la lista una vez (ligera) → filtros y páginas aquí
+  async function loadPool(gen) {
+    const all = [];
+    for (let page = 1; page <= 200; page++) {
+      const r = await window.api.mediaList({ page, perPage: 100, type: 'all' });
+      if (gen !== st.gen) return null;
+      all.push(...r.items);
+      if (page >= (r.totalPages || 1)) break;
+    }
+    return all;
+  }
+  function filtered() {
+    const { f, tt } = range(), s = st.search.toLowerCase();
+    return st.pool.filter((m) => {
+      if (st.type !== 'all' && m.type !== st.type) return false;
+      if (s && !`${m.name} ${m.url}`.toLowerCase().includes(s)) return false;
+      if (st.unused && st.usage?.[m.id]?.length) return false;
+      if (f || tt) { const d = new Date(origDate(m)); if ((f && d < f) || (tt && d >= tt)) return false; }
+      return true;
+    }).sort((a, b) => new Date(origDate(b)) - new Date(origDate(a)));
+  }
+  async function load() {
+    const gen = ++st.gen;
+    st.loading = true; st.err = ''; render();
     try {
-      if (st.unused && !st.usage) await usageReady();
-      let added = 0;
-      do {
-        const r = await window.api.mediaList({ page: st.page + 1, perPage: 40, type: st.type, search: st.search });
+      if (o.usage) {
+        if (!st.pool) { st.items = []; render(); const p = await loadPool(gen); if (!p) return; st.pool = p; }
         if (gen !== st.gen) return;
-        st.page++; st.totalPages = r.totalPages || 1; st.total = r.total || 0;
-        const fresh = st.unused ? r.items.filter((m) => !(st.usage?.[m.id]?.length)) : r.items;
-        st.items.push(...fresh); added += fresh.length;
-      } while (st.unused && added < 20 && st.page < st.totalPages);
-      st.err = '';
+        const list = filtered();
+        st.total = list.length;
+        st.page = Math.min(st.page, pages());
+        st.items = list.slice((st.page - 1) * st.per, st.page * st.per);
+      } else {
+        const { f, tt } = range();
+        const r = await window.api.mediaList({ page: st.page, perPage: st.per, type: st.type, search: st.search, ...(f ? { after: f.toISOString() } : {}), ...(tt ? { before: tt.toISOString() } : {}) });
+        if (gen !== st.gen) return;
+        st.items = r.items; st.total = r.total || r.items.length;
+      }
     } catch (e) {
       if (gen !== st.gen) return;
-      st.err = e.message;
-      if (st.items.length) toast(e.message, true);
+      st.err = e.message; st.items = [];
     }
     st.loading = false; render();
   }
   // Uso de cada medio (en segundo plano; la rejilla se pinta antes)
-  let usageP = null;
   function usageReady(force) {
     if (!o.usage) return Promise.resolve();
-    usageP = window.api.mediaUsage(!!force).then((u) => { st.usage = u || {}; st.usageErr = false; }).catch((e) => { st.usage = null; st.usageErr = true; toast(t('No se pudo comprobar qué fotos se usan: {e}', { e: e.message }), true); });
-    return usageP;
+    return window.api.mediaUsage(!!force).then((u) => { st.usage = u || {}; st.usageErr = false; }).catch((e) => { st.usage = null; st.usageErr = true; toast(t('No se pudo comprobar qué fotos se usan: {e}', { e: e.message }), true); });
   }
   async function reload(force) {
-    if (o.usage) { st.usage = null; const p = usageReady(force); p.then(() => { if (!st.unused) render(); }); if (st.unused) await p; }
-    return load(true);
+    st.pool = null;
+    if (o.usage) { st.usage = null; const p = usageReady(force).then(() => load()); if (st.unused || st.from || st.to) await p; else load(); return p; }
+    return load();
   }
+  const refilter = () => { st.page = 1; return (o.usage && !st.usage && (st.unused || st.from || st.to)) ? usageReady().then(load) : load(); };
 
   q('.mg-type').onclick = (e) => {
     const b = e.target.closest('button'); if (!b) return;
     $$('.mg-type button', host).forEach((x) => x.classList.toggle('active', x === b));
-    st.type = b.dataset.t; load(true);
+    st.type = b.dataset.t; refilter();
   };
-  let timer; q('.mg-search').oninput = (e) => { clearTimeout(timer); timer = setTimeout(() => { st.search = e.target.value.trim(); load(true); }, 350); };
-  q('.mg-unused')?.querySelector('input').addEventListener('change', async (e) => {
-    st.unused = e.target.checked;
-    if (st.unused && !st.usage) { st.loading = true; st.items = []; render(); await usageReady(); if (!st.usage) { st.unused = false; e.target.checked = false; } }
-    load(true);
-  });
+  let timer; q('.mg-search').oninput = (e) => { clearTimeout(timer); timer = setTimeout(() => { st.search = e.target.value.trim(); refilter(); }, 300); };
+  q('.mg-unused')?.querySelector('input').addEventListener('change', (e) => { st.unused = e.target.checked; refilter(); });
   q('.mg-refresh').onclick = () => reload(true);
-  q('.mg-more-btn').onclick = () => load(false);
+  // fechas
+  const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+  q('.mg-preset').onchange = (e) => {
+    const v = e.target.value, now = new Date();
+    if (v === 'all') { st.from = st.to = ''; }
+    else if (v === 'month') { st.from = iso(new Date(now.getFullYear(), now.getMonth(), 1)); st.to = iso(now); }
+    else if (v === 'year') { st.from = iso(new Date(now.getFullYear(), 0, 1)); st.to = iso(now); }
+    else if (/^y\d{4}$/.test(v)) { st.from = `${v.slice(1)}-01-01`; st.to = `${v.slice(1)}-12-31`; }
+    else { q('.mg-from').focus(); return; }
+    q('.mg-from').value = st.from; q('.mg-to').value = st.to; refilter();
+  };
+  [q('.mg-from'), q('.mg-to')].forEach((i) => (i.onchange = () => { st.from = q('.mg-from').value; st.to = q('.mg-to').value; q('.mg-preset').value = st.from || st.to ? 'custom' : 'all'; refilter(); }));
+  q('.mg-range-clear').onclick = () => { st.from = st.to = ''; q('.mg-from').value = q('.mg-to').value = ''; q('.mg-preset').value = 'all'; refilter(); };
+  // todas las que cumplen los filtros (de todas las páginas)
+  q('.mg-selall')?.addEventListener('click', () => { if (!st.pool) return; for (const m of filtered()) st.sel.set(m.id, m); render(); changed(); toast(t('{n} seleccionadas', { n: st.sel.size })); });
+  // páginas
+  const go = (p) => { const n = Math.min(pages(), Math.max(1, Math.round(Number(p) || 1))); q('.mg-goto').value = ''; if (n === st.page) return; st.page = n; load(); host.scrollIntoView({ block: 'start', behavior: 'smooth' }); };
+  q('.mg-pager').onclick = (e) => { const b = e.target.closest('[data-pg]'); if (!b) return; go({ first: 1, prev: st.page - 1, next: st.page + 1, last: pages() }[b.dataset.pg]); };
+  q('.mg-go').onclick = () => { if (q('.mg-goto').value) go(q('.mg-goto').value); };
+  q('.mg-goto').onkeydown = (e) => { if (e.key === 'Enter' && e.target.value) go(e.target.value); };
+  q('.mg-per').onchange = (e) => { const first = (st.page - 1) * st.per; st.per = Number(e.target.value); st.page = Math.floor(first / st.per) + 1; load(); };
 
   return {
-    sel: st.sel, st, reload, render,
+    sel: st.sel, st, reload, render, origDate,
     clear() { st.sel.clear(); render(); changed(); },
-    remove(ids) { const s = new Set(ids); st.items = st.items.filter((m) => !s.has(m.id)); ids.forEach((id) => st.sel.delete(id)); st.total = Math.max(0, st.total - ids.length); render(); changed(); },
+    remove(ids) { const s = new Set(ids); if (st.pool) st.pool = st.pool.filter((m) => !s.has(m.id)); ids.forEach((id) => st.sel.delete(id)); load(); changed(); },
   };
 }
 
@@ -138,6 +217,7 @@ function renderMediaLib() {
     acts.innerHTML = n ? `<button class="btn tonal small" data-a="copy"><span class="ms">link</span>${t('Copiar enlace')}</button>
       ${n === 1 ? `<button class="btn tonal small" data-a="alt"><span class="ms">edit_note</span>${t('Editar descripción (alt)')}</button>` : ''}
       ${sel.some((m) => m.type !== 'video') ? `<button class="btn tonal small" data-a="ai"><span class="ms">auto_fix_high</span>${t('Mejorar con IA')}</button>` : ''}
+      ${sel.some((m) => mediaLib.origDate(m) !== m.date) ? `<button class="btn tonal small" data-a="dates" title="${escHtml(t('Cambia la fecha de la foto en WordPress por la de la entrada donde se usa (así se ordenan bien también en wp-admin)'))}"><span class="ms">event</span>${t('Poner fecha original')}</button>` : ''}
       <button class="btn tonal small danger" data-a="del"><span class="ms">delete</span>${t('Borrar de la biblioteca')}</button>
       <button class="btn text icon-only" data-a="clear" title="${escHtml(t('Quitar la selección'))}"><span class="ms">close</span></button>` : '';
   };
@@ -154,6 +234,10 @@ function renderMediaLib() {
       if (v === null) return;
       await busy(b, async () => { await window.api.mediaSetAlt(m.id, v); m.alt = v; toast(t('Descripción guardada')); });
       mediaLib.render();
+    }
+    if (b.dataset.a === 'dates') {
+      const list = sel.filter((m) => mediaLib.origDate(m) !== m.date).map((m) => ({ id: m.id, date: mediaLib.origDate(m) }));
+      return busy(b, async () => { const r = await window.api.mediaSetDates(list); toast(t('Fecha original puesta en {n} archivos.', { n: r.done }) + (r.failed ? ' ' + t('{e} con error.', { e: r.failed }) : ''), !!r.failed); mediaLib.clear(); mediaLib.reload(); });
     }
     if (b.dataset.a === 'ai') return upscaleSelected(sel.filter((m) => m.type !== 'video'), b);
     if (b.dataset.a === 'del') {
