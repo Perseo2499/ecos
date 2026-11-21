@@ -540,6 +540,13 @@ function markExported(postId, status) {
   return cfg.exported || {};
 }
 handle('blog:setStatus', async (id, status, type) => { await wpCall(() => WP().setPostStatus(cfg, id, status, type)); return markExported(id, status); });
+handle('blog:setDate', async (id, iso, status) => {
+  if (!isSelf()) throw new Error('Cambiar la fecha desde el calendario solo está disponible con «Mi web (wp-admin)» en Conexiones → WordPress.');
+  const r = await wpCall(() => wpself.setPostDate(cfg, id, iso, status, 'post'));
+  log('Fecha cambiada', id, r.date, r.status);
+  markExported(id, r.status);
+  return r;
+});
 handle('blog:trash', async (id, type) => { await wpCall(() => WP().trashPost(cfg, id, type)); return markExported(id, 'trash'); });
 // Estructura de la web (solo WordPress propio: WordPress.com no da acceso a menús ni ajustes por esta vía)
 const needSelf = () => { if (!isSelf()) throw new Error('La estructura de la web solo está disponible con «Mi web (wp-admin)» en Conexiones → WordPress.'); };

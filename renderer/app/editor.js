@@ -42,7 +42,7 @@ async function openFromWp(postId, keys, type = 'post') {
 
 // Abre el editor de Ecos con un borrador en blanco (entrada o página). La usan el Blog y la pantalla Estructura.
 // Al enviar se crea en WordPress con el tipo correcto; la fecha es la de hoy (o la que se programe).
-function newDraft({ type = 'post', title = '', categories = [], parent = 0 } = {}) {
+function newDraft({ type = 'post', title = '', categories = [], parent = 0, scheduleAt = '' } = {}) {
   const page = type === 'page';
   draft = {
     title, excerpt: '', slug: '', tags: [], categories: page ? [] : (categories && categories.length ? [...categories] : undefined),
@@ -52,6 +52,8 @@ function newDraft({ type = 'post', title = '', categories = [], parent = 0 } = {
   draftKeys = [];
   renderWpState(null);
   openEditor();
+  // Con scheduleAt («AAAA-MM-DDTHH:MM», hora local) la entrada nueva queda marcada para programar
+  if (scheduleAt && !page) { $$('input[name="d-when"]').forEach((r) => (r.checked = r.value === 'future')); $('#d-schedule').value = scheduleAt; toggleSchedule(); }
   $('#d-title').focus();
 }
 

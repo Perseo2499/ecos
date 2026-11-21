@@ -266,28 +266,38 @@ const fromRest = (p) => ({ ID: p.id, URL: p.link, status: p.status, date: p.date
 async function savePost(cfg, route, f) {
   const body = await toRest(cfg, f);
   let p = await req(cfg, route, { method: 'POST', json: body });
-  if (body.date_gmt) {
-    const want = new Date(body.date_gmt + 'Z').getTime();
-    const got = p.date_gmt ? new Date(p.date_gmt + 'Z').getTime() : NaN;
-    if (!(Math.abs(got - want) < 60000)) {
-      const coll = f.type === 'page' ? 'pages' : 'posts';
-      // la hora local de la web se calcula con su diferencia horaria (Ajustes → Generales → Zona horaria)
-      const site = await req(cfg, '/').catch(() => ({}));
-      const offset = p.date && p.date_gmt ? new Date(p.date + 'Z') - new Date(p.date_gmt + 'Z') : (Number(site.gmt_offset) || 0) * 3600000;
-      const local = new Date(want + offset).toISOString().slice(0, 19);
-      p = await req(cfg, `/wp/v2/${coll}/${p.id}`, { method: 'POST', json: { date: local, date_gmt: body.date_gmt } });
-    }
-  }
+  if (body.date_gmt) p = await ensureDate(cfg, f.type === 'page' ? 'pages' : 'posts', p, body.date_gmt);
   return fromRest(p);
+}
+// Si la fecha guardada no coincide con la pedida (UTC, «AAAA-MM-DDTHH:MM:SS»), la envía de nuevo con la hora local de la web
+async function ensureDate(cfg, coll, p, dateGmt) {
+  const want = new Date(dateGmt + 'Z').getTime();
+  const got = p.date_gmt ? new Date(p.date_gmt + 'Z').getTime() : NaN;
+  if (Math.abs(got - want) < 60000) return p;
+  // la hora local de la web se calcula con su diferencia horaria (Ajustes → Generales → Zona horaria)
+  const site = await req(cfg, '/').catch(() => ({}));
+  const offset = p.date && p.date_gmt ? new Date(p.date + 'Z') - new Date(p.date_gmt + 'Z') : (Number(site.gmt_offset) || 0) * 3600000;
+  const local = new Date(want + offset).toISOString().slice(0, 19);
+  return req(cfg, `/wp/v2/${coll}/${p.id}`, { method: 'POST', json: { date: local, date_gmt: dateGmt } });
+}
+// Cambia solo la fecha (y el estado) de una entrada sin tocar el resto: lo usa el calendario al arrastrar
+async function setPostDate(cfg, id, iso, status, type) {
+  const d = new Date(iso);
+  if (isNaN(d)) throw new Error('Fecha no válida.');
+  const dateGmt = d.toISOString().slice(0, 19);
+  const coll = type === 'page' ? 'pages' : 'posts';
+  let p = await req(cfg, `/wp/v2/${coll}/${id}`, { method: 'POST', json: { date_gmt: dateGmt, ...(status ? { status } : {}) } });
+  p = await ensureDate(cfg, coll, p, dateGmt);
+  return { id: p.id, status: p.status, date: p.date_gmt ? p.date_gmt + 'Z' : p.date };
 }
 const createPost = (cfg, f) => savePost(cfg, `/wp/v2/${f.type === 'page' ? 'pages' : 'posts'}`, f);
 const updatePost = (cfg, id, f) => savePost(cfg, `/wp/v2/${f.type === 'page' ? 'pages' : 'posts'}/${id}`, f);
 
-async function listPosts(cfg, { type = 'post', status = 'any', search = '', page = 1, number = 20, after, before } = {}) {
+async function listPosts(cfg, { type = 'post', status = 'any', search = '', page = 1, number = 20, after, before, orderby = 'date' } = {}) {
   const coll = type === 'page' ? 'pages' : 'posts';
   const q = new URLSearchParams({
     status: status === 'any' ? 'publish,future,draft,pending,private' : status, per_page: String(number), page: String(page),
-    orderby: 'date', order: 'desc', context: 'edit', _embed: 'wp:featuredmedia',
+    orderby: orderby === 'modified' ? 'modified' : 'date', order: 'desc', context: 'edit', _embed: 'wp:featuredmedia',
     ...(search ? { search } : {}), ...(after ? { after } : {}), ...(before ? { before } : {}),
   });
   const { data, res } = await req(cfg, `/wp/v2/${coll}?${q}`, { raw: true });
@@ -522,4 +532,4 @@ async function saveStructure(cfg, ch, progress = () => {}) {
   return { errors };
 }
 
-module.exports = { allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost };
+module.exports = { allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost };

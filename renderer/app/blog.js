@@ -5,16 +5,110 @@
 // Un mes de un vistazo: publicadas, programadas y borradores en su día; se abren en Ecos o en WordPress.
 const calState = { month: new Date(new Date().getFullYear(), new Date().getMonth(), 1), mode: 'month' };
 function renderCalendar() {
-  return calendarView($('#b-calendar'), calState, {
-    legend: `<i class="publish"></i>${t('Publicada')}<i class="future"></i>${t('Programada')}<i class="draft"></i>${t('Borrador')}`,
+  const box = $('#b-calendar');
+  const self = CFG.wpMode === 'selfhosted';
+  const canDrag = self; // cambiar la fecha solo funciona con WordPress propio
+  box.innerHTML = `<div class="cal-layout"><div class="cal-main"></div>
+    <aside class="cal-tray${calState.trayOpen === false ? ' closed' : ''}" id="cal-tray">
+      <button class="cal-tray-h" id="cal-tray-h" aria-expanded="${calState.trayOpen !== false}"><span class="ms">inbox</span><b>${t('Sin fecha')}</b><span class="cal-tray-n" id="cal-tray-n"></span><span class="ms cal-tray-chev">expand_more</span></button>
+      <div class="cal-tray-b">
+        <button class="btn tonal small cal-tray-new" id="cal-new"><span class="ms">add</span>${t('Nueva entrada para este mes')}</button>
+        <p class="hint cal-tray-hint">${t('Arrastra un borrador a un día para programarlo.')}</p>
+        <div class="cal-tray-list" id="cal-tray-list"><p class="hint">${t('Cargando…')}</p></div>
+      </div></aside></div>`;
+  const main = $('.cal-main', box);
+  $('#cal-tray-h').onclick = () => { calState.trayOpen = calState.trayOpen === false; $('#cal-tray').classList.toggle('closed', calState.trayOpen === false); $('#cal-tray-h').setAttribute('aria-expanded', calState.trayOpen !== false); };
+  $('#cal-new').onclick = () => newDraft({ type: 'post' });
+
+  const cache = new Map(); // «desde» → entradas de ese tramo (se modifican al arrastrar, sin volver a pedirlas)
+  let cur = null, tray = [];
+  const mk = (it) => ({ id: it.id, date: it.date, status: it.status, title: decodeEntities(it.title), cls: 'st-' + it.status, thumb: it.image || '',
+    badge: it.status === 'future' ? '<span class="ms cal-clk" title="' + escHtml(t('Programada')) + '">schedule</span>' : '',
+    draggable: canDrag && ['publish', 'draft', 'future'].includes(it.status) });
+  const restyle = (c) => { c.cls = 'st-' + c.status; c.badge = c.status === 'future' ? '<span class="ms cal-clk" title="' + escHtml(t('Programada')) + '">schedule</span>' : ''; };
+  const refresh = () => calendarView(main, calState, opts);
+
+  function drawTray() {
+    $('#cal-tray-n').textContent = tray.length ? String(tray.length) : '';
+    const list = $('#cal-tray-list');
+    if (!tray.length) { list.innerHTML = `<p class="hint">${t('No hay borradores.')}</p>`; return; }
+    list.innerHTML = '';
+    for (const it of tray) {
+      const el = document.createElement('div');
+      el.className = 'cal-tray-it'; el.draggable = canDrag; el.dataset.id = it.id; el.title = it.title;
+      el.innerHTML = `${it.thumb ? `<img src="${escHtml(it.thumb)}" alt="" loading="lazy">` : '<span class="noimg"><span class="ms">image</span></span>'}<span class="cal-t"></span>`;
+      $('.cal-t', el).textContent = it.title || t('(sin título)');
+      el.onclick = () => busy(el, () => openFromWp(it.id));
+      el.ondragstart = (e) => calStartDrag(e, it, el);
+      el.ondragend = calEndDrag;
+      list.appendChild(el);
+    }
+  }
+  (async () => {
+    try {
+      const r = await window.api.blogList({ type: 'post', status: 'draft', page: 1, number: 50, orderby: 'modified' });
+      tray = r.items.slice().sort((a, b) => new Date(b.modified || 0) - new Date(a.modified || 0))
+        .map((it) => ({ id: it.id, status: 'draft', title: decodeEntities(it.title), thumb: it.image || '', fromTray: true, draggable: canDrag }));
+      drawTray();
+    } catch (e) { $('#cal-tray-list').innerHTML = `<p class="hint">${escHtml(e.message)}</p>`; }
+  })();
+
+  const when = (d) => d.toLocaleDateString(prefs().lang === 'en' ? 'en-GB' : 'es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  async function onDrop(item, day) {
+    const list = cache.get(cur) || [];
+    const date = calNewDate(item.fromTray ? null : item.date, day);
+    const dec = calDropDecision(item.status, date);
+    let status = dec.status;
+    const name = item.title || t('(sin título)'), d = when(date);
+    if (!item.fromTray && date.getTime() === new Date(item.date).getTime()) return;
+    if (dec.action === 'confirm') {
+      const msg = t('¿Cambiar la fecha de publicación de «{x}» al {d}?', { x: name, d }) + '\n'
+        + (status === 'future' ? t('Esa fecha es futura: la entrada pasará a estar programada y dejará de verse hasta entonces.') : t('Cambiará el orden de las entradas en el blog.'));
+      if (!(await ask(msg, { ok: t('Cambiar la fecha') }))) return;
+    } else if (dec.action === 'past') {
+      if (await ask(t('El {d} ya ha pasado. ¿Publicar «{x}» con esa fecha?', { x: name, d }), { ok: t('Publicar con esa fecha'), cancel: t('No publicar') })) status = 'publish';
+      else if (await ask(t('¿Dejar «{x}» como borrador con la fecha del {d}?', { x: name, d }), { ok: t('Dejar en borrador'), cancel: t('No mover') })) status = 'draft';
+      else return;
+    }
+    // Cambio al momento en la vista; si WordPress lo rechaza, todo vuelve a su sitio
+    const iso = date.toISOString();
+    let entry = item, was = null, trayAt = -1;
+    if (item.fromTray) {
+      trayAt = tray.findIndex((x) => x.id === item.id);
+      if (trayAt >= 0) tray.splice(trayAt, 1);
+      entry = { id: item.id, title: item.title, thumb: item.thumb, draggable: canDrag, date: iso, status };
+      restyle(entry); list.push(entry); drawTray();
+    } else {
+      was = { date: item.date, status: item.status };
+      item.date = iso; item.status = status; restyle(item);
+    }
+    refresh();
+    try {
+      await window.api.blogSetDate(entry.id, iso, status);
+      toast(status === 'future' ? t('«{x}» programada para el {d}.', { x: name, d }) : status === 'publish' ? t('«{x}» publicada con fecha del {d}.', { x: name, d }) : t('«{x}» queda en borrador con fecha del {d}.', { x: name, d }));
+    } catch (e) {
+      if (item.fromTray) { list.splice(list.indexOf(entry), 1); tray.splice(Math.max(trayAt, 0), 0, item); drawTray(); }
+      else { Object.assign(item, was); restyle(item); }
+      refresh();
+      toast(t('No se pudo cambiar la fecha: {m}', { m: e.message }), true);
+    }
+  }
+
+  const opts = {
+    legend: `<i class="publish"></i>${t('Publicada')}<i class="future"></i>${t('Programada')}<i class="draft"></i>${t('Borrador')}${canDrag ? `<span class="cal-drag-hint"><span class="ms">drag_indicator</span>${t('Arrastra para cambiar el día')}</span>` : ''}`,
     async load(from, to) {
+      const key = from.getTime() + '-' + to.getTime();
+      cur = key;
+      if (cache.has(key)) return cache.get(key);
       const items = [];
       for (let page = 1; page <= 10; page++) {
         const r = await window.api.blogList({ type: 'post', status: 'any', page, number: 100, after: from.toISOString(), before: to.toISOString() });
         items.push(...r.items);
         if (items.length >= r.found || !r.items.length) break;
       }
-      return items.map((it) => ({ id: it.id, date: it.date, title: decodeEntities(it.title), cls: 'st-' + it.status, thumb: it.image || '' }));
+      const out = items.map(mk);
+      cache.set(key, out);
+      return out;
     },
     footer: (items, from, to, year) => (year ? t('{n} entradas en {y} · pulsa un mes para verlo.', { n: items.length, y: from.getFullYear() })
       : t('{n} entradas este mes · pulsa una para editarla en Ecos (con Ctrl, en WordPress).', { n: items.length })),
@@ -22,7 +116,12 @@ function renderCalendar() {
       if (e.ctrlKey || e.metaKey) return window.api.open(await window.api.blogEditUrl(it.id, 'post'));
       await openFromWp(it.id);
     }),
-  });
+  };
+  if (canDrag) {
+    opts.onDrop = onDrop;
+    opts.onAdd = (day) => newDraft({ type: 'post', scheduleAt: calLocalInput(new Date(day.getFullYear(), day.getMonth(), day.getDate(), 10, 0)) });
+  }
+  return refresh();
 }
 
 // ---------------------------------------------------------------- Pestaña Blog

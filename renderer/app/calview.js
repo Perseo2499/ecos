@@ -7,9 +7,27 @@
 //   opts.legend          → HTML de la leyenda
 //   opts.onItem(item, e, button) → al pulsar un elemento
 //   opts.footer(items, from, to, isYear) → HTML bajo el calendario (opcional)
+//   opts.onDrop(item, date) → si existe, las entradas se arrastran y los días aceptan soltarlas (date = día elegido, a las 00:00)
+//   opts.onAdd(date)     → si existe, un «+» en los días vacíos al pasar el ratón
+//   (item.draggable === false impide arrastrar un elemento concreto)
 //   opts.beforeLoad(from) → Promise (opcional; p. ej. cargar más publicaciones hasta esa fecha)
 const calLoc = () => (prefs().lang === 'en' ? 'en-GB' : 'es-ES');
 const calCap = (s) => s.replace(/^./, (c) => c.toUpperCase());
+// Arrastre propio del calendario (dataTransfer «text/x-ecos-cal»); lo comparten las entradas del calendario y la bandeja de borradores
+const CAL_MIME = 'text/x-ecos-cal';
+let calDrag = null;
+function calStartDrag(e, item, el) {
+  calDrag = item;
+  e.dataTransfer.setData(CAL_MIME, String(item.id ?? ''));
+  e.dataTransfer.effectAllowed = 'move';
+  el.classList.add('dragging');
+  document.body.classList.add('dragging-internal', 'dragging-cal'); // así no salta el aviso de «suelta archivos aquí»
+}
+function calEndDrag() {
+  calDrag = null;
+  document.body.classList.remove('dragging-internal', 'dragging-cal');
+  $$('.cal-item.dragging, .cal-tray-it.dragging').forEach((x) => x.classList.remove('dragging'));
+}
 async function calendarView(box, state, opts) {
   const m = state.month, y = m.getFullYear(), mo = m.getMonth(), year = state.mode === 'year';
   const loc = calLoc();
@@ -53,12 +71,40 @@ async function calendarView(box, state, opts) {
       const list = (byDay.get(d) || []).sort((a, b) => new Date(a.date) - new Date(b.date));
       const shown = list.slice(0, 4).map((it) => {
         all.push(it);
-        return `<button class="cal-item ${escHtml(it.cls || '')}${it.thumb ? ' thumb' : ''}" data-i="${all.length - 1}" title="${escHtml(it.title)}">${it.thumb ? `<img src="${escHtml(it.thumb)}" alt="" loading="lazy">` : ''}${it.badge || ''}<span class="cal-t">${escHtml(it.title)}</span></button>`;
+        return `<button class="cal-item ${escHtml(it.cls || '')}${it.thumb ? ' thumb' : ''}"${opts.onDrop && it.draggable !== false ? ' draggable="true"' : ''} data-i="${all.length - 1}" title="${escHtml(it.title)}">${it.thumb ? `<img src="${escHtml(it.thumb)}" alt="" loading="lazy">` : ''}${it.badge || ''}<span class="cal-t">${escHtml(it.title)}</span></button>`;
       }).join('');
-      cells += `<div class="cal-day${sameDay(today, new Date(y, mo, d)) ? ' today' : ''}${list.length ? ' has' : ''}"><span class="cal-n">${d}</span>${shown}${list.length > 4 ? `<span class="cal-more">+${list.length - 4}</span>` : ''}</div>`;
+      cells += `<div class="cal-day${sameDay(today, new Date(y, mo, d)) ? ' today' : ''}${list.length ? ' has' : ''}" data-d="${d}"><span class="cal-n">${d}</span>${!list.length && opts.onAdd ? `<button class="cal-add" data-add="${d}" title="${escHtml(t('Nueva entrada para este día'))}"><span class="ms">add</span></button>` : ''}${shown}${list.length > 4 ? `<span class="cal-more">+${list.length - 4}</span>` : ''}</div>`;
     }
     body.innerHTML = `<div class="cal-grid">${cells}</div>`;
     $$('.cal-item', body).forEach((b) => (b.onclick = (e) => opts.onItem?.(all[Number(b.dataset.i)], e, b)));
+    $$('.cal-add', body).forEach((b) => (b.onclick = (e) => { e.stopPropagation(); opts.onAdd(new Date(y, mo, Number(b.dataset.add))); }));
+    if (opts.onDrop) {
+      const grid = $('.cal-grid', body);
+      const clear = () => $$('.cal-day.drop-over', grid).forEach((c) => { c.classList.remove('drop-over'); c.removeAttribute('data-drop'); });
+      $$('.cal-item[draggable]', body).forEach((b) => {
+        b.ondragstart = (e) => calStartDrag(e, all[Number(b.dataset.i)], b);
+        b.ondragend = () => { clear(); calEndDrag(); };
+      });
+      const mine = (e) => calDrag && [...e.dataTransfer.types].includes(CAL_MIME);
+      $$('.cal-day[data-d]', grid).forEach((c) => {
+        c.ondragover = (e) => {
+          if (!mine(e)) return;
+          e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+          if (!c.classList.contains('drop-over')) {
+            clear(); c.classList.add('drop-over');
+            c.dataset.drop = calCap(new Date(y, mo, Number(c.dataset.d)).toLocaleDateString(loc, { weekday: 'short', day: 'numeric', month: 'long' }));
+          }
+        };
+        c.ondrop = (e) => {
+          if (!mine(e)) return;
+          e.preventDefault();
+          const item = calDrag, date = new Date(y, mo, Number(c.dataset.d));
+          clear(); calEndDrag();
+          opts.onDrop(item, date);
+        };
+      });
+      grid.ondragleave = (e) => { if (!grid.contains(e.relatedTarget)) clear(); };
+    }
   } else {
     // Año: cada mes con sus días coloreados según cuántas cosas hay (más intenso = más contenido)
     const count = new Map();
@@ -86,3 +132,26 @@ async function calendarView(box, state, opts) {
   const foot = opts.footer?.(items, from, to, year);
   if (foot) body.insertAdjacentHTML('beforeend', `<p class="hint cal-sum">${foot}</p>`);
 }
+
+// ---- Lógica pura de «mover al día» (se prueba en test/ecos.test.js) ----
+// Nueva fecha: el día elegido (año, mes, día) con la hora local de la entrada; sin fecha anterior, a las 10:00.
+function calNewDate(oldIso, day, defHour = 10) {
+  const o = oldIso ? new Date(oldIso) : null, ok = o && !isNaN(o);
+  return new Date(day.getFullYear(), day.getMonth(), day.getDate(), ok ? o.getHours() : defHour, ok ? o.getMinutes() : 0, ok ? o.getSeconds() : 0);
+}
+// Qué hacer al soltar una entrada en un día:
+//   { action: 'set', status }      → se aplica sin preguntar (borrador/programada hacia una fecha futura: queda programada)
+//   { action: 'past', status }     → el día ya pasó: hay que preguntar si se publica (status) o se deja en borrador
+//   { action: 'confirm', status }  → ya estaba publicada: hay que confirmar el cambio (status resultante)
+function calDropDecision(status, newDate, now = new Date()) {
+  const future = newDate.getTime() > now.getTime();
+  if (status === 'publish') return { action: 'confirm', status: future ? 'future' : 'publish' };
+  if (future) return { action: 'set', status: 'future' };
+  return { action: 'past', status: 'publish' };
+}
+// Valor de un <input type="datetime-local"> («AAAA-MM-DDTHH:MM», hora local)
+function calLocalInput(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+if (typeof module !== 'undefined' && module.exports) module.exports = { calNewDate, calDropDecision, calLocalInput };

@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('api', {
   pullPost: (id, type) => call('post:pull', id, type),
   postRevisions: (id, type) => call('post:revisions', id, type),
   sitePages: () => call('site:pages'),
+  blogSetDate: (id, iso, status) => call('blog:setDate', id, iso, status),
   blogDuplicate: (id, type) => call('blog:duplicate', id, type),
   autosave: (d) => call('draft:autosave', d),
   autosaved: () => call('draft:autosaved'),

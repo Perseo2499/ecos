@@ -440,3 +440,19 @@ test('páginas en Ecos: toRest envía la página superior y no categorías ni et
   assert.ok(!('categories' in body) && !('tags' in body));
   assert.ok(!('date_gmt' in body));
 });
+
+test('calendario editorial: nuevo día conservando la hora y estado según la fecha', () => {
+  const { calNewDate, calDropDecision, calLocalInput } = require('../renderer/app/calview');
+  const old = new Date(2026, 10, 3, 17, 45, 12).toISOString();
+  const d = calNewDate(old, new Date(2026, 10, 24));
+  assert.deepEqual([d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds()], [2026, 10, 24, 17, 45, 12]);
+  const sin = calNewDate(null, new Date(2026, 11, 1));
+  assert.deepEqual([sin.getDate(), sin.getHours(), sin.getMinutes()], [1, 10, 0]); // sin fecha previa: las 10:00
+  const now = new Date(2026, 10, 21, 12, 0);
+  assert.deepEqual(calDropDecision('draft', new Date(2026, 10, 25, 10), now), { action: 'set', status: 'future' });
+  assert.deepEqual(calDropDecision('future', new Date(2026, 10, 25, 10), now), { action: 'set', status: 'future' });
+  assert.deepEqual(calDropDecision('draft', new Date(2026, 10, 5, 10), now), { action: 'past', status: 'publish' });
+  assert.deepEqual(calDropDecision('publish', new Date(2026, 10, 5, 10), now), { action: 'confirm', status: 'publish' });
+  assert.deepEqual(calDropDecision('publish', new Date(2026, 10, 30, 10), now), { action: 'confirm', status: 'future' });
+  assert.equal(calLocalInput(new Date(2026, 0, 5, 9, 3)), '2026-01-05T09:03');
+});
