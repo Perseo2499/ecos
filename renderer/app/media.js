@@ -106,15 +106,9 @@ function mediaGrid(host, o = {}) {
   }
 
   // Biblioteca: toda la lista una vez (ligera) → filtros y páginas aquí
-  async function loadPool(gen) {
-    const all = [];
-    for (let page = 1; page <= 200; page++) {
-      const r = await window.api.mediaList({ page, perPage: 100, type: 'all' });
-      if (gen !== st.gen) return null;
-      all.push(...r.items);
-      if (page >= (r.totalPages || 1)) break;
-    }
-    return all;
+  async function loadPool(gen, force) {
+    const all = await window.api.mediaAll(!!force);
+    return gen !== st.gen ? null : all;
   }
   function filtered() {
     const { f, tt } = range(), s = st.search.toLowerCase();
@@ -131,7 +125,7 @@ function mediaGrid(host, o = {}) {
     st.loading = true; st.err = ''; render();
     try {
       if (o.usage) {
-        if (!st.pool) { st.items = []; render(); const p = await loadPool(gen); if (!p) return; st.pool = p; }
+        if (!st.pool) { st.items = []; render(); const p = await loadPool(gen, st.force); st.force = false; if (!p) return; st.pool = p; }
         if (gen !== st.gen) return;
         const list = filtered();
         st.total = list.length;
@@ -155,7 +149,7 @@ function mediaGrid(host, o = {}) {
     return window.api.mediaUsage(!!force).then((u) => { st.usage = u || {}; st.usageErr = false; }).catch((e) => { st.usage = null; st.usageErr = true; toast(t('No se pudo comprobar qué fotos se usan: {e}', { e: e.message }), true); });
   }
   async function reload(force) {
-    st.pool = null;
+    st.pool = null; st.force = !!force;
     if (o.usage) { st.usage = null; const p = usageReady(force).then(() => load()); if (st.unused || st.from || st.to) await p; else load(); return p; }
     return load();
   }

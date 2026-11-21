@@ -173,16 +173,17 @@ const normMedia = (m) => {
   return {
     id: m.id, date: m.date, url: m.source_url, type: m.media_type === 'video' ? 'video' : 'image', mime: m.mime_type || '',
     alt: m.alt_text || '', name: decode((m.title && (m.title.rendered ?? m.title.raw)) || '').replace(/<[^>]+>/g, '') || file,
-    thumb: (sz.medium || sz.thumbnail || {}).source_url || '', large: (sz.large || {}).source_url || '',
+    thumb: (sz.medium || sz.thumbnail || {}).source_url || '', tiny: (sz.thumbnail || sz.medium || {}).source_url || '', large: (sz.large || {}).source_url || '',
     width: d.width || 0, height: d.height || 0, size: d.filesize || 0,
   };
 };
 // {page, perPage, type: 'all'|'image'|'video', search} → { items, total, totalPages }
-async function listMedia(cfg, { page = 1, perPage = 40, type = 'all', search = '', after, before } = {}) {
+async function listMedia(cfg, { page = 1, perPage = 40, type = 'all', search = '', after, before, modifiedAfter } = {}) {
   const q = new URLSearchParams({ per_page: String(perPage), page: String(page), _fields: MEDIA_FIELDS, orderby: 'date', order: 'desc' });
   if (type === 'image' || type === 'video') q.set('media_type', type);
   if (search) q.set('search', search);
   if (after) q.set('after', after);
+  if (modifiedAfter) q.set('modified_after', modifiedAfter);
   if (before) q.set('before', before);
   const { data, res } = await req(cfg, `/wp/v2/media?${q}`, { raw: true });
   return {
@@ -227,11 +228,12 @@ function usedMediaIds(posts, media) {
   }
   return out;
 }
-async function mediaUsage(cfg) {
+async function mediaUsage(cfg, knownMedia) {
   const posts = [];
   for (const coll of ['posts', 'pages']) {
-    posts.push(...(await all(cfg, `/wp/v2/${coll}?context=edit&status=publish,draft,private,pending,future&_fields=id,title,content,featured_media,date`)));
+    posts.push(...(await allParallel(cfg, `/wp/v2/${coll}?context=edit&status=publish,draft,private,pending,future&_fields=id,title,content,featured_media,date`)));
   }
+  if (knownMedia) return usedMediaIds(posts, knownMedia);
   const media = [];
   for (let page = 1; page <= 200; page++) {
     const { data, res } = await req(cfg, `/wp/v2/media?per_page=100&page=${page}&_fields=id,source_url`, { raw: true });
@@ -402,6 +404,23 @@ const publicUrl = (_cfg, url) => url;
 
 // ---------------------------------------------------------------- Estructura de la web
 // Portada, menús (con sus elementos), árbol de páginas y categorías con sus entradas.
+// Todas las páginas de una lista, varias a la vez (la primera dice cuántas hay)
+async function allParallel(cfg, route, { per = 100, conc = 6, onProgress } = {}) {
+  const url = (page) => `${route}${route.includes('?') ? '&' : '?'}per_page=${per}&page=${page}`;
+  const first = await req(cfg, url(1), { raw: true });
+  const total = Number(first.res.headers.get('x-wp-totalpages') || 1);
+  const pages = [first.data || []];
+  let next = 2, done = 1;
+  const work = async () => {
+    while (next <= total) {
+      const p = next++;
+      pages[p - 1] = await req(cfg, url(p)).catch(() => []);
+      onProgress?.(++done, total);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(conc, Math.max(0, total - 1)) }, work));
+  return pages.flat();
+}
 async function all(cfg, route) {
   const out = [];
   for (let page = 1; page < 30; page++) {
@@ -466,4 +485,4 @@ async function saveStructure(cfg, ch, progress = () => {}) {
   return { errors };
 }
 
-module.exports = { setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw };
+module.exports = { allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw };

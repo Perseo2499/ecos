@@ -548,6 +548,57 @@ handle('site:save', async (changes) => { needSelf(); return wpCall(() => wpself.
 // Biblioteca de medios (solo WordPress propio)
 const needSelfMedia = () => { if (!isSelf()) throw new Error('La biblioteca de medios solo está disponible con «Mi web (wp-admin)» en Conexiones → WordPress.'); };
 let mediaUsageCache = null; // { at, data }
+// Biblioteca entera guardada en el ordenador: se enseña al momento y luego solo se piden los cambios
+const mediaCacheFile = () => path.join(app.getPath('userData'), 'media-cache.json');
+let mediaPool = null; // { site, at, syncedAt, items }
+function readMediaCache() {
+  if (mediaPool) return mediaPool;
+  try { const c = JSON.parse(fs.readFileSync(mediaCacheFile(), 'utf8')); if (c.site === cfg.wpUrl) mediaPool = c; } catch { /* sin copia */ }
+  return mediaPool;
+}
+function saveMediaCache() { try { fs.writeFileSync(mediaCacheFile(), JSON.stringify(mediaPool)); } catch (e) { log('Copia de la biblioteca', e.message); } }
+async function fullMediaList() {
+  const items = [];
+  const first = await wpCall(() => wpself.listMedia(cfg, { page: 1, perPage: 100, type: 'all' }));
+  items.push(...first.items);
+  const total = first.totalPages || 1;
+  let next = 2, done = 1;
+  const work = async () => {
+    while (next <= total) {
+      const p = next++;
+      const r = await wpCall(() => wpself.listMedia(cfg, { page: p, perPage: 100, type: 'all' })).catch(() => ({ items: [] }));
+      items.push(...r.items);
+      if (++done % 5 === 0) sendToast(`Leyendo la biblioteca: ${Math.min(done * 100, first.total)} de ${first.total}…`);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(8, Math.max(0, total - 1)) }, work));
+  return items;
+}
+// force: volver a leerla entera (borrados incluidos). Si no, la copia guardada + lo nuevo o cambiado.
+async function mediaAll(force) {
+  const now = new Date().toISOString();
+  const c = readMediaCache();
+  if (!force && c?.items?.length) {
+    if (Date.now() - new Date(c.syncedAt).getTime() > 60000) {
+      try {
+        const fresh = [];
+        for (let page = 1; page <= 20; page++) {
+          const r = await wpCall(() => wpself.listMedia(cfg, { page, perPage: 100, type: 'all', modifiedAfter: new Date(new Date(c.syncedAt).getTime() - 120000).toISOString() }));
+          fresh.push(...r.items);
+          if (page >= (r.totalPages || 1)) break;
+        }
+        if (fresh.length) { const ids = new Set(fresh.map((m) => m.id)); c.items = [...fresh, ...c.items.filter((m) => !ids.has(m.id))]; }
+        c.syncedAt = now; saveMediaCache();
+      } catch (e) { log('Cambios de la biblioteca', e.message); }
+    }
+    return c.items;
+  }
+  const items = await fullMediaList();
+  mediaPool = { site: cfg.wpUrl, at: now, syncedAt: now, items };
+  saveMediaCache();
+  return items;
+}
+handle('media:all', async (force) => { needSelfMedia(); return mediaAll(!!force); });
 handle('media:list', async (opts) => { needSelfMedia(); return wpCall(() => wpself.listMedia(cfg, opts || {})); });
 handle('media:setDates', async (list) => {
   needSelfMedia();
@@ -559,7 +610,8 @@ handle('media:setDates', async (list) => {
 handle('media:usage', async (force) => {
   needSelfMedia();
   if (!force && mediaUsageCache && Date.now() - mediaUsageCache.at < 5 * 60000) return mediaUsageCache.data;
-  const data = await wpCall(() => wpself.mediaUsage(cfg));
+  const pool = await mediaAll(false);
+  const data = await wpCall(() => wpself.mediaUsage(cfg, pool.map((m) => ({ id: m.id, source_url: m.url }))));
   mediaUsageCache = { at: Date.now(), data };
   return data;
 });
@@ -632,12 +684,7 @@ handle('media:duplicates', async () => {
   const D = require('./src/dupes');
   const { nativeImage } = require('electron');
   cfg.mediaHashes = cfg.mediaHashes || {};
-  const all = [];
-  for (let page = 1; page <= 200; page++) {
-    const r = await wpCall(() => wpself.listMedia(cfg, { page, perPage: 100, type: 'image' }));
-    all.push(...r.items);
-    if (page >= (r.totalPages || 1)) break;
-  }
+  const all = (await mediaAll(false)).filter((m) => m.type === 'image');
   let done = 0, next = 0;
   const work = async () => {
     while (next < all.length) {
@@ -645,16 +692,16 @@ handle('media:duplicates', async () => {
       const key = `${m.id}:${m.url}`;
       if (!cfg.mediaHashes[key]) {
         try {
-          const r = await fetch(m.thumb || m.url, { signal: AbortSignal.timeout(20000) });
+          const r = await fetch(m.tiny || m.thumb || m.url, { signal: AbortSignal.timeout(20000) });
           const img = nativeImage.createFromBuffer(Buffer.from(await r.arrayBuffer()));
           if (!img.isEmpty()) cfg.mediaHashes[key] = D.dhash(D.grayFromBGRA(img.resize({ width: 9, height: 8, quality: 'good' }).toBitmap()));
         } catch (e) { log('Huella de foto', m.id, e.message); }
       }
       m.hash = cfg.mediaHashes[key];
-      if (++done % 25 === 0) sendToast(`Buscando fotos repetidas: ${done} de ${all.length}…`);
+      if (++done % 100 === 0) { sendToast(`Buscando fotos repetidas: ${done} de ${all.length}…`); store.save(cfg); }
     }
   };
-  await Promise.all(Array.from({ length: 6 }, work));
+  await Promise.all(Array.from({ length: 12 }, work));
   store.save(cfg);
   const groups = D.groupDuplicates(all);
   const byId = new Map(all.map((m) => [m.id, m]));
@@ -678,6 +725,7 @@ handle('media:mergeDuplicates', async (groups) => {
     }
   }
   mediaUsageCache = null;
+  if (mediaPool && deleted) { const gone = new Set((groups || []).flatMap((g) => g.drop)); mediaPool.items = mediaPool.items.filter((m) => !gone.has(m.id)); saveMediaCache(); }
   return { posts, deleted, errors };
 });
 handle('media:upscaleApply', async ({ id, token }) => {
