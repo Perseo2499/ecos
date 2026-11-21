@@ -254,6 +254,7 @@ async function toRest(cfg, f) {
     title: f.title, content: f.content, status: f.status, excerpt: f.excerpt || '',
     ...(f.slug ? { slug: f.slug } : {}),
     ...(f.featured_image ? { featured_media: f.featured_image } : {}),
+    ...(isPage && f.parent !== undefined ? { parent: Number(f.parent) || 0 } : {}),
     ...(f.date ? { date_gmt: new Date(f.date).toISOString().slice(0, 19) } : {}),
     ...(isPage ? {} : { categories: await categoryIds(cfg, split(f.categories), !!f.createCategories), tags: await tagIds(cfg, split(f.tags)) }),
   };
@@ -302,6 +303,27 @@ async function listPosts(cfg, { type = 'post', status = 'any', search = '', page
     })),
   };
 }
+// Páginas de la web (id, título y página superior), para elegir la «Página superior» en el editor
+async function listPagesLite(cfg) {
+  const out = [];
+  for (let page = 1; page <= 10; page++) {
+    const { data, res } = await req(cfg, `/wp/v2/pages?context=edit&_fields=id,title,parent&per_page=100&page=${page}`, { raw: true });
+    out.push(...(data || []).map((p) => ({ id: p.id, title: p.title?.raw || p.title?.rendered || '(sin título)', parent: Number(p.parent) || 0 })));
+    if (page >= Number(res.headers.get('x-wp-totalpages') || 1)) break;
+  }
+  return out;
+}
+// Copia en borrador de una entrada o página (mismo contenido, extracto, categorías, etiquetas, imagen destacada o padre)
+async function duplicatePost(cfg, id, type) {
+  const p = await getPost(cfg, id, type);
+  const isPage = type === 'page';
+  const created = await createPost(cfg, {
+    type: isPage ? 'page' : 'post', title: '(copia) ' + p.title, content: p.content, excerpt: p.excerpt, status: 'draft',
+    ...(isPage ? { parent: p.parent } : { categories: p.categories.join(','), tags: p.tags.join(',') }),
+    ...(p.featured ? { featured_image: p.featured } : {}),
+  });
+  return { id: created.ID, type: isPage ? 'page' : 'post', url: created.URL };
+}
 // type: la pestaña Blog indica si es entrada o página
 const coll = (type) => (type === 'page' ? 'pages' : 'posts');
 const setPostStatus = (cfg, id, status, type) => req(cfg, `/wp/v2/${coll(type)}/${id}`, { method: 'POST', json: { status } });
@@ -317,11 +339,12 @@ async function getPost(cfg, id, type) {
     featuredImg: fm?.source_url ? { id: fm.id, url: fm.source_url, alt: fm.alt_text || '' } : null,
     id: p.id, status: p.status, url: p.link, date: p.date_gmt ? p.date_gmt + 'Z' : p.date, modified: p.modified_gmt ? p.modified_gmt + 'Z' : p.modified,
     title: p.title?.raw ?? '', excerpt: p.excerpt?.raw ?? '', content: p.content?.raw ?? '', featured: p.featured_media || null, slug: p.slug || '',
+    type: type === 'page' ? 'page' : 'post', parent: Number(p.parent) || 0,
   };
 }
 // Versiones anteriores que WordPress ha guardado de una entrada (las más recientes primero)
-async function listRevisions(cfg, id) {
-  const list = await req(cfg, `/wp/v2/posts/${id}/revisions?context=edit&per_page=50`);
+async function listRevisions(cfg, id, type) {
+  const list = await req(cfg, `/wp/v2/${coll(type)}/${id}/revisions?context=edit&per_page=50`);
   return (Array.isArray(list) ? list : []).map((r) => ({
     id: r.id, date: r.date_gmt ? r.date_gmt + 'Z' : r.date, title: r.title?.raw ?? '', content: r.content?.raw ?? '', excerpt: r.excerpt?.raw ?? '',
   })).sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -487,4 +510,4 @@ async function saveStructure(cfg, ch, progress = () => {}) {
   return { errors };
 }
 
-module.exports = { allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw };
+module.exports = { toRest, listPagesLite, duplicatePost, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw };

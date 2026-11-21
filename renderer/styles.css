@@ -1532,3 +1532,14 @@ body.editing .b-bulk.on { display: none; }
 button.dp-item { border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; transition: opacity .15s, box-shadow .15s, transform .15s; }
 button.dp-item:hover { opacity: 1; transform: translateY(-1px); }
 button.dp-item:not(.keep) b { color: var(--error, #e5484d); }
+
+/* ---- Blog: «Nueva» con menú, y páginas en el editor ---- */
+.b-new-wrap { position: relative; display: inline-block; }
+.b-new-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 210px; padding: 6px; display: flex; flex-direction: column; gap: 2px;
+  background: var(--surface-c-high); border: 1px solid var(--outline-var); border-radius: var(--r-m); box-shadow: var(--e2); }
+.b-new-menu.hidden { display: none; }
+.b-new-menu button { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 0; border-radius: 8px; background: transparent; color: var(--on-surface); font: inherit; cursor: pointer; text-align: left; }
+.b-new-menu button:hover { background: color-mix(in srgb, var(--primary) 12%, transparent); }
+.b-new-menu button:last-child { border-top: 1px solid var(--outline-var); border-radius: 0 0 8px 8px; margin-top: 4px; color: var(--on-surface-var); }
+.b-new-menu .ms { font-size: 20px; color: var(--primary); }
+#d-parent-field select { width: 100%; }

@@ -83,8 +83,9 @@ function renderBlog(items) {
       b.textContent = label; b.onclick = () => busy(b, fn); actions.appendChild(b);
     };
     // cualquier entrada se puede editar en Ecos (el HTML antiguo se convierte en bloques)
-    if (it.status !== 'trash' && it.type !== 'page') btn(t('Editar en Ecos'), () => openFromWp(it.id), 'primary');
-    if (it.status !== 'trash') btn(it.type === 'page' ? t('Editar') : t('Editar en WordPress'), async () => window.api.open(await window.api.blogEditUrl(it.id, it.type)));
+    if (it.status !== 'trash') btn(t('Editar en Ecos'), () => openFromWp(it.id, null, it.type === 'page' ? 'page' : 'post'), 'primary');
+    if (it.status !== 'trash') btn(t('Editar en WordPress'), async () => window.api.open(await window.api.blogEditUrl(it.id, it.type)));
+    if (it.status !== 'trash' && CFG.wpMode === 'selfhosted') btn(t('Duplicar'), () => duplicateItems([it]));
     if (it.status === 'publish') btn(t('Ver'), async () => window.api.open(it.url));
     if (['draft', 'pending', 'private'].includes(it.status)) btn(t('Publicar'), async () => {
       if (!await ask(t('¿Publicar «{x}»? Será visible en la web.', { x: title }))) return;
@@ -113,7 +114,7 @@ $$('#b-type button').forEach((b) => b.onclick = async () => {
   $$('#b-type button').forEach((x) => x.classList.toggle('active', x === b));
   const st = b.dataset.type === 'structure', cal = b.dataset.type === 'calendar', med = b.dataset.type === 'media';
   // Estructura y Calendario: en lugar de la lista
-  $$('#b-status, #tab-blog .field.search, #b-refresh, #b-new, #b-list, #b-bulk, #b-range, #tab-blog .pager').forEach((x) => x.classList.toggle('hidden', st || cal || med));
+  $$('#b-status, #tab-blog .field.search, #b-refresh, #b-new-wrap, #b-list, #b-bulk, #b-range, #tab-blog .pager').forEach((x) => x.classList.toggle('hidden', st || cal || med));
   $('#b-structure').classList.toggle('hidden', !st);
   $('#b-calendar').classList.toggle('hidden', !cal);
   $('#b-media').classList.toggle('hidden', !med);
@@ -130,13 +131,42 @@ let bTimer; $('#b-search').oninput = () => { clearTimeout(bTimer); bTimer = setT
 $('#b-refresh').onclick = loadBlog;
 $('#b-prev').onclick = () => { blog.page--; loadBlog(); };
 $('#b-next').onclick = () => { blog.page++; loadBlog(); };
-$('#b-new').onclick = () => {
+// «Nueva»: en Entradas, un menú (entrada o página en Ecos, o WordPress); en Páginas, una página nueva directamente
+const newMenu = () => $('#b-new-menu');
+const closeNewMenu = () => newMenu().classList.add('hidden');
+$('#b-new').onclick = (e) => {
+  e.stopPropagation();
+  if (blog.type === 'page') return newDraft({ type: 'page' });
+  newMenu().classList.toggle('hidden');
+};
+document.addEventListener('click', closeNewMenu);
+$$('#b-new-menu [data-new]').forEach((x) => (x.onclick = () => {
+  closeNewMenu();
+  if (x.dataset.new === 'wp') return openNewInWp();
+  newDraft({ type: x.dataset.new });
+}));
+function openNewInWp() {
   if (CFG.wpMode === 'selfhosted') {
     const base = (CFG.wpUrl || '').replace(/\/$/, '');
     return window.api.open(`${/^https?:/.test(base) ? base : 'https://' + base}/wp-admin/post-new.php${blog.type === 'page' ? '?post_type=page' : ''}`);
   }
   window.api.open(`https://wordpress.com/${blog.type === 'page' ? 'page' : 'post'}/${CFG.wpSite}`);
-};
+}
+
+// Duplicar: copia en borrador (mismo contenido, extracto, categorías, etiquetas, imagen destacada o página superior)
+async function duplicateItems(items) {
+  const done = [], errors = [];
+  for (const it of items) {
+    try { done.push(await window.api.blogDuplicate(it.id, it.type === 'page' ? 'page' : 'post')); }
+    catch (e) { errors.push(`«${decodeEntities(it.title)}»: ${e.message}`); }
+  }
+  loadBlog();
+  if (errors.length) toast(t('{e} con error: {m}', { e: errors.length, m: errors.slice(0, 2).join(' · ') }), true);
+  if (done.length === 1 && items.length === 1) {
+    toast(t('Copia creada: «{x}». Está como borrador.', { x: '(copia) ' + decodeEntities(items[0].title) }));
+    if (await ask(t('¿Abrir la copia en Ecos?'), { ok: t('Abrir en Ecos') })) await openFromWp(done[0].id, null, done[0].type);
+  } else if (done.length) toast(t('{n} copias creadas.', { n: done.length }));
+}
 
 // --- Selección y acciones en lote --------------------------------------------------
 const bsel = new Map(); // id → entrada (se mantiene al cambiar de página)
@@ -161,6 +191,7 @@ function renderBulk() {
     if (CFG.wpMode === 'selfhosted' && has((i) => i.status !== 'trash')) acts.push(['links', 'link', t('Revisar enlaces')]);
     if (blog.type !== 'page' && has((i) => i.status !== 'trash')) acts.push(['normalize', 'format_paint', t('Normalizar formato')]);
     if (blog.type !== 'page' && CFG.wpMode === 'selfhosted' && has((i) => i.status !== 'trash')) acts.push(['origimg', 'high_quality', t('Recuperar fotos originales')]);
+    if (CFG.wpMode === 'selfhosted' && has((i) => i.status !== 'trash')) acts.push(['duplicate', 'content_copy', t('Duplicar')]);
     if (has((i) => i.status !== 'trash')) acts.push(['trash', 'delete', t('Papelera')]);
     acts.push(['delete', 'delete_forever', t('Borrar definitivamente')]);
   }
@@ -192,6 +223,7 @@ async function runBulk(kind) {
   let items = [...bsel.values()];
   const n = items.length;
   if (kind === 'links') return linksBulk(items);
+  if (kind === 'duplicate') { items = items.filter((i) => i.status !== 'trash'); bsel.clear(); renderBulk(); return duplicateItems(items); }
   let cat = null;
   if (kind === 'cat-add' || kind === 'cat-del') {
     cat = await pickCategory(kind === 'cat-add' ? t('¿Qué categoría quieres añadir a las {n} entradas?', { n }) : t('¿Qué categoría quieres quitar de las {n} entradas?', { n }));

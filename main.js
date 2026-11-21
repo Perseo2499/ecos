@@ -317,8 +317,9 @@ function editUrlFor(id, type = 'post') {
 function postFields(d, status) {
   const scheduled = status === 'future' && d.scheduleAt;
   return {
+    ...(d.type === 'page' ? { type: 'page', parent: Number(d.parent) || 0 } : {}),
     title: d.title, content: d.blocks ? composeBlocks(d.blocks, { spectra: isSelf() }) : composeContent(d.sections), status: scheduled ? 'future' : status,
-    tags: d.tags.join(','), categories: d.categories.join(','),
+    tags: (d.tags || []).join(','), categories: (d.categories || []).join(','),
     excerpt: d.excerpt || '',
     ...(d.slug ? { slug: d.slug } : {}),
     ...(d.featuredImageId ? { featured_image: d.featuredImageId } : {}),
@@ -341,18 +342,18 @@ handle('draft:autosave', (data) => { fs.writeFileSync(autosaveFile(), store.seal
 handle('draft:autosaved', () => { try { return store.unseal(cfg, fs.readFileSync(autosaveFile(), 'utf8')); } catch { return null; } });
 handle('draft:autosaveClear', () => { try { fs.unlinkSync(autosaveFile()); } catch { /* no había */ } return true; });
 // Historial de versiones de una entrada (revisiones de WordPress), ya en bloques de Ecos
-handle('post:revisions', async (postId) => {
+handle('post:revisions', async (postId, type) => {
   if (!isSelf()) throw new Error('El historial de versiones solo está disponible con WordPress propio.');
   const { parseBlocks } = require('./src/parseblocks');
-  const revs = await wpCall(() => WP().listRevisions(cfg, postId));
+  const revs = await wpCall(() => WP().listRevisions(cfg, postId, type));
   return revs.map((r) => {
     const text = String(r.content || '').replace(/<!--[\s\S]*?-->/g, ' ').replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]*>/g, ' ');
     return { ...r, blocks: parseBlocks(r.content), words: text.split(/\s+/).filter(Boolean).length };
   });
 });
 // Actualizar desde WordPress: estado, fechas, título, extracto, destacada y contenido (ya en bloques de Ecos)
-handle('post:pull', async (id) => {
-  const p = await wpCall(() => WP().getPost(cfg, id));
+handle('post:pull', async (id, type) => {
+  const p = await wpCall(() => WP().getPost(cfg, id, type));
   const sent = cfg.sentContent?.[id];
   const norm = (s) => String(s || '').replace(/ecos-[cm]-[a-z0-9]+/g, '').replace(/\s+/g, ' ').trim();
   // estado al día en las publicaciones exportadas
@@ -439,7 +440,7 @@ handle('draft:publish', async (d) => {
   // para la vista previa se borra y la entrada se crea de nuevo, de una sola vez.
   let post;
   if (d.postId && d.recreate && WP().deletePost) {
-    await wpCall(() => WP().deletePost(cfg, d.postId)).catch((e) => log('No se pudo borrar el borrador de la vista previa', d.postId, e.message));
+    await wpCall(() => WP().deletePost(cfg, d.postId, d.type)).catch((e) => log('No se pudo borrar el borrador de la vista previa', d.postId, e.message));
     post = await wpCall(() => WP().createPost(cfg, fields));
   } else {
     post = await wpCall(() => (d.postId ? WP().updatePost(cfg, d.postId, fields) : WP().createPost(cfg, fields)));
@@ -447,7 +448,7 @@ handle('draft:publish', async (d) => {
   cfg.sentContent = cfg.sentContent || {};
   cfg.sentContent[post.ID] = fields.content;
   const ids = Object.keys(cfg.sentContent); if (ids.length > 200) delete cfg.sentContent[ids[0]];
-  const editUrl = editUrlFor(post.ID);
+  const editUrl = editUrlFor(post.ID, d.type);
   const url = WP().publicUrl(cfg, post.URL);
   cfg.exported = cfg.exported || {};
   for (const k of d.keys || []) cfg.exported[k] = { postId: post.ID, url, editUrl, title: d.title, status: post.status, at: new Date().toISOString() };
@@ -542,6 +543,13 @@ handle('blog:setStatus', async (id, status, type) => { await wpCall(() => WP().s
 handle('blog:trash', async (id, type) => { await wpCall(() => WP().trashPost(cfg, id, type)); return markExported(id, 'trash'); });
 // Estructura de la web (solo WordPress propio: WordPress.com no da acceso a menús ni ajustes por esta vía)
 const needSelf = () => { if (!isSelf()) throw new Error('La estructura de la web solo está disponible con «Mi web (wp-admin)» en Conexiones → WordPress.'); };
+handle('site:pages', async () => { if (!isSelf()) throw new Error('La lista de páginas solo está disponible con «Mi web (wp-admin)».'); return wpCall(() => wpself.listPagesLite(cfg)); });
+handle('blog:duplicate', async (id, type) => {
+  if (!isSelf()) throw new Error('Duplicar solo está disponible con «Mi web (wp-admin)» en Conexiones → WordPress.');
+  const r = await wpCall(() => wpself.duplicatePost(cfg, id, type));
+  log('Copia creada', id, '→', r.id, r.type);
+  return r;
+});
 handle('site:structure', async () => { needSelf(); return wpCall(() => wpself.siteStructure(cfg)); });
 handle('site:catPosts', async (catId) => { needSelf(); return wpCall(() => wpself.categoryPosts(cfg, catId)); });
 handle('site:save', async (changes) => { needSelf(); return wpCall(() => wpself.saveStructure(cfg, changes)); });

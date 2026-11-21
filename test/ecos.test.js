@@ -414,3 +414,11 @@ test('fecha real de fotos sin entrada: en el nombre o dentro de la foto (EXIF)',
   const jpg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe1]), len, app1, Buffer.from([0xff, 0xda])]);
   assert.equal(P.exifDate(jpg), '2011-11-04T18:30:00');
 });
+
+test('páginas en Ecos: toRest envía la página superior y no categorías ni etiquetas', async () => {
+  const W = require('../src/wpself');
+  const body = await W.toRest({}, { type: 'page', parent: '7', title: 'Quiénes somos', content: '<p>x</p>', status: 'draft', categories: 'Noticias', tags: 'a,b' });
+  assert.equal(body.parent, 7);
+  assert.ok(!('categories' in body) && !('tags' in body));
+  assert.ok(!('date_gmt' in body));
+});

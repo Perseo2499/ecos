@@ -266,6 +266,12 @@
     'Modelo (opcional: si lo dejas vacío, usa el de la CLI)': 'Model (optional: leave empty to use the CLI default)',
     'Los botones de IA usarán {c}. Pulsa «Probar» para comprobarlo.': 'The AI buttons will use {c}. Click "Try it" to check.',
     // 1.2 (editor completo)
+    'Nueva entrada': 'New post', 'Nueva página': 'New page', 'Abrir en WordPress': 'Open in WordPress', 'Página superior': 'Parent page', '(ninguna)': '(none)',
+    'Abrir en Ecos': 'Open in Ecos', '¡Página publicada!': 'Page published!', 'Borrador de página creado en WordPress.': 'Page draft created in WordPress.',
+    'Página programada para el {d}.': 'Page scheduled for {d}.', 'Abriendo la página de WordPress…': 'Opening the WordPress page…',
+    'Copia creada: «{x}». Está como borrador.': 'Copy created: «{x}». It is a draft.', '¿Abrir la copia en Ecos?': 'Open the copy in Ecos?',
+    '{n} copias creadas.': '{n} copies created.', 'Duplicar en borrador': 'Duplicate as draft', 'Esta página todavía no está en WordPress: envíala primero.': 'This page is not in WordPress yet: send it first.',
+    'WordPress aún no ha guardado versiones anteriores de esta página.': 'WordPress has not saved earlier versions of this page yet.',
     'Fecha de la entrada a la que se subió · subida el {d}': 'Date of the post it was uploaded to · uploaded on {d}',
     'Fecha escrita en el nombre del archivo · subida el {d}': 'Date written in the file name · uploaded on {d}',
     'Pone a cada foto su fecha real: la de la entrada donde se usa o se subió, la escrita en su nombre o la que la cámara guardó dentro de la foto': 'Gives each photo its real date: the post where it is used or was uploaded, the date in its name, or the one the camera saved inside the photo',
