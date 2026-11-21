@@ -63,11 +63,23 @@
     mount(draft, { media, onChange, onOpenMedia, onPeekCss }) {
       this.draft = draft; this.media = media; this.onChange = onChange || (() => {}); this.onOpenMedia = onOpenMedia || (() => {}); this.onPeekCss = onPeekCss;
       this.undo = []; this.redo = [];
+      this.autoFeatured();
       this.liftFeatured(); // la destacada va arriba y sale del cuerpo
       this.render(); this.renderMedia();
     },
     // Fotos del cuerpo de la entrada
     bodyImages() { return this.draft.blocks.flatMap((b) => (b.img ? [b.img] : b.images || [])); },
+    // Si la entrada tiene una sola foto y ninguna destacada, esa foto pasa a ser la destacada (es la que se ve en
+    // la lista del blog y al compartir). No se hace si se quitó la destacada a mano.
+    autoFeatured() {
+      if (this.draft.featuredImageId != null || this.draft.noAutoFeatured) return;
+      const imgs = this.bodyImages().filter((i) => i && i.type !== 'video' && i.url);
+      if (imgs.length !== 1) return;
+      const img = imgs[0];
+      this.draft.featuredImageId = img.id;
+      // que siga a mano en la bandeja (al salir del cuerpo)
+      if (this.media && !this.media.some((m) => m.id === img.id)) this.media.unshift({ ...img, type: 'image' });
+    },
     // Saca la imagen destacada del cuerpo (si está) para que no salga dos veces en la web
     liftFeatured() {
       const id = this.draft.featuredImageId;
@@ -212,7 +224,7 @@
       box.innerHTML = img
         ? `<img src="${esc(img.url)}" alt=""><span class="cover-tag"><span class="ms fill">star</span>${t('Imagen destacada')}</span><button class="cover-del" title="${t('Quitar imagen destacada')}"><span class="ms">close</span></button>`
         : `<span class="ms">add_photo_alternate</span>${t('Arrastra aquí la imagen destacada (se quita del cuerpo)')}`;
-      $('.cover-del', box)?.addEventListener('click', () => this.change(() => (this.draft.featuredImageId = null)));
+      $('.cover-del', box)?.addEventListener('click', () => this.change(() => { this.draft.featuredImageId = null; this.draft.noAutoFeatured = true; }));
       if (!box.dataset.wired) {
         box.dataset.wired = '1';
         // a la portada se copia la foto (no se saca de donde está)

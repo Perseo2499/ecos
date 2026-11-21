@@ -713,7 +713,13 @@ handle('backup:restore', async (keys, opts = {}) => {
       }
       const prep = await backupMod().prepare(backupAn, x, (buf, name) => wpCall(() => WP().uploadNamed(cfg, buf, name)), { download: opts.download !== false, job });
       if (job.stop) { sendProgress({ key, state: 'cancelled' }); break; }
-      if (opts.modern !== false) prep.fields.content = modernize(prep.fields.content); // bloques de WordPress con el formato habitual
+      if (opts.modern !== false) {
+        prep.fields.content = modernize(prep.fields.content); // bloques de WordPress con el formato habitual
+        if (!prep.fields.featured_image) {
+          const af = await autoFeatured(prep.fields.content).catch((e) => { log('Destacada automática', key, e.message); return null; });
+          if (af) { prep.fields.content = af.content; prep.fields.featured_image = af.mediaId; }
+        }
+      }
       const status = opts.status === 'original' ? (['publish', 'future', 'private', 'pending', 'draft'].includes(x.status) ? x.status : 'draft') : 'draft';
       const post = await wpCall(() => WP().createPost(cfg, { ...prep.fields, status, type: x.type, createCategories: opts.createCategories !== false }));
       const url = WP().publicUrl(cfg, post.URL);
@@ -729,6 +735,21 @@ handle('backup:restore', async (keys, opts = {}) => {
   }
   return results;
 });
+// Entrada sin imagen destacada y con una sola foto: esa foto pasa a ser la destacada y sale del cuerpo
+// (así se ve en la lista del blog y no aparece dos veces). Devuelve { content, mediaId } o null.
+async function autoFeatured(content) {
+  const blocks = require('./src/parseblocks').parseBlocks(content);
+  const imgs = blocks.flatMap((b) => (b.img ? [b.img] : b.images || [])).filter((i) => i && i.type !== 'video' && i.url);
+  if (imgs.length !== 1) return null;
+  const img = imgs[0];
+  let mediaId = Number(img.id) > 0 ? Number(img.id) : 0;
+  if (mediaId && isSelf() && !(await WP().mediaExists(cfg, mediaId))) mediaId = 0;
+  if (!mediaId && isSelf()) mediaId = await WP().findMediaByUrl(cfg, img.url).catch(() => null);
+  if (!mediaId) mediaId = (await wpCall(() => WP().uploadFromUrls(cfg, [img.url])))[0]?.id;
+  if (!mediaId) return null;
+  const rest = blocks.filter((b) => !(b.type === 'image' && b.img === img)).map((b) => (b.images ? { ...b, images: b.images.filter((x) => x !== img) } : b.img === img ? { ...b, img: null } : b));
+  return { content: composeBlocks(rest, { spectra: isSelf() }), mediaId };
+}
 // Contenido antiguo → bloques de WordPress con el formato habitual del blog (el texto no cambia)
 let normSeq = 0;
 function modernize(html) {
@@ -743,8 +764,11 @@ handle('backup:normalizeRestored', async (postIds) => {
   for (const id of postIds) {
     try {
       const p = await wpCall(() => WP().getPost(cfg, id));
-      const content = modernize(p.content);
-      if (content.trim() && content !== p.content) await wpCall(() => WP().updateContent(cfg, id, content));
+      let content = modernize(p.content);
+      // sin imagen destacada y con una sola foto: esa foto pasa a ser la destacada
+      const af = !p.featured && isSelf() ? await autoFeatured(content).catch((e) => { log('Destacada automática', id, e.message); return null; }) : null;
+      if (af) { await wpCall(() => WP().updateFields(cfg, id, { content: af.content, featured_media: af.mediaId })); content = null; }
+      if (content && content.trim() && content !== p.content) await wpCall(() => WP().updateContent(cfg, id, content));
       done.push(id); sendProgress({ normalized: id });
     } catch (e) { errors.push(`${id}: ${e.message}`); log('Normalizar', id, e.message); }
   }
