@@ -117,8 +117,8 @@ const decode = (s) => String(s || '').replace(/&amp;/g, '&').replace(/&#8217;/g,
 
 // --- Medios -----------------------------------------------------------------------
 const MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm' };
-async function uploadBuffer(cfg, buf, filename, type) {
-  ({ buf, type, name: filename } = require('./imgopt').optimize(buf, type, filename)); // fotos más ligeras
+async function uploadBuffer(cfg, buf, filename, type, { keep = false } = {}) {
+  if (!keep) ({ buf, type, name: filename } = require('./imgopt').optimize(buf, type, filename)); // fotos más ligeras
   const m = await req(cfg, '/wp/v2/media', {
     method: 'POST', body: buf,
     headers: { 'Content-Type': type, 'Content-Disposition': `attachment; filename="${filename.replace(/["\r\n]/g, '')}"` },
@@ -389,7 +389,8 @@ async function findExisting(cfg, type, slug, title, date) {
   const hit = matchExisting(found, { slug, title, date });
   return hit ? hit.id : null;
 }
-const uploadNamed = (cfg, buf, name) => uploadBuffer(cfg, buf, name, MIME[path.extname(name).slice(1).toLowerCase()] || 'application/octet-stream');
+// keep: el archivo tal cual, sin reducir ni volver a comprimir (fotos restauradas: calidad original)
+const uploadNamed = (cfg, buf, name, opts) => uploadBuffer(cfg, buf, name, MIME[path.extname(name).slice(1).toLowerCase()] || 'application/octet-stream', opts);
 
 const publicBase = (cfg) => { try { return base(cfg); } catch { return null; } };
 const publicUrl = (_cfg, url) => url;

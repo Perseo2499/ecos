@@ -186,6 +186,40 @@ function wpFromWxr(xmlOrList) {
 
 // ---------------------------------------------------------------- análisis
 const IMG_EXT = /\.(jpe?g|png|gif|webp|bmp|svg|mp4|mov|m4v|webm|mp3|pdf)$/i;
+// Fotos alojadas en Blogger/Picasa (muy habitual en blogs antiguos). En la entrada suele estar una versión
+// pequeña (/s320/, /s400/…); cambiando ese trozo por /s0/ se obtiene la foto original, a tamaño completo.
+const GOOGLE_IMG = /^https?:\/\/[^/]*(bp\.blogspot\.com|ggpht\.com|googleusercontent\.com)\//i;
+const SIZE_SEG = /\/(s\d+(-[a-z]+)?|w\d+-h\d+(-[a-z0-9-]+)?|h\d+)\//i;
+const googleKey = (u) => String(u).replace(/&amp;/g, '&').replace(/^https?:\/\//i, '').replace(/^\d\.bp\./, 'bp.').replace(SIZE_SEG, '/~/').split('?')[0];
+const googleFull = (u) => String(u).replace(/&amp;/g, '&').replace(SIZE_SEG, '/s0/').replace(/^http:/i, 'https:');
+// Fotos de Blogger/Picasa de un contenido (una por foto, aunque estén en varios tamaños)
+function externalImages(html) {
+  const out = new Map();
+  for (const m of String(html).matchAll(/(?:src|href)=["'](https?:\/\/[^"']+)["']/gi)) {
+    const u = m[1].replace(/&amp;/g, '&');
+    if (!GOOGLE_IMG.test(u) || (!SIZE_SEG.test(u) && !IMG_EXT.test(u.split('?')[0]))) continue;
+    const k = googleKey(u);
+    if (!out.has(k)) out.set(k, { url: googleFull(u), orig: u, gkey: k, ext: true });
+  }
+  return [...out.values()];
+}
+// Descarga una foto en la mejor calidad posible: original, tamaño grande, la dirección de la entrada y,
+// si ya no existe, la copia del Archivo de Internet
+async function downloadBest(m, signalFn) {
+  const tries = [...new Set([m.url, m.url.replace(/\/s0\//, '/s1600/'), m.orig].filter(Boolean))];
+  for (const u of tries) {
+    try {
+      const r = await fetch(u, { signal: signalFn() });
+      if (r.ok && /^image\//.test(r.headers.get('content-type') || '')) return Buffer.from(await r.arrayBuffer());
+    } catch { /* siguiente */ }
+  }
+  try {
+    const arch = await require('./links').archivedFile(m.orig || m.url);
+    if (arch) { const r = await fetch(arch, { signal: signalFn() }); if (r.ok && /^image\//.test(r.headers.get('content-type') || '')) return Buffer.from(await r.arrayBuffer()); }
+  } catch { /* sin copia */ }
+  return null;
+}
+const nameOf = (u) => (decodeURIComponent(String(u).split('?')[0].split('/').pop() || 'foto') || 'foto').replace(/[^\w.\-]+/g, '-').slice(0, 80) || 'foto.jpg';
 // «2017/03/foto-300x200.jpg» → «2017/03/foto.jpg» (las miniaturas apuntan al original)
 const original = (rel) => rel.replace(/-\d+x\d+(?=\.\w+$)/, '').replace(/-scaled(?=\.\w+$)/, '');
 // Ruta relativa dentro de «uploads» a partir de una URL (WordPress propio o WordPress.com)
@@ -269,9 +303,10 @@ async function analyze(paths, progress = () => {}) {
       const galleryIds = [...content.matchAll(/\[gallery[^\]]*ids=["']?([\d,\s]+)/g)].flatMap((m) => m[1].split(',').map((x) => x.trim()).filter(Boolean));
       const thumb = meta._thumbnail_id && attachments.get(String(meta._thumbnail_id));
       const media = [...urls].map((u) => ({ url: u, rel: original(uploadsRel(u)) }));
+      media.push(...externalImages(content));
       for (const id of galleryIds) { const a = attachments.get(id); if (a) media.push({ url: a.url, rel: a.rel, attId: id }); }
       if (thumb) media.push({ url: thumb.url, rel: thumb.rel, attId: thumb.id, featured: true });
-      const uniq = [...new Map(media.map((m) => [m.rel || m.url, m])).values()];
+      const uniq = [...new Map(media.map((m) => [m.gkey || m.rel || m.url, m])).values()];
       const found = uniq.filter((m) => findFile(m.rel)).length;
       const t = termsOf.get(String(p.ID)) || { category: [], post_tag: [] };
       return {
@@ -327,12 +362,15 @@ async function prepare(an, post, upload, { download = true, job = null } = {}) {
   const problems = [];
   for (const m of post.media) {
     if (job?.stop) break;
-    const key = m.rel || m.url;
+    const key = m.gkey || m.rel || m.url;
     if (map.has(key)) continue;
-    let buf = null, name = path.basename((m.rel || m.url).split('?')[0]);
-    const f = an.findFile(m.rel);
+    let buf = null, name = m.ext ? nameOf(m.orig || m.url) : path.basename((m.rel || m.url).split('?')[0]);
+    const f = m.ext ? null : an.findFile(m.rel);
     if (f) buf = await f.src.read(f.name);
-    else if (download) {
+    else if (m.ext && download) {
+      buf = await downloadBest(m, () => (job ? AbortSignal.any([AbortSignal.timeout(45000), job.ctrl.signal]) : AbortSignal.timeout(45000)));
+      if (buf && !/\.(jpe?g|png|gif|webp)$/i.test(name)) name += '.jpg';
+    } else if (download) {
       // como mucho 45 s por foto (web.archive.org a veces no contesta); «Cancelar» corta la descarga
       const signal = job ? AbortSignal.any([AbortSignal.timeout(45000), job.ctrl.signal]) : AbortSignal.timeout(45000);
       try { const r = await fetch(m.url.split('?')[0], { signal }); if (r.ok) buf = Buffer.from(await r.arrayBuffer()); } catch { /* sin conexión, tiempo agotado o cancelado */ }
@@ -355,6 +393,7 @@ async function prepare(an, post, upload, { download = true, job = null } = {}) {
   const clean = sanitizeRestored(post.content);
   if (clean.removed) problems.push(`Se quitó código potencialmente peligroso (${clean.removed} caracteres)`);
   let content = clean.html.replace(/(https?:\/\/[^\s"'<>)]+)/g, (u) => {
+    if (GOOGLE_IMG.test(u)) { const g = map.get(googleKey(u)); return g ? g.url : u; }
     const rel = uploadsRel(u); if (!rel) return u;
     const hit = map.get(original(rel)) || map.get(rel) || map.get(u);
     return hit ? hit.url : u;
@@ -424,4 +463,4 @@ async function thumbnail(an, rel, nativeImage) {
   return img.resize({ width: 120 }).toDataURL();
 }
 
-module.exports = { sanitizeRestored, previewContent, analyze, prepare, thumbnail, parseSql, wpFromSql, wpFromWxr, uploadsRel, original };
+module.exports = { externalImages, downloadBest, googleKey, googleFull, nameOf, sanitizeRestored, previewContent, analyze, prepare, thumbnail, parseSql, wpFromSql, wpFromWxr, uploadsRel, original };

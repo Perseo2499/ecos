@@ -335,3 +335,13 @@ test('fotos rotas: variantes de Blogger y quitar la foto del contenido', () => {
   assert.equal(out.includes('wp:image'), false);
   assert.ok(out.includes('g.jpg') && out.includes('Texto'));
 });
+
+test('fotos de Blogger: una por foto aunque esté en varios tamaños, y en su tamaño original', () => {
+  const B = require('../src/backup');
+  const html = '<a href="http://4.bp.blogspot.com/-a/UO9/AAA/xyz/s1600/foto+1.jpg"><img src="http://4.bp.blogspot.com/-a/UO9/AAA/xyz/s320/foto+1.jpg"></a><img src="https://1.bp.blogspot.com/-b/c/d/e/w400-h300/otra.png">';
+  const list = B.externalImages(html);
+  assert.equal(list.length, 2);
+  assert.equal(list[0].url, 'https://4.bp.blogspot.com/-a/UO9/AAA/xyz/s0/foto+1.jpg');
+  assert.equal(B.googleKey('http://3.bp.blogspot.com/-a/UO9/AAA/xyz/s400/foto+1.jpg'), list[0].gkey);
+  assert.equal(list[1].url, 'https://1.bp.blogspot.com/-b/c/d/e/s0/otra.png');
+});

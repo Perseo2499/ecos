@@ -777,7 +777,7 @@ handle('backup:restore', async (keys, opts = {}) => {
         const existing = await wpCall(() => WP().findExisting(cfg, x.type, x.slug, x.title, x.date));
         if (existing) { results.push({ key, state: 'exists', postId: existing }); sendProgress({ key, state: 'exists', postId: existing }); continue; }
       }
-      const prep = await backupMod().prepare(backupAn, x, (buf, name) => wpCall(() => WP().uploadNamed(cfg, buf, name)), { download: opts.download !== false, job });
+      const prep = await backupMod().prepare(backupAn, x, (buf, name) => wpCall(() => WP().uploadNamed(cfg, buf, name, { keep: true })), { download: opts.download !== false, job });
       if (job.stop) { sendProgress({ key, state: 'cancelled' }); break; }
       if (opts.modern !== false) {
         prep.fields.content = modernize(prep.fields.content); // bloques de WordPress con el formato habitual
@@ -815,6 +815,23 @@ async function autoFeatured(content) {
   if (!mediaId) return null;
   return { content, mediaId };
 }
+// Fotos de Blogger/Picasa enlazadas desde fuera (normalmente en versión pequeña): se descargan a tamaño
+// original, se suben a la biblioteca tal cual (sin volver a comprimir) y la entrada pasa a usarlas.
+async function importExternalImages(html) {
+  const B = backupMod();
+  const list = B.externalImages(html);
+  if (!list.length) return html;
+  const map = new Map();
+  for (const m of list) {
+    try {
+      const buf = await B.downloadBest(m, () => AbortSignal.timeout(45000));
+      if (!buf) continue;
+      let name = B.nameOf(m.orig || m.url); if (!/\.(jpe?g|png|gif|webp)$/i.test(name)) name += '.jpg';
+      map.set(m.gkey, await wpCall(() => WP().uploadNamed(cfg, buf, name, { keep: true })));
+    } catch (e) { log('Foto externa', m.orig, e.message); }
+  }
+  return String(html).replace(/https?:\/\/[^\s"'<>)]+/g, (u) => { const g = map.get(B.googleKey(u)); return g ? g.url : u; });
+}
 // Contenido antiguo → bloques de WordPress con el formato habitual del blog (el texto no cambia)
 let normSeq = 0;
 function modernize(html) {
@@ -829,7 +846,7 @@ handle('backup:normalizeRestored', async (postIds) => {
   for (const id of postIds) {
     try {
       const p = await wpCall(() => WP().getPost(cfg, id));
-      let content = modernize(p.content);
+      let content = modernize(isSelf() ? await importExternalImages(p.content) : p.content);
       // sin imagen destacada y con una sola foto: esa foto pasa a ser la destacada
       const af = !p.featured && isSelf() ? await autoFeatured(content).catch((e) => { log('Destacada automática', id, e.message); return null; }) : null;
       if (af) { await wpCall(() => WP().updateFields(cfg, id, { content: af.content, featured_media: af.mediaId })); content = null; }
