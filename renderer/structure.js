@@ -439,8 +439,14 @@
     const lim = S.plAll ? 999 : 10;
     const others = S.data.pages.filter((p) => !(z.type === 'page' && p.id === z.id));
     const locked = d.buttons.filter((b) => !b.editable).length;
+    const elem = d.builder === 'elementor';
     const help = `<div class="pv-help"><span class="ms">info</span><span>${t('Aquí ves <b>adónde lleva cada botón</b> de «{p}» (derecha) y <b>desde qué páginas se llega</b> a ella (izquierda). Pulsa cualquier página para entrar en ella. Para unirla con otra, pulsa <b>«+ Añadir botón»</b> o elige la página en la lista de abajo.', { p: esc(d.title) })}</span></div>`
-      + (locked ? `<div class="pv-help warn"><span class="ms">lock</span><span>${t('{n} de sus botones los puso otro editor de la web (por ejemplo Elementor o el tema), así que Ecos los muestra pero no los cambia.', { n: locked })}</span><button class="btn text small" data-pv="wpedit"><span class="ms">open_in_new</span>${t('Cambiarlos en WordPress')}</button></div>` : '');
+      + (elem ? `<div class="pv-help warn"><span class="ms">design_services</span><span>${t('Esta página está <b>diseñada con Elementor</b>. Ecos te enseña adónde llevan sus botones, pero los que añade Ecos aparecen <b>al final de la página, fuera del diseño</b>. Para añadir, colocar o dar estilo a botones aquí, usa Elementor.')}</span><button class="btn tonal small" data-pv="elementor"><span class="ms">open_in_new</span>${t('Abrir en Elementor')}</button></div>`
+        : d.builder === 'spectra' ? `<div class="pv-help warn"><span class="ms">view_quilt</span><span>${t('Esta página está montada con <b>bloques de diseño de Spectra</b> (columnas, contenedores y sus botones). Ecos añade los botones nuevos <b>al final de la página</b>. Para <b>subirlo</b> entre los bloques, ábrela en Ecos y arrástralo; para meterlo <b>dentro de una columna</b> o darle el mismo estilo que los demás botones, usa el editor de WordPress.')}</span><span class="pv-hb"><button class="btn tonal small" data-pv="ecos"><span class="ms">edit_square</span>${t('Abrir en Ecos')}</button><button class="btn text small" data-pv="wpedit"><span class="ms">open_in_new</span>${t('Abrir en WordPress')}</button></span></div>`
+        : `<div class="pv-help"><span class="ms">open_with</span><span>${t('¿Quieres <b>mover</b> un botón, ponerlo en otro sitio o cambiar su <b>estilo</b>? Abre la página en Ecos: ahí lo arrastras donde quieras y eliges relleno o contorno y su alineación.')}</span><button class="btn text small" data-pv="ecos"><span class="ms">edit_square</span>${t('Abrir en Ecos')}</button></div>`)
+      + (locked && !elem && d.builder !== 'spectra' ? `<div class="pv-help warn"><span class="ms">lock</span><span>${t('{n} de sus botones los puso otro editor de la web (por ejemplo Elementor o el tema), así que Ecos los muestra pero no los cambia.', { n: locked })}</span><button class="btn text small" data-pv="wpedit"><span class="ms">open_in_new</span>${t('Cambiarlos en WordPress')}</button></div>` : '');
+    // en páginas de Elementor no se añaden botones desde aquí (quedarían fuera del diseño)
+    const canAdd = !elem;
     return `<div class="st-map st-pv ${S.pvAnim ? 'pv-in' : ''}">${top}${tools}${help}
       <div class="pv-stage"><svg class="pv-svg" aria-hidden="true"><defs><marker id="pvAr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="currentColor"/></marker></defs></svg>
         <div class="pv-col pv-inc"><div class="pv-h"><span class="ms">login</span>${t('Llegan aquí desde…')}</div>
@@ -448,15 +454,15 @@
         <div class="pv-mid"><div class="pv-main"><div class="pv-mh"><span class="ms fill">${z.type === 'post' ? 'article' : 'description'}</span><b>${esc(d.title)}</b>${stBadge(d.status) || `<span class="mp-b">${t('Publicada')}</span>`}</div>
           ${thumb(d.outline)}
           <div class="pv-cnt">${t('{b} botón(es) · {l} enlace(s) en el texto', { b: d.buttons.length, l: d.links.length + d.moreLinks })}</div>
-          <button class="btn filled small pv-add" data-pv="add">${t('+ Añadir botón')}</button>
-          <span class="pv-conn" draggable="true" data-pv-conn title="${t('Arrastra este punto hasta otra página para unirlas con un botón')}"><span class="ms">drag_indicator</span></span></div></div>
+          ${canAdd ? `<button class="btn filled small pv-add" data-pv="add">${t('+ Añadir botón')}</button>
+          <span class="pv-conn" draggable="true" data-pv-conn title="${t('Arrastra este punto hasta otra página para unirlas con un botón')}"><span class="ms">drag_indicator</span></span>` : `<button class="btn tonal small pv-add" data-pv="elementor"><span class="ms">open_in_new</span>${t('Añadir botones en Elementor')}</button>`}</div></div>
         <div class="pv-col pv-out"><div class="pv-h"><span class="ms">logout</span>${t('Esta página lleva a…')}</div>
           <div class="pv-g">${t('Botones')}</div>
           ${d.buttons.length ? d.buttons.map((b, i) => row(b, i, true)).join('') : `<div class="hint pv-none">${t('No tiene botones. Pulsa «+ Añadir botón» para unirla con otra página.')}</div>`}
           ${d.links.length ? `<div class="pv-g">${t('Enlaces del texto')}</div>${d.links.slice(0, lim).map((l, i) => row(l, i, false)).join('')}
             ${d.links.length > lim ? `<button class="btn text small pv-more" data-pv="more">${t('Ver los {n} restantes', { n: d.links.length - lim })}</button>` : ''}` : ''}</div>
       </div>
-      <div class="pv-others"><div class="pv-oh"><span class="ms">add_link</span><b>${t('Añadir un botón que lleve a otra página')}</b><span class="hint">${t('Pulsa la página de destino (o arrastra hasta ella el punto ⋮ de la tarjeta)')}</span></div>
+      <div class="pv-others" ${canAdd ? '' : 'hidden'}><div class="pv-oh"><span class="ms">add_link</span><b>${t('Añadir un botón que lleve a otra página')}</b><span class="hint">${t('Pulsa la página de destino (o arrastra hasta ella el punto ⋮ de la tarjeta)')}</span></div>
         ${others.map((p) => `<span class="pv-pill" role="button" tabindex="0" data-go="page:${p.id}" data-pill title="${esc(t('Añadir en «{a}» un botón que lleve a «{b}»', { a: d.title, b: p.title }))}"><span class="ms">add</span>${esc(p.title)}</span>`).join('')}</div>
     </div>`;
   }
@@ -584,6 +590,7 @@
         if (a === 'edit') return editBtn(i).catch(fail);
         if (a === 'del') return delBtn(i).catch(fail);
         if (a === 'ecos') return window.openFromWp?.(z.id, null, z.type);
+        if (a === 'elementor') return window.api.blogEditUrl(z.id, z.type).then((u) => window.api.open(String(u).replace(/action=edit\b/, 'action=elementor'))).catch(fail);
         if (a === 'wpedit') return window.api.blogEditUrl(z.id, z.type).then((u) => window.api.open(u)).catch(fail);
         if (a === 'web') { if (d?.link) window.api.open(d.link); }
       };

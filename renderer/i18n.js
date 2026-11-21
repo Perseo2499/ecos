@@ -266,6 +266,11 @@
     'Modelo (opcional: si lo dejas vacío, usa el de la CLI)': 'Model (optional: leave empty to use the CLI default)',
     'Los botones de IA usarán {c}. Pulsa «Probar» para comprobarlo.': 'The AI buttons will use {c}. Click "Try it" to check.',
     // 1.2 (editor completo)
+    'Esta página está montada con <b>bloques de diseño de Spectra</b> (columnas, contenedores y sus botones). Ecos añade los botones nuevos <b>al final de la página</b>. Para <b>subirlo</b> entre los bloques, ábrela en Ecos y arrástralo; para meterlo <b>dentro de una columna</b> o darle el mismo estilo que los demás botones, usa el editor de WordPress.': 'This page is built with <b>Spectra design blocks</b> (columns, containers and their buttons). Ecos adds new buttons <b>at the end of the page</b>. To <b>move it up</b> between the blocks, open it in Ecos and drag it; to put it <b>inside a column</b> or give it the same style as the other buttons, use the WordPress editor.',
+    'Esta página está <b>diseñada con Elementor</b>. Ecos te enseña adónde llevan sus botones, pero los que añade Ecos aparecen <b>al final de la página, fuera del diseño</b>. Para añadir, colocar o dar estilo a botones aquí, usa Elementor.': 'This page is <b>designed with Elementor</b>. Ecos shows where its buttons lead, but buttons added by Ecos appear <b>at the end of the page, outside the design</b>. To add, place or style buttons here, use Elementor.',
+    'Abrir en Elementor': 'Open in Elementor',
+    'Añadir botones en Elementor': 'Add buttons in Elementor',
+    '¿Quieres <b>mover</b> un botón, ponerlo en otro sitio o cambiar su <b>estilo</b>? Abre la página en Ecos: ahí lo arrastras donde quieras y eliges relleno o contorno y su alineación.': 'Want to <b>move</b> a button, place it elsewhere or change its <b>style</b>? Open the page in Ecos: drag it wherever you want and choose filled or outline and its alignment.',
     'Convertir en mosaico': 'Turn into mosaic',
     'Ahora suelta aquí más fotos desde la bandeja (o pulsa el recuadro para elegirlas).': 'Now drop more photos here from the tray (or click the box to choose them).',
     'Este botón lo puso otro editor de la web (por ejemplo Elementor o el tema). Se cambia en WordPress.': 'This button was added by another editor on the site (for example Elementor or the theme). It is changed in WordPress.',

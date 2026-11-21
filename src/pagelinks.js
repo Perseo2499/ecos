@@ -49,8 +49,19 @@ async function pageLinks(cfg, id, type = 'page') {
   if (me) { me.to = targetsOf(resolve, [...buttons, ...links], me); me.title = p.title || me.title; me.status = p.status; }
   else idx.items.push({ id, type, title: p.title || '(sin título)', status: p.status, link: p.url, slug: p.slug, to: targetsOf(resolve, [...buttons, ...links], { id, type }) });
   const withRes = (l) => ({ ...l, res: resolve(l.href) });
+  // ¿Diseñada con Elementor? Entonces lo que se ve sale de Elementor, no del contenido normal de WordPress
+  let builder = null;
+  if (p.status === 'publish' && p.url) {
+    try {
+      const r = await fetch(p.url, { signal: AbortSignal.timeout(10000) });
+      const page = await r.text();
+      if (new RegExp(`data-elementor-id=["']${id}["']|elementor-page-${id}\\b`).test(page)) builder = 'elementor';
+    } catch { /* sin conexión: se supone que no */ }
+  }
+  // Montada con bloques de diseño de Spectra (columnas, contenedores, sus botones…)
+  if (!builder && /<!--\s*wp:uagb\//.test(html)) builder = 'spectra';
   return {
-    id, type, title: p.title || '(sin título)', status: p.status, link: p.url, outline: SM.blockOutline(html),
+    builder, id, type, title: p.title || '(sin título)', status: p.status, link: p.url, outline: SM.blockOutline(html),
     buttons: buttons.map(withRes), links: links.slice(0, 300).map(withRes), moreLinks: Math.max(0, links.length - 300),
     incoming: idx.items.filter((x) => !(x.id === id && x.type === type) && x.to.includes(type + id)).map((x) => ({ id: x.id, type: x.type, title: x.title, status: x.status })),
     targets: idx.items.map((x) => ({ id: x.id, type: x.type, title: x.title, status: x.status, link: x.link })),

@@ -1828,3 +1828,5 @@ button.dp-item:not(.keep) b { color: var(--error, #e5484d); }
 span.pv-pill[data-pill] { display: inline-flex; align-items: center; gap: 4px; border: 0; font: inherit; color: inherit; cursor: pointer; }
 span.pv-pill[data-pill] .ms { font-size: 15px; opacity: .7; }
 span.pv-pill[data-pill]:hover { background: var(--primary); color: var(--on-primary); }
+.pv-others[hidden] { display: none; }
+.pv-hb { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; flex: none; } .pv-hb .btn.small { width: auto; margin: 0; }
