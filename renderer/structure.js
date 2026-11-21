@@ -434,7 +434,7 @@
     const row = (l, i, isBtn) => `<div class="pv-row ${isBtn ? '' : 'sm'} ${S.fresh.has(l.text + '|' + l.href) ? 'fresh' : ''}" data-row="${isBtn ? 'b' : 'l'}${i}">
       <div class="pv-chip ${l.variant === 'outline' ? 'outline' : ''}" ${isBtn ? '' : 'data-plain="1"'}><span class="pv-ch-t">${esc(l.text || t('(sin texto)'))}</span>
         ${isBtn ? (l.editable ? `<button class="pv-ico" data-pv="edit" data-i="${i}" title="${t('Cambiar este botón')}"><span class="ms">edit</span></button><button class="pv-ico" data-pv="del" data-i="${i}" title="${t('Quitar este botón')}"><span class="ms">delete</span></button>`
-          : `<span class="pv-ico lock" title="${t('Este botón lo puso otro editor de la web (por ejemplo Elementor o el tema). Se cambia en WordPress.')}"><span class="ms">lock</span></span>`) : ''}</div>
+          : `<span class="pv-ico pv-locked" title="${t('Este botón lo puso otro editor de la web (por ejemplo Elementor o el tema). Se cambia en WordPress.')}"><span class="ms">lock</span></span>`) : ''}</div>
       <span class="pv-arrow"><span class="ms">arrow_forward</span></span>${destCard(l.res, d, l.href)}</div>`;
     const lim = S.plAll ? 999 : 10;
     const others = S.data.pages.filter((p) => !(z.type === 'page' && p.id === z.id));

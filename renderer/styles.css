@@ -1821,7 +1821,7 @@ button.dp-item:not(.keep) b { color: var(--error, #e5484d); }
 .pv-help > .ms { color: var(--primary); flex: none; }
 .pv-help.warn > .ms { color: #c27a00; }
 .pv-help .btn.small { width: auto; margin: 0 0 0 auto; flex: none; }
-.pv-ico.lock { opacity: .7; cursor: help; }
+.pv-ico.pv-locked { opacity: .7; cursor: help; }
 .pv-others { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; padding: 12px; border-radius: var(--r-l); background: var(--surface-c-low); }
 .pv-oh { flex-basis: 100%; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
 .pv-oh .ms { color: var(--primary); }
