@@ -375,7 +375,7 @@
     return true;
   }
   const ecosEditPage = async (p) => {
-    if (typeof window.openFromWp === 'function' && window.openFromWp.length >= 3) return window.openFromWp(p.id, null, 'page');
+    if (typeof window.openFromWp === 'function') return window.openFromWp(p.id, null, 'page');
     window.api.open(await window.api.blogEditUrl(p.id, 'page'));
   };
 

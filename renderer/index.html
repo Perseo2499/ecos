@@ -91,7 +91,7 @@
       <aside id="editor" class="editor hidden">
         <div class="ed-bar">
           <button id="ed-close" class="btn text icon-only" data-i18n-title title="Cerrar"><span class="ms">arrow_back</span></button>
-          <b class="ed-bar-title" data-i18n>Entrada</b>
+          <b class="ed-bar-title" id="ed-bar-title">Entrada</b>
           <span class="hint" id="ed-count"></span>
           <span class="spacer"></span>
           <span id="ed-wp" class="ed-wp hidden"></span>
@@ -201,9 +201,10 @@
               <button id="d-normalize" class="btn ai" data-i18n-title title="Deja la entrada con el formato habitual del blog sin cambiar el texto (útil en entradas antiguas o restauradas)"><span class="ms">format_paint</span><span data-i18n>Normalizar formato</span></button>
               <button id="d-links" class="btn ai" data-i18n-title title="Comprueba si los enlaces de la entrada siguen funcionando y propone alternativas"><span class="ms">link</span><span data-i18n>Revisar enlaces</span></button>
             </div>
-            <div class="field"><span class="ms">sell</span><input id="d-tags" data-i18n-ph placeholder="Etiquetas"></div>
-            <div class="section-label" data-i18n>Categorías</div>
+            <div class="field" id="d-tags-field"><span class="ms">sell</span><input id="d-tags" data-i18n-ph placeholder="Etiquetas"></div>
+            <div class="section-label" id="d-cats-label" data-i18n>Categorías</div>
             <div id="d-cats" class="cat-list"></div>
+            <div class="field hidden" id="d-parent-field"><label data-i18n>Página superior</label><select id="d-parent"><option value="0" data-i18n>(ninguna)</option></select></div>
             <div class="section-label" data-i18n>Publicación</div>
             <div class="seg when" id="d-when-seg">
               <label><input type="radio" name="d-when" value="draft" checked><span class="ms">draft</span><span data-i18n>Borrador</span></label>
@@ -252,7 +253,12 @@
       <button id="b-refresh" class="btn text icon-only" data-i18n-title title="Actualizar"><span class="ms">refresh</span></button>
       <button id="b-find" class="btn text hidden"><span class="ms">find_replace</span><span data-i18n>Buscar y reemplazar</span></button>
       <span class="spacer"></span>
-      <button id="b-new" class="btn filled"><span class="ms">add</span><span data-i18n>Nueva</span></button>
+      <span class="b-new-wrap" id="b-new-wrap"><button id="b-new" class="btn filled"><span class="ms">add</span><span data-i18n>Nueva</span></button>
+        <div id="b-new-menu" class="b-new-menu hidden">
+          <button data-new="post"><span class="ms">article</span><span data-i18n>Nueva entrada</span></button>
+          <button data-new="page"><span class="ms">description</span><span data-i18n>Nueva página</span></button>
+          <button data-new="wp"><span class="ms">open_in_new</span><span data-i18n>Abrir en WordPress</span></button>
+        </div></span>
     </div>
     <div id="b-range" class="b-range">
       <span class="ms">date_range</span>

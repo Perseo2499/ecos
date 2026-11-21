@@ -432,3 +432,11 @@ test('estructura: páginas fuera del menú, menú con páginas ocultas y categor
   const cats = [{ id: 1, count: 0, parent: 0 }, { id: 2, count: 0, parent: 0 }, { id: 3, count: 0, parent: 2 }, { id: 4, count: 5, parent: 0 }];
   assert.deepEqual(SM.emptyCategories(cats).map((c) => c.id), [3]);
 });
+
+test('páginas en Ecos: toRest envía la página superior y no categorías ni etiquetas', async () => {
+  const W = require('../src/wpself');
+  const body = await W.toRest({}, { type: 'page', parent: '7', title: 'Quiénes somos', content: '<p>x</p>', status: 'draft', categories: 'Noticias', tags: 'a,b' });
+  assert.equal(body.parent, 7);
+  assert.ok(!('categories' in body) && !('tags' in body));
+  assert.ok(!('date_gmt' in body));
+});

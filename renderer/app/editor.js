@@ -23,15 +23,16 @@ $('#make').onclick = (e) => busy(e.target, makeDraft);
 
 // Abre en el editor de Ecos una entrada que ya está en WordPress (desde una publicación o desde el Blog).
 // Al enviar se actualiza esa misma entrada.
-async function openFromWp(postId, keys) {
-  toast(t('Abriendo la entrada de WordPress…'));
-  const r = await window.api.pullPost(postId);
+async function openFromWp(postId, keys, type = 'post') {
+  toast(type === 'page' ? t('Abriendo la página de WordPress…') : t('Abriendo la entrada de WordPress…'));
+  const r = await window.api.pullPost(postId, type);
   exported = r.exported || exported;
   const imgs = r.blocks.flatMap((b) => (b.img ? [b.img] : b.images || []));
   const vids = r.blocks.filter((b) => b.type === 'video' && b.video?.id).map((b) => ({ ...b.video, type: 'video' }));
   draft = {
     title: r.title, excerpt: r.excerpt || '', slug: r.slug || '', tags: r.tags || [], categories: r.categories || [], blocks: r.blocks,
     featuredImageId: r.featured || null, keepFeaturedInBody: true, date: r.date, postId, previewOnly: false, wpStatus: r.status, sections: [], sourceText: '',
+    type: type === 'page' ? 'page' : 'post', parent: r.parent || 0,
     extraMedia: [...(r.featuredImg ? [{ ...r.featuredImg, type: 'image' }] : []), ...imgs.map((i) => ({ ...i, type: i.type || 'image' })), ...vids],
   };
   draftKeys = keys || Object.entries(exported).filter(([, v]) => v.postId === postId).map(([k]) => k);
@@ -39,6 +40,20 @@ async function openFromWp(postId, keys) {
   renderWpState(r.status, r.url);
 }
 
+// Abre el editor de Ecos con un borrador en blanco (entrada o página). La usan el Blog y la pantalla Estructura.
+// Al enviar se crea en WordPress con el tipo correcto; la fecha es la de hoy (o la que se programe).
+function newDraft({ type = 'post', title = '', categories = [], parent = 0 } = {}) {
+  const page = type === 'page';
+  draft = {
+    title, excerpt: '', slug: '', tags: [], categories: page ? [] : (categories && categories.length ? [...categories] : undefined),
+    blocks: [window.BlockEditor.create('paragraph')], featuredImageId: null, keepFeaturedInBody: true, date: null, postId: null,
+    previewOnly: false, wpStatus: null, sections: [], sourceText: '', extraMedia: [], type: page ? 'page' : 'post', parent: Number(parent) || 0, isNew: true,
+  };
+  draftKeys = [];
+  renderWpState(null);
+  openEditor();
+  $('#d-title').focus();
+}
 
 // Fotos y vídeos disponibles para la entrada (subidos a WordPress): alimentan la bandeja del editor
 function mediaPool() {
@@ -64,7 +79,10 @@ function openEditor() {
   $('#d-schedule').value = '';
   // Fecha original: activada por defecto y con la fecha a la vista
   $('#d-keepdate').checked = prefs().keepDate !== false;
-  $('#d-keepdate-label').textContent = t('Fecha original ({d})', { d: fmtDay(draft.date) });
+  $('#d-keepdate-label').textContent = t('Fecha original ({d})', { d: draft.date ? fmtDay(draft.date) : '' });
+  // Borrador en blanco: no hay fecha original que conservar
+  $('#d-keepdate').closest('label').classList.toggle('hidden', !!draft.isNew);
+  applyDraftType();
   $('#d-template').innerHTML = `<option value="">${t('Sin plantilla')}</option>` + (CFG.templates || []).map((tp, i) => `<option value="${i}">${escHtml(tp.name)}</option>`).join('');
   // Sin IA configurada, los botones se muestran desactivados y explican por qué al pasar el ratón
   $$('#ai-article, #ai-alts').forEach((b) => { b.disabled = !CFG.aiConfigured; b.parentElement.title = CFG.aiConfigured ? '' : t('Configura una IA en «Conexiones» para usar estos botones.'); });
@@ -91,6 +109,30 @@ function openEditor() {
   updateCount();
   updateHistoryBtn();
 }
+// Modo página: sin categorías ni etiquetas, con «Página superior»; la barra dice «Página»
+const isPageDraft = () => draft?.type === 'page';
+function applyDraftType() {
+  const page = isPageDraft();
+  ['#d-tags-field', '#d-cats-label', '#d-cats'].forEach((s) => $(s).classList.toggle('hidden', page));
+  $('#d-parent-field').classList.toggle('hidden', !page);
+  $('#ed-bar-title').textContent = page ? t('Página') : t('Entrada');
+  if (page) fillParents(draft.parent || 0);
+}
+let sitePagesCache = null;
+async function fillParents(sel) {
+  const box = $('#d-parent');
+  const set = (list) => {
+    const byId = new Map(list.map((p) => [p.id, p]));
+    const depth = (p) => { let n = 0, q = p; while (q && q.parent && byId.has(q.parent) && n < 6) { q = byId.get(q.parent); n++; } return n; };
+    box.innerHTML = `<option value="0">${t('(ninguna)')}</option>` + list.filter((p) => p.id !== draft.postId)
+      .map((p) => `<option value="${p.id}">${'— '.repeat(depth(p))}${escHtml(decodeEntities(p.title))}</option>`).join('');
+    box.value = String(sel || 0);
+    if (box.value !== String(sel || 0)) box.value = '0';
+  };
+  set(sitePagesCache || []);
+  try { sitePagesCache = await window.api.sitePages(); if (isPageDraft()) set(sitePagesCache || []); } catch (e) { toast(e.message || String(e), true); }
+}
+$('#d-parent').onchange = () => autosaveSoon();
 // El título crece en varias líneas (y no admite saltos de línea)
 const autoTitle = () => { const el = $('#d-title'); el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; };
 $('#d-title').oninput = () => { autoTitle(); autosaveSoon(); };
@@ -131,7 +173,7 @@ async function autosaveNow() {
   clearTimeout(autosaveTimer);
   if (!draft) return;
   const p = draftPayload($('input[name="d-when"]:checked')?.value || 'draft');
-  try { await window.api.autosave({ draft: { ...draft, title: p.title, excerpt: p.excerpt, tags: p.tags, categories: p.categories, slug: $('#d-slug')?.value || '' }, keys: draftKeys }); } catch { /* bloqueada o sin disco */ }
+  try { await window.api.autosave({ draft: { ...draft, title: p.title, excerpt: p.excerpt, tags: p.tags, categories: p.categories, parent: p.parent, slug: $('#d-slug')?.value || '' }, keys: draftKeys }); } catch { /* bloqueada o sin disco */ }
 }
 async function showRecoverBanner() {
   let a; try { a = await window.api.autosaved(); } catch { return; }
@@ -270,12 +312,12 @@ function featuredUrl() {
 }
 // Datos de la entrada para enviar o previsualizar
 const draftPayload = (status) => ({
-  postId: draft.postId,
+  postId: draft.postId, type: draft.type === 'page' ? 'page' : 'post', parent: isPageDraft() ? Number($('#d-parent').value) || 0 : 0,
   title: $('#d-title').value.trim(), excerpt: $('#d-excerpt').value.trim(), blocks: draft.blocks,
-  tags: $('#d-tags').value.split(',').map((x) => x.trim()).filter(Boolean),
-  categories: $$('#d-cats input:checked').map((i) => i.value),
+  tags: isPageDraft() ? [] : $('#d-tags').value.split(',').map((x) => x.trim()).filter(Boolean),
+  categories: isPageDraft() ? [] : $$('#d-cats input:checked').map((i) => i.value),
   status, scheduleAt: status === 'future' ? $('#d-schedule').value : null,
-  featuredImageId: draft.featuredImageId, featuredImageUrl: featuredUrl(), keepDate: $('#d-keepdate').checked, date: draft.date, keys: draftKeys,
+  featuredImageId: draft.featuredImageId, featuredImageUrl: featuredUrl(), keepDate: draft.isNew ? false : $('#d-keepdate').checked, date: draft.date, keys: draftKeys,
   slug: slugify($('#d-slug').value),
   recreate: !!draft.previewOnly,
 });
@@ -292,8 +334,8 @@ function renderWpState(st, url) {
   $('a', el)?.addEventListener('click', (e) => { e.preventDefault(); window.api.open(url); });
 }
 $('#ed-pull').onclick = (e) => busy(e.currentTarget, async () => {
-  if (!draft.postId) return toast(t('Esta entrada todavía no está en WordPress: envíala primero.'), true);
-  const r = await window.api.pullPost(draft.postId);
+  if (!draft.postId) return toast(isPageDraft() ? t('Esta página todavía no está en WordPress: envíala primero.') : t('Esta entrada todavía no está en WordPress: envíala primero.'), true);
+  const r = await window.api.pullPost(draft.postId, draft.type);
   exported = r.exported || exported;
   renderWpState(r.status, r.url);
   if (r.status === 'trash') return toast(t('Esta entrada está en la papelera de WordPress.'), true);
@@ -331,8 +373,9 @@ $('#send').onclick = (e) => busy(e.target, async () => {
   if (when === 'publish' && !await ask(t('Se publicará ahora y será visible en la web. ¿Continuar?'))) return;
   const res = await window.api.publish(draftPayload(when));
   exported = res.exported; lastSent = res; draft.postId = res.postId || draft.postId; draft.previewOnly = false; window.api.autosaveClear().catch(() => {}); draftDirty = false; renderWpState(res.status, res.url);
-  $('#sent-text').textContent = res.status === 'publish' ? t('¡Entrada publicada!')
-    : res.status === 'future' ? t('Entrada programada para el {d}.', { d: fmtDate(res.date) }) : t('Borrador creado en WordPress.');
+  const pg = isPageDraft();
+  $('#sent-text').textContent = res.status === 'publish' ? (pg ? t('¡Página publicada!') : t('¡Entrada publicada!'))
+    : res.status === 'future' ? (pg ? t('Página programada para el {d}.', { d: fmtDate(res.date) }) : t('Entrada programada para el {d}.', { d: fmtDate(res.date) })) : (pg ? t('Borrador de página creado en WordPress.') : t('Borrador creado en WordPress.'));
   if (res.status !== 'future' && res.date) $('#sent-text').textContent += ' ' + t('Fecha de la entrada: {d}.', { d: fmtDate(res.date) });
   $('#sent').classList.remove('hidden');
   selected.clear(); updateCount(); renderFeed(); blog.loaded = false;
@@ -489,9 +532,9 @@ async function openHistory() {
   document.body.appendChild(scrim);
   prev.innerHTML = `<p class="hist-msg">${t('Cargando versiones…')}</p>`;
   let revs;
-  try { revs = await window.api.postRevisions(draft.postId); } catch (e) { close(); return toast(e.message || String(e), true); }
+  try { revs = await window.api.postRevisions(draft.postId, draft.type); } catch (e) { close(); return toast(e.message || String(e), true); }
   if (!scrim.isConnected) return;
-  if (!revs.length) { prev.innerHTML = `<p class="hist-msg">${t('WordPress aún no ha guardado versiones anteriores de esta entrada.')}</p>`; scrim.classList.add('empty'); return; }
+  if (!revs.length) { prev.innerHTML = `<p class="hist-msg">${isPageDraft() ? t('WordPress aún no ha guardado versiones anteriores de esta página.') : t('WordPress aún no ha guardado versiones anteriores de esta entrada.')}</p>`; scrim.classList.add('empty'); return; }
   const curTexts = histBlockTexts(draft.blocks), curWords = curTexts.join(' ').split(/\s+/).filter(Boolean).length;
   let sel = null;
   list.innerHTML = revs.map((r, i) => {
