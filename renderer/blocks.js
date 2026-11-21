@@ -69,21 +69,21 @@
     },
     // Fotos del cuerpo de la entrada
     bodyImages() { return this.draft.blocks.flatMap((b) => (b.img ? [b.img] : b.images || [])); },
-    // Si la entrada tiene una sola foto y ninguna destacada, esa foto pasa a ser la destacada (es la que se ve en
-    // la lista del blog y al compartir). No se hace si se quitó la destacada a mano.
+    // Si la entrada tiene una sola foto y ninguna destacada, esa foto pasa a ser también la destacada (es la que se
+    // ve en la lista del blog y al compartir) y se queda en el cuerpo, para que el texto no pierda sentido.
+    // No se hace si se quitó la destacada a mano.
     autoFeatured() {
       if (this.draft.featuredImageId != null || this.draft.noAutoFeatured) return;
       const imgs = this.bodyImages().filter((i) => i && i.type !== 'video' && i.url);
       if (imgs.length !== 1) return;
       const img = imgs[0];
       this.draft.featuredImageId = img.id;
-      // que siga a mano en la bandeja (al salir del cuerpo)
-      if (this.media && !this.media.some((m) => m.id === img.id)) this.media.unshift({ ...img, type: 'image' });
+      this.draft.keepFeaturedInBody = true;
     },
     // Saca la imagen destacada del cuerpo (si está) para que no salga dos veces en la web
     liftFeatured() {
       const id = this.draft.featuredImageId;
-      if (id == null) return false;
+      if (id == null || this.draft.keepFeaturedInBody) return false;
       let found = false;
       for (let i = this.draft.blocks.length - 1; i >= 0; i--) {
         const b = this.draft.blocks[i];
@@ -235,7 +235,7 @@
           if (!this.isPhoto(drag)) return;
           e.preventDefault();
           const d = drag; drag = null; endDrag();
-          this.change(() => { const img = this.take(d); if (img) { this.draft.featuredImageId = img.id; this.liftFeatured(); } });
+          this.change(() => { const img = this.take(d); if (img) { this.draft.featuredImageId = img.id; this.draft.keepFeaturedInBody = false; this.liftFeatured(); } });
         });
       }
     },
@@ -674,7 +674,7 @@
         <input class="alt" placeholder="${t('Descripción (alt)')}" draggable="false">`;
       $('.alt', fig).value = img.alt || '';
       $('.alt', fig).oninput = (e) => { img.alt = e.target.value; this.onChange(); };
-      $('.star', fig).onclick = () => this.change(() => { this.draft.featuredImageId = img.id; this.liftFeatured(); });
+      $('.star', fig).onclick = () => this.change(() => { this.draft.featuredImageId = img.id; this.draft.keepFeaturedInBody = false; this.liftFeatured(); });
       $('.del', fig).onclick = remove;
       $(isVid ? 'video' : 'img', fig).onclick = () => this.onOpenMedia(img);
       if (isVid) { $('.star', fig).remove(); $('.alt', fig).remove(); }

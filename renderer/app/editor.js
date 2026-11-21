@@ -31,7 +31,7 @@ async function openFromWp(postId, keys) {
   const vids = r.blocks.filter((b) => b.type === 'video' && b.video?.id).map((b) => ({ ...b.video, type: 'video' }));
   draft = {
     title: r.title, excerpt: r.excerpt || '', slug: r.slug || '', tags: r.tags || [], categories: r.categories || [], blocks: r.blocks,
-    featuredImageId: r.featured || null, date: r.date, postId, previewOnly: false, wpStatus: r.status, sections: [], sourceText: '',
+    featuredImageId: r.featured || null, keepFeaturedInBody: true, date: r.date, postId, previewOnly: false, wpStatus: r.status, sections: [], sourceText: '',
     extraMedia: [...(r.featuredImg ? [{ ...r.featuredImg, type: 'image' }] : []), ...imgs.map((i) => ({ ...i, type: i.type || 'image' })), ...vids],
   };
   draftKeys = keys || Object.entries(exported).filter(([, v]) => v.postId === postId).map(([k]) => k);
@@ -314,7 +314,7 @@ $('#ed-pull').onclick = (e) => busy(e.currentTarget, async () => {
   $('#d-excerpt').value = r.excerpt || '';
   window.BlockEditor.change(() => {
     if (r.contentChanged) draft.blocks = r.blocks;
-    if (r.featured) { draft.featuredImageId = r.featured; window.BlockEditor.liftFeatured(); }
+    if (r.featured) { draft.featuredImageId = r.featured; draft.keepFeaturedInBody = true; }
   });
   // las fotos que ahora usa la entrada, también en la bandeja
   const known = new Set(window.BlockEditor.media.map((m) => m.id));

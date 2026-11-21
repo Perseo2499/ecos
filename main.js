@@ -735,8 +735,8 @@ handle('backup:restore', async (keys, opts = {}) => {
   }
   return results;
 });
-// Entrada sin imagen destacada y con una sola foto: esa foto pasa a ser la destacada y sale del cuerpo
-// (así se ve en la lista del blog y no aparece dos veces). Devuelve { content, mediaId } o null.
+// Entrada sin imagen destacada y con una sola foto: esa foto pasa a ser también la destacada (así se ve en la
+// lista del blog) y se queda en el cuerpo, para que el texto no pierda sentido. Devuelve { content, mediaId } o null.
 async function autoFeatured(content) {
   const blocks = require('./src/parseblocks').parseBlocks(content);
   const imgs = blocks.flatMap((b) => (b.img ? [b.img] : b.images || [])).filter((i) => i && i.type !== 'video' && i.url);
@@ -747,8 +747,7 @@ async function autoFeatured(content) {
   if (!mediaId && isSelf()) mediaId = await WP().findMediaByUrl(cfg, img.url).catch(() => null);
   if (!mediaId) mediaId = (await wpCall(() => WP().uploadFromUrls(cfg, [img.url])))[0]?.id;
   if (!mediaId) return null;
-  const rest = blocks.filter((b) => !(b.type === 'image' && b.img === img)).map((b) => (b.images ? { ...b, images: b.images.filter((x) => x !== img) } : b.img === img ? { ...b, img: null } : b));
-  return { content: composeBlocks(rest, { spectra: isSelf() }), mediaId };
+  return { content, mediaId };
 }
 // Contenido antiguo → bloques de WordPress con el formato habitual del blog (el texto no cambia)
 let normSeq = 0;
