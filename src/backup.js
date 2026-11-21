@@ -336,6 +336,13 @@ async function prepare(an, post, upload, { download = true, job = null } = {}) {
       // como mucho 45 s por foto (web.archive.org a veces no contesta); «Cancelar» corta la descarga
       const signal = job ? AbortSignal.any([AbortSignal.timeout(45000), job.ctrl.signal]) : AbortSignal.timeout(45000);
       try { const r = await fetch(m.url.split('?')[0], { signal }); if (r.ok) buf = Buffer.from(await r.arrayBuffer()); } catch { /* sin conexión, tiempo agotado o cancelado */ }
+      // la foto ya no está en su sitio (p. ej. Picasa o Blogger borrados): la copia del Archivo de Internet
+      if (!buf && !job?.stop) {
+        try {
+          const arch = await require('./links').archivedFile(m.url.split('?')[0]);
+          if (arch) { const r = await fetch(arch, { signal: job ? AbortSignal.any([AbortSignal.timeout(45000), job.ctrl.signal]) : AbortSignal.timeout(45000) }); if (r.ok && /^image\//.test(r.headers.get('content-type') || '')) buf = Buffer.from(await r.arrayBuffer()); }
+        } catch { /* sin copia */ }
+      }
     }
     if (!buf) { problems.push(name); continue; }
     try {
@@ -395,6 +402,14 @@ async function previewContent(an, post, nativeImage) {
     const data = rel && (await local(rel));
     if (data) content = content.split(u).join(data);
   }
+  // fotos de fuera de la copia que ya no se pueden ver: la copia guardada en el Archivo de Internet
+  const L = require('./links');
+  const ext = [...new Set([...content.matchAll(/<img\b[^>]*\ssrc="(https?:\/\/[^"]+)"/gi)].map((m) => m[1]))].slice(0, 30);
+  await Promise.all(ext.map(async (u) => {
+    if (/web\.archive\.org/.test(u) || (await L.imageWorks(u.replace(/&amp;/g, '&')).catch(() => true))) return;
+    const arch = await L.archivedFile(u.replace(/&amp;/g, '&')).catch(() => null);
+    if (arch) content = content.split(u).join(arch);
+  }));
   content = content.replace(/<!--[\s\S]*?-->/g, '').replace(/<script[\s\S]*?<\/script>/gi, '');
   const fm = (post.media || []).find((m) => m.featured);
   const featured = fm ? (await local(fm.rel)) || fm.url : null;

@@ -312,3 +312,12 @@ test('replaceLinkInHtml: solo cambia atributos, no el texto visible', () => {
   assert.equal(out, '<p>Visita https://a.es/x?a=1&amp;b=2 y <a href="https://n.es/y">https://a.es/x?a=1&amp;b=2</a><img src="https://n.es/y"></p>');
   assert.equal(LK.unlinkInHtml('<a href="https://q.es/">hola</a> y <a href="https://o.es/">otro</a>', 'https://q.es/'), 'hola y <a href="https://o.es/">otro</a>');
 });
+
+test('fotos desaparecidas: copia del Archivo de Internet tal cual (id_)', async () => {
+  const L = require('../src/links');
+  assert.equal(L.rawArchive('https://web.archive.org/web/20111105120000/http://x.blogspot.com/a.jpg'), 'https://web.archive.org/web/20111105120000id_/http://x.blogspot.com/a.jpg');
+  const fake = async (u) => ({ status: 200, url: u, json: async () => ({ archived_snapshots: { closest: { available: true, url: 'http://web.archive.org/web/2011/http://x/a.jpg' } } }) });
+  assert.equal(await L.archivedFile('http://x/a.jpg', { fetch: fake }), 'https://web.archive.org/web/2011id_/http://x/a.jpg');
+  const dead = async (u) => ({ status: 404, url: u });
+  assert.equal(await L.imageWorks('http://x/a.jpg', { fetch: dead }), false);
+});

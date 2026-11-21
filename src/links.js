@@ -49,6 +49,20 @@ async function wayback(fetchFn, url, timeout) {
   } catch { return null; } finally { clearTimeout(timer); }
 }
 
+// Dirección del archivo tal cual lo guardó el Archivo de Internet (sin su marco): /web/2011…/x → /web/2011…id_/x
+const rawArchive = (u) => String(u).replace(/(\/web\/\d{4,14})(\/)/, '$1id_$2');
+const IMG_RE = /\.(jpe?g|png|gif|webp|bmp)(\?|$)/i;
+// Foto desaparecida (servidor caído, Picasa/Blogger borrado…): la copia guardada en el Archivo de Internet
+async function archivedFile(url, { fetch: fetchFn = globalThis.fetch, timeout = 15000 } = {}) {
+  const snap = await wayback(fetchFn, url, timeout);
+  return snap ? rawArchive(snap) : null;
+}
+// ¿Se puede ver esta foto? (las webs de fotos borradas a veces devuelven un dibujo de aviso con error 404)
+async function imageWorks(url, { fetch: fetchFn = globalThis.fetch, timeout = 8000 } = {}) {
+  const r = await probe(fetchFn, url, timeout);
+  return !r.error && is2xx(r.code);
+}
+
 async function checkUrl(url, { fetch: fetchFn = globalThis.fetch, timeout = 12000, siteUrl, findOnSite } = {}) {
   const res = { url, status: 'unknown', code: null, finalUrl: null, suggestion: null, suggestionSource: null, note: '' };
   const r = await probe(fetchFn, url, timeout);
@@ -83,7 +97,8 @@ async function checkUrl(url, { fetch: fetchFn = globalThis.fetch, timeout = 1200
     const ok = found && canon(found) !== canon(url) ? await works(found) : null;
     if (ok) return set(ok, 'site');
   }
-  const arch = await wayback(fetchFn, url, timeout);
+  const arch0 = await wayback(fetchFn, url, timeout);
+  const arch = arch0 && IMG_RE.test(url) ? rawArchive(arch0) : arch0;
   if (arch) return set(arch, 'archive');
   return res;
 }
@@ -108,4 +123,4 @@ async function checkMany(urls, opts = {}, onProgress) {
 }
 const clearCache = () => cache.clear();
 
-module.exports = { extractLinks, replaceLinkInHtml, unlinkInHtml, checkUrl, checkMany, clearCache, canon };
+module.exports = { archivedFile, imageWorks, rawArchive, extractLinks, replaceLinkInHtml, unlinkInHtml, checkUrl, checkMany, clearCache, canon };
