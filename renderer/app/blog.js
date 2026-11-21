@@ -32,8 +32,8 @@ async function loadBlog() {
   const list = $('#b-list');
   list.innerHTML = `<p class="hint pad">${t('Cargando…')}</p>`;
   try {
-    const r = await window.api.blogList({ type: blog.type, status: $('#b-status').value, search: $('#b-search').value.trim(), page: blog.page, number: blog.per });
-    blog.loaded = true; blog.found = r.found; syncFindBtn();
+    const r = await window.api.blogList({ ...blogFilters(), page: blog.page, number: blog.per });
+    blog.loaded = true; blog.found = r.found; syncRange(); syncFindBtn();
     renderBlog(r.items);
   } catch (e) { list.innerHTML = `<div class="empty"><span class="ms">cloud_off</span><span>${escHtml(e.message)}</span></div>`; }
 }
@@ -112,7 +112,7 @@ $$('#b-type button').forEach((b) => b.onclick = async () => {
   $$('#b-type button').forEach((x) => x.classList.toggle('active', x === b));
   const st = b.dataset.type === 'structure', cal = b.dataset.type === 'calendar', med = b.dataset.type === 'media';
   // Estructura y Calendario: en lugar de la lista
-  $$('#b-status, #tab-blog .field.search, #b-refresh, #b-new, #b-list, #b-bulk, #tab-blog .pager').forEach((x) => x.classList.toggle('hidden', st || cal || med));
+  $$('#b-status, #tab-blog .field.search, #b-refresh, #b-new, #b-list, #b-bulk, #b-range, #tab-blog .pager').forEach((x) => x.classList.toggle('hidden', st || cal || med));
   $('#b-structure').classList.toggle('hidden', !st);
   $('#b-calendar').classList.toggle('hidden', !cal);
   $('#b-media').classList.toggle('hidden', !med);
@@ -301,4 +301,55 @@ $('#bfr-apply').onclick = (e) => busy(e.currentTarget, async () => {
   bfrClose();
   toast(r.errors.length ? t('{n} entradas cambiadas; {e} con error', { n: r.done, e: r.errors.length }) : t('{n} entradas cambiadas', { n: r.done }), !!r.errors.length);
   loadBlog();
+});
+
+// ---------------------------------------------------------------- Filtro por fechas y «seleccionar todas»
+// Los filtros actuales de la lista (estado, búsqueda y periodo) para pedírselos a WordPress
+function blogFilters() {
+  const f = { type: blog.type, status: $('#b-status').value, search: $('#b-search').value.trim() };
+  const from = $('#b-from').value, to = $('#b-to').value;
+  if (from) f.after = new Date(from + 'T00:00:00').toISOString();
+  if (to) { const d = new Date(to + 'T00:00:00'); d.setDate(d.getDate() + 1); f.before = d.toISOString(); }
+  return f;
+}
+const isoDay = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+// Años sueltos en el desplegable (del actual hacia atrás), para llegar rápido a entradas antiguas
+(() => {
+  const sel = $('#b-preset'), y = new Date().getFullYear();
+  const custom = sel.querySelector('[value="custom"]');
+  for (let k = y - 1; k >= 2005; k--) { const o = document.createElement('option'); o.value = 'y' + k; o.textContent = String(k); sel.insertBefore(o, custom); }
+})();
+function applyPreset(v) {
+  const now = new Date(), y = now.getFullYear(), m = now.getMonth();
+  let from = '', to = '';
+  if (v === 'month') { from = isoDay(new Date(y, m, 1)); to = isoDay(now); }
+  else if (v === 'lastmonth') { from = isoDay(new Date(y, m - 1, 1)); to = isoDay(new Date(y, m, 0)); }
+  else if (v === '3m') { from = isoDay(new Date(y, m - 2, 1)); to = isoDay(now); }
+  else if (v === 'year') { from = isoDay(new Date(y, 0, 1)); to = isoDay(now); }
+  else if (/^y\d{4}$/.test(v)) { const k = Number(v.slice(1)); from = `${k}-01-01`; to = `${k}-12-31`; }
+  if (v !== 'custom') { $('#b-from').value = from; $('#b-to').value = to; }
+  else if (!$('#b-from').value) $('#b-from').focus();
+}
+function syncRange() {
+  const on = !!($('#b-from').value || $('#b-to').value);
+  $('#b-range').classList.toggle('active', on);
+  $('#b-range-clear').classList.toggle('hidden', !on);
+  $('#b-selrange-l').textContent = blog.found ? t(on ? 'Seleccionar las {n} de estas fechas' : 'Seleccionar las {n}', { n: blog.found }) : t('Seleccionar todas');
+  $('#b-selrange').disabled = !blog.found;
+}
+const reloadRange = () => { blog.page = 1; syncRange(); loadBlog(); };
+$('#b-preset').onchange = (e) => { applyPreset(e.target.value); reloadRange(); };
+$$('#b-from, #b-to').forEach((i) => (i.onchange = () => { $('#b-preset').value = $('#b-from').value || $('#b-to').value ? 'custom' : 'all'; reloadRange(); }));
+$('#b-range-clear').onclick = () => { $('#b-preset').value = 'all'; $('#b-from').value = ''; $('#b-to').value = ''; reloadRange(); };
+// Selecciona todas las entradas que cumplen los filtros (de todas las páginas, no solo la que se ve)
+$('#b-selrange').onclick = (e) => busy(e.currentTarget, async () => {
+  const f = blogFilters();
+  let n = 0;
+  for (let page = 1; page <= 50; page++) {
+    const r = await window.api.blogList({ ...f, page, number: 100 });
+    for (const it of r.items) { bsel.set(it.id, it); n++; }
+    if (n >= r.found || !r.items.length) break;
+  }
+  renderBulk();
+  toast(t('{n} entradas seleccionadas', { n }));
 });

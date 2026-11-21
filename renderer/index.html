@@ -254,6 +254,22 @@
       <span class="spacer"></span>
       <button id="b-new" class="btn filled"><span class="ms">add</span><span data-i18n>Nueva</span></button>
     </div>
+    <div id="b-range" class="b-range">
+      <span class="ms">date_range</span>
+      <select id="b-preset" data-i18n-title title="Entradas de un periodo">
+        <option value="all" data-i18n>Todas las fechas</option>
+        <option value="month" data-i18n>Este mes</option>
+        <option value="lastmonth" data-i18n>Mes pasado</option>
+        <option value="3m" data-i18n>Últimos 3 meses</option>
+        <option value="year" data-i18n>Este año</option>
+        <option value="custom" data-i18n>De una fecha a otra…</option>
+      </select>
+      <label class="b-date"><span data-i18n>Desde</span><input type="date" id="b-from"></label>
+      <label class="b-date"><span data-i18n>Hasta</span><input type="date" id="b-to"></label>
+      <button id="b-range-clear" class="btn text icon-only hidden" data-i18n-title title="Quitar el filtro de fechas"><span class="ms">close</span></button>
+      <span class="spacer"></span>
+      <button id="b-selrange" class="btn tonal"><span class="ms">select_all</span><span id="b-selrange-l"></span></button>
+    </div>
     <div id="b-bulk" class="b-bulk hidden">
       <label class="b-check" data-i18n-title title="Seleccionar todas las de esta página"><input type="checkbox" id="b-all"></label>
       <span id="b-count" class="b-count"></span>
