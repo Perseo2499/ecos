@@ -29,6 +29,18 @@ jobs:
           $c = .\build\winhello.exe check; $t = .\build\winhello.exe selftest aG9sYQ==
           Write-Host "check: $c | selftest: $t"
           if ($c -notmatch '"supported"' -or $t -notmatch 'aG9sYQ==') { Write-Error "El ayudante de Windows Hello no responde bien"; exit 1 }
+      - name: Motor de IA para mejorar fotos (comprobación, en procesador)
+        shell: powershell
+        continue-on-error: true
+        run: |
+          $d = "$env:RUNNER_TEMP\esr"; New-Item -ItemType Directory -Force $d | Out-Null
+          Invoke-WebRequest "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-windows.zip" -OutFile "$d\e.zip"
+          Expand-Archive "$d\e.zip" -DestinationPath $d -Force
+          Push-Location $d
+          $t = Measure-Command { .\realesrgan-ncnn-vulkan.exe -i input.jpg -o out.png -n realesrgan-x4plus -s 4 -f png -g -1 }
+          Pop-Location
+          if (-not (Test-Path "$d\out.png")) { Write-Error "El motor de IA no ha generado la foto"; exit 1 }
+          Write-Host ("Motor de IA OK en procesador: {0:N0} s, {1:N0} KB" -f $t.TotalSeconds, ((Get-Item "$d\out.png").Length / 1KB))
       - name: Compilar (y firmar si hay certificado)
         shell: bash
         env:
