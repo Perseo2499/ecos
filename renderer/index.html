@@ -180,7 +180,7 @@
           <div class="ed-side">
             <div class="section-label" data-i18n>Revisión</div>
             <div id="d-review" class="review"></div>
-            <div class="field"><label data-i18n>Plantilla</label><select id="d-template"><option value="" data-i18n>Sin plantilla</option></select></div>
+            <div class="field"><label data-i18n>Plantilla</label><div class="tpl-sel"><select id="d-template"><option value="" data-i18n>Sin plantilla</option></select><button id="d-tpl-save" class="btn tonal icon-only" data-i18n-title title="Guardar los bloques como plantilla"><span class="ms">bookmark_add</span></button></div></div>
             <div class="field"><label data-i18n>Extracto</label><textarea id="d-excerpt" rows="3" data-i18n-ph placeholder="Resumen corto (opcional)"></textarea></div>
             <div class="field slug-field"><label data-i18n>Dirección de la entrada</label><div class="slug-row"><span class="slug-base" id="d-slug-base"></span><input id="d-slug" spellcheck="false"></div></div>
             <div class="share-card" id="d-share" title=""></div>
@@ -516,6 +516,9 @@
           <div class="card-head"><span class="ms fill ic">bookmarks</span><h2 data-i18n>Plantillas</h2></div>
           <div id="tpl-list"></div>
           <div class="card-actions"><button id="tpl-add" class="btn tonal"><span class="ms">add</span><span data-i18n>Añadir plantilla</span></button></div>
+          <div class="section-label" data-i18n>Plantillas de contenido propias</div>
+          <p class="hint" data-i18n>Se crean desde el editor con «Guardar como plantilla» y aparecen al crear una entrada o página nueva.</p>
+          <div id="btpl-list"></div>
         </div>
 
         <div class="card" id="set-notify">
@@ -785,6 +788,7 @@
 <script src="findreplace.js"></script>
 <script src="linkutil.js"></script>
 <script src="mosaic.js"></script>
+<script src="templates.js"></script>
 <script src="blocks.js"></script>
 <script src="format.js"></script>
 <script src="sitemap.js"></script>
@@ -796,6 +800,7 @@
 <script src="app/calview.js"></script>
 <script src="app/posts.js"></script>
 <script src="app/editor.js"></script>
+<script src="app/tplpicker.js"></script>
 <script src="app/blog.js"></script>
 <script src="app/links.js"></script>
 <script src="app/media.js"></script>

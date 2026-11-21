@@ -405,7 +405,7 @@
 
     body(b, i, body, extra) {
       const self = this;
-      const textBlock = (tag, cls) => this.editable(tag, b.html, b.type === 'paragraph' ? t('Escribe aquí… (pulsa / para elegir un bloque)') : t('Escribe aquí…'), (h) => (b.html = h), {
+      const textBlock = (tag, cls) => this.editable(tag, b.html, b.ph ? b.ph : b.type === 'paragraph' ? t('Escribe aquí… (pulsa / para elegir un bloque)') : t('Escribe aquí…'), (h) => (b.html = h), {
         cls, block: b,
         onKey(e, el) {
           // Intro al final de un párrafo crea otro; Retroceso en un bloque vacío lo borra
@@ -436,7 +436,7 @@
         case 'quote': {
           const q = document.createElement('blockquote');
           if (b.pull) q.className = 'pull';
-          const qp = this.editable('p', b.html, t('Escribe aquí…'), (h) => (b.html = h), { cls: '', block: b, styleEl: q });
+          const qp = this.editable('p', b.html, b.ph || t('Escribe aquí…'), (h) => (b.html = h), { cls: '', block: b, styleEl: q });
           q.appendChild(qp);
           q.appendChild(this.editable('cite', b.cite, t('Autor o fuente (opcional)'), (h) => (b.cite = h), { block: b, styleEl: q }));
           applyStyle(q, b);
@@ -449,7 +449,7 @@
         case 'list': {
           const list = document.createElement(b.ordered ? 'ol' : 'ul');
           b.items.forEach((it, k) => {
-            const li = this.editable('li', it, t('Elemento'), (h) => (b.items[k] = h), {
+            const li = this.editable('li', it, b.ph || t('Elemento'), (h) => (b.items[k] = h), {
               block: b, styleEl: list,
               onKey(e, el) {
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); self.change(() => b.items.splice(k + 1, 0, '')); requestAnimationFrame(() => $$(`.blk[data-id="${b.id}"] li`)[k + 1]?.focus()); }
@@ -610,7 +610,7 @@
         case 'buttons': {
           const wrap = document.createElement('div');
           wrap.className = 'ed-btns'; wrap.style.justifyContent = b.align === 'center' ? 'center' : b.align === 'right' ? 'flex-end' : 'flex-start';
-          const btn = this.editable('span', b.html, t('Texto del botón'), (h) => (b.html = h), { cls: 'ed-btn' + (b.variant === 'outline' ? ' outline' : ''), block: b, onKey(e) { if (e.key === 'Enter') e.preventDefault(); } });
+          const btn = this.editable('span', b.html, b.ph || t('Texto del botón'), (h) => (b.html = h), { cls: 'ed-btn' + (b.variant === 'outline' ? ' outline' : ''), block: b, onKey(e) { if (e.key === 'Enter') e.preventDefault(); } });
           wrap.appendChild(btn);
           body.appendChild(wrap);
           const url = document.createElement('input');
@@ -634,7 +634,7 @@
         case 'details': {
           const d = document.createElement('div');
           d.className = 'ed-details';
-          const sum = this.editable('div', b.summary, t('Pregunta o título que se ve siempre'), (h) => (b.summary = h), { cls: 'ed-sum', block: b, onKey(e) { if (e.key === 'Enter') e.preventDefault(); } });
+          const sum = this.editable('div', b.summary, b.ph || t('Pregunta o título que se ve siempre'), (h) => (b.summary = h), { cls: 'ed-sum', block: b, onKey(e) { if (e.key === 'Enter') e.preventDefault(); } });
           d.append(sum, this.editable('div', b.html, t('Contenido que se muestra al pulsar…'), (h) => (b.html = h), { cls: 'ed-det', block: b }));
           body.appendChild(d);
           break;
