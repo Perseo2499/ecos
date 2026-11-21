@@ -564,6 +564,8 @@ handle('site:createCategory', async (o) => { needSelf(); return wpCall(() => wps
 handle('site:trashPage', async (id) => { needSelf(); return wpCall(() => wpself.trashPage(cfg, id)); });
 handle('site:deleteCategory', async (id) => { needSelf(); return wpCall(() => wpself.deleteCategory(cfg, id)); });
 handle('site:save', async (changes) => { needSelf(); return wpCall(() => wpself.saveStructure(cfg, changes)); });
+handle('site:pageLinks', async (id, type) => { needSelf(); return wpCall(() => require('./src/pagelinks').pageLinks(cfg, Number(id), type)); });
+handle('site:buttonOp', async (id, type, op) => { needSelf(); return wpCall(() => require('./src/pagelinks').buttonOp(cfg, Number(id), type, op || {})); });
 // Biblioteca de medios (solo WordPress propio)
 const needSelfMedia = () => { if (!isSelf()) throw new Error('La biblioteca de medios solo está disponible con «Mi web (wp-admin)» en Conexiones → WordPress.'); };
 let mediaUsageCache = null; // { at, data }

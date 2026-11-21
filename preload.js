@@ -93,6 +93,8 @@ contextBridge.exposeInMainWorld('api', {
   siteTrashPage: (id) => call('site:trashPage', id),
   siteDeleteCategory: (id) => call('site:deleteCategory', id),
   siteSave: (changes) => call('site:save', changes),
+  sitePageLinks: (id, type) => call('site:pageLinks', id, type),
+  siteButtonOp: (id, type, op) => call('site:buttonOp', id, type, op),
   blogEditUrl: (id, type) => call('blog:editUrl', id, type),
 
   // Restaurar desde copia de seguridad
