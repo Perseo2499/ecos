@@ -1466,3 +1466,8 @@ body.editing .b-bulk.on { display: none; }
   .lk-row { flex-direction: column; }
   .lk-acts { align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
 }
+
+/* Revisar enlaces en lote: título de la entrada con «Editar en Ecos» y aviso cuando no hay alternativa */
+.lk-gt { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.lk-edit.btn.small { width: auto; margin: 0; height: 30px; padding: 0 10px; }
+.lk-none { margin-top: 6px; font-size: 12.5px; color: var(--on-surface-var); }

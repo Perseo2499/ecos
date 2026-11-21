@@ -266,6 +266,11 @@
     'Modelo (opcional: si lo dejas vacío, usa el de la CLI)': 'Model (optional: leave empty to use the CLI default)',
     'Los botones de IA usarán {c}. Pulsa «Probar» para comprobarlo.': 'The AI buttons will use {c}. Click "Try it" to check.',
     // 1.2 (editor completo)
+    '1 entrada revisada · {m} enlaces': '1 post checked · {m} links',
+    'No hay copia guardada de esta foto.': 'There is no saved copy of this photo.',
+    'No se ha encontrado otra dirección.': 'No other address was found.',
+    'Quitar la foto de la entrada': 'Remove the photo from the post',
+    'Quitar el enlace (se queda el texto)': 'Remove the link (the text stays)',
     '1 enlace cambiado. Puedes deshacerlo con Ctrl+Z.': '1 link changed. You can undo it with Ctrl+Z.',
     'Funciona': 'Works',
     'Ha cambiado de dirección': 'Has moved',

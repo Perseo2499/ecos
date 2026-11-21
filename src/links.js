@@ -1,6 +1,6 @@
 // Revisar enlaces: comprueba si siguen funcionando y propone una alternativa cuando han cambiado.
 // La red es inyectable (opts.fetch) para poder probarlo sin internet.
-const { extractLinks, replaceLinkInHtml, unlinkInHtml } = require('../renderer/linkutil');
+const { extractLinks, replaceLinkInHtml, unlinkInHtml, removeImageInHtml } = require('../renderer/linkutil');
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
 const HEADERS = { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8' };
@@ -53,9 +53,35 @@ async function wayback(fetchFn, url, timeout) {
 const rawArchive = (u) => String(u).replace(/(\/web\/\d{4,14})(\/)/, '$1id_$2');
 const IMG_RE = /\.(jpe?g|png|gif|webp|bmp)(\?|$)/i;
 // Foto desaparecida (servidor caído, Picasa/Blogger borrado…): la copia guardada en el Archivo de Internet
+// Formas en que la misma foto pudo guardarse: http/https y, en Blogger/Picasa, sus distintos tamaños (/s1600/, /s320/…)
+function urlVariants(url) {
+  const out = [url];
+  const swap = (u) => (/^https:/i.test(u) ? u.replace(/^https:/i, 'http:') : u.replace(/^http:/i, 'https:'));
+  out.push(swap(url));
+  if (/(bp\.blogspot\.com|ggpht\.com|googleusercontent\.com)/i.test(url) && /\/s\d+(-[a-z]+)?\//i.test(url)) {
+    for (const s of ['s1600', 's640', 's400', 's320', 's200']) {
+      const v = url.replace(/\/s\d+(-[a-z]+)?\//i, `/${s}/`);
+      out.push(v, swap(v));
+    }
+  }
+  return [...new Set(out)].slice(0, 12);
+}
+// Busca la copia en el Archivo de Internet: primero pidiendo el archivo directamente (el Archivo lleva a la
+// copia más cercana), luego con su servicio de búsqueda. Devuelve la dirección del archivo tal cual o null.
+async function findArchived(fetchFn, url, timeout) {
+  const isImg = IMG_RE.test(url) || /(bp\.blogspot\.com|ggpht\.com|googleusercontent\.com)/i.test(url);
+  for (const v of urlVariants(url)) {
+    const p = await probe(fetchFn, 'https://web.archive.org/web/2015' + (isImg ? 'im_' : 'id_') + '/' + v, timeout);
+    if (!p.error && is2xx(p.code) && /web\.archive\.org\/web\/\d+/.test(p.finalUrl || '')) return isImg ? rawArchive(p.finalUrl.replace(/im_\//, '/')) : p.finalUrl.replace(/id_\//, '/');
+  }
+  for (const v of urlVariants(url).slice(0, 2)) {
+    const snap = await wayback(fetchFn, v, timeout);
+    if (snap) return isImg ? rawArchive(snap) : snap;
+  }
+  return null;
+}
 async function archivedFile(url, { fetch: fetchFn = globalThis.fetch, timeout = 15000 } = {}) {
-  const snap = await wayback(fetchFn, url, timeout);
-  return snap ? rawArchive(snap) : null;
+  return findArchived(fetchFn, url, timeout);
 }
 // ¿Se puede ver esta foto? (las webs de fotos borradas a veces devuelven un dibujo de aviso con error 404)
 async function imageWorks(url, { fetch: fetchFn = globalThis.fetch, timeout = 8000 } = {}) {
@@ -97,8 +123,7 @@ async function checkUrl(url, { fetch: fetchFn = globalThis.fetch, timeout = 1200
     const ok = found && canon(found) !== canon(url) ? await works(found) : null;
     if (ok) return set(ok, 'site');
   }
-  const arch0 = await wayback(fetchFn, url, timeout);
-  const arch = arch0 && IMG_RE.test(url) ? rawArchive(arch0) : arch0;
+  const arch = await findArchived(fetchFn, url, timeout);
   if (arch) return set(arch, 'archive');
   return res;
 }
@@ -123,4 +148,4 @@ async function checkMany(urls, opts = {}, onProgress) {
 }
 const clearCache = () => cache.clear();
 
-module.exports = { archivedFile, imageWorks, rawArchive, extractLinks, replaceLinkInHtml, unlinkInHtml, checkUrl, checkMany, clearCache, canon };
+module.exports = { removeImageInHtml, urlVariants, archivedFile, imageWorks, rawArchive, extractLinks, replaceLinkInHtml, unlinkInHtml, checkUrl, checkMany, clearCache, canon };

@@ -317,7 +317,21 @@ test('fotos desaparecidas: copia del Archivo de Internet tal cual (id_)', async 
   const L = require('../src/links');
   assert.equal(L.rawArchive('https://web.archive.org/web/20111105120000/http://x.blogspot.com/a.jpg'), 'https://web.archive.org/web/20111105120000id_/http://x.blogspot.com/a.jpg');
   const fake = async (u) => ({ status: 200, url: u, json: async () => ({ archived_snapshots: { closest: { available: true, url: 'http://web.archive.org/web/2011/http://x/a.jpg' } } }) });
-  assert.equal(await L.archivedFile('http://x/a.jpg', { fetch: fake }), 'https://web.archive.org/web/2011id_/http://x/a.jpg');
+  assert.match(await L.archivedFile('http://x/a.jpg', { fetch: fake }), /^https:\/\/web\.archive\.org\/web\/\d+id_\/http:\/\/x\/a\.jpg$/);
+  // sin copia directa: se usa el servicio de búsqueda
+  const viaApi = async (u) => (/wayback\/available/.test(u) ? { status: 200, url: u, json: async () => ({ archived_snapshots: { closest: { available: true, url: 'http://web.archive.org/web/2011/http://x/a.jpg' } } }) } : { status: 404, url: u });
+  assert.equal(await L.archivedFile('http://x/a.jpg', { fetch: viaApi }), 'https://web.archive.org/web/2011id_/http://x/a.jpg');
   const dead = async (u) => ({ status: 404, url: u });
   assert.equal(await L.imageWorks('http://x/a.jpg', { fetch: dead }), false);
+});
+
+test('fotos rotas: variantes de Blogger y quitar la foto del contenido', () => {
+  const L = require('../src/links');
+  const v = L.urlVariants('https://4.bp.blogspot.com/-a/b/c/d/s1600/foto.jpg');
+  assert.ok(v.includes('http://4.bp.blogspot.com/-a/b/c/d/s320/foto.jpg'));
+  const html = '<!-- wp:image {"id":3} --><figure class="wp-block-image"><a href="x"><img src="https://x/f.jpg&amp;a=1"></a></figure><!-- /wp:image --><p>Texto <img src="https://x/g.jpg"></p>';
+  const out = L.removeImageInHtml(html, 'https://x/f.jpg&a=1');
+  assert.equal(out.includes('f.jpg'), false);
+  assert.equal(out.includes('wp:image'), false);
+  assert.ok(out.includes('g.jpg') && out.includes('Texto'));
 });

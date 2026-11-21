@@ -146,19 +146,28 @@ async function linksBulk(items) {
   const withLinks = posts.filter((p) => p.links.length);
   const total = withLinks.reduce((n, p) => n + p.links.length, 0);
   const bad = withLinks.map((p) => ({ ...p, links: p.links.filter((l) => l.status !== 'ok') })).filter((p) => p.links.length);
-  M.sum.textContent = t('{n} entradas revisadas · {m} enlaces', { n: posts.length, m: total });
+  M.sum.textContent = t(posts.length === 1 ? '1 entrada revisada · {m} enlaces' : '{n} entradas revisadas · {m} enlaces', { n: posts.length, m: total });
   if (!bad.length) { M.body.innerHTML = `<div class="empty"><span class="ms">task_alt</span><span>${t('Todos los enlaces funcionan.')}</span></div>`; return; }
   const apply = document.createElement('button');
   apply.className = 'btn filled';
   M.actions.appendChild(apply);
   const flat = [];
-  M.body.innerHTML = `<div class="lk-list">${bad.map((p) => `<div class="lk-group"><div class="lk-gt">${escHtml(decodeEntities(p.title))}</div>${p.links.map((l) => {
-    const k = flat.push({ id: p.id, type: p.type, from: l.url, to: l.suggestion }) - 1;
-    return `<div class="lk-row">${lkRowHtml(l)}${l.suggestion ? `<label class="lk-chk"><input type="checkbox" data-k="${k}"${l.status === 'unknown' ? '' : ' checked'}><span>${t('Cambiar por la alternativa')}</span></label>` : ''}</div>`;
+  M.body.innerHTML = `<div class="lk-list">${bad.map((p) => `<div class="lk-group"><div class="lk-gt"><span>${escHtml(decodeEntities(p.title))}</span>${p.type !== 'page' ? `<button class="btn text small lk-edit" data-edit="${p.id}"><span class="ms">edit_square</span>${t('Editar en Ecos')}</button>` : ''}</div>${p.links.map((l) => {
+    // con alternativa: cambiarla; rota y sin alternativa: quitar la foto o el enlace (desmarcado: lo decides tú)
+    if (l.suggestion) {
+      const k = flat.push({ id: p.id, type: p.type, from: l.url, to: l.suggestion }) - 1;
+      return `<div class="lk-row">${lkRowHtml(l)}<label class="lk-chk"><input type="checkbox" data-k="${k}"${l.status === 'unknown' ? '' : ' checked'}><span>${t('Cambiar por la alternativa')}</span></label></div>`;
+    }
+    if (l.status === 'broken') {
+      const k = flat.push({ id: p.id, type: p.type, from: l.url, remove: true, kind: l.kind === 'image' ? 'image' : 'link' }) - 1;
+      return `<div class="lk-row">${lkRowHtml(l)}<div class="lk-none">${t(l.kind === 'image' ? 'No hay copia guardada de esta foto.' : 'No se ha encontrado otra dirección.')}</div><label class="lk-chk"><input type="checkbox" data-k="${k}"><span>${t(l.kind === 'image' ? 'Quitar la foto de la entrada' : 'Quitar el enlace (se queda el texto)')}</span></label></div>`;
+    }
+    return `<div class="lk-row">${lkRowHtml(l)}</div>`;
   }).join('')}</div>`).join('')}</div>`;
+  $$('[data-edit]', M.body).forEach((b) => (b.onclick = () => busy(b, async () => { M.close(); await openFromWp(Number(b.dataset.edit)); })));
   lkBindOpen(M.body);
   const picked = () => $$('input[data-k]:checked', M.body).map((c) => flat[Number(c.dataset.k)]);
-  const sync = () => { const n = picked().length; apply.disabled = !n; apply.textContent = t('Aplicar {n} cambios', { n }); apply.classList.toggle('hidden', !flat.some((f) => f.to)); };
+  const sync = () => { const n = picked().length; apply.disabled = !n; apply.textContent = t('Aplicar {n} cambios', { n }); apply.classList.toggle('hidden', !flat.length); };
   $$('input[data-k]', M.body).forEach((c) => (c.onchange = sync));
   sync();
   apply.onclick = () => busy(apply, async () => {

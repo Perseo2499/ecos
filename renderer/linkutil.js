@@ -54,6 +54,17 @@
     });
   }
 
-  const api = { extractLinks, replaceLinkInHtml, unlinkInHtml };
+  // Quita las fotos con esa dirección (y el enlace que solo las envuelve); si un bloque de imagen queda vacío, fuera
+  function removeImageInHtml(html, url) {
+    const f = decodeAmp(url).trim();
+    const isIt = (tag) => { const a = ATTR('src').exec(tag); return a && decodeAmp(a[1] ?? a[2] ?? '').trim() === f; };
+    let h = String(html ?? '').replace(/<a\b[^>]*>\s*(<img\b[^>]*>)\s*<\/a>/gi, (all, img) => (isIt(img) ? '' : all));
+    h = h.replace(/<img\b[^>]*>/gi, (img) => (isIt(img) ? '' : img));
+    h = h.replace(/<!-- wp:image\b[^>]*-->\s*<figure\b[^>]*>\s*<\/figure>\s*<!-- \/wp:image -->\s*/gi, '');
+    h = h.replace(/<figure\b[^>]*>\s*<\/figure>/gi, '').replace(/<p\b[^>]*>(\s|&nbsp;)*<\/p>/gi, '');
+    return h;
+  }
+
+  const api = { extractLinks, replaceLinkInHtml, unlinkInHtml, removeImageInHtml };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.LinkUtil = api;
 })(typeof self !== 'undefined' ? self : this);

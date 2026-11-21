@@ -671,7 +671,7 @@ handle('blog:fixLinks', async (changes) => {
   const L = linksMod();
   const groups = new Map();
   for (const c of changes || []) {
-    if (!c?.from || !c?.to) continue;
+    if (!c?.from || !(c?.to || c?.remove)) continue;
     const k = `${c.type || 'post'}:${c.id}`;
     if (!groups.has(k)) groups.set(k, { id: c.id, type: c.type, list: [] });
     groups.get(k).list.push(c);
@@ -683,7 +683,7 @@ handle('blog:fixLinks', async (changes) => {
       if (!p) throw new Error('no se encuentra');
       const old = p.content?.raw ?? '';
       let html = old;
-      for (const c of g.list) html = L.replaceLinkInHtml(html, c.from, c.to);
+      for (const c of g.list) html = c.remove ? (c.kind === 'image' ? L.removeImageInHtml(html, c.from) : L.unlinkInHtml(html, c.from)) : L.replaceLinkInHtml(html, c.from, c.to);
       if (html === old) continue;
       await wpCall(() => wpself.updateFields(cfg, g.id, { content: html }, g.type));
       done++;
