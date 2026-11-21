@@ -157,6 +157,7 @@ function renderBulk() {
     if (has((i) => ['publish', 'future', 'pending', 'private'].includes(i.status))) acts.push(['draft', 'edit_note', t('Pasar a borrador')]);
     if (has((i) => i.status === 'trash')) acts.push(['restore', 'restore_from_trash', t('Restaurar como borrador')]);
     if (blog.type !== 'page' && CFG.wpMode === 'selfhosted') acts.push(['cat-add', 'new_label', t('Añadir categoría')], ['cat-del', 'label_off', t('Quitar categoría')]);
+    if (CFG.wpMode === 'selfhosted' && has((i) => i.status !== 'trash')) acts.push(['links', 'link', t('Revisar enlaces')]);
     if (blog.type !== 'page' && has((i) => i.status !== 'trash')) acts.push(['normalize', 'format_paint', t('Normalizar formato')]);
     if (has((i) => i.status !== 'trash')) acts.push(['trash', 'delete', t('Papelera')]);
     acts.push(['delete', 'delete_forever', t('Borrar definitivamente')]);
@@ -188,6 +189,7 @@ async function pickCategory(title) {
 async function runBulk(kind) {
   let items = [...bsel.values()];
   const n = items.length;
+  if (kind === 'links') return linksBulk(items);
   let cat = null;
   if (kind === 'cat-add' || kind === 'cat-del') {
     cat = await pickCategory(kind === 'cat-add' ? t('¿Qué categoría quieres añadir a las {n} entradas?', { n }) : t('¿Qué categoría quieres quitar de las {n} entradas?', { n }));

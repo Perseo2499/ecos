@@ -252,3 +252,63 @@ test('restaurar: reconoce entradas que ya están en la web aunque cambie la escr
   assert.equal(W.matchExisting(index, { slug: 'otra', title: 'Nada que ver', date: '' }).id, 3);
   assert.equal(W.matchExisting(index, { slug: 'nueva', title: 'Nueva entrada', date: '2020-01-01' }), null);
 });
+
+// ---- Revisar enlaces (src/links.js) con un fetch simulado: sin red real
+const LK = require('../src/links');
+const fakeFetch = (routes) => async (url, opts = {}) => {
+  const r = routes[url];
+  if (r === undefined) throw Object.assign(new Error('fetch failed'), { cause: { code: 'ENOTFOUND' } });
+  if (r instanceof Error) throw r;
+  const o = typeof r === 'function' ? r(opts) : r;
+  return { status: o.status ?? 200, url: o.url ?? url, json: async () => o.json, body: { cancel: async () => {} } };
+};
+
+test('extractLinks: a e img, &amp;, mailto, anclas y duplicados', () => {
+  const html = '<p><a href="https://a.es/x?a=1&amp;b=2">Mi <b>enlace</b></a> <a href="mailto:x@y.es">m</a> <a href="#top">t</a> <a href="">v</a> <a href="tel:123">t</a> <a href="https://a.es/x?a=1&b=2">otra vez</a></p><img src="https://a.es/f.jpg" alt="Foto">';
+  assert.deepEqual(LK.extractLinks(html), [{ url: 'https://a.es/x?a=1&b=2', text: 'Mi enlace' }, { url: 'https://a.es/f.jpg', text: 'Foto', kind: 'image' }]);
+});
+test('checkUrl: con redirección a https, barra o www sigue siendo ok', async () => {
+  const f = fakeFetch({ 'http://a.es/p': { url: 'https://www.a.es/p/' } });
+  assert.equal((await LK.checkUrl('http://a.es/p', { fetch: f })).status, 'ok');
+});
+test('checkUrl: redirección a otra web = moved con sugerencia', async () => {
+  const r = await LK.checkUrl('https://a.es/x', { fetch: fakeFetch({ 'https://a.es/x': { url: 'https://b.org/nuevo' } }) });
+  assert.equal(r.status, 'moved'); assert.equal(r.suggestion, 'https://b.org/nuevo'); assert.equal(r.suggestionSource, 'redirect');
+});
+test('checkUrl: HEAD no permitido, se prueba GET', async () => {
+  const f = fakeFetch({ 'https://a.es/x': (o) => ({ status: o.method === 'HEAD' ? 405 : 200 }) });
+  assert.equal((await LK.checkUrl('https://a.es/x', { fetch: f })).status, 'ok');
+});
+test('checkUrl: 404 con copia en el Archivo de Internet', async () => {
+  const wb = 'https://archive.org/wayback/available?url=' + encodeURIComponent('https://viejo.com/a');
+  const f = fakeFetch({ 'https://viejo.com/a': { status: 404 }, [wb]: { json: { archived_snapshots: { closest: { available: true, url: 'http://web.archive.org/web/2020/https://viejo.com/a' } } } } });
+  const r = await LK.checkUrl('https://viejo.com/a', { fetch: f });
+  assert.equal(r.status, 'broken'); assert.equal(r.suggestionSource, 'archive'); assert.equal(r.suggestion, 'https://web.archive.org/web/2020/https://viejo.com/a');
+});
+test('checkUrl: http roto, pero la versión https funciona', async () => {
+  const f = fakeFetch({ 'http://c.es/a': new Error('boom'), 'https://c.es/a': { status: 200 } });
+  const r = await LK.checkUrl('http://c.es/a', { fetch: f });
+  assert.equal(r.status, 'broken'); assert.equal(r.suggestion, 'https://c.es/a'); assert.equal(r.suggestionSource, 'https');
+});
+test('checkUrl: enlace de la propia web con findOnSite', async () => {
+  const f = fakeFetch({ 'https://www.mi.org/viejo-slug/': { status: 404 }, 'https://www.mi.org/2024/nuevo/': { status: 200 } });
+  const r = await LK.checkUrl('https://www.mi.org/viejo-slug/', { fetch: f, siteUrl: 'https://mi.org', findOnSite: async () => 'https://www.mi.org/2024/nuevo/' });
+  assert.equal(r.suggestionSource, 'site'); assert.equal(r.suggestion, 'https://www.mi.org/2024/nuevo/');
+});
+test('checkUrl: 403 y 999 no son rotos sino «unknown»', async () => {
+  assert.equal((await LK.checkUrl('https://l.com/x', { fetch: fakeFetch({ 'https://l.com/x': { status: 999 } }) })).status, 'unknown');
+  assert.equal((await LK.checkUrl('https://l.com/y', { fetch: fakeFetch({ 'https://l.com/y': { status: 403 } }) })).status, 'unknown');
+});
+test('checkMany: sin repetir y con caché', async () => {
+  let n = 0;
+  const f = async (u) => { n++; return { status: 200, url: u, body: null }; };
+  await LK.checkMany(['https://z.es/1', 'https://z.es/1'], { fetch: f });
+  await LK.checkMany(['https://z.es/1'], { fetch: f });
+  assert.equal(n, 1);
+});
+test('replaceLinkInHtml: solo cambia atributos, no el texto visible', () => {
+  const h = '<p>Visita https://a.es/x?a=1&amp;b=2 y <a href="https://a.es/x?a=1&amp;b=2">https://a.es/x?a=1&amp;b=2</a><img src="https://a.es/x?a=1&b=2"></p>';
+  const out = LK.replaceLinkInHtml(h, 'https://a.es/x?a=1&b=2', 'https://n.es/y');
+  assert.equal(out, '<p>Visita https://a.es/x?a=1&amp;b=2 y <a href="https://n.es/y">https://a.es/x?a=1&amp;b=2</a><img src="https://n.es/y"></p>');
+  assert.equal(LK.unlinkInHtml('<a href="https://q.es/">hola</a> y <a href="https://o.es/">otro</a>', 'https://q.es/'), 'hola y <a href="https://o.es/">otro</a>');
+});

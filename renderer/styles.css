@@ -1427,3 +1427,42 @@ body.locked > *:not(#lock):not(#toast):not(.dlg-scrim) { visibility: hidden; }
 .b-count { flex: none; white-space: nowrap; }
 #tab-blog:has(.b-bulk.on) #b-list { padding-bottom: 96px; }
 body.editing .b-bulk.on { display: none; }
+
+/* ---------------------------------------------------------------- Revisar enlaces */
+.lk-box { display: flex; flex-direction: column; max-height: 90vh; max-width: 94vw; }
+.lk-sum { margin: -6px 0 10px; font-size: 14px; color: var(--on-surface); }
+.lk-body { overflow: auto; min-height: 0; flex: 1; }
+.lk-list { display: flex; flex-direction: column; gap: 8px; }
+.lk-row { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 10px 12px; border-radius: var(--r-m); background: var(--surface-c); }
+.lk-row.done { opacity: .65; }
+.lk-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.lk-text { font-weight: 600; overflow-wrap: anywhere; }
+.lk-text .lk-img { font-size: 16px; vertical-align: -3px; color: var(--on-surface-var); }
+.lk-url { font-size: 12.5px; color: var(--on-surface-var); overflow-wrap: anywhere; text-decoration: none; }
+.lk-url:hover, .lk-alt a:hover { text-decoration: underline; }
+.lk-state { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 3px; }
+.lk-tag { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--surface-c-high); color: var(--on-surface-var); }
+.lk-tag.ok { background: color-mix(in srgb, #2fa36b 22%, transparent); color: #2fa36b; }
+.lk-tag.moved { background: color-mix(in srgb, #2e7fd9 22%, transparent); color: #3b8de0; }
+.lk-tag.broken { background: var(--error-container); color: var(--error); }
+.lk-note { font-size: 12px; color: var(--on-surface-var); }
+.lk-alt { display: flex; gap: 6px; align-items: flex-start; font-size: 13px; margin-top: 4px; overflow-wrap: anywhere; }
+.lk-alt .ms { font-size: 18px; color: var(--primary); }
+.lk-alt a { color: var(--primary); }
+.lk-src { color: var(--on-surface-var); font-size: 12px; }
+.lk-acts { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; flex: none; }
+.lk-btn.btn.small { width: auto; margin: 0; white-space: nowrap; }
+.lk-done { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; color: #2fa36b; max-width: 180px; text-align: right; }
+.lk-done .ms { font-size: 18px; }
+.lk-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.lk-gt { font-weight: 700; padding: 4px 2px; overflow-wrap: anywhere; }
+.lk-chk { display: flex; gap: 6px; align-items: center; font-size: 13px; flex: none; cursor: pointer; }
+.lk-prog { padding: 30px 6px; text-align: center; }
+.lk-bar { height: 6px; border-radius: 3px; background: var(--surface-c-high); overflow: hidden; margin-bottom: 12px; }
+.lk-bar i { display: block; height: 100%; width: 0; background: var(--primary); transition: width .2s; }
+.lk-modal .modal-actions { flex-wrap: wrap; }
+@media (max-width: 640px) {
+  .lk-box { padding: 18px; }
+  .lk-row { flex-direction: column; }
+  .lk-acts { align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
+}

@@ -627,6 +627,72 @@ handle('blog:replaceText', async ({ query, replacement, opts, ids, type }) => {
 });
 handle('blog:editUrl', (id, type) => editUrlFor(id, type));
 
+// --- Revisar enlaces (src/links.js): comprueba si funcionan y propone alternativas ---
+const linksMod = () => require('./src/links');
+const sendLinksProgress = (p) => { try { mainWin?.webContents.send('links:progress', p); } catch { /* ventana cerrada */ } };
+const linkSiteUrl = () => (isSelf() ? WP().publicBase(cfg) : null) || (cfg.wpPublicUrl ? String(cfg.wpPublicUrl).replace(/\/+$/, '') : null);
+// Busca en las entradas y páginas de la web propia por el último trozo de la ruta (el slug) y devuelve su enlace actual
+async function findLinkOnSite(url) {
+  if (!isSelf()) return null;
+  const site = WP().publicBase(cfg);
+  if (!site) return null;
+  let slug;
+  try { slug = decodeURIComponent(new URL(url).pathname.split('/').filter(Boolean).pop() || '').replace(/\.\w{2,5}$/, ''); } catch { return null; }
+  if (!slug) return null;
+  for (const coll of ['posts', 'pages']) {
+    try {
+      const r = await fetch(`${site}/wp-json/wp/v2/${coll}?${new URLSearchParams({ slug, _fields: 'link' })}`, { headers: { Accept: 'application/json' } });
+      const j = r.ok ? await r.json() : [];
+      if (j?.[0]?.link) return j[0].link;
+    } catch { /* probamos con lo siguiente */ }
+  }
+  return null;
+}
+const checkLinkList = (urls) => linksMod().checkMany(urls, { fetch: globalThis.fetch, siteUrl: linkSiteUrl(), findOnSite: findLinkOnSite }, sendLinksProgress);
+handle('links:check', async (urls) => {
+  const list = [...new Set((urls || []).filter((u) => /^https?:\/\//i.test(u)))].slice(0, 500);
+  const r = await checkLinkList(list);
+  log(`Revisar enlaces: ${list.length} comprobados, ${r.filter((x) => x.status === 'broken').length} rotos`);
+  return r;
+});
+handle('blog:checkLinks', async ({ ids, type }) => {
+  if (!isSelf()) throw new Error('Revisar los enlaces del blog solo está disponible con WordPress propio');
+  const L = linksMod();
+  sendToast('Leyendo las entradas…');
+  const posts = await wpCall(() => wpself.allRaw(cfg, type, ids));
+  const per = posts.map((p) => ({ id: p.id, title: p.title?.raw ?? p.title?.rendered ?? '', links: L.extractLinks(p.content?.raw ?? '') }));
+  const all = [...new Set(per.flatMap((p) => p.links.map((l) => l.url)))];
+  const res = new Map((await checkLinkList(all)).map((r) => [r.url, r]));
+  log(`Revisar enlaces: ${posts.length} entradas, ${all.length} enlaces distintos`);
+  return per.map((p) => ({ id: p.id, title: p.title || '(sin título)', links: p.links.map((l) => ({ ...res.get(l.url), text: l.text, kind: l.kind })) }));
+});
+handle('blog:fixLinks', async (changes) => {
+  if (!isSelf()) throw new Error('Cambiar enlaces en el blog solo está disponible con WordPress propio');
+  const L = linksMod();
+  const groups = new Map();
+  for (const c of changes || []) {
+    if (!c?.from || !c?.to) continue;
+    const k = `${c.type || 'post'}:${c.id}`;
+    if (!groups.has(k)) groups.set(k, { id: c.id, type: c.type, list: [] });
+    groups.get(k).list.push(c);
+  }
+  let done = 0; const errors = [];
+  for (const g of groups.values()) {
+    try {
+      const [p] = await wpCall(() => wpself.allRaw(cfg, g.type, [g.id]));
+      if (!p) throw new Error('no se encuentra');
+      const old = p.content?.raw ?? '';
+      let html = old;
+      for (const c of g.list) html = L.replaceLinkInHtml(html, c.from, c.to);
+      if (html === old) continue;
+      await wpCall(() => wpself.updateFields(cfg, g.id, { content: html }, g.type));
+      done++;
+    } catch (e) { errors.push({ id: g.id, error: e.message }); }
+  }
+  log(`Revisar enlaces: cambiados en ${done} entradas, ${errors.length} errores`);
+  return { done, errors };
+});
+
 // --- Restaurar entradas desde una copia de seguridad (src/backup.js) ---
 let backupAn = null;
 const backupMod = () => require('./src/backup');
