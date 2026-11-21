@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld('api', {
   autosaveClear: () => call('draft:autosaveClear'),
   siteStyles: () => call('site:styles'),
   uploadMedia: () => call('media:upload'),
+  uploadPasted: (bytes, name, type) => call('media:uploadPasted', { bytes, name, type }),
   mediaList: (opts) => call('media:list', opts),
   mediaUsage: (force) => call('media:usage', force),
   mediaAll: (force) => call('media:all', force),

@@ -67,7 +67,18 @@ function toBlock(t) {
     case 'list': return { id: bid(), type: 'list', ordered: !!a.ordered, items: all(h, 'li').map((x) => x.replace(/<!--[\s\S]*?-->/g, '').trim()), ...styleFrom({ ...a, align: null }) };
     case 'quote': return { id: bid(), type: 'quote', html: all(h, 'p').join('<br>'), cite: inner(h, 'cite'), ...styleFrom({ ...a, align: null }) };
     case 'pullquote': return { id: bid(), type: 'quote', pull: true, html: all(h, 'p').join('<br>'), cite: inner(h, 'cite'), ...styleFrom({ ...a, align: null }) };
-    case 'image': { const img = imgOf(h); return img ? { id: bid(), type: 'image', img, caption: inner(h, 'figcaption') } : raw(); }
+    case 'image': {
+      const img = imgOf(h);
+      if (!img) return raw();
+      const b = { id: bid(), type: 'image', img, caption: inner(h, 'figcaption') };
+      // colocada a un lado (texto alrededor) o centrada a un tamaño
+      if (['left', 'right', 'center'].includes(a.align)) {
+        b.align = a.align;
+        const px = parseInt(a.width, 10);
+        if (px) b.width = px <= 300 ? 33 : px <= 470 ? 50 : px <= 650 ? 75 : 100;
+      }
+      return b;
+    }
     case 'gallery': {
       const images = tokenize(h).filter((x) => /(^|\/)image$/.test(x.name)).map((x) => imgOf(x.inner)).filter(Boolean);
       return images.length ? { id: bid(), type: 'gallery', images, columns: a.columns || 3 } : raw();

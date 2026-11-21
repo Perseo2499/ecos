@@ -221,6 +221,41 @@ const toggleSchedule = () => $('#d-schedule').classList.toggle('hidden', $('inpu
 $$('input[name="d-when"]').forEach((r) => (r.onchange = () => { toggleSchedule(); if (r.value === 'future') $('#d-schedule').focus(); }));
 
 // Subir más fotos desde el ordenador a la bandeja
+// Pegar imágenes (Ctrl+V, «Pegar» del botón derecho o el botón «Pegar imagen»): se suben a la biblioteca y
+// entran como bloques de imagen debajo del bloque en el que se está escribiendo
+async function pasteImages(files) {
+  const E = window.BlockEditor;
+  if (!files.length || !draft) return;
+  toast(files.length === 1 ? t('Subiendo la imagen pegada…') : t('Subiendo {n} imágenes pegadas…', { n: files.length }));
+  const ups = [];
+  for (const f of files) {
+    try { ups.push(await window.api.uploadPasted(new Uint8Array(await f.arrayBuffer()), f.name || '', f.type || 'image/png')); } catch (e) { toast(e.message, true); }
+  }
+  if (!ups.length) return;
+  draft.extraMedia = [...(draft.extraMedia || []), ...ups];
+  E.media = mediaPool();
+  const at = E.active?.b ? draft.blocks.indexOf(E.active.b) + 1 : draft.blocks.length;
+  const blocks = ups.map((img) => E.create('image', { img: { id: img.id, url: img.url, alt: '' } }));
+  E.change(() => draft.blocks.splice(at < 1 ? draft.blocks.length : at, 0, ...blocks));
+  E.renderMedia();
+  toast(ups.length === 1 ? t('Imagen añadida a la entrada') : t('{n} imágenes añadidas a la entrada', { n: ups.length }));
+}
+const clipImages = (dt) => [...(dt?.items || [])].filter((i) => i.kind === 'file' && /^image\//.test(i.type)).map((i) => i.getAsFile()).filter(Boolean);
+// antes que el pegado de texto de cada bloque (fase de captura)
+$('#editor').addEventListener('paste', (e) => {
+  const files = clipImages(e.clipboardData);
+  if (!files.length) return; // texto: lo trata el bloque
+  e.preventDefault(); e.stopPropagation();
+  pasteImages(files);
+}, true);
+$('#d-media-paste').onclick = (e) => busy(e.currentTarget, async () => {
+  let items;
+  try { items = await navigator.clipboard.read(); } catch { throw new Error(t('No se ha podido leer el portapapeles.')); }
+  const files = [];
+  for (const it of items) { const type = it.types.find((x) => /^image\//.test(x)); if (type) files.push(new File([await it.getType(type)], '', { type })); }
+  if (!files.length) throw new Error(t('No hay ninguna imagen copiada. Copia una imagen (por ejemplo con clic derecho → Copiar imagen, o Win+Mayús+S) y vuelve a intentarlo.'));
+  await pasteImages(files);
+});
 $('#d-media-add').onclick = (e) => busy(e.target, async () => {
   const added = await window.api.uploadMedia();
   if (!added?.length) return;

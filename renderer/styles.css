@@ -1721,3 +1721,17 @@ button.dp-item:not(.keep) b { color: var(--error, #e5484d); }
 .tp-sk .k-quote { width: 70%; margin-left: 8px; border-left: 3px solid var(--primary); border-radius: 0; } .tp-sk .k-list { width: 80%; margin-left: 8px; }
 .tp-sk .k-btn { height: 8px; width: 40%; background: var(--primary); } .tp-sk .k-sep { height: 1px; } .tp-sk .k-det { height: 7px; border: 1px solid var(--outline-var); background: none; }
 .btpl { display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center; margin-bottom: 8px; } .btpl small { color: var(--on-surface-var); }
+
+/* Fotos dentro del texto: a un lado con el texto alrededor, o centradas a un tamaño (como quedarán en la web) */
+.blk.blk-image.img-left { float: left; clear: left; margin: 6px 22px 10px 0; }
+.blk.blk-image.img-right { float: right; clear: right; margin: 6px 0 10px 22px; }
+.blk.blk-image.img-center { margin-left: auto; margin-right: auto; }
+.blk.blk-image.imgw-33 { width: 33%; } .blk.blk-image.imgw-50 { width: 50%; } .blk.blk-image.imgw-75 { width: 75%; }
+.blk.blk-image.img-left .ph img, .blk.blk-image.img-right .ph img { max-height: none; }
+.blk.blk-heading, .blk.blk-separator, .blk.blk-gallery, .blk.blk-carousel, .blk.blk-table, .blk.blk-video, .blk.blk-embed { clear: both; }
+.blk-image .lv-sep { width: 1px; height: 18px; margin: 0 4px; background: var(--outline-var); align-self: center; }
+/* La columna de bloques en flujo normal (no flex) para que el texto pueda rodear las fotos colocadas a un lado */
+.blocks { display: flow-root; }
+.blocks > .blk, .blocks > .ins { display: block; }
+.blk.blk-image.img-left + .ins, .blk.blk-image.img-right + .ins { display: none; }
+.blk.blk-image.img-left, .blk.blk-image.img-right { position: relative; z-index: 4; }

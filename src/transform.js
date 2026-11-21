@@ -194,9 +194,17 @@ function sectionsToBlocks(sections) {
 const inline = (html) => sanitizeParagraphs(html).join('<br><br>');
 const caption = (c) => (c && inline(c) ? `<figcaption class="wp-element-caption">${inline(c)}</figcaption>` : '');
 
-function imageBlockFull(img, cap = '') {
+// Tamaños de una foto colocada a un lado o centrada (en píxeles: el ancho de texto del blog es ~760)
+const IMG_W = { 33: 250, 50: 380, 75: 570 };
+function imageBlockFull(img, cap = '', place = {}) {
   const alt = img.alt ? ` alt="${esc(img.alt)}"` : ' alt=""';
-  return `<!-- wp:image ${imageBlockAttrs(img)} -->\n<figure class="wp-block-image size-large"><img src="${esc(img.url)}"${alt}${imgClass(img)}/>${caption(cap)}</figure>\n<!-- /wp:image -->`;
+  const align = ['left', 'right', 'center'].includes(place.align) ? place.align : '';
+  const px = align && IMG_W[place.width] ? IMG_W[place.width] : 0;
+  if (!align) return `<!-- wp:image ${imageBlockAttrs(img)} -->\n<figure class="wp-block-image size-large"><img src="${esc(img.url)}"${alt}${imgClass(img)}/>${caption(cap)}</figure>\n<!-- /wp:image -->`;
+  const attrs = JSON.parse(imageBlockAttrs(img));
+  Object.assign(attrs, { align, ...(px ? { width: `${px}px` } : {}) });
+  const cls = imgId(img) ? `wp-image-${imgId(img)}` : '';
+  return `<!-- wp:image ${JSON.stringify(attrs)} -->\n<figure class="wp-block-image align${align} size-large${px ? ' is-resized' : ''}"><img src="${esc(img.url)}"${alt}${cls ? ` class="${cls}"` : ''}${px ? ` style="width:${px}px"` : ''}/>${caption(cap)}</figure>\n<!-- /wp:image -->`;
 }
 
 // Carrusel: diapositivas que se deslizan (scroll-snap, funciona sin JavaScript) con la foto activa
@@ -438,7 +446,7 @@ function composeBlocks(blocks, opts = {}) {
         out.push(head + `<!-- wp:list -->\n<ul class="wp-block-list">${items.map((h) => `<!-- wp:list-item -->\n<li><a href="#${anchors.get(h.id)}">${inline(h.html).replace(/<[^>]+>/g, '')}</a></li>\n<!-- /wp:list-item -->`).join('\n')}</ul>\n<!-- /wp:list -->`);
         break;
       }
-      case 'image': if (b.img) out.push(imageBlockFull(b.img, b.caption)); break;
+      case 'image': if (b.img) out.push(imageBlockFull(b.img, b.caption, { align: b.align, width: b.width })); break;
       case 'gallery': {
         if (!b.images?.length) break;
         if (b.layout === 'mosaic' && b.images.length > 1) { out.push(mosaicBlock(b)); break; }

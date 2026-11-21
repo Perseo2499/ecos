@@ -287,7 +287,7 @@
     block(b, i) {
       const T = TYPES()[b.type] || { icon: 'help', name: b.type };
       const el = document.createElement('div');
-      el.className = `blk blk-${b.type}`;
+      el.className = `blk blk-${b.type}` + (b.type === 'image' && b.align ? ` img-${b.align} imgw-${b.width || 50}` : '');
       el.dataset.id = b.id;
       el.innerHTML = `
         <div class="blk-tools">
@@ -474,6 +474,16 @@
           // soltar otra foto sobre esta imagen las junta en una galería
           this.acceptPhoto(body, (img) => { b.type = 'gallery'; b.images = [b.img, img]; b.columns = 2; delete b.img; delete b.caption; },
             { sameOk: (d) => !(d.kind === 'photo' && d.block === b.id) });
+          // Colocación: a todo el ancho, a la izquierda o a la derecha con el texto alrededor, o centrada; y tamaño
+          const place = b.align || 'full';
+          extra.innerHTML = [['full', 'crop_landscape', t('A todo el ancho')], ['left', 'format_image_left', t('A la izquierda, con el texto alrededor')], ['center', 'format_align_center', t('Centrada')], ['right', 'format_image_right', t('A la derecha, con el texto alrededor')]]
+            .map(([k, ic, n]) => `<button class="lv ${place === k ? 'on' : ''}" data-al="${k}" title="${n}"><span class="ms">${ic}</span></button>`).join('')
+            + (place !== 'full' ? '<span class="lv-sep"></span>' + [[33, t('Pequeña')], [50, t('Mediana')], [75, t('Grande')]]
+              .map(([w, n]) => `<button class="lv ${(b.width || 50) === w ? 'on' : ''}" data-w="${w}" title="${n}">${n}</button>`).join('') : '');
+          $$('[data-al]', extra).forEach((x) => (x.onclick = () => this.change(() => {
+            if (x.dataset.al === 'full') { delete b.align; delete b.width; } else { b.align = x.dataset.al; b.width = b.width || 50; }
+          })));
+          $$('[data-w]', extra).forEach((x) => (x.onclick = () => this.change(() => (b.width = Number(x.dataset.w)))));
           break;
         }
 

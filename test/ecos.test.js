@@ -456,3 +456,13 @@ test('calendario editorial: nuevo día conservando la hora y estado según la fe
   assert.deepEqual(calDropDecision('publish', new Date(2026, 10, 30, 10), now), { action: 'confirm', status: 'future' });
   assert.equal(calLocalInput(new Date(2026, 0, 5, 9, 3)), '2026-01-05T09:03');
 });
+
+test('fotos dentro del texto: a un lado con el texto alrededor y su tamaño, ida y vuelta', () => {
+  const { parseBlocks } = require('../src/parseblocks');
+  const html = T.composeBlocks([{ id: 'f', type: 'image', img: { id: 9, url: 'https://x/a.jpg', alt: '' }, caption: '', align: 'right', width: 33 }]);
+  assert.match(html, /"align":"right"/); assert.match(html, /alignright/); assert.match(html, /width:250px/);
+  const b = parseBlocks(html)[0];
+  assert.equal(b.align, 'right'); assert.equal(b.width, 33);
+  const plain = T.composeBlocks([{ id: 'g', type: 'image', img: { id: 9, url: 'https://x/a.jpg', alt: '' }, caption: '' }]);
+  assert.equal(parseBlocks(plain)[0].align, undefined);
+});

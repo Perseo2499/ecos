@@ -119,6 +119,21 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => { openSafe(url); return { action: 'deny' }; });
   // la ventana de la app nunca navega a otra página (un enlace malicioso no puede sustituir la interfaz)
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('file:')) { e.preventDefault(); openSafe(url); } });
+  // Menú del botón derecho: cortar, copiar, pegar (también imágenes en el editor) y correcciones de ortografía
+  win.webContents.on('context-menu', (_e, params) => {
+    const { Menu } = require('electron');
+    const items = [];
+    for (const w of (params.dictionarySuggestions || []).slice(0, 5)) items.push({ label: w, click: () => win.webContents.replaceMisspelling(w) });
+    if (params.misspelledWord) items.push({ label: 'Añadir al diccionario', click: () => win.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord) }, { type: 'separator' });
+    const ed = params.isEditable, f = params.editFlags || {};
+    if (ed) items.push({ label: 'Cortar', role: 'cut', enabled: f.canCut });
+    if (ed || params.selectionText) items.push({ label: 'Copiar', role: 'copy', enabled: f.canCopy });
+    if (ed) items.push({ label: 'Pegar', role: 'paste', enabled: f.canPaste }, { label: 'Pegar sin formato', role: 'pasteAndMatchStyle', enabled: f.canPaste });
+    if (ed || params.selectionText) items.push({ type: 'separator' }, { label: 'Seleccionar todo', role: 'selectAll' });
+    if (params.mediaType === 'image' && params.srcURL && /^https?:/.test(params.srcURL)) items.push({ type: 'separator' }, { label: 'Copiar imagen', click: () => win.webContents.copyImageAt(params.x, params.y) });
+    while (items.length && items[items.length - 1].type === 'separator') items.pop();
+    if (items.length) Menu.buildFromTemplate(items).popup({ window: win });
+  });
 }
 
 const publicCfg = () => ({
@@ -363,6 +378,15 @@ handle('post:pull', async (id, type) => {
 });
 
 // Bandeja del editor: subir fotos o vídeos del ordenador a la biblioteca de WordPress
+// Imagen pegada (Ctrl+V o «Pegar»): llega como bytes y se sube a la biblioteca de medios
+handle('media:uploadPasted', async ({ bytes, name, type }) => {
+  const ext = (String(type).split('/')[1] || 'png').replace('jpeg', 'jpg').replace(/[^a-z0-9]/gi, '');
+  const base = String(name || '').replace(/\.[^.]+$/, '').replace(/[^\w\-]+/g, '-').slice(0, 60) || `pegada-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}`;
+  const tmp = path.join(app.getPath('temp'), `ecos-${Date.now()}-${base}.${ext}`);
+  fs.writeFileSync(tmp, Buffer.from(bytes));
+  try { const up = await wpCall(() => WP().uploadFile(cfg, tmp)); return { ...up, alt: '', type: 'image' }; }
+  finally { fs.rm(tmp, { force: true }, () => {}); }
+});
 handle('media:upload', async () => {
   const r = await dialog.showOpenDialog(mainWin, {
     title: 'Fotos y vídeos para la entrada', properties: ['openFile', 'multiSelections'],
