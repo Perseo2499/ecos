@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('api', {
   mediaUsage: (force) => call('media:usage', force),
   mediaAll: (force) => call('media:all', force),
   mediaSetDates: (list) => call('media:setDates', list),
+  mediaExifDates: (items) => call('media:exifDates', items),
   mediaDuplicates: () => call('media:duplicates'),
   mediaMergeDuplicates: (groups) => call('media:mergeDuplicates', groups),
   mediaDelete: (ids) => call('media:delete', ids),

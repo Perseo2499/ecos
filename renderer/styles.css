@@ -1525,3 +1525,10 @@ body.editing .b-bulk.on { display: none; }
 .dp-meta b { color: var(--on-surface); font-size: 13px; }
 .dp-meta .mg-tag { position: static; align-self: flex-start; }
 .dp-list { align-items: stretch; } .dp-group { justify-content: flex-start; }
+
+/* Repetidas: cada foto se pulsa para elegir si se queda */
+.dp-group { cursor: default; }
+.dp-chk { display: grid; place-items: center; cursor: pointer; }
+button.dp-item { border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; transition: opacity .15s, box-shadow .15s, transform .15s; }
+button.dp-item:hover { opacity: 1; transform: translateY(-1px); }
+button.dp-item:not(.keep) b { color: var(--error, #e5484d); }

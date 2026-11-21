@@ -166,12 +166,12 @@ async function uploadFromUrls(cfg, urls) {
 const updateMedia = (cfg, id, fields) => req(cfg, `/wp/v2/media/${id}`, { method: 'POST', json: { alt_text: fields.alt ?? fields.alt_text } });
 
 // --- Biblioteca de medios ------------------------------------------------------------
-const MEDIA_FIELDS = 'id,date,source_url,mime_type,media_type,alt_text,title,media_details';
+const MEDIA_FIELDS = 'id,date,source_url,mime_type,media_type,alt_text,title,media_details,post';
 const normMedia = (m) => {
   const d = m.media_details || {}, sz = d.sizes || {};
   const file = decodeURIComponent((m.source_url || '').split('?')[0].split('/').pop() || '');
   return {
-    id: m.id, date: m.date, url: m.source_url, type: m.media_type === 'video' ? 'video' : 'image', mime: m.mime_type || '',
+    id: m.id, date: m.date, parent: m.post || 0, url: m.source_url, type: m.media_type === 'video' ? 'video' : 'image', mime: m.mime_type || '',
     alt: m.alt_text || '', name: decode((m.title && (m.title.rendered ?? m.title.raw)) || '').replace(/<[^>]+>/g, '') || file,
     thumb: (sz.medium || sz.thumbnail || {}).source_url || '', tiny: (sz.thumbnail || sz.medium || {}).source_url || '', large: (sz.large || {}).source_url || '',
     width: d.width || 0, height: d.height || 0, size: d.filesize || 0,
@@ -233,7 +233,9 @@ async function mediaUsage(cfg, knownMedia) {
   for (const coll of ['posts', 'pages']) {
     posts.push(...(await allParallel(cfg, `/wp/v2/${coll}?context=edit&status=publish,draft,private,pending,future&_fields=id,title,content,featured_media,date`)));
   }
-  if (knownMedia) return usedMediaIds(posts, knownMedia);
+  // fechas de todas las entradas (para las fotos subidas a una entrada aunque ya no salgan en ella)
+  const withDates = (u) => Object.assign(u, { _postDates: Object.fromEntries(posts.map((p) => [p.id, p.date])) });
+  if (knownMedia) return withDates(usedMediaIds(posts, knownMedia));
   const media = [];
   for (let page = 1; page <= 200; page++) {
     const { data, res } = await req(cfg, `/wp/v2/media?per_page=100&page=${page}&_fields=id,source_url`, { raw: true });

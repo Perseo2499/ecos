@@ -1,6 +1,13 @@
 // Biblioteca de medios de WordPress (solo WordPress propio): ver, limpiar y reutilizar fotos y vídeos.
 // Dos usos de la misma rejilla: la vista «Medios» del Blog y el selector «De la biblioteca» del editor.
 
+// Fecha escrita en el nombre del archivo (igual que src/photodate.js): «WhatsApp-Image-2023-02-04…», «IMG_20190512…»
+function dateFromFileName(name) {
+  let n = String(name || ''); try { n = decodeURIComponent(n); } catch { /* tal cual */ }
+  const m = n.split('/').pop().match(/(?<!\d)((?:19|20)\d{2})([-_.]?)(0[1-9]|1[0-2])\2(0[1-9]|[12]\d|3[01])(?!\d)/);
+  if (!m || Number(m[1]) < 1990 || Number(m[1]) > new Date().getFullYear()) return null;
+  return `${m[1]}-${m[3]}-${m[4]}`;
+}
 const fmtBytes = (n) => (!n ? '' : n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
 const mediaDate = (d) => { try { return new Date(d).toLocaleDateString(prefs().lang === 'en' ? 'en-GB' : 'es-ES', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return ''; } };
 
@@ -52,7 +59,19 @@ function mediaGrid(host, o = {}) {
   const changed = () => { o.onChange?.(); };
   const pages = () => Math.max(1, Math.ceil(st.total / st.per));
   // Fecha original de un medio: la de la primera entrada donde se usa (si se sabe); si no, la de subida
-  const origDate = (m) => { const u = st.usage?.[m.id]; const d = (u || []).map((x) => x.date).filter(Boolean).sort()[0]; return d || m.date; };
+  // Fecha original de un medio y de dónde sale: la entrada donde se usa; la entrada a la que se subió; la fecha
+  // escrita en el nombre (WhatsApp, móviles…); si no, la de subida
+  const dateInfo = (m) => {
+    const u = st.usage?.[m.id];
+    const d = (u || []).map((x) => x.date).filter(Boolean).sort()[0];
+    if (d) return { date: d, src: 'post', title: u[0]?.title };
+    const pd = m.parent && st.usage?._postDates?.[m.parent];
+    if (pd) return { date: pd, src: 'parent' };
+    const nd = dateFromFileName(m.url || m.name);
+    if (nd) return { date: nd + 'T12:00:00', src: 'name' };
+    return { date: m.date, src: '' };
+  };
+  const origDate = (m) => dateInfo(m).date;
   const range = () => {
     const f = st.from ? new Date(st.from + 'T00:00:00') : null;
     const tt = st.to ? new Date(st.to + 'T00:00:00') : null; if (tt) tt.setDate(tt.getDate() + 1);
@@ -93,8 +112,11 @@ function mediaGrid(host, o = {}) {
       const tag = !o.usage || !st.usage ? '' : uses?.length
         ? `<span class="mg-tag use" title="${escHtml(uses.map((u) => u.title).join('\n'))}">${t('En uso ({n})', { n: uses.length })}</span>`
         : `<span class="mg-tag free">${t('Sin usar')}</span>`;
-      const od = origDate(m), isOrig = od !== m.date;
-      const dateTxt = isOrig ? `<span class="mg-orig" title="${escHtml(t('Fecha de la entrada «{x}» · subida el {d}', { x: uses[0]?.title || '', d: mediaDate(m.date) }))}"><span class="ms">event</span>${escHtml(mediaDate(od))}</span>` : escHtml(mediaDate(m.date));
+      const di = dateInfo(m), isOrig = di.src && di.date.slice(0, 10) !== String(m.date).slice(0, 10);
+      const why = di.src === 'post' ? t('Fecha de la entrada «{x}» · subida el {d}', { x: di.title || '', d: mediaDate(m.date) })
+        : di.src === 'parent' ? t('Fecha de la entrada a la que se subió · subida el {d}', { d: mediaDate(m.date) })
+        : t('Fecha escrita en el nombre del archivo · subida el {d}', { d: mediaDate(m.date) });
+      const dateTxt = isOrig ? `<span class="mg-orig" title="${escHtml(why)}"><span class="ms">event</span>${escHtml(mediaDate(di.date))}</span>` : escHtml(mediaDate(m.date));
       const meta = [m.width ? `${m.width}×${m.height}` : '', fmtBytes(m.size)].filter(Boolean).join(' · ');
       card.innerHTML = `<div class="mg-th">${thumb}</div><label class="mg-check"><input type="checkbox" ${st.sel.has(m.id) ? 'checked' : ''}></label>${tag}
         <div class="mg-meta"><b title="${escHtml(m.name)}">${escHtml(m.name)}</b><span>${dateTxt}${meta ? ' · ' + escHtml(meta) : ''}</span></div>`;
@@ -186,7 +208,7 @@ function mediaGrid(host, o = {}) {
   q('.mg-per').onchange = (e) => { const first = (st.page - 1) * st.per; st.per = Number(e.target.value); st.page = Math.floor(first / st.per) + 1; load(); };
 
   return {
-    sel: st.sel, st, reload, render, origDate,
+    sel: st.sel, st, reload, render, origDate, dateInfo,
     clear() { st.sel.clear(); render(); changed(); },
     remove(ids) { const s = new Set(ids); if (st.pool) st.pool = st.pool.filter((m) => !s.has(m.id)); ids.forEach((id) => st.sel.delete(id)); load(); changed(); },
   };
@@ -211,7 +233,7 @@ function renderMediaLib() {
     acts.innerHTML = !n ? `<button class="btn tonal small" data-a="dupes" title="${escHtml(t('Busca la misma foto subida varias veces y deja solo la de mejor calidad'))}"><span class="ms">filter_none</span>${t('Buscar fotos repetidas')}</button>` : `<button class="btn tonal small" data-a="copy"><span class="ms">link</span>${t('Copiar enlace')}</button>
       ${n === 1 ? `<button class="btn tonal small" data-a="alt"><span class="ms">edit_note</span>${t('Editar descripción (alt)')}</button>` : ''}
       ${sel.some((m) => m.type !== 'video') ? `<button class="btn tonal small" data-a="ai"><span class="ms">auto_fix_high</span>${t('Mejorar con IA')}</button>` : ''}
-      ${sel.some((m) => mediaLib.origDate(m) !== m.date) ? `<button class="btn tonal small" data-a="dates" title="${escHtml(t('Cambia la fecha de la foto en WordPress por la de la entrada donde se usa (así se ordenan bien también en wp-admin)'))}"><span class="ms">event</span>${t('Poner fecha original')}</button>` : ''}
+      ${sel.some((m) => m.type !== 'video') ? `<button class="btn tonal small" data-a="dates" title="${escHtml(t('Pone a cada foto su fecha real: la de la entrada donde se usa o se subió, la escrita en su nombre o la que la cámara guardó dentro de la foto'))}"><span class="ms">event</span>${t('Poner fecha original')}</button>` : ''}
       <button class="btn tonal small danger" data-a="del"><span class="ms">delete</span>${t('Borrar de la biblioteca')}</button>
       <button class="btn text icon-only" data-a="clear" title="${escHtml(t('Quitar la selección'))}"><span class="ms">close</span></button>`;
   };
@@ -231,8 +253,21 @@ function renderMediaLib() {
       mediaLib.render();
     }
     if (b.dataset.a === 'dates') {
-      const list = sel.filter((m) => mediaLib.origDate(m) !== m.date).map((m) => ({ id: m.id, date: mediaLib.origDate(m) }));
-      return busy(b, async () => { const r = await window.api.mediaSetDates(list); toast(t('Fecha original puesta en {n} archivos.', { n: r.done }) + (r.failed ? ' ' + t('{e} con error.', { e: r.failed }) : ''), !!r.failed); mediaLib.clear(); mediaLib.reload(); });
+      return busy(b, async () => {
+        const known = [], unknown = [];
+        for (const m of sel) { const di = mediaLib.dateInfo(m); (di.src ? known : unknown).push({ m, date: di.date }); }
+        // sin entrada ni fecha en el nombre: la fecha de captura guardada dentro de la foto
+        if (unknown.length) {
+          toast(t('Leyendo la fecha de captura de {n} fotos…', { n: unknown.length }));
+          const ex = await window.api.mediaExifDates(unknown.map((x) => ({ id: x.m.id, url: x.m.url })));
+          for (const x of unknown) if (ex[x.m.id]) known.push({ m: x.m, date: ex[x.m.id] });
+        }
+        const list = known.filter((x) => String(x.date).slice(0, 10) !== String(x.m.date).slice(0, 10)).map((x) => ({ id: x.m.id, date: x.date }));
+        const none = sel.length - known.length;
+        const r = list.length ? await window.api.mediaSetDates(list) : { done: 0, failed: 0 };
+        toast(t('Fecha original puesta en {n} archivos.', { n: r.done }) + (none ? ' ' + t('{x} no tienen ninguna fecha conocida (ni entrada, ni nombre, ni datos de la cámara).', { x: none }) : '') + (r.failed ? ' ' + t('{e} con error.', { e: r.failed }) : ''), !!r.failed);
+        mediaLib.clear(); mediaLib.reload();
+      });
     }
     if (b.dataset.a === 'ai') return upscaleSelected(sel.filter((m) => m.type !== 'video'), b);
     if (b.dataset.a === 'del') {
@@ -394,31 +429,45 @@ async function findDuplicates() {
   const groups = await window.api.mediaDuplicates();
   const usage = mediaLib?.st.usage || await window.api.mediaUsage(false).catch(() => ({}));
   if (!groups.length) return toast(t('No hay fotos repetidas en la biblioteca.'));
+  // Cada grupo: todas sus fotos. Las que se quedan se eligen con un clic (al principio, la de más resolución).
+  const items = groups.map((g) => [g.keep, ...g.drop]);
+  const kept = groups.map((g) => new Set([g.keep.id]));
+  // de las que se quedan, la principal (más resolución) recibe las entradas que usaban las que se borran
+  const target = (i) => items[i].filter((m) => kept[i].has(m.id)).sort((x, y) => y.width * y.height - x.width * x.height || (y.size || 0) - (x.size || 0))[0];
+  const card = (m, i) => {
+    const u = usage?.[m.id] || [], keep = kept[i].has(m.id), main = keep && kept[i].size > 1 && target(i)?.id === m.id;
+    return `<button type="button" class="dp-item${keep ? ' keep' : ''}" data-gi="${i}" data-id="${m.id}" title="${escHtml(t('Pulsa para elegir si se queda o se borra'))}"><img src="${escHtml(m.thumb || m.url)}" alt="" loading="lazy">
+      <span class="dp-meta"><b>${keep ? (main ? t('Se queda (principal)') : t('Se queda')) : t('Se borra')}</b><span>${m.width}×${m.height} · ${escHtml(fmtBytes(m.size) || '')}</span>
+      <span class="mg-tag ${u.length ? 'use' : 'free'}">${u.length ? t('En uso ({n})', { n: u.length }) : t('Sin usar')}</span></span></button>`;
+  };
+  const row = (i) => `<div class="dp-row">${items[i].map((m) => card(m, i)).join('')}</div>`;
   const d = document.createElement('div');
   d.className = 'dlg-scrim';
-  const card = (m, keep) => {
-    const u = usage?.[m.id] || [];
-    return `<div class="dp-item${keep ? ' keep' : ''}"><img src="${escHtml(m.thumb || m.url)}" alt="" loading="lazy">
-      <div class="dp-meta"><b>${keep ? t('Se queda') : t('Se borra')}</b><span>${m.width}×${m.height} · ${escHtml(fmtBytes(m.size) || '')}</span>
-      <span class="mg-tag ${u.length ? 'use' : 'free'}">${u.length ? t('En uso ({n})', { n: u.length }) : t('Sin usar')}</span></div></div>`;
-  };
   d.innerHTML = `<div class="dlg dp-dlg" role="dialog" aria-modal="true">
     <div class="dp-head"><span class="ms fill">filter_none</span><h2>${t('Fotos repetidas')}</h2></div>
-    <p class="hint">${t('Se ha encontrado la misma foto varias veces. Se queda la de mejor calidad: las entradas que usaban las otras pasan a usarla, y las otras se borran de la biblioteca.')}</p>
-    <div class="dp-list">${groups.map((g, i) => `<label class="dp-group"><input type="checkbox" data-g="${i}" checked><div class="dp-row">${card(g.keep, true)}${g.drop.map((m) => card(m, false)).join('')}</div></label>`).join('')}</div>
+    <p class="hint">${t('Se ha encontrado la misma foto varias veces. Pulsa una foto para cambiar si se queda o se borra (al principio se queda la de más resolución). Las entradas que usaban las que se borran pasan a usar la principal de las que se quedan.')}</p>
+    <div class="dp-list">${groups.map((g, i) => `<div class="dp-group"><label class="dp-chk" title="${escHtml(t('Incluir este grupo'))}"><input type="checkbox" data-g="${i}" checked></label><div class="dp-slot" data-slot="${i}">${row(i)}</div></div>`).join('')}</div>
     <div class="dlg-actions"><button class="btn text" data-x>${t('Cancelar')}</button><button class="btn filled" data-ok></button></div></div>`;
   document.body.appendChild(d);
   const ok = d.querySelector('[data-ok]');
-  const picked = () => [...d.querySelectorAll('[data-g]:checked')].map((c) => groups[Number(c.dataset.g)]);
+  // grupos marcados en los que algo se borra
+  const picked = () => [...d.querySelectorAll('[data-g]:checked')].map((c) => Number(c.dataset.g)).filter((i) => items[i].some((m) => !kept[i].has(m.id)));
   const sync = () => { const n = picked().length; ok.disabled = !n; ok.textContent = t('Juntar {n} grupos', { n }); };
   d.querySelectorAll('[data-g]').forEach((c) => (c.onchange = sync)); sync();
+  d.querySelector('.dp-list').addEventListener('click', (e) => {
+    const b = e.target.closest('.dp-item'); if (!b) return;
+    const i = Number(b.dataset.gi), id = Number(b.dataset.id);
+    if (kept[i].has(id)) { if (kept[i].size === 1) return toast(t('Al menos una foto de cada grupo tiene que quedarse.'), true); kept[i].delete(id); } else kept[i].add(id);
+    d.querySelector(`[data-slot="${i}"]`).innerHTML = row(i);
+    sync();
+  });
   const close = () => d.remove();
   d.querySelector('[data-x]').onclick = close;
   d.addEventListener('mousedown', (e) => { if (e.target === d) close(); });
   ok.onclick = () => busy(ok, async () => {
-    const sel = picked();
-    if (!await ask(t('Se borrarán {n} fotos repetidas de la biblioteca y las entradas pasarán a usar la de mejor calidad. ¿Continuar?', { n: sel.reduce((a, g) => a + g.drop.length, 0) }), { danger: true, ok: t('Juntar') })) return;
-    const r = await window.api.mediaMergeDuplicates(sel.map((g) => ({ keep: g.keep.id, drop: g.drop.map((m) => m.id) })));
+    const sel = picked().map((i) => ({ keep: target(i).id, drop: items[i].filter((m) => !kept[i].has(m.id)).map((m) => m.id) }));
+    if (!await ask(t('Se borrarán {n} fotos repetidas de la biblioteca y las entradas pasarán a usar la principal de las que se quedan. ¿Continuar?', { n: sel.reduce((a, g) => a + g.drop.length, 0) }), { danger: true, ok: t('Juntar') })) return;
+    const r = await window.api.mediaMergeDuplicates(sel);
     close();
     toast(t('{d} fotos repetidas borradas; {p} entradas actualizadas.', { d: r.deleted, p: r.posts }) + (r.errors.length ? ' ' + t('{e} con error.', { e: r.errors.length }) : ''), !!r.errors.length);
     mediaLib?.reload(true);

@@ -396,3 +396,21 @@ test('fotos repetidas: misma foto en dos tamaños = un grupo; se queda la grande
   ]);
   assert.deepEqual(groups, [{ keep: 2, drop: [1] }]);
 });
+
+test('fecha real de fotos sin entrada: en el nombre o dentro de la foto (EXIF)', () => {
+  const P = require('../src/photodate');
+  assert.equal(P.dateFromName('WhatsApp-Image-2023-02-04-at-10.15.22.jpeg'), '2023-02-04');
+  assert.equal(P.dateFromName('IMG_20190512_123456.jpg'), '2019-05-12');
+  assert.equal(P.dateFromName('702677198_18088941234567890_n.jpg'), null); // número de Instagram: no es fecha
+  assert.equal(P.dateFromName('Dia-del-Inmigrante-3.jpg'), null);
+  // JPEG mínima con EXIF (little endian): IFD0 → puntero EXIF → DateTimeOriginal
+  const tiff = Buffer.alloc(80);
+  tiff.write('II', 0, 'latin1'); tiff.writeUInt16LE(42, 2); tiff.writeUInt32LE(8, 4);
+  tiff.writeUInt16LE(1, 8); tiff.writeUInt16LE(0x8769, 10); tiff.writeUInt16LE(4, 12); tiff.writeUInt32LE(1, 14); tiff.writeUInt32LE(26, 18);
+  tiff.writeUInt16LE(1, 26); tiff.writeUInt16LE(0x9003, 28); tiff.writeUInt16LE(2, 30); tiff.writeUInt32LE(20, 32); tiff.writeUInt32LE(44, 36);
+  tiff.write('2011:11:04 18:30:00\0', 44, 'latin1');
+  const app1 = Buffer.concat([Buffer.from('Exif\0\0', 'latin1'), tiff]);
+  const len = Buffer.alloc(2); len.writeUInt16BE(app1.length + 2);
+  const jpg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe1]), len, app1, Buffer.from([0xff, 0xda])]);
+  assert.equal(P.exifDate(jpg), '2011-11-04T18:30:00');
+});

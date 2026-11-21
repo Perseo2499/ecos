@@ -600,11 +600,40 @@ async function mediaAll(force) {
 }
 handle('media:all', async (force) => { needSelfMedia(); return mediaAll(!!force); });
 handle('media:list', async (opts) => { needSelfMedia(); return wpCall(() => wpself.listMedia(cfg, opts || {})); });
+// Fecha de captura guardada dentro de las fotos (EXIF): se leen solo los primeros KB de cada una
+handle('media:exifDates', async (items) => {
+  needSelfMedia();
+  const { exifDate } = require('./src/photodate');
+  const out = {};
+  let next = 0;
+  const work = async () => {
+    while (next < (items || []).length) {
+      const m = items[next++];
+      if (!/\.jpe?g(\?|$)/i.test(m.url || '')) continue;
+      try {
+        const r = await fetch(m.url, { headers: { Range: 'bytes=0-131071' }, signal: AbortSignal.timeout(20000) });
+        const reader = r.body?.getReader?.();
+        let buf;
+        if (reader) { // por si el servidor no admite «Range»: no se descarga más de lo necesario
+          const parts = []; let size = 0;
+          while (size < 131072) { const { value, done } = await reader.read(); if (done) break; parts.push(value); size += value.length; }
+          try { await reader.cancel(); } catch { /* ya está */ }
+          buf = Buffer.concat(parts.map((x) => Buffer.from(x)));
+        } else buf = Buffer.from(await r.arrayBuffer());
+        const d = exifDate(buf);
+        if (d) out[m.id] = d;
+      } catch (e) { log('Fecha EXIF', m.id, e.message); }
+    }
+  };
+  await Promise.all(Array.from({ length: 6 }, work));
+  return out;
+});
 handle('media:setDates', async (list) => {
   needSelfMedia();
   let done = 0, failed = 0;
   for (const x of list || []) { try { await wpCall(() => wpself.setMediaDate(cfg, x.id, x.date)); done++; } catch (e) { failed++; log('Fecha de medio', x.id, e.message); } }
   mediaUsageCache = null;
+  if (mediaPool) { const m = new Map((list || []).map((x) => [x.id, x.date])); for (const it of mediaPool.items) if (m.has(it.id)) it.date = String(m.get(it.id)).slice(0, 19); saveMediaCache(); }
   return { done, failed };
 });
 handle('media:usage', async (force) => {
