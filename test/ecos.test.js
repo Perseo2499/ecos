@@ -414,3 +414,21 @@ test('fecha real de fotos sin entrada: en el nombre o dentro de la foto (EXIF)',
   const jpg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe1]), len, app1, Buffer.from([0xff, 0xda])]);
   assert.equal(P.exifDate(jpg), '2011-11-04T18:30:00');
 });
+
+// --- Estructura: avisos (renderer/sitemap.js) ---
+const SM = require('../renderer/sitemap');
+test('estructura: páginas fuera del menú, menú con páginas ocultas y categorías vacías', () => {
+  const pg = (id, parent, status = 'publish') => ({ id, title: 'P' + id, parent, status, order: id });
+  const pages = [pg(1, 0), pg(2, 1), pg(3, 2), pg(4, 0), pg(5, 4), pg(6, 0, 'draft'), pg(7, 0), pg(8, 0)];
+  const menu = [
+    { id: 10, object: 'page', objectId: 1 }, { id: 11, object: 'page', objectId: 6 }, { id: 12, object: 'page', objectId: 99 },
+    { id: 13, object: 'custom', objectId: 0 }, { id: 14, object: 'category', objectId: 4 },
+  ];
+  // 1,2,3 (cuelgan de la 1) y 6 (en el menú, pero borrador) se alcanzan; 4,5,7 no; 8 es la portada
+  assert.deepEqual([...SM.reachablePages(pages, menu)].sort(), [1, 2, 3, 6]);
+  assert.deepEqual(SM.unlinkedPages(pages, menu, { showOnFront: 'page', pageOnFront: 8 }).map((p) => p.id), [4, 5, 7]);
+  assert.deepEqual(SM.unlinkedPages(pages, menu, { showOnFront: 'posts' }).map((p) => p.id), [4, 5, 7, 8]);
+  assert.deepEqual(SM.menuProblems(pages, menu).map((x) => [x.item.id, x.why]), [[11, 'draft'], [12, 'trash']]);
+  const cats = [{ id: 1, count: 0, parent: 0 }, { id: 2, count: 0, parent: 0 }, { id: 3, count: 0, parent: 2 }, { id: 4, count: 5, parent: 0 }];
+  assert.deepEqual(SM.emptyCategories(cats).map((c) => c.id), [3]);
+});

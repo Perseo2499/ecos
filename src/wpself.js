@@ -464,13 +464,25 @@ async function categoryPosts(cfg, catId) {
   return (await all(cfg, `/wp/v2/posts?categories=${catId}&context=edit&status=publish,draft,private,pending,future&_fields=id,title,status,sticky,categories,date`))
     .map((p) => ({ id: p.id, title: raw(p.title) || '(sin título)', status: p.status, sticky: !!p.sticky, categories: p.categories, date: p.date }));
 }
-// ch: { settings, pages:[{id,parent,order,status}], menuDel:[id], menuAdd:[{tmp,menu,title,type,object,objectId,url,parent,order}],
+// Crear desde la estructura (los cambios se aplican al momento)
+async function createPage(cfg, { title, parent = 0, status = 'draft' }) {
+  const p = await req(cfg, '/wp/v2/pages?context=edit', { method: 'POST', json: { title, parent: parent || 0, status } });
+  return { id: p.id, title: raw(p.title) || title, status: p.status, parent: p.parent || 0, order: p.menu_order || 0, link: p.link };
+}
+async function createCategory(cfg, { name, parent = 0 }) {
+  const c = await req(cfg, '/wp/v2/categories', { method: 'POST', json: { name, parent: parent || 0 } });
+  return { id: c.id, name: raw({ raw: c.name }), count: 0, parent: c.parent || 0, link: c.link };
+}
+const trashPage = (cfg, id) => req(cfg, `/wp/v2/pages/${id}`, { method: 'DELETE' }).then(() => true);
+const deleteCategory = (cfg, id) => req(cfg, `/wp/v2/categories/${id}?force=true`, { method: 'DELETE' }).then(() => true);
+// ch: { settings, categories:[{id,name}], pages:[{id,parent,order,status,title}], menuDel:[id], menuAdd:[{tmp,menu,title,type,object,objectId,url,parent,order}],
 //       menuItems:[{id,parent,order}], posts:[{id,categories,sticky}] }  (los «tmp» son elementos de menú nuevos)
 async function saveStructure(cfg, ch, progress = () => {}) {
   const errors = [];
   const run = async (what, fn) => { try { await fn(); progress(what); } catch (e) { errors.push(`${what}: ${e.message}`); } };
   if (ch.settings) await run('Portada', () => req(cfg, '/wp/v2/settings', { method: 'POST', json: { show_on_front: ch.settings.showOnFront, page_on_front: ch.settings.pageOnFront || 0, page_for_posts: ch.settings.pageForPosts || 0 } }));
-  for (const p of ch.pages || []) await run(`Página ${p.id}`, () => req(cfg, `/wp/v2/pages/${p.id}`, { method: 'POST', json: { parent: p.parent, menu_order: p.order, status: p.status } }));
+  for (const p of ch.pages || []) await run(`Página ${p.id}`, () => req(cfg, `/wp/v2/pages/${p.id}`, { method: 'POST', json: { ...(p.parent !== undefined ? { parent: p.parent } : {}), ...(p.order !== undefined ? { menu_order: p.order } : {}), ...(p.status ? { status: p.status } : {}), ...(p.title ? { title: p.title } : {}) } }));
+  for (const c of ch.categories || []) await run(`Categoría ${c.id}`, () => req(cfg, `/wp/v2/categories/${c.id}`, { method: 'POST', json: { name: c.name } }));
   for (const id of ch.menuDel || []) await run(`Menú ${id}`, () => req(cfg, `/wp/v2/menu-items/${id}?force=true`, { method: 'DELETE' }));
   const ids = new Map();
   const real = (x) => (typeof x === 'string' && ids.has(x) ? ids.get(x) : x);
@@ -487,4 +499,4 @@ async function saveStructure(cfg, ch, progress = () => {}) {
   return { errors };
 }
 
-module.exports = { allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw };
+module.exports = { allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw };

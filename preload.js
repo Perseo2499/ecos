@@ -80,6 +80,10 @@ contextBridge.exposeInMainWorld('api', {
   blogCategory: (id, name, add) => call('blog:category', id, name, add),
   siteStructure: () => call('site:structure'),
   siteCatPosts: (id) => call('site:catPosts', id),
+  siteCreatePage: (o) => call('site:createPage', o),
+  siteCreateCategory: (o) => call('site:createCategory', o),
+  siteTrashPage: (id) => call('site:trashPage', id),
+  siteDeleteCategory: (id) => call('site:deleteCategory', id),
   siteSave: (changes) => call('site:save', changes),
   blogEditUrl: (id, type) => call('blog:editUrl', id, type),
 

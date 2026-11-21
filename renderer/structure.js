@@ -1,20 +1,24 @@
 // Estructura de la web (pestaña Blog → Estructura): un esquema editable de cómo está organizada la web.
 //  · Portada: qué muestra la página de inicio y qué página lista las entradas.
 //  · Menú: sus elementos en árbol; se reordenan y anidan arrastrando, se quitan con el ojo y se añaden
-//    arrastrando una página o una categoría desde las otras columnas.
+//    arrastrando una página o una categoría desde las otras columnas (o con «Añadir al menú» / «+ Enlace»).
 //  · Páginas: árbol de páginas y subpáginas; se reordenan y anidan arrastrando; el ojo las publica o
-//    las pasa a borrador.
+//    las pasa a borrador; se crean páginas y subpáginas, se renombran y se mandan a la papelera.
 //  · Categorías: cada una con sus entradas; una entrada se lleva a otra categoría arrastrándola (con Ctrl
 //    se añade sin quitarla de la suya), se fija arriba con la chincheta y se abre en el editor de Ecos.
-// Los cambios se acumulan y se guardan juntos («Guardar cambios»).
+//  · Revisión: avisos (páginas fuera del menú, menú con páginas ocultas, categorías vacías).
+//  · Mapa: el mismo sitio como diagrama de árbol (Inicio → menú → subpáginas; fuera del menú; categorías).
+// Crear páginas/categorías se hace al momento en WordPress; el resto de cambios se acumulan y se guardan
+// juntos («Guardar cambios»).
 (function () {
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const t = (s, v) => window.I18N.t(s, v);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const box = () => $('#b-structure');
+  const toast = (m, err) => window.toast?.(m, err);
 
-  const S = { data: null, orig: null, menu: 0, posts: new Map(), postsOrig: new Map(), loaded: new Set(), open: new Set(), tmp: 0, del: new Set(), busy: false };
+  const S = { data: null, orig: null, menu: 0, posts: new Map(), postsOrig: new Map(), loaded: new Set(), open: new Set(), tmp: 0, del: new Set(), busy: false, view: 'cols', sel: null, revOpen: true, revAll: false };
   let drag = null; // { kind: 'page'|'menu'|'cat'|'post', id, from? }
 
   const STATUS = () => ({ publish: [t('Publicada'), 'visibility'], draft: [t('Borrador'), 'visibility_off'], private: [t('Privada'), 'lock'], pending: [t('Pendiente'), 'hourglass_top'], future: [t('Programada'), 'schedule'] });
@@ -39,6 +43,7 @@
     return true;
   }
   const flat = (list, pid = 0, out = []) => { for (const x of kids(list, pid)) { out.push(x); flat(list, x.id, out); } return out; };
+  const clone = (x) => JSON.parse(JSON.stringify(x));
 
   // --- Cargar ---------------------------------------------------------------------------------
   async function open(force) {
@@ -46,8 +51,8 @@
     box().innerHTML = `<p class="hint pad">${t('Leyendo la estructura de tu web…')}</p>`;
     try {
       const d = await window.api.siteStructure();
-      S.data = d; S.orig = JSON.parse(JSON.stringify(d));
-      S.posts.clear(); S.postsOrig.clear(); S.loaded.clear(); S.del.clear(); S.menu = 0;
+      S.data = d; S.orig = clone(d);
+      S.posts.clear(); S.postsOrig.clear(); S.loaded.clear(); S.del.clear(); S.menu = 0; S.sel = null;
       for (const p of d.pages) S.open.add('p' + p.id);
       d.menus.forEach((m) => m.items.forEach((i) => S.open.add('m' + i.id)));
       render();
@@ -62,10 +67,14 @@
 
   // --- Cambios pendientes -------------------------------------------------------------------
   function changes() {
-    const d = S.data, o = S.orig, ch = { pages: [], menuDel: [...S.del], menuAdd: [], menuItems: [], posts: [] };
+    const d = S.data, o = S.orig, ch = { pages: [], categories: [], menuDel: [...S.del], menuAdd: [], menuItems: [], posts: [] };
     const so = o.settings, sn = d.settings;
     if (sn && so && (sn.showOnFront !== so.showOnFront || sn.pageOnFront !== so.pageOnFront || sn.pageForPosts !== so.pageForPosts)) ch.settings = sn;
-    for (const p of d.pages) { const q = o.pages.find((x) => x.id === p.id); if (q && (q.parent !== p.parent || q.order !== p.order || q.status !== p.status)) ch.pages.push({ id: p.id, parent: p.parent, order: p.order, status: p.status }); }
+    for (const p of d.pages) {
+      const q = o.pages.find((x) => x.id === p.id);
+      if (q && (q.parent !== p.parent || q.order !== p.order || q.status !== p.status || q.title !== p.title)) ch.pages.push({ id: p.id, parent: p.parent, order: p.order, status: p.status, ...(q.title !== p.title ? { title: p.title } : {}) });
+    }
+    for (const c of d.categories) { const q = o.categories.find((x) => x.id === c.id); if (q && q.name !== c.name) ch.categories.push({ id: c.id, name: c.name }); }
     d.menus.forEach((m, mi) => {
       flat(m.items).forEach((it, i) => {
         const order = i + 1;
@@ -74,21 +83,66 @@
       });
     });
     for (const [id, p] of S.posts) if (S.postsOrig.get(id) !== JSON.stringify({ c: [...p.categories].sort(), s: p.sticky })) ch.posts.push({ id, categories: p.categories, sticky: p.sticky });
-    ch.count = (ch.settings ? 1 : 0) + ch.pages.length + ch.menuDel.length + ch.menuAdd.length + ch.menuItems.length + ch.posts.length;
+    ch.count = (ch.settings ? 1 : 0) + ch.pages.length + ch.categories.length + ch.menuDel.length + ch.menuAdd.length + ch.menuItems.length + ch.posts.length;
     return ch;
   }
 
+  // --- Avisos (lógica pura en sitemap.js) ------------------------------------------------------
+  const allMenuItems = () => S.data.menus.flatMap((m) => m.items);
+  function review() {
+    const d = S.data, SM = window.SiteMap;
+    const hasMenus = d.menus.length > 0;
+    return {
+      hasMenus,
+      unlinked: hasMenus ? SM.unlinkedPages(d.pages, allMenuItems(), d.settings) : [],
+      problems: SM.menuProblems(d.pages, allMenuItems()),
+      empty: SM.emptyCategories(d.categories),
+    };
+  }
+
+  // --- Diálogo pequeño con campos (nombre, dirección…) ------------------------------------------
+  // fields: [{ key, label, value, ph }]; buttons: [{ id, label, cls }] (por defecto «Crear»). → { v, btn } | null
+  function form(title, fields, buttons, icon = 'add_circle') {
+    buttons = buttons || [{ id: 'ok', label: t('Crear'), cls: 'filled' }];
+    return new Promise((resolve) => {
+      const prev = document.activeElement;
+      const d = document.createElement('div');
+      d.className = 'dlg-scrim';
+      d.innerHTML = `<div class="dlg st-dlg" role="dialog" aria-modal="true"><span class="ms fill dlg-ic">${icon}</span>
+        <p class="dlg-msg">${esc(title)}</p>
+        ${fields.map((f, i) => `<label class="st-fld"><span>${esc(f.label)}</span><input type="text" data-f="${f.key}" value="${esc(f.value || '')}" placeholder="${esc(f.ph || '')}" ${i === 0 ? 'autofocus' : ''}></label>`).join('')}
+        <div class="dlg-actions st-dlg-act"><button class="btn text" data-b="">${t('Cancelar')}</button>${buttons.map((b) => `<button class="btn ${b.cls || 'filled'}" data-b="${b.id}">${esc(b.label)}</button>`).join('')}</div></div>`;
+      const close = (r) => { d.classList.add('out'); setTimeout(() => d.remove(), 160); document.removeEventListener('keydown', key, true); prev?.focus?.(); resolve(r); };
+      const go = (btn) => {
+        const v = {}; $$('[data-f]', d).forEach((i) => (v[i.dataset.f] = i.value.trim()));
+        if (!v[fields[0].key]) { $('[data-f]', d).focus(); return; }
+        close({ v, btn });
+      };
+      const key = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(null); } else if (e.key === 'Enter' && e.target.matches?.('input')) { e.preventDefault(); e.stopPropagation(); go(buttons[buttons.length - 1].id); } };
+      $$('[data-b]', d).forEach((b) => (b.onclick = () => (b.dataset.b ? go(b.dataset.b) : close(null))));
+      d.addEventListener('mousedown', (e) => { if (e.target === d) close(null); });
+      document.addEventListener('keydown', key, true);
+      document.body.appendChild(d);
+      $('[data-f]', d).focus();
+    });
+  }
+
   // --- Dibujo ---------------------------------------------------------------------------------
+  function scrollState() { const s = $('.mp-scroll', box()); return s ? [s.scrollLeft, s.scrollTop] : null; }
   function render() {
+    const keep = scrollState();
     const d = S.data;
     const ch = changes();
     const m = d.menus[S.menu];
-    const pageName = (id) => d.pages.find((p) => p.id === id)?.title || '—';
     const pageOpts = (sel) => `<option value="0">—</option>` + flat(d.pages).filter((p) => p.status === 'publish').map((p) => `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${esc(p.title)}</option>`).join('');
     box().innerHTML = `
       <div class="st-bar">
-        <div><b>${t('Estructura de tu web')}</b><div class="hint">${t('Arrastra para ordenar o anidar. Lleva páginas o categorías al menú para añadirlas. Los cambios se guardan al pulsar «Guardar cambios».')}</div></div>
+        <div><b>${t('Estructura de tu web')}</b><div class="hint">${t('Crea páginas, subpáginas y categorías, y conéctalas con el menú. Arrastra para ordenar o anidar. Los cambios de orden se guardan al pulsar «Guardar cambios».')}</div></div>
         <span class="spacer"></span>
+        <div class="st-seg" role="tablist">
+          <button class="${S.view === 'cols' ? 'on' : ''}" data-view="cols"><span class="ms">view_column</span>${t('Columnas')}</button>
+          <button class="${S.view === 'map' ? 'on' : ''}" data-view="map"><span class="ms">account_tree</span>${t('Mapa')}</button>
+        </div>
         <button class="btn text" data-a="reload"><span class="ms">refresh</span>${t('Recargar')}</button>
         <button class="btn text" data-a="discard" ${ch.count ? '' : 'disabled'}>${t('Descartar')}</button>
         <button class="btn filled" data-a="save" ${ch.count ? '' : 'disabled'}><span class="ms">save</span>${ch.count ? t('Guardar cambios ({n})', { n: ch.count }) : t('Sin cambios')}</button>
@@ -100,10 +154,12 @@
         ${d.settings.showOnFront === 'page' ? `<div class="st-home-f"><label>${t('Página de inicio')}</label><select data-set="pageOnFront">${pageOpts(d.settings.pageOnFront)}</select></div>
         <div class="st-home-f"><label>${t('Página de entradas')}</label><select data-set="pageForPosts">${pageOpts(d.settings.pageForPosts)}</select></div>` : ''}
       </div>` : ''}
-      <div class="st-cols">
+      ${reviewHtml()}
+      ${S.view === 'map' ? mapHtml() : `<div class="st-cols">
         <div class="st-col" data-col="menu">
           <div class="st-col-h"><span class="ms">menu</span><b>${t('Menú')}</b>
             ${d.menus.length > 1 ? `<select data-a="menu">${d.menus.map((x, i) => `<option value="${i}" ${i === S.menu ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : m ? `<span class="hint">${esc(m.name)}</span>` : ''}
+            ${m ? `<button class="btn tonal small st-add" data-do="addlink"><span class="ms">add_link</span>${t('+ Enlace')}</button>` : ''}
           </div>
           ${m ? `${m.locations.length ? `<div class="hint st-loc">${t('Se muestra en: {l}', { l: esc(m.locations.join(', ')) })}</div>` : `<div class="hint st-loc">${t('Este menú no está asignado a ninguna zona del tema.')}</div>`}
             <div class="st-tree" data-tree="menu">${tree(m.items, 0, 'menu')}</div>
@@ -111,29 +167,64 @@
           : `<div class="st-note">${d.navigation.length ? t('Tu tema usa menús de bloques ({n}); se editan en Apariencia → Editor → Navegación.', { n: esc(d.navigation.map((x) => x.title).join(', ')) }) : t('No se pudieron leer los menús de tu web.')}${d.menuNote ? `<div class="hint">${esc(d.menuNote)}</div>` : ''}</div>`}
         </div>
         <div class="st-col" data-col="pages">
-          <div class="st-col-h"><span class="ms">description</span><b>${t('Páginas')}</b><span class="hint">${d.pages.length}</span></div>
+          <div class="st-col-h"><span class="ms">description</span><b>${t('Páginas')}</b><span class="hint">${d.pages.length}</span>
+            <button class="btn tonal small st-add" data-do="addpage"><span class="ms">add</span>${t('+ Página')}</button></div>
           <div class="st-tree" data-tree="page">${tree(d.pages, 0, 'page')}</div>
           <div class="st-drop-end" data-end="page">${t('Suelta aquí para dejarla en el nivel principal')}</div>
         </div>
         <div class="st-col" data-col="cats">
-          <div class="st-col-h"><span class="ms">category</span><b>${t('Categorías y entradas')}</b></div>
+          <div class="st-col-h"><span class="ms">category</span><b>${t('Categorías y entradas')}</b>
+            <button class="btn tonal small st-add" data-do="addcat"><span class="ms">add</span>${t('+ Categoría')}</button></div>
           <div class="st-tree">${catTree(0)}</div>
         </div>
-      </div>`;
+      </div>`}`;
     wire();
-    void pageName;
+    if (keep) { const s = $('.mp-scroll', box()); if (s) { s.scrollLeft = keep[0]; s.scrollTop = keep[1]; } }
+  }
+
+  // Panel «Revisión»
+  function reviewHtml() {
+    const d = S.data, r = review();
+    const front = d.settings?.showOnFront === 'page' ? d.pages.find((p) => p.id === d.settings.pageOnFront) : null;
+    const blogp = d.settings?.showOnFront === 'page' ? d.pages.find((p) => p.id === d.settings.pageForPosts) : null;
+    const n = r.unlinked.length + r.problems.length + r.empty.length;
+    const lim = S.revAll ? 999 : 5;
+    const more = (len) => (len > lim ? `<button class="btn text small st-more" data-do="revall">${t('Ver las {n} restantes', { n: len - lim })}</button>` : S.revAll && len > 5 ? `<button class="btn text small st-more" data-do="revall">${t('Ver menos')}</button>` : '');
+    return `<details class="st-rev ${n ? 'warn' : 'ok'}" ${S.revOpen ? 'open' : ''}>
+      <summary><span class="ms fill">${n ? 'rule' : 'task_alt'}</span><b>${t('Revisión')}</b>
+        <span class="st-rev-n">${n ? t('{n} aviso(s)', { n }) : t('Todo en orden')}</span>
+        <span class="st-rev-home"><span class="ms">home</span>${d.settings ? (front ? t('Portada: «{p}»', { p: esc(front.title) }) : t('Portada: últimas entradas')) : ''}${blogp ? ` · <span class="ms">article</span>${t('Entradas en: «{p}»', { p: esc(blogp.title) })}` : ''}</span></summary>
+      <div class="st-rev-b">
+        ${r.hasMenus ? '' : `<div class="hint">${t('No se pueden revisar los enlaces del menú: tu tema usa menús de bloques.')}</div>`}
+        ${r.unlinked.length ? `<div class="st-rev-g"><div class="st-rev-t"><span class="ms">link_off</span>${t('Páginas publicadas a las que no se puede llegar desde el menú')} <span class="hint">(${r.unlinked.length})</span>
+          ${S.data.menus[S.menu] ? `<button class="btn text small" data-do="addallmenu">${t('Añadir todas al menú')}</button>` : ''}</div>
+          ${r.unlinked.slice(0, lim).map((p) => `<div class="st-rev-i"><span class="st-t">${esc(p.title)}</span><span class="spacer"></span>
+            <button class="btn tonal small" data-do="addmenu" data-k="page" data-i="${p.id}"><span class="ms">playlist_add</span>${t('Añadir al menú')}</button></div>`).join('')}${more(r.unlinked.length)}</div>` : ''}
+        ${r.problems.length ? `<div class="st-rev-g"><div class="st-rev-t"><span class="ms">warning</span>${t('Elementos del menú que apuntan a páginas ocultas o borradas')}</div>
+          ${r.problems.map((x) => `<div class="st-rev-i"><span class="st-t">${esc(x.item.title)}</span>
+            <span class="st-tag off">${x.why === 'trash' ? t('En la papelera') : esc(STATUS()[x.page.status]?.[0] || x.page.status)}</span><span class="spacer"></span>
+            ${x.why === 'draft' ? `<button class="btn tonal small" data-do="publish" data-k="page" data-i="${x.page.id}"><span class="ms">visibility</span>${t('Publicar la página')}</button>` : ''}
+            <button class="btn text small" data-do="rmmenu" data-k="mi" data-i="${x.item.id}"><span class="ms">remove_circle_outline</span>${t('Quitar del menú')}</button></div>`).join('')}</div>` : ''}
+        ${r.empty.length ? `<div class="st-rev-g"><div class="st-rev-t"><span class="ms">folder_off</span>${t('Categorías vacías')} <span class="hint">(${r.empty.length})</span></div>
+          ${r.empty.slice(0, lim).map((c) => `<div class="st-rev-i"><span class="st-t">${esc(c.name)}</span><span class="spacer"></span>
+            <button class="btn text small" data-do="newpost" data-k="cat" data-i="${c.id}"><span class="ms">edit_square</span>${t('+ Entrada')}</button>
+            <button class="btn text small danger-t" data-do="delcat" data-k="cat" data-i="${c.id}"><span class="ms">delete</span>${t('Borrar')}</button></div>`).join('')}${more(r.empty.length)}</div>` : ''}
+      </div></details>`;
   }
 
   // ¿Ha cambiado respecto a lo que hay en la web? (se marca hasta guardar)
   function changed(kind, n) {
-    if (kind === 'page') { const o = S.orig.pages.find((x) => x.id === n.id); return o && (o.parent !== n.parent || o.order !== n.order || o.status !== n.status); }
+    if (kind === 'page') { const o = S.orig.pages.find((x) => x.id === n.id); return o && (o.parent !== n.parent || o.order !== n.order || o.status !== n.status || o.title !== n.title); }
     if (typeof n.id === 'string') return false;
     const o = S.orig.menus[S.menu]?.items.find((x) => x.id === n.id);
     return o && o.parent !== n.parent;
   }
+  const unlinkedIds = () => (S.data.menus.length ? new Set(review().unlinked.map((p) => p.id)) : new Set());
+  const problemMap = () => new Map(review().problems.map((x) => [x.item.id, x]));
   function tree(list, pid, kind) {
     const ch = kids(list, pid);
     if (!ch.length) return pid ? '' : `<div class="hint pad">${t('Vacío')}</div>`;
+    const un = kind === 'page' ? unlinkedIds() : null, pm = kind === 'menu' ? problemMap() : null;
     return `<ul>${ch.map((n) => {
       const key = (kind === 'menu' ? 'm' : 'p') + n.id;
       const sub = kids(list, n.id).length;
@@ -141,16 +232,25 @@
       const front = kind === 'page' && S.data.settings?.showOnFront === 'page' && S.data.settings.pageOnFront === n.id;
       const blogp = kind === 'page' && S.data.settings?.showOnFront === 'page' && S.data.settings.pageForPosts === n.id;
       const icon = kind === 'menu' ? (n.object === 'category' ? 'category' : n.type === 'custom' ? 'link' : 'description') : 'description';
+      const pr = pm?.get(n.id);
       return `<li>
         <div class="st-node ${kind === 'page' ? 'st-' + n.status : ''} ${typeof n.id === 'string' ? 'new' : ''} ${changed(kind, n) ? 'changed' : ''}" draggable="true" data-kind="${kind}" data-id="${n.id}">
           ${sub ? `<button class="st-tw" data-tw="${key}"><span class="ms">${S.open.has(key) ? 'expand_more' : 'chevron_right'}</span></button>` : '<span class="st-tw"></span>'}
-          <span class="ms st-ic">${icon}</span><span class="st-t">${esc(n.title)}</span>
+          <span class="ms st-ic">${icon}</span><span class="st-t" ${kind === 'page' ? `data-do="ren" data-k="page" data-i="${n.id}" data-dbl="1"` : ''}>${esc(n.title)}</span>
           ${front ? `<span class="st-tag home"><span class="ms">home</span>${t('Inicio')}</span>` : ''}${blogp ? `<span class="st-tag"><span class="ms">article</span>${t('Entradas')}</span>` : ''}
           ${kind === 'page' && n.status !== 'publish' ? `<span class="st-tag off">${esc(st?.[0] || n.status)}</span>` : ''}
+          ${kind === 'page' && un.has(n.id) ? `<span class="st-tag warn" title="${t('No se puede llegar a ella desde el menú')}"><span class="ms">link_off</span>${t('Fuera del menú')}</span>` : ''}
+          ${pr ? `<span class="st-tag warn" title="${t('Apunta a una página oculta o borrada')}"><span class="ms">warning</span>${pr.why === 'trash' ? t('En la papelera') : esc(STATUS()[pr.page.status]?.[0] || pr.page.status)}</span>` : ''}
           ${typeof n.id === 'string' ? `<span class="st-tag new">${t('Nuevo')}</span>` : ''}
           <span class="spacer"></span>
-          ${kind === 'page' ? `<button class="st-act" data-vis="${n.id}" title="${n.status === 'publish' ? t('Visible: pulsa para ocultarla (borrador)') : t('Oculta: pulsa para publicarla')}"><span class="ms">${n.status === 'publish' ? 'visibility' : 'visibility_off'}</span></button>
-            <button class="st-act" data-wp="${n.id}" title="${t('Editar en WordPress')}"><span class="ms">open_in_new</span></button>`
+          ${kind === 'page' ? `<span class="st-acts">
+            <button class="st-act" data-do="subpage" data-k="page" data-i="${n.id}" title="${t('+ Subpágina')}"><span class="ms">subdirectory_arrow_right</span></button>
+            <button class="st-act" data-do="addmenu" data-k="page" data-i="${n.id}" title="${t('Añadir al menú')}"><span class="ms">playlist_add</span></button>
+            <button class="st-act" data-do="ren" data-k="page" data-i="${n.id}" title="${t('Renombrar')}"><span class="ms">edit</span></button>
+            <button class="st-act" data-do="ecospage" data-k="page" data-i="${n.id}" title="${t('Editar en Ecos')}"><span class="ms">edit_square</span></button>
+            <button class="st-act" data-do="web" data-k="page" data-i="${n.id}" title="${t('Ver en la web')}"><span class="ms">public</span></button>
+            <button class="st-act" data-do="trash" data-k="page" data-i="${n.id}" title="${t('Mandar a la papelera')}"><span class="ms">delete</span></button></span>
+            <button class="st-act" data-vis="${n.id}" title="${n.status === 'publish' ? t('Visible: pulsa para ocultarla (borrador)') : t('Oculta: pulsa para publicarla')}"><span class="ms">${n.status === 'publish' ? 'visibility' : 'visibility_off'}</span></button>`
           : `<button class="st-act" data-rm="${n.id}" title="${t('Quitar del menú')}"><span class="ms">remove_circle_outline</span></button>`}
         </div>
         ${sub && S.open.has(key) ? tree(list, n.id, kind) : ''}
@@ -160,15 +260,23 @@
 
   function catTree(pid) {
     const cats = S.data.categories.filter((c) => c.parent === pid).sort((a, b) => a.name.localeCompare(b.name));
-    if (!cats.length) return '';
+    if (!cats.length) return pid ? '' : `<div class="hint pad">${t('Vacío')}</div>`;
+    const emptyIds = new Set(window.SiteMap.emptyCategories(S.data.categories).map((c) => c.id));
     return `<ul>${cats.map((c) => {
       const key = 'c' + c.id;
       const posts = S.loaded.has(c.id) ? [...S.posts.values()].filter((p) => p.categories.includes(c.id)).sort((a, b) => (b.sticky - a.sticky) || String(b.date).localeCompare(String(a.date))) : null;
       const count = posts ? posts.length : c.count;
       return `<li>
-        <div class="st-node st-cat" draggable="true" data-kind="cat" data-id="${c.id}">
+        <div class="st-node st-cat ${S.orig.categories.find((x) => x.id === c.id)?.name !== c.name ? 'changed' : ''}" draggable="true" data-kind="cat" data-id="${c.id}">
           <button class="st-tw" data-tw="${key}"><span class="ms">${S.open.has(key) ? 'expand_more' : 'chevron_right'}</span></button>
-          <span class="ms st-ic">folder</span><span class="st-t">${esc(c.name)}</span><span class="st-count">${count}</span>
+          <span class="ms st-ic">folder</span><span class="st-t" data-do="ren" data-k="cat" data-i="${c.id}" data-dbl="1">${esc(c.name)}</span><span class="st-count">${count}</span>
+          ${emptyIds.has(c.id) ? `<span class="st-tag warn"><span class="ms">folder_off</span>${t('Vacía')}</span>` : ''}
+          <span class="spacer"></span><span class="st-acts">
+            <button class="st-act" data-do="newpost" data-k="cat" data-i="${c.id}" title="${t('+ Entrada')}"><span class="ms">edit_square</span></button>
+            <button class="st-act" data-do="subcat" data-k="cat" data-i="${c.id}" title="${t('+ Subcategoría')}"><span class="ms">create_new_folder</span></button>
+            <button class="st-act" data-do="addmenu" data-k="cat" data-i="${c.id}" title="${t('Añadir al menú')}"><span class="ms">playlist_add</span></button>
+            <button class="st-act" data-do="ren" data-k="cat" data-i="${c.id}" title="${t('Renombrar')}"><span class="ms">edit</span></button>
+            ${emptyIds.has(c.id) ? `<button class="st-act" data-do="delcat" data-k="cat" data-i="${c.id}" title="${t('Borrar categoría vacía')}"><span class="ms">delete</span></button>` : ''}</span>
         </div>
         ${S.open.has(key) ? `<ul class="st-posts">${posts ? posts.map((p) => `<li><div class="st-node st-post st-${p.status} ${S.postsOrig.get(p.id) !== JSON.stringify({ c: [...p.categories].sort(), s: p.sticky }) ? 'changed' : ''}" draggable="true" data-kind="post" data-id="${p.id}" data-cat="${c.id}">
             <span class="ms st-ic">article</span><span class="st-t">${esc(p.title)}</span>
@@ -181,31 +289,202 @@
     }).join('')}</ul>`;
   }
 
+  // --- Vista «Mapa» -----------------------------------------------------------------------------
+  // Diagrama en árbol de izquierda a derecha, con líneas de conexión en CSS. Pulsar una tarjeta la selecciona.
+  function card(key, icon, title, o = {}) {
+    const st = o.status && o.status !== 'publish' ? STATUS()[o.status]?.[0] || o.status : '';
+    return `<div class="mp-card ${o.cls || ''} ${S.sel === key ? 'sel' : ''}" data-sel="${key}" title="${esc(title)}">
+      <span class="ms ${o.fill ? 'fill' : ''}">${icon}</span><span class="mp-t">${esc(title)}</span>
+      ${o.badges || ''}${st ? `<span class="mp-b off">${esc(st)}</span>` : ''}${o.n != null ? `<span class="mp-b">${o.n}</span>` : ''}</div>`;
+  }
+  const node = (cardHtml, kidsHtml) => `<div class="mp-n">${cardHtml}${kidsHtml ? `<div class="mp-kids">${kidsHtml}</div>` : ''}</div>`;
+  const kid = (h) => `<div class="mp-kid">${h}</div>`;
+  function mapHtml() {
+    const d = S.data, r = review(), pages = d.pages, un = new Set(r.unlinked.map((p) => p.id)), pm = problemMap();
+    const front = d.settings?.showOnFront === 'page' ? d.settings.pageOnFront : 0;
+    const reach = window.SiteMap.reachablePages(pages, allMenuItems());
+    const pageNode = (p) => node(
+      card('pg' + p.id, 'description', p.title, { status: p.status, cls: 'pg ' + (un.has(p.id) ? 'warn' : ''), badges: (p.id === front ? `<span class="mp-b home"><span class="ms">home</span></span>` : '') + (un.has(p.id) ? `<span class="mp-b warn" title="${t('No se puede llegar a ella desde el menú')}"><span class="ms">link_off</span></span>` : '') }),
+      kids(pages, p.id).map((c) => kid(pageNode(c))).join(''));
+    const menuNode = (m, it) => {
+      const sub = kids(m.items, it.id);
+      const isPage = it.object === 'page', pg = isPage ? pages.find((p) => p.id === Number(it.objectId)) : null;
+      const subIds = new Set(sub.map((x) => Number(x.objectId)));
+      const extra = pg ? kids(pages, pg.id).filter((c) => !subIds.has(c.id)) : [];
+      const pr = pm.get(it.id);
+      return node(card('mi' + it.id, it.object === 'category' ? 'category' : it.type === 'custom' ? 'link' : 'description', it.title, { cls: 'mi ' + (pr ? 'warn' : ''), status: pg?.status, badges: pr ? `<span class="mp-b warn"><span class="ms">warning</span>${pr.why === 'trash' ? t('En la papelera') : ''}</span>` : '' }),
+        sub.map((x) => kid(menuNode(m, x))).join('') + extra.map((c) => kid(pageNode(c))).join(''));
+    };
+    const m = d.menus[S.menu];
+    const frontPg = front ? pages.find((p) => p.id === front) : null;
+    const homeKids = m ? kids(m.items, 0).map((it) => kid(menuNode(m, it))).join('') : '';
+    const outRoots = pages.filter((p) => !reach.has(p.id) && p.id !== front && (!p.parent || !pages.some((x) => x.id === p.parent)));
+    const outCount = pages.filter((p) => !reach.has(p.id) && p.id !== front).length;
+    const catNode = (c) => node(card('ct' + c.id, 'folder', c.name, { cls: 'ct', n: c.count, badges: !c.count && c.id !== 1 && !d.categories.some((x) => x.parent === c.id) ? `<span class="mp-b warn" title="${t('Vacía')}"><span class="ms">folder_off</span></span>` : '' }),
+      d.categories.filter((x) => x.parent === c.id).sort((a, b) => a.name.localeCompare(b.name)).map((x) => kid(catNode(x))).join(''));
+    const topCats = d.categories.filter((c) => !c.parent).sort((a, b) => a.name.localeCompare(b.name));
+    return `<div class="st-map">
+      <div class="mp-tools">${mapTools()}</div>
+      <div class="mp-scroll">
+        <div class="mp-group">${node(card('home', 'home', frontPg ? frontPg.title : t('Inicio (últimas entradas)'), { cls: 'root', fill: true }), homeKids || (m ? '' : ''))}</div>
+        ${m ? '' : `<div class="hint mp-note">${t('Tu tema usa menús de bloques: no se puede dibujar el menú.')}</div>`}
+        ${outRoots.length ? `<div class="mp-group">${node(card('out', 'link_off', t('Fuera del menú'), { cls: 'root warn', n: outCount }), outRoots.sort((a, b) => a.order - b.order || a.title.localeCompare(b.title)).map((p) => kid(pageNode(p))).join(''))}</div>` : ''}
+        <div class="mp-group">${node(card('cats', 'category', t('Categorías'), { cls: 'root', n: d.categories.length }), topCats.map((c) => kid(catNode(c))).join(''))}</div>
+      </div></div>`;
+  }
+  // Barra de acciones de la tarjeta seleccionada
+  function mapTools() {
+    const d = S.data, s = S.sel;
+    const btn = (act, k, i, ic, label, extra = '') => `<button class="btn tonal small" data-do="${act}" data-k="${k}" data-i="${i}" ${extra}><span class="ms">${ic}</span>${label}</button>`;
+    let h = '', title = t('Pulsa una tarjeta para ver qué puedes hacer con ella.');
+    const pageActs = (p) => btn('ecospage', 'page', p.id, 'edit_square', t('Abrir en Ecos')) + btn('web', 'page', p.id, 'public', t('Ver en la web'))
+      + btn('subpage', 'page', p.id, 'subdirectory_arrow_right', t('+ Subpágina')) + btn('addmenu', 'page', p.id, 'playlist_add', t('Añadir al menú'))
+      + btn('ren', 'page', p.id, 'edit', t('Renombrar')) + btn('publish', 'page', p.id, p.status === 'publish' ? 'visibility_off' : 'visibility', p.status === 'publish' ? t('Pasar a borrador') : t('Publicar'))
+      + btn('trash', 'page', p.id, 'delete', t('Papelera'));
+    const catActs = (c) => btn('newpost', 'cat', c.id, 'edit_square', t('+ Entrada')) + btn('subcat', 'cat', c.id, 'create_new_folder', t('+ Subcategoría'))
+      + btn('addmenu', 'cat', c.id, 'playlist_add', t('Añadir al menú')) + btn('ren', 'cat', c.id, 'edit', t('Renombrar')) + (!c.count && !d.categories.some((x) => x.parent === c.id) && c.id !== 1 ? btn('delcat', 'cat', c.id, 'delete', t('Borrar')) : '');
+    if (s?.startsWith('pg')) { const p = d.pages.find((x) => x.id === Number(s.slice(2))); if (p) { title = p.title; h = pageActs(p); } }
+    else if (s?.startsWith('ct')) { const c = d.categories.find((x) => x.id === Number(s.slice(2))); if (c) { title = c.name; h = catActs(c); } }
+    else if (s?.startsWith('mi')) {
+      const id = /^mit/.test(s) ? s.slice(2) : Number(s.slice(2)), it = allMenuItems().find((x) => x.id === id);
+      if (it) {
+        title = it.title; const p = it.object === 'page' ? d.pages.find((x) => x.id === Number(it.objectId)) : null;
+        h = btn('rmmenu', 'mi', it.id, 'remove_circle_outline', t('Quitar del menú')) + (p ? btn('ecospage', 'page', p.id, 'edit_square', t('Abrir en Ecos')) + btn('web', 'page', p.id, 'public', t('Ver en la web')) + btn('subpage', 'page', p.id, 'subdirectory_arrow_right', t('+ Subpágina')) + btn('ren', 'page', p.id, 'edit', t('Renombrar')) : '');
+      }
+    } else if (s === 'home') { title = t('Inicio'); h = btn('addpage', 'page', 0, 'add', t('+ Página')) + (d.menus[S.menu] ? btn('addlink', 'mi', 0, 'add_link', t('+ Enlace')) : ''); }
+    else if (s === 'cats') { title = t('Categorías'); h = btn('addcat', 'cat', 0, 'add', t('+ Categoría')); }
+    else if (s === 'out') { title = t('Fuera del menú'); h = btn('addallmenu', 'page', 0, 'playlist_add', t('Añadir todas al menú')); }
+    return `<b class="mp-sel">${esc(title)}</b><span class="spacer"></span>${h}`;
+  }
+
   // --- Interacción ---------------------------------------------------------------------------
+  function removeMenuItem(id) {
+    const d = S.data, m = d.menus.find((x) => x.items.some((i) => i.id === id)) || d.menus[S.menu];
+    const it = m.items.find((x) => x.id === id);
+    if (!it) return;
+    m.items.filter((x) => x.parent === id).forEach((x) => (x.parent = it.parent)); // sus hijos suben un nivel
+    m.items = m.items.filter((x) => x.id !== id);
+    if (typeof id === 'number') S.del.add(id);
+    renumber(m.items, it.parent);
+  }
+  function addToMenu(kind, id) {
+    const m = S.data.menus[S.menu];
+    if (!m) { toast(t('Tu tema usa menús de bloques: el menú se edita en Apariencia → Editor → Navegación.'), true); return false; }
+    const it = newMenuItem(kind, id);
+    m.items.push(it); move(m.items, it.id, null, 'end');
+    return true;
+  }
+  const ecosEditPage = async (p) => {
+    if (typeof window.openFromWp === 'function' && window.openFromWp.length >= 3) return window.openFromWp(p.id, null, 'page');
+    window.api.open(await window.api.blogEditUrl(p.id, 'page'));
+  };
+
+  async function run(a, k, i, el) {
+    const d = S.data;
+    const page = k === 'page' ? d.pages.find((x) => x.id === i) : null;
+    const cat = k === 'cat' ? d.categories.find((x) => x.id === i) : null;
+    if (a === 'revall') { S.revAll = !S.revAll; return render(); }
+    if (a === 'addpage' || a === 'subpage') {
+      const parent = a === 'subpage' ? page : null;
+      const r = await form(parent ? t('Nueva subpágina dentro de «{p}»', { p: parent.title }) : t('Nueva página'), [{ key: 'name', label: t('Nombre de la página'), ph: t('Por ejemplo: Quiénes somos') }],
+        [{ id: 'empty', label: t('Solo crearla vacía'), cls: 'tonal' }, { id: 'ecos', label: t('Escribirla ahora en Ecos'), cls: 'filled' }], parent ? 'subdirectory_arrow_right' : 'note_add');
+      if (!r) return;
+      if (r.btn === 'ecos') {
+        if (typeof window.newDraft === 'function') return window.newDraft({ type: 'page', title: r.v.name, parent: parent ? parent.id : 0 });
+        toast(t('Esta versión todavía no puede abrir un borrador nuevo desde aquí. Se creará vacía.'), true);
+      }
+      try {
+        const p = await window.api.siteCreatePage({ title: r.v.name, parent: parent ? parent.id : 0, status: 'draft' });
+        d.pages.push(clone(p)); S.orig.pages.push(clone(p));
+        if (parent) S.open.add('p' + parent.id);
+        S.sel = 'pg' + p.id;
+        toast(t('Página «{p}» creada como borrador.', { p: p.title }));
+      } catch (e) { toast(e.message, true); }
+      return render();
+    }
+    if (a === 'addcat' || a === 'subcat') {
+      const r = await form(cat ? t('Nueva subcategoría dentro de «{c}»', { c: cat.name }) : t('Nueva categoría'), [{ key: 'name', label: t('Nombre de la categoría') }], null, 'create_new_folder');
+      if (!r) return;
+      try {
+        const c = await window.api.siteCreateCategory({ name: r.v.name, parent: cat ? cat.id : 0 });
+        d.categories.push(clone(c)); S.orig.categories.push(clone(c));
+        if (cat) S.open.add('c' + cat.id);
+        S.sel = 'ct' + c.id;
+        toast(t('Categoría «{c}» creada.', { c: c.name }));
+      } catch (e) { toast(e.message, true); }
+      return render();
+    }
+    if (a === 'newpost') {
+      if (typeof window.newDraft === 'function') return window.newDraft({ type: 'post', categories: [cat.name] });
+      return toast(t('Esta versión todavía no puede abrir un borrador nuevo desde aquí.'), true);
+    }
+    if (a === 'addlink') {
+      const m = d.menus[S.menu];
+      if (!m) return;
+      const r = await form(t('Nuevo enlace en el menú'), [{ key: 'name', label: t('Texto del enlace'), ph: t('Por ejemplo: Tienda') }, { key: 'url', label: t('Dirección (https://…)'), ph: 'https://' }], [{ id: 'ok', label: t('Añadir al menú'), cls: 'filled' }], 'add_link');
+      if (!r) return;
+      let url = r.v.url; if (url && !/^[a-z]+:|^[/#]/i.test(url)) url = 'https://' + url;
+      m.items.push({ id: 't' + ++S.tmp, title: r.v.name, type: 'custom', object: 'custom', objectId: 0, url: url || '#', parent: 0, order: 999 });
+      move(m.items, 't' + S.tmp, null, 'end');
+      return render();
+    }
+    if (a === 'addmenu') { if (addToMenu(k, i)) { toast(t('Añadida al menú. Pulsa «Guardar cambios» para publicarlo.')); render(); } return; }
+    if (a === 'addallmenu') { const r = review(); let n = 0; for (const p of r.unlinked) if (addToMenu('page', p.id)) n++; if (n) toast(t('{n} página(s) añadidas al menú.', { n })); return render(); }
+    if (a === 'rmmenu') { removeMenuItem(/^t/.test(String(i)) ? String(i) : Number(i)); S.sel = null; return render(); }
+    if (a === 'publish') { page.status = page.status === 'publish' ? 'draft' : 'publish'; return render(); }
+    if (a === 'ren') {
+      const cur = page ? page.title : cat.name;
+      const r = await form(page ? t('Renombrar la página') : t('Renombrar la categoría'), [{ key: 'name', label: t('Nuevo nombre'), value: cur }], [{ id: 'ok', label: t('Cambiar nombre'), cls: 'filled' }], 'edit');
+      if (!r) return;
+      if (page) page.title = r.v.name; else cat.name = r.v.name;
+      return render();
+    }
+    if (a === 'ecospage') return ecosEditPage(page);
+    if (a === 'web') { if (page?.link) window.api.open(page.link); return; }
+    if (a === 'trash') {
+      if (d.pages.some((x) => x.parent === page.id)) return toast(t('«{p}» tiene subpáginas. Muévelas o bórralas antes.', { p: page.title }), true);
+      if (!(await window.ask(t('¿Mandar «{p}» a la papelera de WordPress? Se puede recuperar desde wp-admin.', { p: page.title }), { ok: t('Mandar a la papelera'), danger: true }))) return;
+      try {
+        await window.api.siteTrashPage(page.id);
+        d.pages = d.pages.filter((x) => x.id !== page.id); S.orig.pages = S.orig.pages.filter((x) => x.id !== page.id); S.sel = null;
+        toast(t('Página enviada a la papelera.'));
+      } catch (e) { toast(e.message, true); }
+      return render();
+    }
+    if (a === 'delcat') {
+      if (cat.count || d.categories.some((x) => x.parent === cat.id)) return toast(t('Solo se pueden borrar categorías vacías y sin subcategorías.'), true);
+      if (!(await window.ask(t('¿Borrar la categoría vacía «{c}»?', { c: cat.name }), { ok: t('Borrar'), danger: true }))) return;
+      try {
+        await window.api.siteDeleteCategory(cat.id);
+        d.categories = d.categories.filter((x) => x.id !== cat.id); S.orig.categories = S.orig.categories.filter((x) => x.id !== cat.id); S.sel = null;
+        toast(t('Categoría borrada.'));
+      } catch (e) { toast(e.message, true); }
+      return render();
+    }
+  }
+
   function wire() {
     const d = S.data, root = box();
     $$('[data-a]', root).forEach((b) => {
       if (b.dataset.a === 'menu') b.onchange = () => { S.menu = Number(b.value); render(); };
       else b.onclick = () => act(b.dataset.a, b);
     });
+    $$('[data-view]', root).forEach((b) => (b.onclick = () => { S.view = b.dataset.view; render(); }));
+    $$('details.st-rev', root).forEach((x) => (x.ontoggle = () => { S.revOpen = x.open; }));
+    $$('[data-sel]', root).forEach((c) => (c.onclick = () => { S.sel = S.sel === c.dataset.sel ? null : c.dataset.sel; render(); }));
+    $$('[data-do]', root).forEach((b) => {
+      const go = (e) => { e.stopPropagation(); const i = b.dataset.i; run(b.dataset.do, b.dataset.k, /^t/.test(i || '') ? i : Number(i), b).catch((err) => toast(err.message, true)); };
+      if (b.dataset.dbl) b.ondblclick = go; else b.onclick = go;
+    });
     $$('[data-set]', root).forEach((s) => (s.onchange = () => { d.settings[s.dataset.set] = s.dataset.set === 'showOnFront' ? s.value : Number(s.value); render(); }));
     $$('[data-tw]', root).forEach((b) => (b.onclick = async (e) => {
       e.stopPropagation();
       const k = b.dataset.tw;
-      if (S.open.has(k)) S.open.delete(k); else { S.open.add(k); if (k[0] === 'c') { render(); await loadCat(Number(k.slice(1))).catch((err) => window.toast?.(err.message, true)); } }
+      if (S.open.has(k)) S.open.delete(k); else { S.open.add(k); if (k[0] === 'c') { render(); await loadCat(Number(k.slice(1))).catch((err) => toast(err.message, true)); } }
       render();
     }));
     $$('[data-vis]', root).forEach((b) => (b.onclick = () => { const p = d.pages.find((x) => x.id === Number(b.dataset.vis)); p.status = p.status === 'publish' ? 'draft' : 'publish'; render(); }));
-    $$('[data-wp]', root).forEach((b) => (b.onclick = async () => window.api.open(await window.api.blogEditUrl(Number(b.dataset.wp), 'page'))));
-    $$('[data-rm]', root).forEach((b) => (b.onclick = () => {
-      const m = d.menus[S.menu], id = /^t/.test(b.dataset.rm) ? b.dataset.rm : Number(b.dataset.rm);
-      const it = m.items.find((x) => x.id === id);
-      m.items.filter((x) => x.parent === id).forEach((x) => (x.parent = it.parent)); // sus hijos suben un nivel
-      m.items = m.items.filter((x) => x.id !== id);
-      if (typeof id === 'number') S.del.add(id);
-      renumber(m.items, it.parent);
-      render();
-    }));
+    $$('[data-rm]', root).forEach((b) => (b.onclick = () => { removeMenuItem(/^t/.test(b.dataset.rm) ? b.dataset.rm : Number(b.dataset.rm)); render(); }));
     $$('[data-pin]', root).forEach((b) => (b.onclick = () => { const p = S.posts.get(Number(b.dataset.pin)); p.sticky = !p.sticky; render(); }));
     $$('[data-ecos]', root).forEach((b) => (b.onclick = () => window.openFromWp?.(Number(b.dataset.ecos))));
 
@@ -264,7 +543,7 @@
       const keep = e.ctrlKey || e.metaKey; // con Ctrl se añade a la categoría sin quitarla de la suya
       p.categories = [...new Set([...(keep ? p.categories : p.categories.filter((c) => c !== drag.cat)), target])];
       if (!S.loaded.has(target)) loadCat(target).then(render).catch(() => {});
-      window.toast?.(keep ? t('Añadida también a «{c}».', { c: d.categories.find((c) => c.id === target)?.name }) : t('Movida a «{c}». (Con Ctrl se añade sin quitarla de la suya.)', { c: d.categories.find((c) => c.id === target)?.name }));
+      toast(keep ? t('Añadida también a «{c}».', { c: d.categories.find((c) => c.id === target)?.name }) : t('Movida a «{c}». (Con Ctrl se añade sin quitarla de la suya.)', { c: d.categories.find((c) => c.id === target)?.name }));
     }
     drag = null;
     render();
@@ -282,7 +561,7 @@
 
   async function act(a, b) {
     if (a === 'reload') { if (changes().count && !(await window.ask(t('Se perderán los cambios sin guardar. ¿Recargar?')))) return; return open(true); }
-    if (a === 'discard') { if (!(await window.ask(t('¿Descartar los cambios sin guardar?')))) return; S.data = JSON.parse(JSON.stringify(S.orig)); S.del.clear(); for (const [id, o] of S.postsOrig) { const p = S.posts.get(id), j = JSON.parse(o); p.categories = j.c; p.sticky = j.s; } return render(); }
+    if (a === 'discard') { if (!(await window.ask(t('¿Descartar los cambios sin guardar?')))) return; S.data = clone(S.orig); S.del.clear(); for (const [id, o] of S.postsOrig) { const p = S.posts.get(id), j = JSON.parse(o); p.categories = j.c; p.sticky = j.s; } return render(); }
     if (a === 'save') {
       const ch = changes();
       if (!ch.count) return;
@@ -291,10 +570,10 @@
       b.disabled = true; b.innerHTML = `<span class="spin"></span>${t('Guardando…')}`;
       try {
         const r = await window.api.siteSave(ch);
-        if (r.errors.length) window.toast?.(t('Algunos cambios no se pudieron guardar: {e}', { e: r.errors.slice(0, 2).join(' · ') }), true);
-        else window.toast?.(t('Estructura guardada en tu web.'));
+        if (r.errors.length) toast(t('Algunos cambios no se pudieron guardar: {e}', { e: r.errors.slice(0, 2).join(' · ') }), true);
+        else toast(t('Estructura guardada en tu web.'));
         await open(true);
-      } catch (e) { window.toast?.(e.message, true); render(); }
+      } catch (e) { toast(e.message, true); render(); }
     }
   }
 
