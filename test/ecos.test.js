@@ -466,3 +466,58 @@ test('fotos dentro del texto: a un lado con el texto alrededor y su tamaño, ida
   const plain = T.composeBlocks([{ id: 'g', type: 'image', img: { id: 9, url: 'https://x/a.jpg', alt: '' }, caption: '' }]);
   assert.equal(parseBlocks(plain)[0].align, undefined);
 });
+
+// --- Mapa: enlaces de una página, resolver destinos y editar botones ---
+const PL = require('../src/pagelinks');
+const BTN = (t, h, o = '') => PL.buttonHtml(t, h, o);
+const PAGE_HTML = `<!-- wp:paragraph -->\n<p>Hola <a href="https://www.asociacionelin.com/contacto/">escríbenos</a> o mira <a href="https://otra.org/x">otra</a>.</p>\n<!-- /wp:paragraph -->\n\n${BTN('Colabora', 'https://asociacionelin.com/colabora')}\n\n<!-- wp:paragraph -->\n<p>Fin <a href="#abajo">ir</a></p>\n<!-- /wp:paragraph -->\n\n${BTN('Más información', 'https://x.org/info', 'outline')}`;
+test('extractLinks separa botones y enlaces del texto', () => {
+  const r = SM.extractLinks(PAGE_HTML);
+  assert.deepEqual(r.buttons.map((b) => [b.index, b.text, b.href, b.variant]), [[0, 'Colabora', 'https://asociacionelin.com/colabora', 'fill'], [1, 'Más información', 'https://x.org/info', 'outline']]);
+  assert.deepEqual(r.links.map((l) => l.href), ['https://www.asociacionelin.com/contacto/', 'https://otra.org/x', '#abajo']);
+});
+test('makeResolver: por enlace, slug, sin www ni barra final, externas y rotas', () => {
+  const items = [{ id: 1, type: 'page', title: 'Contacto', link: 'https://www.asociacionelin.com/contacto/', slug: 'contacto' }, { id: 2, type: 'page', title: 'Colabora', link: 'https://www.asociacionelin.com/colabora/', slug: 'colabora' }, { id: 9, type: 'post', title: 'Noticia', link: 'https://www.asociacionelin.com/2024/noticia/', slug: 'noticia' }];
+  const r = SM.makeResolver(items, 'https://www.asociacionelin.com');
+  assert.equal(r('https://asociacionelin.com/colabora').id, 2);
+  assert.equal(r('http://www.asociacionelin.com/contacto').id, 1);
+  assert.equal(r('/contacto/#form').id, 1);
+  assert.equal(r('/otro/noticia/').id, 9);
+  assert.equal(r('/?page_id=2').id, 2);
+  assert.equal(r('https://otra.org/x').host, 'otra.org');
+  assert.equal(r('#a').kind, 'anchor');
+  assert.equal(r('/no-existe/').kind, 'broken');
+  assert.equal(r('mailto:a@b.es').kind, 'mail');
+  assert.equal(r('https://www.asociacionelin.com/').kind, 'home');
+  assert.equal(SM.normUrl('HTTPS://www.A.com/b/'), 'a.com/b');
+});
+test('blockOutline: bloques de primer nivel', () => {
+  assert.deepEqual(SM.blockOutline(PAGE_HTML), ['paragraph', 'buttons', 'paragraph', 'buttons']);
+});
+test('insertar botón: al final y tras el primer párrafo', () => {
+  const blk = BTN('Hola', 'https://a.com/');
+  assert.match(blk, /<!-- wp:buttons -->[\s\S]*wp-block-button__link[^>]*href="https:\/\/a\.com\/"[^>]*>Hola<\/a>/);
+  const end = SM.insertBlock(PAGE_HTML, blk, 'end');
+  assert.equal(SM.extractLinks(end).buttons.length, 3);
+  assert.equal(SM.extractLinks(end).buttons[2].text, 'Hola');
+  const after = SM.insertBlock(PAGE_HTML, blk, 'afterFirst');
+  assert.equal(SM.extractLinks(after).buttons[0].text, 'Hola');
+  assert.ok(after.indexOf('Hola</a>') > after.indexOf('<!-- /wp:paragraph -->'));
+  assert.equal(SM.insertBlock('', blk, 'end'), blk);
+  assert.equal(PL.buttonHtml('A & B <x>', 'https://a.com/', 'fill').includes('A &amp; B &lt;x&gt;'), true);
+});
+test('editar y quitar un botón con precisión', () => {
+  const e = SM.editButton(PAGE_HTML, 1, { text: 'Más información', href: 'https://x.org/info' }, { text: 'Dona', href: 'https://x.org/dona?a=1&b=2', variant: 'fill' });
+  const b = SM.extractLinks(e).buttons;
+  assert.equal(b[1].text, 'Dona'); assert.equal(b[1].href, 'https://x.org/dona?a=1&b=2'); assert.equal(b[1].variant, 'fill');
+  assert.equal(b[0].text, 'Colabora');
+  assert.ok(!/is-style-outline/.test(e));
+  assert.throws(() => SM.editButton(PAGE_HTML, 1, { text: 'otro', href: 'x' }, { text: 'a' }), /ha cambiado/);
+  const rm = SM.removeButton(PAGE_HTML, 0, { text: 'Colabora', href: 'https://asociacionelin.com/colabora' });
+  assert.equal(SM.extractLinks(rm).buttons.length, 1);
+  assert.equal((rm.match(/<!-- wp:buttons/g) || []).length, 1);
+  assert.equal(SM.removeButton(BTN('Solo', 'https://a.com/'), 0), '');
+  const two = '<!-- wp:buttons -->\n<div class="wp-block-buttons"><!-- wp:button -->\n<div class="wp-block-button"><a class="wp-block-button__link" href="/a">A</a></div>\n<!-- /wp:button --><!-- wp:button -->\n<div class="wp-block-button"><a class="wp-block-button__link" href="/b">B</a></div>\n<!-- /wp:button --></div>\n<!-- /wp:buttons -->';
+  const one = SM.removeButton(two, 0);
+  assert.deepEqual(SM.extractLinks(one).buttons.map((x) => x.text), ['B']); assert.ok(one.includes('wp:buttons'));
+});
