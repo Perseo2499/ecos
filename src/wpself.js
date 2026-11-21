@@ -324,7 +324,7 @@ const updateFields = (cfg, id, fields, type) => req(cfg, `/wp/v2/${coll(type)}/$
 // Todas las entradas (o páginas) con contenido en bruto, para buscar y reemplazar texto; ids opcional
 async function allRaw(cfg, type, ids) {
   const out = [];
-  const q0 = { context: 'edit', per_page: '100', _fields: 'id,title,content,status,link', status: 'publish,future,draft,pending,private' };
+  const q0 = { context: 'edit', per_page: '100', _fields: 'id,title,content,status,link,slug,date', status: 'publish,future,draft,pending,private' };
   if (ids?.length) {
     for (let i = 0; i < ids.length; i += 100) {
       const q = new URLSearchParams({ ...q0, include: ids.slice(i, i + 100).join(',') });

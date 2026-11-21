@@ -159,6 +159,7 @@ function renderBulk() {
     if (blog.type !== 'page' && CFG.wpMode === 'selfhosted') acts.push(['cat-add', 'new_label', t('Añadir categoría')], ['cat-del', 'label_off', t('Quitar categoría')]);
     if (CFG.wpMode === 'selfhosted' && has((i) => i.status !== 'trash')) acts.push(['links', 'link', t('Revisar enlaces')]);
     if (blog.type !== 'page' && has((i) => i.status !== 'trash')) acts.push(['normalize', 'format_paint', t('Normalizar formato')]);
+    if (blog.type !== 'page' && CFG.wpMode === 'selfhosted' && has((i) => i.status !== 'trash')) acts.push(['origimg', 'high_quality', t('Recuperar fotos originales')]);
     if (has((i) => i.status !== 'trash')) acts.push(['trash', 'delete', t('Papelera')]);
     acts.push(['delete', 'delete_forever', t('Borrar definitivamente')]);
   }
@@ -204,6 +205,28 @@ async function runBulk(kind) {
     if (!await ask(t('¿Borrar {n} entradas definitivamente? Desaparecerán de tu web y de la papelera, y no se podrán recuperar. (Las fotos se quedan en la biblioteca de medios.)', { n }), { danger: true, ok: t('Borrar definitivamente') })) return;
     const pub = items.filter((i) => i.status === 'publish').length;
     if (pub && !await ask(t('{n} de ellas están publicadas y visibles en la web. ¿Seguro que quieres borrarlas para siempre?', { n: pub }), { danger: true, ok: t('Sí, borrarlas') })) return;
+  }
+  if (kind === 'origimg') {
+    items = items.filter((i) => i.status !== 'trash');
+    // hace falta una copia de seguridad abierta: la de Restaurar o se elige ahora
+    let st = await window.api.backupStatus();
+    if (!st.open) {
+      if (!await ask(t('Para recuperar las fotos originales, elige la copia de seguridad de la que salieron estas entradas (ZIP, XML, SQL o carpeta). Las fotos de Blogger se traen igualmente a tamaño completo.'), { ok: t('Elegir copia') })) return;
+      const paths = await window.api.backupPick('files');
+      if (!paths) return;
+      toast(t('Leyendo la copia de seguridad…'));
+      await window.api.backupAnalyze(paths);
+      st = await window.api.backupStatus();
+    }
+    if (!await ask(t('Ecos buscará en la copia «{c}» la foto original de cada imagen de {n} entradas y la pondrá en su lugar, a resolución completa y sin recomprimir. ¿Continuar?', { c: st.name || t('abierta'), n: items.length }), { ok: t('Recuperar fotos') })) return;
+    $('#b-count').textContent = t('Recuperando fotos…');
+    const r = await window.api.backupRestoreImages(items.map((i) => i.id));
+    toast(t('{p} fotos recuperadas en {n} entradas.', { p: r.photos, n: r.done })
+      + (r.notFound ? ' ' + t('{x} fotos no están en la copia.', { x: r.notFound }) : '')
+      + (r.unmatched ? ' ' + t('{x} entradas no aparecen en la copia.', { x: r.unmatched }) : '')
+      + (r.errors.length ? ' ' + t('{e} con error.', { e: r.errors.length }) : ''), r.errors.length > 0);
+    bsel.clear(); loadBlog();
+    return;
   }
   const errors = [];
   let done = 0;

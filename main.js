@@ -177,7 +177,7 @@ const handle = (name, fn) => ipcMain.handle(name, async (_e, ...args) => {
   try { return { ok: true, data: await fn(...args) }; } catch (err) { return { ok: false, error: err.message }; }
 });
 
-const PROTECTED_KEYS = new Set(['lock', 'vault', '__totp', '__recovery', 'metaUserToken', 'wpToken', 'sentContent', 'restored', 'exported']);
+const PROTECTED_KEYS = new Set(['lock', 'vault', '__totp', '__recovery', 'metaUserToken', 'wpToken', 'sentContent', 'restored', 'exported', 'origUploads']);
 handle('config:get', () => publicCfg());
 handle('config:set', (changes) => {
   // Si cambian los datos de la web propia, hay que volver a pulsar «Conectar»
@@ -855,6 +855,70 @@ handle('backup:normalizeRestored', async (postIds) => {
     } catch (e) { errors.push(`${id}: ${e.message}`); log('Normalizar', id, e.message); }
   }
   return { done: done.length, errors };
+});
+// ¿Hay una copia de seguridad abierta? (para «Recuperar fotos originales» desde el Blog)
+handle('backup:status', () => (backupAn ? { open: true, name: backupAn.siteName || backupAn.dbFile || '', posts: backupAn.posts.length } : { open: false }));
+// Recuperar fotos originales: para cada entrada de la web se busca su entrada en la copia abierta y cada foto
+// se cambia por el archivo original de la copia (resolución completa, sin recomprimir). Las fotos de Blogger
+// se traen a tamaño completo. Lo ya subido se reutiliza (no se duplica en la biblioteca).
+handle('backup:restoreImages', async (ids) => {
+  if (!isSelf()) throw new Error('Solo disponible con WordPress propio');
+  const B = backupMod();
+  cfg.origUploads = cfg.origUploads || {};
+  const out = { done: 0, photos: 0, notFound: 0, unmatched: 0, errors: [] };
+  // todos los archivos de foto de la copia, por nombre comparable
+  const byName = new Map();
+  if (backupAn) for (const [rel] of backupAn.files) if (/\.(jpe?g|png|gif|webp)$/i.test(rel) && !/-\d+x\d+\.\w+$/.test(rel)) {
+    for (const k of new Set([B.photoKey(rel), B.photoKey(rel, true)])) { if (!byName.has(k)) byName.set(k, []); byName.get(k).push(rel); }
+  }
+  let n = 0;
+  for (const id of ids) {
+    n++; sendToast(`Fotos originales: entrada ${n} de ${ids.length}…`);
+    try {
+      const raw = (await wpCall(() => WP().allRaw(cfg, 'post', [id])))[0];
+      if (!raw) throw new Error('no se encuentra');
+      const wpPost = { slug: raw.slug, title: raw.title?.raw ?? raw.title, date: raw.date, type: 'post' };
+      let html = raw.content?.raw ?? '';
+      const before = html;
+      const match = backupAn ? B.matchBackupPost(backupAn, wpPost) : null;
+      if (backupAn && !match) out.unmatched++;
+      // fotos de la entrada → archivo original de la copia (primero las de esa entrada, si no por nombre)
+      const own = new Map();
+      for (const m of (match?.media || []).filter((x) => x.rel && !x.ext)) { own.set(B.photoKey(m.rel), m.rel); if (!own.has(B.photoKey(m.rel, true))) own.set(B.photoKey(m.rel, true), m.rel); }
+      const imgs = [...new Set([...html.matchAll(/<img\b[^>]*\ssrc=["']([^"']+)["']/gi)].map((m) => m[1]))];
+      for (const src of imgs) {
+        if (/(bp\.blogspot\.com|ggpht\.com|googleusercontent\.com)/i.test(src)) continue; // van aparte
+        const k = B.photoKey(src), kl = B.photoKey(src, true);
+        const one = (key) => (byName.get(key)?.length === 1 ? byName.get(key)[0] : null);
+        const rel = own.get(k) || own.get(kl) || one(k) || one(kl);
+        if (!rel) { out.notFound++; continue; }
+        const ck = `${backupAn.siteUrl || ''}|${rel}`;
+        let up = cfg.origUploads[ck];
+        if (!up) {
+          const f = backupAn.findFile(rel);
+          if (!f) { out.notFound++; continue; }
+          const buf = await f.src.read(f.name);
+          up = await wpCall(() => WP().uploadNamed(cfg, buf, path.basename(rel), { keep: true }));
+          cfg.origUploads[ck] = { id: up.id, url: up.url }; store.save(cfg);
+        }
+        if (up.url === src.replace(/&amp;/g, '&')) continue; // ya es la original
+        // la foto, su enlace (si apuntaba a otra versión de la misma foto) y su número en la biblioteca
+        html = html.replace(/<img\b[^>]*>/gi, (tag) => {
+          if (!tag.includes(src)) return tag;
+          const old = (tag.match(/wp-image-(\d+)/) || [])[1];
+          if (old) html = html.split(`"id":${old}`).join(`"id":${up.id}`);
+          return tag.split(src).join(up.url).replace(/wp-image-\d+/, `wp-image-${up.id}`).replace(/\s(srcset|sizes)="[^"]*"/gi, '');
+        });
+        html = html.replace(/href=["']([^"']+)["']/gi, (all, h) => (B.photoKey(h, true) === kl && /\.(jpe?g|png|gif|webp)(\?|$)/i.test(h) ? `href="${up.url}"` : all));
+        out.photos++;
+      }
+      // fotos de Blogger/Picasa a tamaño completo
+      const ext = await importExternalImages(html);
+      if (ext !== html) { out.photos += B.externalImages(html).length - B.externalImages(ext).length; html = ext; }
+      if (html !== before) { await wpCall(() => WP().updateFields(cfg, id, { content: html })); out.done++; }
+    } catch (e) { out.errors.push(`${id}: ${e.message}`); log('Fotos originales', id, e.message); }
+  }
+  return out;
 });
 handle('backup:close', () => { if (backupAn) { backupAn.sources.forEach((x) => x.close()); backupAn = null; } });
 

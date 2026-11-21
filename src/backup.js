@@ -219,6 +219,23 @@ async function downloadBest(m, signalFn) {
   } catch { /* sin copia */ }
   return null;
 }
+// Nombre comparable de una foto: sin carpeta, extensión, tamaño (-300x225), «-scaled», «-e123…» ni el «-1»
+// que WordPress añade a los repetidos; sin tildes ni mayúsculas
+function photoKey(u, loose = false) {
+  let n = decodeURIComponent(String(u).replace(/&amp;/g, '&').split('?')[0].split('/').pop() || '');
+  n = n.replace(/\.[a-z0-9]{2,4}$/i, '').replace(/-\d+x\d+$/, '').replace(/-scaled$/, '').replace(/-e\d{10,}$/, '');
+  if (loose) n = n.replace(/-\d{1,2}$/, ''); // el «-1» que WordPress pone a los nombres repetidos
+  return n.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+// La entrada de la copia que corresponde a una entrada de la web (por dirección, o por título y día)
+function matchBackupPost(an, wp) {
+  const W = require('./wpself');
+  const slug = String(wp.slug || '').toLowerCase(), title = W.normTitle(wp.title), day = String(wp.date || '').slice(0, 10);
+  const list = an.posts.filter((x) => x.type === (wp.type || 'post'));
+  return (slug && list.find((x) => String(x.slug || '').toLowerCase() === slug))
+    || list.find((x) => W.normTitle(x.title) === title && String(x.date || '').slice(0, 10) === day)
+    || (() => { const same = list.filter((x) => W.normTitle(x.title) === title); return same.length === 1 ? same[0] : null; })();
+}
 const nameOf = (u) => (decodeURIComponent(String(u).split('?')[0].split('/').pop() || 'foto') || 'foto').replace(/[^\w.\-]+/g, '-').slice(0, 80) || 'foto.jpg';
 // «2017/03/foto-300x200.jpg» → «2017/03/foto.jpg» (las miniaturas apuntan al original)
 const original = (rel) => rel.replace(/-\d+x\d+(?=\.\w+$)/, '').replace(/-scaled(?=\.\w+$)/, '');
@@ -463,4 +480,4 @@ async function thumbnail(an, rel, nativeImage) {
   return img.resize({ width: 120 }).toDataURL();
 }
 
-module.exports = { externalImages, downloadBest, googleKey, googleFull, nameOf, sanitizeRestored, previewContent, analyze, prepare, thumbnail, parseSql, wpFromSql, wpFromWxr, uploadsRel, original };
+module.exports = { photoKey, matchBackupPost, externalImages, downloadBest, googleKey, googleFull, nameOf, sanitizeRestored, previewContent, analyze, prepare, thumbnail, parseSql, wpFromSql, wpFromWxr, uploadsRel, original };

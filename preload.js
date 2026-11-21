@@ -77,6 +77,8 @@ contextBridge.exposeInMainWorld('api', {
   // Restaurar desde copia de seguridad
   backupPick: (kind) => call('backup:pick', kind),
   backupAnalyze: (paths) => call('backup:analyze', paths),
+  backupStatus: () => call('backup:status'),
+  backupRestoreImages: (ids) => call('backup:restoreImages', ids),
   backupThumb: (key) => call('backup:thumb', key),
   backupContent: (key) => call('backup:content', key),
   backupPreview: (key) => call('backup:preview', key),

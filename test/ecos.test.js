@@ -345,3 +345,16 @@ test('fotos de Blogger: una por foto aunque esté en varios tamaños, y en su ta
   assert.equal(B.googleKey('http://3.bp.blogspot.com/-a/UO9/AAA/xyz/s400/foto+1.jpg'), list[0].gkey);
   assert.equal(list[1].url, 'https://1.bp.blogspot.com/-b/c/d/e/s0/otra.png');
 });
+
+test('recuperar fotos originales: el mismo nombre aunque WordPress lo cambie', () => {
+  const B = require('../src/backup');
+  const k = B.photoKey('2011/11/Fiesta Navidad.jpg');
+  for (const u of ['https://x/wp-content/uploads/2026/11/Fiesta-Navidad-1024x768.jpg', 'https://x/wp-content/uploads/2026/11/Fiesta-Navidad-scaled.jpg'])
+    assert.equal(B.photoKey(u), k);
+  assert.equal(B.photoKey('https://x/wp-content/uploads/2026/11/fiesta-navidad-1.jpg', true), k);
+  assert.notEqual(B.photoKey('foto-1.jpg'), B.photoKey('foto-2.jpg')); // fotos distintas no se confunden
+  assert.notEqual(B.photoKey('https://x/otra-foto.jpg'), k);
+  const an = { posts: [{ type: 'post', slug: '', title: 'Encuentros festivos', date: '2011-11-04 10:00:00' }, { type: 'post', slug: 'voluntariado-en-navidad', title: 'Voluntariado', date: '2011-11-03' }] };
+  assert.equal(B.matchBackupPost(an, { title: 'ENCUENTROS FESTIVOS', date: '2011-11-04T10:00:00' }).title, 'Encuentros festivos');
+  assert.equal(B.matchBackupPost(an, { slug: 'voluntariado-en-navidad', title: 'x', date: '' }).title, 'Voluntariado');
+});
