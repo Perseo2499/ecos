@@ -188,6 +188,7 @@ async function listMedia(cfg, { page = 1, perPage = 40, type = 'all', search = '
     total: Number(res.headers.get('x-wp-total') || 0), totalPages: Number(res.headers.get('x-wp-totalpages') || 1),
   };
 }
+const getMedia = (cfg, id) => req(cfg, `/wp/v2/media/${Number(id)}?context=edit`);
 const deleteMedia = (cfg, id) => req(cfg, `/wp/v2/media/${Number(id)}?force=true`, { method: 'DELETE' });
 
 // Dirección de una foto sin dominio, sin extensión ni sufijos de tamaño (-300x200, -scaled, -e1234)
@@ -324,7 +325,7 @@ const updateFields = (cfg, id, fields, type) => req(cfg, `/wp/v2/${coll(type)}/$
 // Todas las entradas (o páginas) con contenido en bruto, para buscar y reemplazar texto; ids opcional
 async function allRaw(cfg, type, ids) {
   const out = [];
-  const q0 = { context: 'edit', per_page: '100', _fields: 'id,title,content,status,link,slug,date', status: 'publish,future,draft,pending,private' };
+  const q0 = { context: 'edit', per_page: '100', _fields: 'id,title,content,status,link,slug,date,featured_media', status: 'publish,future,draft,pending,private' };
   if (ids?.length) {
     for (let i = 0; i < ids.length; i += 100) {
       const q = new URLSearchParams({ ...q0, include: ids.slice(i, i + 100).join(',') });
@@ -461,4 +462,4 @@ async function saveStructure(cfg, ch, progress = () => {}) {
   return { errors };
 }
 
-module.exports = { postIndex, matchExisting, normTitle, listMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw };
+module.exports = { postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw };

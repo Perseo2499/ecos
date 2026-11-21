@@ -566,6 +566,74 @@ handle('media:delete', async (ids) => {
   return { done, failed };
 });
 handle('media:alt', async (id, alt) => { needSelfMedia(); await wpCall(() => wpself.updateMedia(cfg, id, { alt: String(alt || '') })); return true; });
+// Mejorar fotos con IA (Real-ESRGAN en este ordenador; src/upscale.js)
+const upscaleJobs = new Map(); // token → { file, type, id }
+const sendUpscale = (p) => { try { if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('upscale:progress', p); } catch { /* ventana cerrada */ } };
+const smallPreview = (buf) => {
+  const { nativeImage } = require('electron');
+  let img = nativeImage.createFromBuffer(buf);
+  const { width, height } = img.getSize();
+  if (Math.max(width, height) > 1400) img = img.resize(width >= height ? { width: 1400, quality: 'best' } : { height: 1400, quality: 'best' });
+  return 'data:image/jpeg;base64,' + img.toJPEG(85).toString('base64');
+};
+handle('media:upscale', async (id) => {
+  needSelfMedia();
+  const up = require('./src/upscale');
+  const m = await wpCall(() => wpself.getMedia(cfg, id));
+  if (!m?.source_url) throw new Error('No se encuentra la foto en la biblioteca.');
+  sendUpscale({ text: 'Preparando la foto…' });
+  const res = await fetch(m.source_url);
+  if (!res.ok) throw new Error(`No se pudo descargar la foto original (error ${res.status}).`);
+  const orig = Buffer.from(await res.arrayBuffer());
+  const r = await up.upscale(orig, { onProgress: sendUpscale });
+  const token = crypto.randomBytes(8).toString('hex');
+  const file = path.join(require('os').tmpdir(), `ecos-mejorada-${token}${r.type === 'image/png' ? '.png' : '.jpg'}`);
+  fs.writeFileSync(file, r.buf);
+  upscaleJobs.set(token, { file, type: r.type, id });
+  const before = require('electron').nativeImage.createFromBuffer(orig).getSize();
+  return {
+    token, before: smallPreview(orig), after: smallPreview(r.buf),
+    from: { width: before.width, height: before.height }, to: { width: r.width, height: r.height }, bytes: r.buf.length,
+  };
+});
+handle('media:upscaleApply', async ({ id, token }) => {
+  needSelfMedia();
+  const job = upscaleJobs.get(token);
+  if (!job || !fs.existsSync(job.file)) throw new Error('La foto mejorada ya no está disponible. Vuelve a mejorarla.');
+  const { swapMediaInHtml } = require('./src/upscale');
+  const old = await wpCall(() => wpself.getMedia(cfg, id));
+  const oldUrls = [old.source_url, ...Object.values(old.media_details?.sizes || {}).map((s) => s.source_url)].filter(Boolean);
+  const ext = job.type === 'image/png' ? 'png' : 'jpg';
+  const base = decodeURIComponent(path.basename(old.source_url.split(/[?#]/)[0])).replace(/\.[^.]+$/, '') || 'foto';
+  const up = await wpCall(() => wpself.uploadNamed(cfg, fs.readFileSync(job.file), `${base}-mejorada.${ext}`, { keep: true }));
+  if (old.alt_text) { try { await wpCall(() => wpself.updateMedia(cfg, up.id, { alt: old.alt_text })); } catch (e) { log('No se pudo copiar el texto alternativo', e.message); } }
+  const used = await wpCall(() => wpself.mediaUsage(cfg));
+  const ids = (used[id] || []).map((u) => u.id);
+  let posts = 0;
+  if (ids.length) {
+    for (const type of ['post', 'page']) {
+      for (const p of await wpCall(() => wpself.allRaw(cfg, type, ids))) {
+        const html = p.content?.raw ?? '';
+        const next = swapMediaInHtml(html, { oldUrls, newUrl: up.url, oldId: id, newId: up.id });
+        const fields = {};
+        if (next !== html) fields.content = next;
+        if (Number(p.featured_media) === Number(id)) fields.featured_media = up.id;
+        if (!Object.keys(fields).length) continue;
+        await wpCall(() => wpself.updateFields(cfg, p.id, fields, type));
+        posts++;
+      }
+    }
+  }
+  mediaUsageCache = null;
+  try { fs.rmSync(job.file, { force: true }); } catch { /* nada */ }
+  upscaleJobs.delete(token);
+  return { newId: up.id, url: up.url, posts };
+});
+handle('media:upscaleDiscard', (token) => {
+  const job = upscaleJobs.get(token);
+  if (job) { try { fs.rmSync(job.file, { force: true }); } catch { /* nada */ } upscaleJobs.delete(token); }
+  return true;
+});
 // Borrado definitivo (no se puede deshacer): la entrada desaparece también de la papelera
 handle('blog:delete', async (id, type) => { await wpCall(() => WP().deletePost(cfg, id, type)); if (cfg.sentContent) delete cfg.sentContent[id]; return markExported(id, 'deleted'); });
 

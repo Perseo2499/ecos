@@ -358,3 +358,28 @@ test('recuperar fotos originales: el mismo nombre aunque WordPress lo cambie', (
   assert.equal(B.matchBackupPost(an, { title: 'ENCUENTROS FESTIVOS', date: '2011-11-04T10:00:00' }).title, 'Encuentros festivos');
   assert.equal(B.matchBackupPost(an, { slug: 'voluntariado-en-navidad', title: 'x', date: '' }).title, 'Voluntariado');
 });
+
+test('mejorar con IA: tamaño final (×4 con tope de 2× o 1600 y nunca más de 2560)', () => {
+  const U = require('../src/upscale');
+  assert.deepEqual(U.targetSize(640, 480), { width: 1600, height: 1200 });
+  assert.deepEqual(U.targetSize(300, 200), { width: 1200, height: 800 }); // ×4 cabe: 1200 ≤ 1600
+  assert.deepEqual(U.targetSize(480, 640), { width: 1200, height: 1600 });
+  assert.deepEqual(U.targetSize(1200, 800), { width: 2400, height: 1600 }); // 2×
+  assert.deepEqual(U.targetSize(2000, 1000), { width: 2560, height: 1280 }); // tope absoluto
+  assert.deepEqual(U.targetSize(1, 1), { width: 4, height: 4 });
+});
+
+test('mejorar con IA: cambiar la foto en el contenido (direcciones, wp-image e id de bloque)', () => {
+  const U = require('../src/upscale');
+  const old = 'https://x.org/wp-content/uploads/2020/a.jpg', oldS = 'https://x.org/wp-content/uploads/2020/a-300x200.jpg';
+  const nu = 'https://x.org/wp-content/uploads/2026/a-mejorada.jpg';
+  const html = `<!-- wp:image {"id":12,"sizeSlug":"large"} --><figure><img src="${oldS}" srcset="${oldS} 300w, ${old} 600w" class="wp-image-12" alt="a"/></figure><!-- /wp:image -->
+<p>Texto con <a href="${old}">enlace</a> y ${old} visible, wp-image-123 y "id":123</p><!-- wp:image {"id":123} /-->`;
+  const out = U.swapMediaInHtml(html, { oldUrls: [old, oldS], newUrl: nu, oldId: 12, newId: 99 });
+  assert.match(out, /"id":99,"sizeSlug"/);
+  assert.match(out, /class="wp-image-99"/);
+  assert.ok(out.includes(`src="${nu}"`) && out.includes(`href="${nu}"`));
+  assert.ok(!out.includes('srcset'));
+  assert.ok(out.includes(`y ${old} visible`)); // el texto visible no se toca
+  assert.ok(out.includes('wp-image-123') && out.includes('{"id":123}')); // otros ids intactos
+});

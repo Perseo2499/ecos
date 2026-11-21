@@ -132,11 +132,12 @@ function renderMediaLib() {
   box.innerHTML = `<div class="mg-bar"><span class="mg-sel">${t('Pulsa una foto para seleccionarla; doble clic para verla en grande.')}</span><span class="mg-acts"></span></div><div class="mg-host"></div>`;
   const acts = box.querySelector('.mg-acts'), label = box.querySelector('.mg-sel');
   const sync = () => {
-    const n = mediaLib.sel.size;
+    const n = mediaLib.sel.size, sel = [...mediaLib.sel.values()];
     label.textContent = n ? t('{n} seleccionadas', { n }) : t('Pulsa una foto para seleccionarla; doble clic para verla en grande.');
     box.querySelector('.mg-bar').classList.toggle('on', n > 0);
     acts.innerHTML = n ? `<button class="btn tonal small" data-a="copy"><span class="ms">link</span>${t('Copiar enlace')}</button>
       ${n === 1 ? `<button class="btn tonal small" data-a="alt"><span class="ms">edit_note</span>${t('Editar descripción (alt)')}</button>` : ''}
+      ${sel.some((m) => m.type !== 'video') ? `<button class="btn tonal small" data-a="ai"><span class="ms">auto_fix_high</span>${t('Mejorar con IA')}</button>` : ''}
       <button class="btn tonal small danger" data-a="del"><span class="ms">delete</span>${t('Borrar de la biblioteca')}</button>
       <button class="btn text icon-only" data-a="clear" title="${escHtml(t('Quitar la selección'))}"><span class="ms">close</span></button>` : '';
   };
@@ -154,6 +155,7 @@ function renderMediaLib() {
       await busy(b, async () => { await window.api.mediaSetAlt(m.id, v); m.alt = v; toast(t('Descripción guardada')); });
       mediaLib.render();
     }
+    if (b.dataset.a === 'ai') return upscaleSelected(sel.filter((m) => m.type !== 'video'), b);
     if (b.dataset.a === 'del') {
       const used = sel.filter((m) => mediaLib.st.usage?.[m.id]?.length);
       let msg = sel.length === 1 ? t('¿Borrar «{name}» de la biblioteca? No se puede deshacer.', { name: sel[0].name }) : t('¿Borrar {n} archivos de la biblioteca? No se puede deshacer.', { n: sel.length });
@@ -218,3 +220,91 @@ function openMediaPicker() {
   g.reload();
 }
 $('#d-media-lib')?.addEventListener('click', openMediaPicker);
+
+// --- Mejorar fotos con IA (Real-ESRGAN en este ordenador) -----------------------------
+const aiIsWindows = () => navigator.userAgent.includes('Windows');
+async function upscaleSelected(photos, btn) {
+  if (!photos.length) return;
+  if (!aiIsWindows()) return void toast(t('Mejorar con IA solo funciona en Windows.'), true);
+  let asked = false;
+  try { asked = localStorage.getItem('ecosAiEngine') === '1'; } catch { /* sin almacenamiento */ }
+  if (!asked) {
+    if (!await ask(t('La primera vez se descargará el motor de IA (unos 45 MB, una sola vez). Todo se hace en este ordenador: las fotos no se suben a ningún servicio.'), { ok: t('Continuar') })) return;
+    try { localStorage.setItem('ecosAiEngine', '1'); } catch { /* sin almacenamiento */ }
+  }
+  let changed = 0, entries = 0;
+  for (let i = 0; i < photos.length; i++) {
+    const r = await upscaleDialog(photos[i], photos.length - i - 1);
+    if (r === 'stop') break;
+    if (r) { changed++; entries += r.posts; }
+  }
+  if (changed) {
+    toast(t('Foto mejorada y cambiada en {n} entradas.', { n: entries }));
+    mediaLib?.clear?.();
+    mediaLib?.reload(true);
+  }
+}
+// Un modal por foto: progreso → comparación antes/después. Devuelve {posts} si se aplicó, null si se descartó, 'stop' si se cierra todo.
+function upscaleDialog(m, remaining) {
+  return new Promise((resolve) => {
+    const el = document.createElement('div');
+    el.className = 'modal mg-ai';
+    el.innerHTML = `<div class="modal-box wide"><h2><span class="ms fill modal-icon">auto_fix_high</span>${t('Mejorar con IA')}</h2>
+      <p class="hint">${t('La IA amplía la foto y le da nitidez, sin cambiar lo que muestra. Compara antes de usarla.')}</p>
+      <div class="ai-busy"><span class="spin"></span><span class="ai-msg">${t('Preparando la foto…')}</span><div class="ai-bar"><i></i></div></div>
+      <div class="ai-cmp hidden">
+        <div class="ai-ba"><img class="ai-after" alt=""><img class="ai-before" alt=""><span class="ai-line"></span><span class="ai-lbl l">${t('Antes')}</span><span class="ai-lbl r">${t('Después')}</span></div>
+        <input type="range" class="ai-range" min="0" max="100" value="50" aria-label="${escHtml(t('Comparar antes y después'))}">
+        <div class="hint ai-info"></div>
+      </div>
+      <div class="modal-actions"><span class="spacer"></span>
+        <button class="btn text" data-r="x">${t('Cancelar')}</button>
+        <button class="btn text hidden" data-r="next">${t('Siguiente')}</button>
+        <button class="btn filled hidden" data-r="use"><span class="ms">check</span>${t('Usar la mejorada')}</button></div></div>`;
+    const q = (s) => el.querySelector(s);
+    let token = null, gone = false;
+    window.api.onUpscaleProgress?.((p) => {
+      if (gone || !p) return;
+      q('.ai-msg').textContent = t(p.text) + (p.pct != null ? ` ${p.pct} %` : '');
+      q('.ai-bar').classList.toggle('on', p.pct != null);
+      q('.ai-bar i').style.width = (p.pct || 0) + '%';
+    });
+    const finish = async (v) => {
+      if (gone) return; gone = true;
+      el.remove(); document.removeEventListener('keydown', key, true);
+      if (token) { try { await window.api.mediaUpscaleDiscard(token); } catch { /* nada */ } }
+      resolve(v);
+    };
+    const key = (e) => { if (e.key === 'Escape') { e.stopPropagation(); finish('stop'); } };
+    document.addEventListener('keydown', key, true);
+    const setClip = (v) => {
+      q('.ai-before').style.clipPath = `inset(0 ${100 - v}% 0 0)`;
+      q('.ai-line').style.left = v + '%'; q('.ai-range').value = v;
+    };
+    q('.ai-range').oninput = (e) => setClip(Number(e.target.value));
+    const ba = q('.ai-ba');
+    const drag = (e) => { const r = ba.getBoundingClientRect(); setClip(Math.max(0, Math.min(100, (e.clientX - r.left) / r.width * 100))); };
+    ba.onpointerdown = (e) => { ba.setPointerCapture(e.pointerId); drag(e); ba.onpointermove = drag; };
+    ba.onpointerup = ba.onpointercancel = () => { ba.onpointermove = null; };
+    q('[data-r="x"]').onclick = () => finish('stop');
+    q('[data-r="next"]').onclick = () => finish(null);
+    q('[data-r="use"]').onclick = (e) => busy(e.currentTarget, async () => {
+      const r = await window.api.mediaUpscaleApply({ id: m.id, token });
+      token = null; // ya consumido
+      finish(r);
+    });
+    document.body.appendChild(el);
+    window.api.mediaUpscale(m.id).then((r) => {
+      if (gone) { window.api.mediaUpscaleDiscard(r.token).catch(() => {}); return; }
+      token = r.token;
+      q('.ai-busy').classList.add('hidden'); q('.ai-cmp').classList.remove('hidden');
+      q('.ai-before').src = r.before; q('.ai-after').src = r.after;
+      q('.ai-info').textContent = `${r.from.width}×${r.from.height} → ${r.to.width}×${r.to.height} · ${fmtBytes(r.bytes)}`;
+      q('[data-r="x"]').textContent = t('Descartar');
+      q('[data-r="x"]').onclick = () => finish(null);
+      q('[data-r="use"]').classList.remove('hidden');
+      if (remaining > 0) q('[data-r="next"]').classList.remove('hidden');
+      setClip(50);
+    }).catch((e) => { if (!gone) { toast(e.message, true); finish('stop'); } });
+  });
+}
