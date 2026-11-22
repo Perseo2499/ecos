@@ -193,11 +193,22 @@ function make(deps = {}) {
     return { buf, mime: outMime, name, type, date: item.createTime || item.mediaFile.mediaFileMetadata?.createTime || '' };
   }
 
+  // Miniatura cuadrada (para revisar la selección en Ecos) como data: URL
+  async function thumb(cfg, item, size = 256) {
+    const base = item.mediaFile?.baseUrl;
+    if (!base) return '';
+    const token = await ensureToken(cfg);
+    const res = await f(`${base}=w${size}-h${size}-c`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return '';
+    const mime = (res.headers?.get?.('content-type') || 'image/jpeg').split(';')[0];
+    return `data:${mime};base64,${Buffer.from(await res.arrayBuffer()).toString('base64')}`;
+  }
+
   async function deleteSession(cfg, id) {
     try { await api(cfg, 'DELETE', `${API}/sessions/${encodeURIComponent(id)}`); } catch { /* ya caducada: no importa */ }
   }
 
-  return { login, refresh, ensureToken, createSession, pollSession, listItems, download, deleteSession };
+  return { login, refresh, ensureToken, createSession, pollSession, listItems, download, thumb, kindOf, deleteSession };
 }
 
 module.exports = { make, parseCredentials, findCredentialFiles, authUrl, challengeOf, newVerifier, seconds, SCOPE, REDIRECT, TOKEN_URL, API, RECONNECT, ...make() };

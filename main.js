@@ -470,7 +470,16 @@ handle('gphotos:findCredentials', async () => {
   return gpFound[0] || null;
 });
 handle('gphotos:logout', () => { cfg.gpAccessToken = ''; cfg.gpRefreshToken = ''; cfg.gpTokenExpires = ''; store.save(cfg); return publicCfg(); });
-handle('gphotos:cancel', () => { if (gpPick) gpPick.cancelled = true; return true; });
+handle('gphotos:cancel', () => { if (gpPick) { gpPick.cancelled = true; gpPick.decide?.(null); } return true; });
+// Respuesta de la revisión en Ecos: ids de las fotos que se suben (null = cancelar)
+handle('gphotos:confirm', (ids) => { if (!gpPick?.decide) return false; gpPick.decide(Array.isArray(ids) ? ids.map(String) : null); return true; });
+function bringEcosToFront() {
+  if (!mainWin || mainWin.isDestroyed()) return;
+  if (mainWin.isMinimized()) mainWin.restore();
+  mainWin.show();
+  if (process.platform === 'win32') { mainWin.setAlwaysOnTop(true); mainWin.focus(); setTimeout(() => { if (!mainWin.isDestroyed()) mainWin.setAlwaysOnTop(false); }, 300); }
+  else { try { app.focus({ steal: true }); } catch { /* */ } mainWin.focus(); }
+}
 handle('gphotos:pick', async () => {
   if (!isSelf()) throw new Error('La biblioteca de medios solo está disponible con «Mi web (wp-admin)» en Conexiones → WordPress.');
   if (!cfg.gpRefreshToken) throw new Error('Google Fotos no está conectado. Conéctalo en Conexiones → Google Fotos.');
@@ -483,13 +492,30 @@ handle('gphotos:pick', async () => {
     await shell.openExternal(String(session.pickerUri).replace(/\/?$/, '') + '/autoclose');
     sendGpProgress({ phase: 'waiting' });
     await gphotos.pollSession(cfg, session, { isCancelled: () => job.cancelled });
-    const items = await gphotos.listItems(cfg, session.id);
+    const all = await gphotos.listItems(cfg, session.id);
+    bringEcosToFront();
+    // Revisión en Ecos: miniaturas de lo elegido (de 6 en 6) y se espera a «Subir»
+    const list = all.map((it) => ({ id: String(it.id), name: it.mediaFile?.filename || '', type: gphotos.kindOf(it), date: it.createTime || '', thumb: '' }));
+    sendGpProgress({ phase: 'review', items: list });
+    const decided = new Promise((resolve) => { job.decide = resolve; });
+    (async () => {
+      for (let k = 0; k < all.length && !job.cancelled && !job.chosen; k += 6) {
+        await Promise.all(all.slice(k, k + 6).map(async (it, n) => {
+          try { const th = await gphotos.thumb(cfg, it); if (th) sendGpProgress({ phase: 'thumb', id: list[k + n].id, thumb: th }); } catch { /* sin miniatura */ }
+        }));
+      }
+    })();
+    const ids = await decided;
+    job.chosen = true;
+    if (!ids || job.cancelled) return [];
+    const keep = new Set(ids);
+    const items = all.filter((it) => keep.has(String(it.id)));
     const out = [];
     let n = 0;
     for (const it of items) {
       if (job.cancelled) break;
       n++;
-      sendGpProgress({ phase: 'uploading', done: n, total: items.length });
+      sendGpProgress({ phase: 'uploading', done: n - 1, total: items.length, id: String(it.id) });
       try {
         const d = await gphotos.download(cfg, it);
         let up;
@@ -500,7 +526,12 @@ handle('gphotos:pick', async () => {
           up = await wpCall(() => WP().uploadNamed(cfg, d.buf, d.name, { keep: true }));
         }
         out.push({ id: up.id, url: up.url, type: d.type, alt: '' });
-      } catch (e) { log('Google Fotos', it.id, e.message); if (/Vuelve a conectar/.test(e.message)) throw e; }
+        sendGpProgress({ phase: 'item', id: String(it.id), ok: true, done: n, total: items.length });
+      } catch (e) {
+        log('Google Fotos', it.id, e.message);
+        sendGpProgress({ phase: 'item', id: String(it.id), ok: false, done: n, total: items.length });
+        if (/Vuelve a conectar/.test(e.message)) throw e;
+      }
     }
     if (items.length && !out.length && !job.cancelled) throw new Error('No se ha podido subir ninguna foto de Google Fotos');
     mediaUsageCache = null;

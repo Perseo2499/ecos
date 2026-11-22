@@ -46,6 +46,7 @@ contextBridge.exposeInMainWorld('api', {
   gphotosLogout: () => call('gphotos:logout'),
   gphotosPick: () => call('gphotos:pick'),
   gphotosCancel: () => call('gphotos:cancel'),
+  gphotosConfirm: (ids) => call('gphotos:confirm', ids),
   onGphotosProgress: on('gphotos:progress'),
   uploadPasted: (bytes, name, type) => call('media:uploadPasted', { bytes, name, type }),
   mediaFetchImage: (url) => call('media:fetchImage', url),
