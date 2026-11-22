@@ -212,7 +212,8 @@
     toolsOwner(el) {
       const canvas = document.getElementById('ed-canvas');
       if (!canvas) return;
-      const pick = el || canvas.querySelector('.blk:focus-within:not(:has(.blk:focus-within))');
+      if (this.pinned && !canvas.contains(this.pinned)) this.pinned = null;
+      const pick = el || this.pinned || canvas.querySelector('.blk:focus-within:not(:has(.blk:focus-within))');
       canvas.querySelectorAll('.blk.tools-on').forEach((x) => { if (x !== pick) x.classList.remove('tools-on'); });
       pick?.classList.add('tools-on');
       // la barra no se sale del lienzo (en la última de varias columnas estrechas se desplaza hacia la izquierda)
@@ -233,6 +234,15 @@
         if (blk && canvas.contains(blk)) this.toolsOwner(blk);
       });
       canvas.addEventListener('mouseleave', () => this.toolsOwner(null));
+      // pulsar una foto (o la zona de un bloque que no es texto) deja su barra fija; pulsar en un texto o fuera, la suelta
+      canvas.addEventListener('mousedown', (e) => {
+        const blk = e.target.closest('.blk');
+        if (e.target.closest('.blk-tools')) return;
+        const media = blk && e.target.closest('img, video, figure, .ph, .g-grid, .g-car, .mt-media') && !e.target.closest('.rt');
+        this.pinned = media ? blk : null;
+        canvas.querySelectorAll('.blk.pinned').forEach((x) => x.classList.toggle('pinned', x === this.pinned));
+        if (this.pinned) { this.pinned.classList.add('pinned'); this.toolsOwner(this.pinned); }
+      });
       canvas.addEventListener('focusin', () => { if (!canvas.querySelector('.blk:hover')) this.toolsOwner(null); });
     },
     focus(id, atEnd = false) {
@@ -694,7 +704,7 @@
           if (b.img) {
             const ph = this.photo(b.img, () => this.change(() => (b.img = null)), b);
             this.imgLook(ph, b.fill ? { ...b, ratio: null } : b);
-            side.appendChild(ph);
+            const wrap = document.createElement("div"); wrap.className = "mt-phwrap"; wrap.appendChild(ph); side.appendChild(wrap);
           } else side.appendChild(this.dropZone(t('Arrastra una foto'), (m) => this.change(() => (b.img = { ...m }))));
           this.acceptPhoto(side, (img) => (b.img = img), { sameOk: (d) => !(d.kind === 'photo' && d.block === b.id) });
           const text = this.editable('div', b.html, t('Texto junto a la imagen…'), (h) => (b.html = h), { cls: 'mt-text', block: b });
@@ -719,6 +729,23 @@
             this.styleBtn(extra, b);
             extra.insertAdjacentHTML('beforeend', `<span class="lv-sep"></span><button class="lv" data-drop="1" title="${t('Saca la foto del bloque y deja el texto rodeándola: la foto queda a un lado, dentro del texto')}"><span class="ms">wrap_text</span><span class="lbl">${t('Soltar en el texto')}</span></button>`);
             $('[data-drop]', extra).onclick = () => this.dropIntoText(b);
+            // Barra propia sobre la foto (como en cualquier otra imagen): aparece al pasar el ratón o al pulsar la foto,
+            // aunque el bloque sea alto y su barra general quede lejos
+            const ib = document.createElement('div');
+            ib.className = 'mt-imgbar';
+            ib.innerHTML = [[false, 'format_image_left', t('Imagen a la izquierda')], [true, 'format_image_right', t('Imagen a la derecha')]]
+              .map(([r, ic, n]) => `<button class="lv ${on(!!b.right === r)}" data-side="${r ? 1 : 0}" title="${n}"><span class="ms">${ic}</span></button>`).join('')
+              + '<span class="lv-sep"></span>'
+              + MT_SIZES.map((w) => `<button class="lv ${on(mw === w)}" data-mw="${w}" title="${t('La imagen ocupa el {n} % del ancho', { n: w })}">${w}%</button>`).join('')
+              + `<span class="lv-sep"></span><button class="lv ${on(b.fill)}" data-fill="1" title="${t('Rellenar: la imagen ocupa todo el alto de su lado, recortándose')}"><span class="ms">fit_screen</span></button>`;
+            $$('[data-side]', ib).forEach((x) => (x.onclick = (e) => { e.stopPropagation(); this.change(() => (b.right = x.dataset.side === '1')); }));
+            $$('[data-mw]', ib).forEach((x) => (x.onclick = (e) => { e.stopPropagation(); this.change(() => this.setMtWidth(b, Number(x.dataset.mw))); }));
+            $('[data-fill]', ib).onclick = (e) => { e.stopPropagation(); this.change(() => { if (b.fill) delete b.fill; else b.fill = true; }); };
+            this.styleBtn(ib, b);
+            ib.insertAdjacentHTML('beforeend', `<button class="lv" data-drop="1" title="${t('Saca la foto del bloque y deja el texto rodeándola: la foto queda a un lado, dentro del texto')}"><span class="ms">wrap_text</span></button>`);
+            $('[data-drop]', ib).onclick = (e) => { e.stopPropagation(); this.dropIntoText(b); };
+            ib.addEventListener('mousedown', (e) => e.stopPropagation());
+            (side.querySelector(".mt-phwrap") || side).appendChild(ib);
           }
           break;
         }

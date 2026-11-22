@@ -150,6 +150,9 @@ contextBridge.exposeInMainWorld('api', {
   devCheckDir: (dir) => call('dev:checkDir', dir),
   ptySpawn: (opts) => call('pty:spawn', opts),
   ptyWrite: (id, data) => ipcRenderer.send('pty:write', id, data),
+  // clic derecho en el texto del editor: se avisa ANTES de que se abra el menú (síncrono) para añadir las opciones de formato
+  ctxMark: (kind) => { try { ipcRenderer.sendSync('ctx:mark', String(kind || '')); } catch { /* sin menú extra */ } },
+  onCtxCmd: on('ctx:cmd'),
   ptyResize: (id, cols, rows) => ipcRenderer.send('pty:resize', id, cols, rows),
   ptyKill: (id) => call('pty:kill', id),
   onPtyData: on('pty:data'),

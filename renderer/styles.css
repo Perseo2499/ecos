@@ -2578,3 +2578,34 @@ body:has(.tab.active .b-bulk.on) #toast { bottom: 120px; }
 /* La barra de formato queda siempre por encima de los bloques al hacer scroll (antes un bloque activo o una foto a un
    lado, con z-index 20-30, se pintaba encima: la barra parecía transparente y los clics iban al bloque) */
 #ed-canvas .fmt-bar, .fmt-bar { z-index: 60; }
+
+/* Barra de formato flotante (al estilo de la mini barra de Word) */
+.fmt-bar.float { position: fixed; margin: 0; z-index: 90; max-width: min(720px, calc(100vw - 24px)); box-shadow: var(--e3);
+  transition: opacity .18s ease, transform .18s cubic-bezier(.2, 0, 0, 1), visibility 0s; }
+.fmt-bar.float.faint { opacity: .45; }
+.fmt-bar.float.hide, .fmt-bar.float.away { opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(6px); transition: opacity .15s, transform .15s, visibility 0s .15s; }
+.fmt-bar.float.off { opacity: 0; visibility: hidden; pointer-events: none; }
+#ed-canvas .blk.pinned { box-shadow: 0 0 0 2px var(--primary); border-radius: var(--r-m); }
+@media (prefers-reduced-motion: reduce) { .fmt-bar.float { transition: none; } }
+
+/* Imagen y texto: barra de la foto sobre la propia foto (como en cualquier otra imagen) */
+.mt-media { position: relative; }
+.mt-imgbar { position: absolute; top: 8px; left: 50%; transform: translate(-50%, -4px); z-index: 6; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px;
+  width: max-content; max-width: calc(100% - 16px); padding: 3px 4px; border-radius: 14px; background: var(--surface-c-high); box-shadow: var(--e3);
+  opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s cubic-bezier(.2, 0, 0, 1); }
+.mt-media:hover .mt-imgbar, .blk.pinned .mt-imgbar, .mt-imgbar:focus-within { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
+.mt-imgbar button { height: 30px; min-width: 30px; border: 0; border-radius: 9px; background: transparent; color: var(--on-surface); cursor: pointer; font: inherit; }
+.mt-imgbar button:hover { background: var(--surface-c-highest); }
+.mt-imgbar button.on { background: var(--primary-container); color: var(--on-primary-container); }
+.mt-imgbar .lv-sep { width: 1px; height: 18px; background: var(--outline-var); margin: 0 2px; }
+.mt-imgbar .ms { font-size: 18px; }
+:root[data-vinyl="on"] .mt-imgbar { background: #161616; box-shadow: 0 0 0 1px #4a4a4a, 0 10px 24px rgba(0,0,0,.8); }
+/* la barra de la foto va justo encima de la foto, en una sola fila (puede salir por encima del texto si la foto es estrecha) */
+.mt-phwrap { position: relative; }
+.mt-phwrap > .mt-imgbar { top: auto; bottom: calc(100% + 6px); left: 0; transform: translateY(4px); max-width: none; flex-wrap: nowrap; }
+.mt.right .mt-phwrap > .mt-imgbar { left: auto; right: 0; }
+.mt-media:hover .mt-phwrap > .mt-imgbar, .blk.pinned .mt-phwrap > .mt-imgbar, .mt-phwrap > .mt-imgbar:focus-within { transform: none; }
+.mt-media:hover .mt-phwrap::before { content: ''; position: absolute; left: 0; right: 0; bottom: 100%; height: 46px; }
+.mt-imgbar .lv { width: auto; min-width: 30px; padding: 0 8px; font-size: 12px; font-weight: 600; display: inline-flex; gap: 2px; align-items: center; white-space: nowrap; flex: none; }
+.mt-imgbar .lv .lbl { display: none; }
+.mt-imgbar .lv.sty-btn .lbl { display: inline; }

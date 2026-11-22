@@ -24,6 +24,7 @@ function applyPrefs() {
   if ($('#ai-providers').children.length) renderAi(); // logos claros/oscuros
   $('#s-check-new').checked = p.checkNew; $('#s-check-token').checked = p.checkToken;
   $('#s-share-fb').checked = CFG.shareFacebook === true;
+  $('#s-fmt-fixed').checked = !!p.fmtFixed;
   if (window.I18N.lang !== p.lang) { window.I18N.setLang(p.lang); refreshTexts(); }
 }
 matchMedia('(prefers-color-scheme: dark)').onchange = applyPrefs;
@@ -50,6 +51,7 @@ $('#s-share-fb').onchange = async () => {
   if (typeof renderShare === 'function') renderShare();
   if (!CFG.shareFacebook) $('#sent-share')?.classList.add('hidden');
 };
+$('#s-fmt-fixed').onchange = () => { savePrefs({ fmtFixed: $('#s-fmt-fixed').checked }); window.FormatBarPlace?.(); };
 $('#s-check-token').onchange = () => savePrefs({ checkToken: $('#s-check-token').checked });
 $$('.set-nav a').forEach((a) => a.onclick = (e) => { e.preventDefault(); $(a.getAttribute('href')).scrollIntoView({ behavior: 'smooth', block: 'start' }); });
 

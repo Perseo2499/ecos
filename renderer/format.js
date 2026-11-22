@@ -78,7 +78,7 @@
     wire(pop);
     setTimeout(() => document.addEventListener('mousedown', function off(e) { if (!pop.contains(e.target) && !anchor.contains(e.target)) { closePop(); document.removeEventListener('mousedown', off); } }), 0);
   }
-  const closePop = () => pop.classList.add('hidden');
+  const closePop = () => { pop.classList.add('hidden'); setTimeout(place, 0); };
   // los botones de la ventanita no quitan el foco al texto
   pop.addEventListener('mousedown', (e) => { if (e.target.closest('button, .sw')) e.preventDefault(); });
 
@@ -160,6 +160,7 @@
 
   // --- Barra
   bar.addEventListener('mousedown', (e) => { if (e.target.closest('button')) e.preventDefault(); });
+  setTimeout(() => place(), 0);
   $$('[data-cmd]', bar).forEach((b) => (b.onclick = () => { restore(); document.execCommand(b.dataset.cmd); fire(); state(); }));
   $$('[data-al]', bar).forEach((b) => (b.onclick = () => setBlock('align', b.dataset.al === 'left' ? null : b.dataset.al)));
   $('[data-x="color"]', bar).onclick = (e) => colorPop(e.currentTarget, 'color');
@@ -185,6 +186,75 @@
     else if (v === 'quote') E().convert(a.b, 'quote');
     else if (v === 'ul' || v === 'ol') { if (a.b.type === 'list') E().change(() => (a.b.ordered = v === 'ol')); else E().convert(a.b, 'list', { ordered: v === 'ol' }); }
   };
+
+  // --- Barra flotante (como la mini barra de Word): aparece sobre el texto seleccionado, medio transparente hasta que
+  // se acerca el ratón; se va al quitar la selección o al alejarse. Con «Barra de formato fija» (Ajustes) queda arriba.
+  const fixed = () => typeof prefs === 'function' && !!prefs().fmtFixed;
+  let near = false, ctxHold = 0;
+  const popOpen = () => !pop.classList.contains('hidden');
+  const selRect = () => {
+    const s = getSelection();
+    if (!s.rangeCount || s.isCollapsed) return null;
+    const n = s.anchorNode && (s.anchorNode.nodeType === 1 ? s.anchorNode : s.anchorNode.parentElement);
+    if (!n?.closest('#ed-canvas .rt')) return null;
+    const r = s.getRangeAt(0).getBoundingClientRect();
+    return r.width || r.height ? r : null;
+  };
+  function place() {
+    if (fixed()) { bar.classList.remove('float', 'hide', 'faint'); bar.style.left = bar.style.top = ''; return; }
+    bar.classList.add('float');
+    const r = selRect();
+    const busyBar = bar.contains(document.activeElement) || popOpen() || Date.now() < ctxHold;
+    if (!r) { if (!busyBar) bar.classList.add('hide'); return; }
+    bar.classList.remove('hide');
+    const w = bar.offsetWidth, h = bar.offsetHeight;
+    const top0 = $('#editor .ed-top, #editor header')?.getBoundingClientRect().bottom || 64;
+    let top = r.top - h - 10;
+    if (top < top0 + 6) top = r.bottom + 10; // sin sitio arriba: debajo de la selección
+    bar.style.left = Math.round(Math.min(innerWidth - w - 12, Math.max(12, r.left + r.width / 2 - w / 2))) + 'px';
+    bar.style.top = Math.round(Math.min(innerHeight - h - 8, top)) + 'px';
+    bar.classList.toggle('faint', !near && !busyBar);
+  }
+  document.addEventListener('selectionchange', () => requestAnimationFrame(place));
+  document.addEventListener('scroll', () => { if (!bar.classList.contains('hide')) place(); }, true);
+  addEventListener('resize', () => place());
+  // nítida al acercar el ratón (a menos de ~70 px), tenue al alejarlo y oculta si se aleja mucho
+  document.addEventListener('mousemove', (e) => {
+    if (fixed() || bar.classList.contains('hide')) return;
+    const b = bar.getBoundingClientRect();
+    const dx = Math.max(b.left - e.clientX, 0, e.clientX - b.right), dy = Math.max(b.top - e.clientY, 0, e.clientY - b.bottom);
+    const d = Math.hypot(dx, dy);
+    near = d < 70;
+    bar.classList.toggle('faint', !near && !bar.contains(document.activeElement) && !popOpen());
+    if (d > 260 && !bar.contains(document.activeElement) && !popOpen() && selRect() && !e.buttons) bar.classList.add('away');
+    else bar.classList.remove('away');
+  });
+  // clic derecho sobre texto seleccionado: la barra aparece (el menú normal de copiar/pegar sigue saliendo)
+  document.addEventListener('contextmenu', (e) => {
+    if (fixed() || !e.target.closest?.('#ed-canvas .rt') || !selRect()) return;
+    ctxHold = Date.now() + 400; near = true; bar.classList.remove('away'); place();
+  });
+  window.FormatBarPlace = place;
+  // Clic derecho en el texto: se marca para que el menú normal (copiar, pegar, ortografía) añada las opciones de formato
+  document.addEventListener('contextmenu', (e) => {
+    const rt = e.target.closest?.('#ed-canvas .rt');
+    if (!rt) return;
+    const a = E()?.active;
+    window.api.ctxMark?.(a && E().TEXT_TYPES.includes(a.b.type) ? 'text' : 'other');
+  }, true);
+  // Órdenes del menú: las mismas que los botones de la barra
+  window.api.onCtxCmd?.((c) => {
+    const a = E()?.active;
+    if (!a) return;
+    near = true; place(); bar.classList.remove('hide', 'away', 'faint');
+    const click = (sel) => $(sel, bar)?.click();
+    if (c === 'link') return link();
+    if (c === 'clear') return click('[data-x="clear"]');
+    if (c === 'color' || c === 'bg') return click(`[data-x="${c}"]`);
+    if (c === 'ai') return click('[data-x="ai"]');
+    if (c.startsWith('align:')) return click(`[data-al="${c.slice(6)}"]`);
+    if (c.startsWith('type:')) { const s = $('#fmt-type'); s.value = c.slice(5); s.dispatchEvent(new Event('change')); }
+  });
 
   // Estado de la barra según el bloque y la selección
   function state() {

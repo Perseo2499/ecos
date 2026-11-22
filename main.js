@@ -119,10 +119,16 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => { openSafe(url); return { action: 'deny' }; });
   // la ventana de la app nunca navega a otra página (un enlace malicioso no puede sustituir la interfaz)
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('file:')) { e.preventDefault(); openSafe(url); } });
-  // Menú del botón derecho: cortar, copiar, pegar (también imágenes en el editor) y correcciones de ortografía
+  // Menú del botón derecho: cortar, copiar, pegar (también imágenes en el editor) y correcciones de ortografía.
+  // En el texto del editor de entradas, además, las opciones de formato (como el menú de Word bajo su mini barra).
+  let ctxMark = { kind: '', at: 0 };
+  ipcMain.on('ctx:mark', (e, kind) => { ctxMark = { kind: String(kind || ''), at: Date.now() }; e.returnValue = true; });
   win.webContents.on('context-menu', (_e, params) => {
     const { Menu } = require('electron');
     const items = [];
+    const inEditor = params.isEditable && Date.now() - ctxMark.at < 1500 ? ctxMark.kind : '';
+    ctxMark = { kind: '', at: 0 };
+    const cmd = (c) => () => { if (!win.isDestroyed()) win.webContents.send('ctx:cmd', c); };
     for (const w of (params.dictionarySuggestions || []).slice(0, 5)) items.push({ label: w, click: () => win.webContents.replaceMisspelling(w) });
     if (params.misspelledWord) items.push({ label: 'Añadir al diccionario', click: () => win.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord) }, { type: 'separator' });
     const ed = params.isEditable, f = params.editFlags || {};
@@ -131,6 +137,15 @@ function createWindow() {
     if (ed) items.push({ label: 'Pegar', role: 'paste', enabled: f.canPaste }, { label: 'Pegar sin formato', role: 'pasteAndMatchStyle', enabled: f.canPaste });
     if (ed || params.selectionText) items.push({ type: 'separator' }, { label: 'Seleccionar todo', role: 'selectAll' });
     if (params.mediaType === 'image' && params.srcURL && /^https?:/.test(params.srcURL)) items.push({ type: 'separator' }, { label: 'Copiar imagen', click: () => win.webContents.copyImageAt(params.x, params.y) });
+    if (inEditor) {
+      const block = inEditor === 'text'; // párrafo, título, lista o cita (los demás textos no se convierten)
+      items.push({ type: 'separator' },
+        { label: 'Enlace…', accelerator: 'CmdOrCtrl+K', click: cmd('link') },
+        { label: 'Quitar formato', click: cmd('clear') },
+        { label: 'Alinear', submenu: [['Izquierda', 'left'], ['Centrado', 'center'], ['Derecha', 'right'], ['Justificado', 'justify']].map(([l, v]) => ({ label: l, click: cmd('align:' + v) })) });
+      if (block) items.push({ label: 'Convertir en', submenu: [['Párrafo', 'paragraph'], ['Título', 'h2'], ['Subtítulo', 'h3'], ['Lista', 'ul'], ['Lista numerada', 'ol'], ['Cita', 'quote']].map(([l, v]) => ({ label: l, click: cmd('type:' + v) })) });
+      items.push({ label: 'Color del texto…', click: cmd('color') }, { label: 'Resaltado…', click: cmd('bg') }, { type: 'separator' }, { label: 'Ayuda de la IA…', click: cmd('ai') });
+    }
     while (items.length && items[items.length - 1].type === 'separator') items.pop();
     if (items.length) Menu.buildFromTemplate(items).popup({ window: win });
   });
