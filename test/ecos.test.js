@@ -615,3 +615,44 @@ test('publicaciones nuevas en redes: solo las posteriores a la última vista y n
   assert.equal(N.findNew([], '2026-11-15T00:00:00Z').fresh.length, 0);
   assert.equal(N.newestDate([]), null);
 });
+
+test('SEO: cortes, contadores y avisos del editor', () => {
+  const S = require('../renderer/app/seo');
+  assert.equal(S.cut('Hola mundo', 60), 'Hola mundo');
+  const long = 'Una asociación que acoge a personas migrantes en la frontera sur de España desde hace años';
+  const c = S.cut(long, 60);
+  assert.ok(c.length <= 60 && c.endsWith('…') && !c.includes('  '));
+  assert.equal(S.titleLevel('x'.repeat(45)), 'ok');
+  assert.equal(S.titleLevel('x'.repeat(10)), 'warn');
+  assert.equal(S.titleLevel('x'.repeat(65)), 'warn');
+  assert.equal(S.titleLevel('x'.repeat(90)), 'bad');
+  assert.equal(S.descLevel(''), 'bad');
+  assert.equal(S.descLevel('x'.repeat(120)), 'ok');
+  assert.equal(S.descLevel('x'.repeat(160)), 'warn');
+  const codes = (o) => S.warnings(o).map((w) => w.code);
+  assert.deepEqual(codes({ title: 'x'.repeat(70), desc: '', keyword: 'Rabat', hasImage: false, slug: 'a'.repeat(70) }), ['titleLong', 'noDesc', 'kwTitle', 'noImage', 'slugLong']);
+  assert.deepEqual(codes({ title: 'Primer día en Rabat', desc: 'Algo', keyword: 'dia en Rabat', hasImage: true, slug: 'rabat' }), []);
+});
+
+test('Facebook: mensaje con enlace aparte, texto de partida y texto para Instagram', () => {
+  const S = require('../renderer/app/seo');
+  const link = 'https://www.asociacionelin.com/entrada/';
+  assert.deepEqual(S.fbMessage('Mirad esto\n\n\n\n' + link + '\n', link), { message: 'Mirad esto', link });
+  assert.equal(S.prefill('<p>Extracto</p>', 'otro'), 'Extracto');
+  assert.equal(S.prefill('', 'Primero\n\nSegundo\n\n' + 'z'.repeat(500)), 'Primero\n\nSegundo');
+  assert.equal(S.igText('Hola ' + link + ' amigos', 'Enlace en la bio'), 'Hola amigos\n\nEnlace en la bio');
+});
+
+test('SEO de la web: detecta Yoast/Rank Math solo si se puede escribir; la web real no tiene plugin', () => {
+  const { detectSeo } = require('../src/wpself');
+  assert.deepEqual(detectSeo({ meta: { _yoast_wpseo_metadesc: '' } }), { plugin: 'yoast', key: '_yoast_wpseo_metadesc', writable: true });
+  assert.equal(detectSeo({ meta: { rank_math_description: '' } }).key, 'rank_math_description');
+  assert.deepEqual(detectSeo({ hasYoastHead: true, meta: {} }), { plugin: 'yoast', key: null, writable: false });
+  assert.deepEqual(detectSeo({ namespaces: ['wp/v2', 'astra/v1'], meta: { 'site-sidebar-layout': 'default' } }), { plugin: null, key: null, writable: false });
+});
+
+test('Meta: errores de publicación explican el permiso pages_manage_posts', () => {
+  const { explainShareError } = require('../src/meta');
+  assert.match(explainShareError({ code: 200, message: '(#200) Requires pages_manage_posts permission' }), /pages_manage_posts.*Conectar con Meta/);
+  assert.match(explainShareError({ code: 190, message: 'Invalid OAuth access token' }), /caducado/);
+});

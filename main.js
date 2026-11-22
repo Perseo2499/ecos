@@ -220,6 +220,22 @@ handle('meta:accounts', async () => {
   accounts = await meta.listAccounts(cfg);
   return accounts.map(({ pageToken, ...a }) => a);
 });
+// Compartir una entrada publicada en una página de Facebook (necesita el permiso pages_manage_posts)
+handle('meta:share', async ({ pageId, message, link, postId }) => {
+  if (!accounts.length) accounts = await meta.listAccounts(cfg);
+  const acc = accounts.find((a) => a.pageId === pageId);
+  if (!acc) throw new Error('Página no encontrada; vuelve a conectar con Meta');
+  const r = await meta.sharePost(cfg, acc, { message, link });
+  log('Entrada compartida en Facebook', pageId, r.id);
+  if (postId) {
+    cfg.exported = cfg.exported || {};
+    const recs = Object.values(cfg.exported).filter((e) => e.postId === postId);
+    if (!recs.length) { cfg.exported['wp:' + postId] = { postId, url: link, title: '', status: 'publish', at: new Date().toISOString() }; recs.push(cfg.exported['wp:' + postId]); }
+    for (const e of recs) e.sharedFb = { id: r.id, url: r.url, pageId, pageName: acc.pageName, at: new Date().toISOString() };
+    store.save(cfg);
+  }
+  return { ...r, exported: cfg.exported || {} };
+});
 // cursors: undefined = primera página; { facebook, instagram } = «Cargar más» (null = esa red no tiene más)
 handle('meta:posts', async (pageId, sources, cursors) => {
   const acc = accounts.find((a) => a.pageId === pageId);
@@ -337,6 +353,7 @@ function postFields(d, status) {
     title: d.title, content: d.blocks ? composeBlocks(d.blocks, { spectra: isSelf() }) : composeContent(d.sections), status: scheduled ? 'future' : status,
     tags: (d.tags || []).join(','), categories: (d.categories || []).join(','),
     excerpt: d.excerpt || '',
+    ...(d.seoKey && isSelf() ? { seoKey: d.seoKey, seoDesc: d.seoDesc || '' } : {}),
     ...(d.slug ? { slug: d.slug } : {}),
     ...(d.featuredImageId ? { featured_image: d.featuredImageId } : {}),
     ...(scheduled ? { date: new Date(d.scheduleAt).toISOString() } : d.keepDate ? { date: d.date } : {}),
@@ -516,6 +533,8 @@ handle('ai:article', async (input) => {
   return { ...art, sources: opts.web ? all.slice(0, 12) : [] };
 });
 handle('ai:alts', (urls, context) => ai.altTexts(cfg.ai, urls, context));
+handle('ai:seo', (input) => ai.seoSuggest(cfg.ai, { ...input, extra: cfg.aiInstructions || '' }));
+handle('wp:seoInfo', async () => (isSelf() ? WP().seoInfo(cfg) : { plugin: null, key: null, writable: false }));
 handle('ai:rewrite', (input) => ai.rewrite(cfg.ai, { ...input, extra: cfg.aiInstructions || '' }));
 
 // Selector de IA: cada proveedor guarda su clave, URL personalizada y modelo

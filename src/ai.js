@@ -379,6 +379,24 @@ async function altTexts(aiCfg, imageUrls, context = '') {
   return imageUrls.map((_, i) => r.alts.find((a) => a.index === i)?.alt || '');
 }
 
+// --- Título y descripción para buscadores ---------------------------------------------
+const SeoSuggest = z.object({
+  title: z.string().describe('Título para Google, máximo 60 caracteres, natural y sin comillas'),
+  description: z.string().describe('Descripción para Google, entre 120 y 155 caracteres, que invite a leer, sin inventar datos'),
+});
+async function seoSuggest(aiCfg, { title = '', text = '', keyword = '', extra = '' }) {
+  const prompt = `Eres editor web de una asociación. Propón el título SEO y la descripción (meta description) de esta entrada, en el mismo idioma que el texto.
+Reglas: título de 60 caracteres como máximo; descripción de 155 como máximo; no inventes hechos, cifras ni nombres; sin emojis${keyword ? `; incluye la palabra clave «${keyword}» de forma natural` : ''}.${extra ? `\nIndicaciones de la asociación: ${extra}` : ''}
+Título actual: ${title}
+
+Texto:
+<<<
+${String(text).slice(0, 6000)}
+>>>`;
+  const r = await askStructured(aiCfg, [{ type: 'text', text: prompt }], SeoSuggest);
+  return { title: r.title.trim(), description: r.description.trim() };
+}
+
 // --- Categorías para entradas (revisión del blog) -----------------------------------
 const CatSuggest = z.object({
   suggestions: z.array(z.object({
@@ -463,4 +481,4 @@ ${html}
 
 const isCli = (aiCfg) => !!PROVIDERS[aiCfg?.active]?.cli;
 
-module.exports = { suggestCategories, refineTopics, isCli, research, rewrite, setCliLog, PROVIDERS, askStructured, listModels, testConnection, improveArticle, altTexts };
+module.exports = { suggestCategories, refineTopics, isCli, research, rewrite, setCliLog, PROVIDERS, askStructured, listModels, testConnection, improveArticle, altTexts, seoSuggest };

@@ -2,7 +2,7 @@
 const { loginInBrowser, redirectUri } = require('./oauth');
 
 const REDIRECT = redirectUri('meta');
-const SCOPES = ['pages_show_list', 'pages_read_engagement', 'instagram_basic', 'business_management'];
+const SCOPES = ['pages_show_list', 'pages_read_engagement', 'instagram_basic', 'business_management', 'pages_manage_posts'];
 
 const gv = (cfg) => cfg.graphVersion || 'v23.0';
 const graph = (cfg) => `https://graph.facebook.com/${gv(cfg)}`;
@@ -88,4 +88,35 @@ async function instagramPosts(cfg, account, after = null, limit = 25) {
   return { posts, next };
 }
 
-module.exports = { REDIRECT, login, listAccounts, facebookPosts, instagramPosts };
+// Traduce los errores de la Graph API al publicar en una página a algo que se entienda
+function explainShareError(e = {}) {
+  const msg = String(e.message || '');
+  if (e.code === 200 || e.code === 10 || /pages_manage_posts|permission/i.test(msg)) {
+    return 'Meta no permite publicar en la página: falta el permiso «pages_manage_posts». Ve a Conexiones, pulsa «Conectar con Meta» otra vez y acepta todos los permisos que pide (si tu app usa una configuración de Empresa, añade ese permiso en la configuración).';
+  }
+  if (e.code === 190 || /access token|session/i.test(msg)) return 'La conexión con Meta ha caducado. Ve a Conexiones y vuelve a conectar con Meta.';
+  return 'Meta: ' + msg;
+}
+// Publica un enlace con texto en el muro de una página de Facebook. Devuelve { id, url }.
+async function sharePost(cfg, account, { message, link }) {
+  if (!account?.pageToken) throw new Error('Falta la página de Facebook; vuelve a conectar con Meta');
+  if (!message && !link) throw new Error('No hay nada que publicar');
+  // Comprobación previa del permiso (si Meta la responde); así el aviso es claro antes de intentar publicar
+  try {
+    const perms = await get(`${graph(cfg)}/me/permissions?` + new URLSearchParams({ access_token: cfg.metaUserToken }));
+    const p = (perms.data || []).find((x) => x.permission === 'pages_manage_posts');
+    if (perms.data?.length && (!p || p.status !== 'granted')) throw Object.assign(new Error('permission'), { code: 200 });
+  } catch (e) { if (e.code === 200) throw new Error(explainShareError(e)); /* si no se puede consultar, se intenta igualmente */ }
+  const res = await fetch(`${graph(cfg)}/${account.pageId}/feed`, {
+    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ message: message || '', ...(link ? { link } : {}), access_token: account.pageToken }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (json.error) throw new Error(explainShareError(json.error));
+  const id = json.id;
+  let url = `https://www.facebook.com/${id}`;
+  try { const pl = await get(`${graph(cfg)}/${id}?` + new URLSearchParams({ fields: 'permalink_url', access_token: account.pageToken })); if (pl.permalink_url) url = pl.permalink_url; } catch { /* nos quedamos con la dirección corta */ }
+  return { id, url };
+}
+
+module.exports = { explainShareError, sharePost, REDIRECT, login, listAccounts, facebookPosts, instagramPosts };

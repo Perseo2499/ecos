@@ -259,11 +259,30 @@ async function toRest(cfg, f) {
   return {
     title: f.title, content: f.content, status: f.status, excerpt: f.excerpt || '',
     ...(f.slug ? { slug: f.slug } : {}),
+    ...(Object.values(SEO_KEYS).includes(f.seoKey) && f.seoDesc !== undefined ? { meta: { [f.seoKey]: f.seoDesc } } : {}),
     ...(f.featured_image ? { featured_media: f.featured_image } : {}),
     ...(isPage && f.parent !== undefined ? { parent: Number(f.parent) || 0 } : {}),
     ...(f.date ? { date_gmt: new Date(f.date).toISOString().slice(0, 19) } : {}),
     ...(isPage ? {} : { categories: await categoryIds(cfg, split(f.categories), !!f.createCategories), tags: await tagIds(cfg, split(f.tags)) }),
   };
+}
+// Descripción para buscadores: Yoast SEO y Rank Math la guardan en un campo «meta» de la entrada, y solo
+// se puede escribir desde aquí si el plugin lo publica en el REST. Si no, se usa el extracto.
+const SEO_KEYS = { yoast: '_yoast_wpseo_metadesc', rankmath: 'rank_math_description' };
+function detectSeo({ namespaces = [], meta = {}, hasYoastHead = false } = {}) {
+  for (const [plugin, key] of Object.entries(SEO_KEYS)) if (meta && key in meta) return { plugin, key, writable: true };
+  if (hasYoastHead || namespaces.includes('yoast/v1')) return { plugin: 'yoast', key: null, writable: false };
+  if (namespaces.includes('rankmath/v1')) return { plugin: 'rankmath', key: null, writable: false };
+  return { plugin: null, key: null, writable: false };
+}
+let seoCache = null;
+async function seoInfo(cfg) {
+  if (seoCache && seoCache.site === cfg.wpUrl && Date.now() - seoCache.at < 600000) return seoCache.info;
+  const root = await req(cfg, '/').catch(() => ({}));
+  const [sample] = await req(cfg, '/wp/v2/posts?per_page=1&context=edit&_fields=id,meta,yoast_head_json').catch(() => []);
+  const info = detectSeo({ namespaces: root.namespaces || [], meta: sample?.meta || {}, hasYoastHead: !!sample?.yoast_head_json });
+  seoCache = { site: cfg.wpUrl, at: Date.now(), info };
+  return info;
 }
 const fromRest = (p) => ({ ID: p.id, URL: p.link, status: p.status, date: p.date_gmt ? p.date_gmt + 'Z' : p.date });
 // Guarda la entrada y comprueba que WordPress se ha quedado con la fecha pedida. En los borradores,
@@ -400,6 +419,7 @@ async function getPost(cfg, id, type) {
     featuredImg: fm?.source_url ? { id: fm.id, url: fm.source_url, alt: fm.alt_text || '' } : null,
     id: p.id, status: p.status, url: p.link, date: p.date_gmt ? p.date_gmt + 'Z' : p.date, modified: p.modified_gmt ? p.modified_gmt + 'Z' : p.modified,
     title: p.title?.raw ?? '', excerpt: p.excerpt?.raw ?? '', content: p.content?.raw ?? '', featured: p.featured_media || null, slug: p.slug || '',
+    seoDesc: p.meta?.[SEO_KEYS.yoast] || p.meta?.[SEO_KEYS.rankmath] || '',
     type: type === 'page' ? 'page' : 'post', parent: Number(p.parent) || 0,
   };
 }
@@ -584,4 +604,4 @@ async function saveStructure(cfg, ch, progress = () => {}) {
   return { errors };
 }
 
-module.exports = { allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText };
+module.exports = { detectSeo, seoInfo, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText };

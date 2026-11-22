@@ -199,6 +199,8 @@
             <div class="field"><label data-i18n>Plantilla</label><div class="tpl-sel"><select id="d-template"><option value="" data-i18n>Sin plantilla</option></select><button id="d-tpl-save" class="btn tonal icon-only" data-i18n-title title="Guardar los bloques como plantilla"><span class="ms">bookmark_add</span></button></div></div>
             <div class="field"><label data-i18n>Extracto</label><textarea id="d-excerpt" rows="3" data-i18n-ph placeholder="Resumen corto (opcional)"></textarea></div>
             <div class="field slug-field"><label data-i18n>Dirección de la entrada</label><div class="slug-row"><span class="slug-base" id="d-slug-base"></span><input id="d-slug" spellcheck="false"></div></div>
+            <div class="field hidden" id="seo-desc-field"><label data-i18n>Descripción para buscadores</label><textarea id="d-seodesc" rows="3" data-i18n-ph placeholder="Lo que se ve bajo el título en Google"></textarea></div>
+            <div class="field"><label data-i18n>Palabra clave</label><input id="d-kw" data-i18n-ph placeholder="Opcional: la búsqueda que quieres cubrir" autocomplete="off"></div>
             <div class="share-card" id="d-share" title=""></div>
             <details class="ai-opts" id="ai-opts">
               <summary><span class="ms">tune</span><span data-i18n>Cómo convertir en artículo</span><span class="ai-opts-sum" id="ai-opts-sum"></span></summary>
@@ -238,6 +240,7 @@
                 <button id="sent-edit" class="btn filled"><span class="ms">edit</span><span data-i18n>Editar en WordPress</span></button>
                 <button id="sent-view" class="btn outlined"><span class="ms">open_in_new</span><span data-i18n>Ver</span></button>
               </div>
+              <button id="sent-share" class="btn tonal hidden"><span class="ms">share</span><span data-i18n>Compartir en Facebook</span></button>
               <button id="sent-close" class="btn text" data-i18n>Cerrar el editor</button>
             </div>
           </div>
@@ -839,6 +842,7 @@
 <script src="app/connections.js"></script>
 <script src="app/calview.js"></script>
 <script src="app/posts.js"></script>
+<script src="app/seo.js"></script>
 <script src="app/editor.js"></script>
 <script src="app/tplpicker.js"></script>
 <script src="app/sections-ui.js"></script>
