@@ -46,6 +46,25 @@
     free.sort((a, b) => ms(b.date) - ms(a.date));
     return { total: free.length, items: free.slice(0, n) };
   }
-  const api = { LIMITS, countPending, isStale, weekStart, weekDays, groupByWeekday, problemItems, unusedPhotos, ymd, addDays };
+  // ---- Agenda (día / semana / mes / año)
+  function agRange(view, anchor) {
+    const a = new Date(anchor); a.setHours(0, 0, 0, 0);
+    if (view === 'day') return { from: a, to: addDays(a, 1) };
+    if (view === 'week') { const s = weekStart(a); return { from: s, to: addDays(s, 7) }; }
+    if (view === 'month') return { from: new Date(a.getFullYear(), a.getMonth(), 1), to: new Date(a.getFullYear(), a.getMonth() + 1, 1) };
+    return { from: new Date(a.getFullYear(), 0, 1), to: new Date(a.getFullYear() + 1, 0, 1) };
+  }
+  function agStep(view, anchor, dir) {
+    const a = new Date(anchor);
+    if (view === 'day') return addDays(a, dir);
+    if (view === 'week') return addDays(a, 7 * dir);
+    if (view === 'month') return new Date(a.getFullYear(), a.getMonth() + dir, 1);
+    return new Date(a.getFullYear() + dir, a.getMonth(), 1);
+  }
+  const agIsNow = (view, anchor, now = new Date()) => agRange(view, anchor).from.getTime() === agRange(view, now).from.getTime();
+  // publicadas (y privadas) / programadas / borradores (y pendientes de revisión)
+  const agGroup = (status) => (status === 'future' ? 'future' : status === 'draft' || status === 'pending' ? 'draft' : 'publish');
+  function agCount(items) { const c = { publish: 0, future: 0, draft: 0 }; for (const it of items || []) c[agGroup(it.status)]++; return c; }
+  const api = { agRange, agStep, agIsNow, agGroup, agCount, LIMITS, countPending, isStale, weekStart, weekDays, groupByWeekday, problemItems, unusedPhotos, ymd, addDays };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.HomeLogic = api;
 })(typeof window !== 'undefined' ? window : globalThis);

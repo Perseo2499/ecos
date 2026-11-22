@@ -719,3 +719,19 @@ test('recuento rápido de Meta: listado ligero de 100 en 100 y total de Instagra
     assert.equal(await meta.instagramCount({}, { pageId: 'pg' }), null);
   } finally { global.fetch = orig; }
 });
+
+test('agenda de Inicio: rangos de día, semana, mes y año, pasos y recuento por estado', () => {
+  const HL = require('../renderer/homelogic');
+  const d = new Date(2026, 10, 22, 15); // domingo 22 nov 2026
+  const r = (v) => { const x = HL.agRange(v, d); return [x.from.toDateString(), x.to.toDateString()]; };
+  assert.deepEqual(r('day'), [new Date(2026, 10, 22).toDateString(), new Date(2026, 10, 23).toDateString()]);
+  assert.deepEqual(r('week'), [new Date(2026, 10, 16).toDateString(), new Date(2026, 10, 23).toDateString()]);
+  assert.deepEqual(r('month'), [new Date(2026, 10, 1).toDateString(), new Date(2026, 11, 1).toDateString()]);
+  assert.deepEqual(r('year'), [new Date(2026, 0, 1).toDateString(), new Date(2027, 0, 1).toDateString()]);
+  assert.equal(HL.agStep('month', d, 1).getMonth(), 11);
+  assert.equal(HL.agStep('year', d, -1).getFullYear(), 2025);
+  assert.equal(HL.agStep('week', d, 1).getDate(), 29);
+  assert.ok(HL.agIsNow('week', new Date(2026, 10, 17), d));
+  assert.ok(!HL.agIsNow('day', new Date(2026, 10, 21), d));
+  assert.deepEqual(HL.agCount([{ status: 'publish' }, { status: 'private' }, { status: 'future' }, { status: 'draft' }, { status: 'pending' }]), { publish: 2, future: 1, draft: 2 });
+});

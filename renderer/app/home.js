@@ -69,7 +69,7 @@ function postThumb(p) {
 const Home = (() => {
   const HL = window.HomeLogic;
   const hs = { drafts: null, health: null, probThumbs: {}, free: null, freeErr: null, loading: false, at: 0, err: null,
-    pend: null, counting: false, tok: 0, wkStart: HL.weekStart(new Date()), wkSpan: (() => { try { return Number(localStorage.getItem('ecos.home.span')) === 14 ? 14 : 7; } catch { return 7; } })(), wk: new Map(), wkErr: null };
+    pend: null, counting: false, tok: 0, };
   const ymd = HL.ymd;
   const lang = () => (prefs().lang === 'en' ? 'en-GB' : 'es-ES');
   const title = (x) => escHtml(decodeEntities(x.title || '') || t('(sin título)'));
@@ -217,43 +217,90 @@ const Home = (() => {
     return card('home-free', 'hide_image', t('Fotos sin entrada'), body, '', ['HOME · 03B PHOTOS', '写真']);
   }
 
-  // ---- semana completa
-  const wkKey = () => `${ymd(hs.wkStart)}/${hs.wkSpan}`;
+  // ---- agenda: día / semana / mes / año, filtros por estado y días plegables con resumen
+  const AGK = 'ecos.home.agenda';
+  const ag = (() => {
+    let st = {}; try { st = JSON.parse(localStorage.getItem(AGK)) || {}; } catch { /* sin almacenamiento */ }
+    return { view: ['day', 'week', 'month', 'year'].includes(st.view) ? st.view : 'week', anchor: new Date(),
+      show: { publish: true, future: true, draft: false, ...(st.show || {}) }, all: !!st.all, open: new Set(), cache: new Map(), err: null };
+  })();
+  const agSave = () => { try { localStorage.setItem(AGK, JSON.stringify({ view: ag.view, show: ag.show, all: ag.all })); } catch { /* sin almacenamiento */ } };
+  const agKey = () => { const r = HL.agRange(ag.view, ag.anchor); return `${ymd(r.from)}|${ymd(r.to)}`; };
+  const agItems = () => ag.cache.get(agKey()) || null;
+  const AG_ST = () => ({ publish: { icon: 'check_circle', label: t('Publicadas') }, future: { icon: 'schedule', label: t('Programadas') }, draft: { icon: 'edit_note', label: t('Borradores') } });
+  const AG_ORDER = ['publish', 'future', 'draft'];
+  function agPills(list) {
+    const c = HL.agCount(list), ST = AG_ST();
+    return AG_ORDER.filter((k) => c[k] && ag.show[k]).map((k) => `<span class="ag-pill ${k}" title="${escHtml(`${c[k]} · ${ST[k].label}`)}"><span class="ms">${ST[k].icon}</span>${c[k]}</span>`).join('');
+  }
+  function agCard(x) {
+    const st = EX_STATUS();
+    return `<button class="wk-card ${x.status}" data-h="open" data-id="${x.id}"${self() ? ' draggable="true"' : ''} title="${escHtml(decodeEntities(x.title || ''))}">
+      <span class="wk-th">${x.image ? `<img src="${escHtml(x.image)}" alt="" loading="lazy" draggable="false">` : '<span class="ms">article</span>'}</span>
+      <span class="wk-ct"><b>${title(x)}</b><span class="wk-s ${x.status}"><span class="ms">${(st[x.status] || {}).icon || 'article'}</span>${escHtml((st[x.status] || {}).label || x.status)} · ${escHtml(new Date(x.date).toLocaleTimeString(lang(), { hour: '2-digit', minute: '2-digit' }))}</span></span></button>`;
+  }
+  const dayName = (d, o) => cap(d.toLocaleDateString(lang(), o));
+  function agDay(d, list) {
+    const k = ymd(d);
+    return `<div class="wk-col ag-dayview${k === ymd(new Date()) ? ' today' : ''}" data-day="${k}"><div class="wk-head"><span class="ag-pills">${agPills(list)}</span>
+      <button class="btn tonal small" data-h="wk-add" data-day="${k}"><span class="ms">add</span>${t('Nueva entrada para este día')}</button></div>
+      ${list.length ? `<div class="ag-daylist">${list.map(agCard).join('')}</div>` : `<span class="wk-none">${t('Nada este día con los filtros elegidos.')}</span>`}</div>`;
+  }
+  function agWeek(start, vis) {
+    const days = HL.weekDays(start, 7), by = HL.groupByWeekday(vis, start, 7), todayK = ymd(new Date());
+    return `<div class="wk-cal">${days.map((d, i) => {
+      const k = ymd(d), list = by[i], open = ag.all || ag.open.has(k);
+      return `<div class="wk-col${k === todayK ? ' today' : ''}${open ? ' open' : ''}" data-day="${k}"><div class="wk-head"><span class="wk-wd">${escHtml(dayName(d, { weekday: 'short' }))}</span><span class="wk-n">${d.getDate()}</span>
+        <button class="wk-add" data-h="wk-add" data-day="${k}" title="${escHtml(t('Nueva entrada para este día'))}"><span class="ms">add</span></button></div>
+        ${list.length ? `<button class="ag-sum" data-h="ag-open" data-day="${k}" aria-expanded="${open}" title="${escHtml(open ? t('Plegar') : t('Ver las entradas de este día'))}"><span class="ag-pills">${agPills(list)}</span><span class="ms">${open ? 'expand_less' : 'expand_more'}</span></button>
+        ${open ? `<div class="wk-list">${list.map(agCard).join('')}</div>` : ''}` : '<span class="wk-none">—</span>'}</div>`;
+    }).join('')}</div>`;
+  }
+  function agMonth(r, vis) {
+    const y = r.from.getFullYear(), m = r.from.getMonth(), lead = (r.from.getDay() + 6) % 7, last = new Date(y, m + 1, 0).getDate(), todayK = ymd(new Date());
+    const by = new Map();
+    for (const x of vis) { const k = ymd(new Date(x.date)); if (!by.has(k)) by.set(k, []); by.get(k).push(x); }
+    let cells = [...Array(7)].map((_, i) => `<div class="ag-wd">${escHtml(new Date(2024, 0, 1 + i).toLocaleDateString(lang(), { weekday: 'short' }))}</div>`).join('') + '<i class="ag-out"></i>'.repeat(lead);
+    for (let d = 1; d <= last; d++) {
+      const day = new Date(y, m, d), k = ymd(day), list = by.get(k) || [];
+      cells += `<button class="ag-cell${k === todayK ? ' today' : ''}${list.length ? ' has' : ''}" data-h="ag-goday" data-day="${k}" title="${escHtml(dayName(day, { weekday: 'long', day: 'numeric', month: 'long' }))}"><span class="ag-n">${d}</span><span class="ag-pills">${agPills(list)}</span></button>`;
+    }
+    return `<div class="ag-month">${cells}</div>`;
+  }
+  function agYear(r, vis) {
+    const y = r.from.getFullYear(), now = new Date();
+    return `<div class="ag-year">${[...Array(12)].map((_, m) => {
+      const list = vis.filter((x) => new Date(x.date).getMonth() === m);
+      return `<button class="ag-mon${now.getFullYear() === y && now.getMonth() === m ? ' today' : ''}" data-h="ag-gomonth" data-m="${m}"><b>${escHtml(dayName(new Date(y, m, 1), { month: 'long' }))}</b><span class="ag-pills">${agPills(list) || '<span class="wk-none">—</span>'}</span></button>`;
+    }).join('')}</div>`;
+  }
   function weekCard() {
-    let body, acts = '', head;
+    let body, head = t('Agenda');
     if (!wpOk()) body = needWp();
     else {
-      const n = hs.wkSpan, start = hs.wkStart, days = HL.weekDays(start, n), items = hs.wk.get(wkKey());
-      const todayK = ymd(new Date()), isNow = ymd(HL.weekStart(new Date())) === ymd(start);
+      const v = ag.view, r = HL.agRange(v, ag.anchor), items = agItems(), now = HL.agIsNow(v, ag.anchor);
       const fmt = (d, o) => d.toLocaleDateString(lang(), o);
-      const range = `${fmt(days[0], { day: 'numeric', month: 'short' })} – ${fmt(days[n - 1], { day: 'numeric', month: 'short', year: 'numeric' })}`;
-      const prevT = n === 7 ? t('Semana anterior') : t('Dos semanas antes'), nextT = n === 7 ? t('Semana siguiente') : t('Dos semanas después');
-      // Barra de navegación estándar de calendario: rango visible | ‹ Hoy › | ir a fecha | 1 / 2 semanas
-      body = `<div class="wk-bar" role="toolbar" aria-label="${escHtml(t('Navegar por las semanas'))}">
-        <div class="wk-step"><button class="btn text small icon-only" data-h="wk-prev" title="${escHtml(prevT)} (←)" aria-label="${escHtml(prevT)}"><span class="ms">chevron_left</span></button>
-          <button class="btn tonal small" data-h="wk-today"${isNow ? ' disabled' : ''} title="${escHtml(t('Volver a esta semana'))} (T)">${t('Hoy')}</button>
-          <button class="btn text small icon-only" data-h="wk-next" title="${escHtml(nextT)} (→)" aria-label="${escHtml(nextT)}"><span class="ms">chevron_right</span></button></div>
-        <label class="wk-range" title="${escHtml(t('Ir a una fecha'))}"><span class="ms">calendar_month</span><span>${escHtml(range)}</span>
-          <input type="date" class="wk-date" value="${ymd(start)}" aria-label="${escHtml(t('Ir a una fecha'))}"></label>
+      const label = v === 'day' ? dayName(r.from, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+        : v === 'week' ? `${fmt(r.from, { day: 'numeric', month: 'short' })} – ${fmt(HL.addDays(r.to, -1), { day: 'numeric', month: 'short', year: 'numeric' })}`
+          : v === 'month' ? dayName(r.from, { month: 'long', year: 'numeric' }) : String(r.from.getFullYear());
+      if (now) head = { day: t('Hoy'), week: t('Esta semana'), month: t('Este mes'), year: t('Este año') }[v];
+      const vis = (items || []).filter((x) => ag.show[HL.agGroup(x.status)]), tot = HL.agCount(items || []), ST = AG_ST();
+      const views = [['day', t('Día')], ['week', t('Semana')], ['month', t('Mes')], ['year', t('Año')]];
+      // Barra estándar de calendario: ‹ Hoy › | rango visible (abre el selector de fecha) | Día · Semana · Mes · Año
+      body = `<div class="wk-bar" role="toolbar" aria-label="${escHtml(t('Navegar por la agenda'))}">
+        <div class="wk-step"><button class="btn text small icon-only" data-h="ag-step" data-d="-1" title="${escHtml(t('Anterior'))} (←)" aria-label="${escHtml(t('Anterior'))}"><span class="ms">chevron_left</span></button>
+          <button class="btn tonal small" data-h="ag-today"${now ? ' disabled' : ''} title="${escHtml(t('Volver a hoy'))} (T)">${t('Hoy')}</button>
+          <button class="btn text small icon-only" data-h="ag-step" data-d="1" title="${escHtml(t('Siguiente'))} (→)" aria-label="${escHtml(t('Siguiente'))}"><span class="ms">chevron_right</span></button></div>
+        <label class="wk-range" title="${escHtml(t('Ir a una fecha'))}"><span class="ms">calendar_month</span><span>${escHtml(label)}</span>
+          <input type="date" class="wk-date" value="${ymd(ag.anchor)}" aria-label="${escHtml(t('Ir a una fecha'))}"></label>
         <span class="spacer"></span>
-        <div class="seg wk-span" role="radiogroup" aria-label="${escHtml(t('Días visibles'))}">
-          <button class="${n === 7 ? 'active' : ''}" data-h="wk-span" data-n="7" role="radio" aria-checked="${n === 7}">${t('1 semana')}</button>
-          <button class="${n === 14 ? 'active' : ''}" data-h="wk-span" data-n="14" role="radio" aria-checked="${n === 14}">${t('2 semanas')}</button></div></div>`;
-      const by = items ? HL.groupByWeekday(items, start, n) : null;
-      const st = EX_STATUS();
-      const cols = days.map((d, i) => {
-        const k = ymd(d), list = by ? by[i] : null;
-        const cardsH = !by ? '<i class="wk-sk"></i>' : !list.length ? `<span class="wk-none">${t('Sin entradas')}</span>`
-          : list.map((x) => `<button class="wk-card ${x.status}" data-h="open" data-id="${x.id}"${self() ? ' draggable="true"' : ''} title="${escHtml(decodeEntities(x.title || ''))}">
-            <span class="wk-th">${x.image ? `<img src="${escHtml(x.image)}" alt="" loading="lazy" draggable="false">` : '<span class="ms">article</span>'}</span>
-            <span class="wk-ct"><b>${title(x)}</b><span class="wk-s ${x.status}"><span class="ms">${(st[x.status] || {}).icon || 'article'}</span>${escHtml((st[x.status] || {}).label || x.status)} · ${escHtml(new Date(x.date).toLocaleTimeString(lang(), { hour: '2-digit', minute: '2-digit' }))}</span></span></button>`).join('');
-        return `<div class="wk-col${k === todayK ? ' today' : ''}" data-day="${k}"><div class="wk-head"><span class="wk-wd">${escHtml(cap(fmt(d, { weekday: 'short' })))}</span><span class="wk-n">${d.getDate()}</span>
-          <button class="wk-add" data-h="wk-add" data-day="${k}" title="${escHtml(t('Nueva entrada programada para este día'))}"><span class="ms">add</span></button></div><div class="wk-list">${cardsH}</div></div>`;
-      }).join('');
-      body += `${hs.wkErr ? `<p class="hint">${escHtml(hs.wkErr)} <button class="btn text small" data-h="retry"><span class="ms">refresh</span>${t('Reintentar')}</button></p>` : ''}<div class="wk-cal${n === 14 ? ' two' : ''}">${cols}</div>`;
-      head = isNow ? (n === 7 ? t('Esta semana') : t('Estas dos semanas')) : t('Calendario');
+        <div class="seg" role="radiogroup" aria-label="${escHtml(t('Rango de fechas'))}">${views.map(([k, l]) => `<button class="${v === k ? 'active' : ''}" data-h="ag-view" data-v="${k}" role="radio" aria-checked="${v === k}">${l}</button>`).join('')}</div></div>
+        <div class="ag-filters" role="group" aria-label="${escHtml(t('Qué mostrar'))}">${AG_ORDER.map((k) => `<button class="chip ag-f ${k}${ag.show[k] ? ' active' : ''}" data-h="ag-filter" data-k="${k}" aria-pressed="${!!ag.show[k]}"><span class="ms">${ag.show[k] ? ST[k].icon : 'visibility_off'}</span>${ST[k].label}<b>${items ? tot[k] : '…'}</b></button>`).join('')}
+        ${v === 'week' ? `<span class="spacer"></span><button class="btn text small" data-h="ag-all"><span class="ms">${ag.all ? 'unfold_less' : 'unfold_more'}</span>${ag.all ? t('Plegar días') : t('Desplegar días')}</button>` : ''}</div>`;
+      if (ag.err) body += `<p class="hint">${escHtml(ag.err)} <button class="btn text small" data-h="retry"><span class="ms">refresh</span>${t('Reintentar')}</button></p>`;
+      body += !items ? `<div class="hc-skel">${'<i></i>'.repeat(5)}</div>` : v === 'day' ? agDay(r.from, vis) : v === 'week' ? agWeek(r.from, vis) : v === 'month' ? agMonth(r, vis) : agYear(r, vis);
     }
-    return card('home-week', 'event', head || t('Esta semana'), body, acts, ['HOME · 04 WEEK', '週']);
+    return card('home-week', 'event', head, body, '', ['HOME · 04 AGENDA', '予定']);
   }
   function quickCard() {
     const q = (h, icon, label) => `<button class="home-q" data-h="${h}"><span class="ms">${icon}</span><span>${label}</span></button>`;
@@ -277,36 +324,44 @@ const Home = (() => {
     hc.classList.toggle('at-end', tr.scrollLeft + tr.clientWidth >= tr.scrollWidth - 4);
   }
 
-  // ---- datos de la semana
-  async function loadWeek(start) {
-    const k = `${ymd(start)}/${hs.wkSpan}`;
-    if (hs.wk.has(k) || !wpOk()) return;
-    const end = HL.addDays(start, hs.wkSpan);
+  // ---- datos de la agenda (todas las entradas del rango, de 100 en 100)
+  async function agLoad() {
+    const key = agKey();
+    if (ag.cache.has(key) || !wpOk()) return;
+    const r = HL.agRange(ag.view, ag.anchor);
     try {
-      const r = await window.api.blogList({ type: 'post', status: 'any', number: 100, after: start.toISOString(), before: end.toISOString() });
-      hs.wk.set(k, r.items.filter((x) => x.status !== 'trash')); hs.wkErr = null;
-    } catch (e) { hs.wk.set(k, []); hs.wkErr = friendlyError(e).text; }
+      let all = [];
+      for (let page = 1; page <= 15; page++) {
+        const res = await window.api.blogList({ type: 'post', status: 'any', number: 100, page, after: r.from.toISOString(), before: r.to.toISOString() });
+        all = all.concat(res.items);
+        if (res.items.length < 100 || all.length >= (res.found || 0)) break;
+      }
+      ag.cache.set(key, all.filter((x) => x.status !== 'trash')); ag.err = null;
+    } catch (e) { ag.cache.set(key, []); ag.err = friendlyError(e).text; }
     draw();
   }
-  // «Ir a una fecha» (selector nativo) y teclado (← → T) cuando el foco está en la tarjeta
+  function agGo(view, anchor) {
+    if (view) ag.view = view;
+    if (anchor) ag.anchor = anchor;
+    ag.err = null; agSave(); render(); agLoad();
+  }
+  // Tras volver a pintar, el foco vuelve al mismo control (así se puede seguir con el teclado)
+  function refocus(sel) { requestAnimationFrame(() => { const el = $(sel) || $('#home .home-week [data-h="ag-step"][data-d="1"]'); el?.focus(); }); }
+  // «Ir a una fecha» (selector nativo) y teclado (← → T) con el foco en la agenda
   document.addEventListener('change', (e) => {
     if (!e.target.matches?.('#home .wk-date') || !e.target.value) return;
     const [y, m, d] = e.target.value.split('-').map(Number);
-    gotoWeek(HL.weekStart(new Date(y, m - 1, d)));
+    agGo(null, new Date(y, m - 1, d));
   });
   document.addEventListener('click', (e) => {
-    const l = e.target.closest?.('#home .wk-range'); if (!l) return;
+    const l = e.target.closest?.('#home .wk-range'); if (!l || e.target.matches('input')) return;
     const i = $('.wk-date', l); try { i.showPicker(); } catch { i.focus(); }
   });
   document.addEventListener('keydown', (e) => {
     if (!e.target.closest?.('#home .home-week') || e.target.matches('input, textarea') || e.altKey || e.ctrlKey || e.metaKey) return;
-    if (e.key === 'ArrowLeft') { e.preventDefault(); gotoWeek(HL.addDays(hs.wkStart, -hs.wkSpan)); }
-    else if (e.key === 'ArrowRight') { e.preventDefault(); gotoWeek(HL.addDays(hs.wkStart, hs.wkSpan)); }
-    else if (e.key === 't' || e.key === 'T') { e.preventDefault(); gotoWeek(HL.weekStart(new Date())); }
-    else return;
-    requestAnimationFrame(() => $('#home .home-week [data-h="wk-today"]:not([disabled])')?.focus() || $('#home .home-week [data-h="wk-next"]')?.focus());
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); const d = e.key === 'ArrowLeft' ? -1 : 1; agGo(null, HL.agStep(ag.view, ag.anchor, d)); refocus(`#home [data-h="ag-step"][data-d="${d}"]`); }
+    else if (e.key === 't' || e.key === 'T') { e.preventDefault(); agGo(null, new Date()); refocus('#home [data-h="ag-step"][data-d="1"]'); }
   });
-  function gotoWeek(start) { hs.wkStart = start; hs.wkErr = null; render(); loadWeek(start); }
 
   async function dropOn(item, dayKey) {
     const [y, m, d] = dayKey.split('-').map(Number);
@@ -335,10 +390,10 @@ const Home = (() => {
   async function load(force) {
     if (!wpOk() || hs.loading || (!force && Date.now() - hs.at < 60000)) return;
     hs.loading = true; hs.at = Date.now();
-    if (force) hs.wk.clear();
+    if (force) ag.cache.clear();
     const jobs = [
       window.api.blogList({ type: 'post', status: 'draft', number: 5, orderby: 'modified' }).then((r) => { hs.drafts = r.items; hs.err = null; }, (e) => { hs.drafts = hs.drafts || []; hs.err = friendlyError(e).text; }),
-      loadWeek(hs.wkStart),
+      agLoad(),
     ];
     jobs.forEach((j) => j.then(draw));
     if (self()) {
@@ -385,7 +440,7 @@ const Home = (() => {
   // Arrastrar entradas de un día a otro de la semana
   document.addEventListener('dragstart', (e) => {
     const c = e.target.closest?.('#home .wk-card[draggable]'); if (!c) return;
-    const item = (hs.wk.get(wkKey()) || []).find((x) => x.id === Number(c.dataset.id)); if (!item) return;
+    const item = (agItems() || []).find((x) => x.id === Number(c.dataset.id)); if (!item) return;
     calStartDrag(e, item, c);
   });
   document.addEventListener('dragend', (e) => { if (e.target.closest?.('#home .wk-card')) { calEndDrag(); $$('#home .wk-col.drop-over').forEach((x) => x.classList.remove('drop-over')); } });
@@ -418,7 +473,7 @@ const Home = (() => {
     const b = e.target.closest('#home [data-h]');
     if (!b) return;
     const a = b.dataset.h;
-    if (a === 'retry') { hs.err = null; hs.errHealth = null; hs.freeErr = null; hs.wkErr = null; hs.wk.delete(wkKey()); return load(true); }
+    if (a === 'retry') { hs.err = null; hs.errHealth = null; hs.freeErr = null; ag.err = null; ag.cache.delete(agKey()); return load(true); }
     if (a === 'conn') return showTab('connections');
     if (a === 'see-all') return goPosts('pending');
     if (a === 'new-see') return goPosts('pending');
@@ -429,10 +484,23 @@ const Home = (() => {
     if (a === 'media') return goBlog('media');
     if (a === 'unused') return openUnused();
     if (a === 'recount') return countSocial(true);
-    if (a === 'wk-prev') return gotoWeek(HL.addDays(hs.wkStart, -hs.wkSpan));
-    if (a === 'wk-next') return gotoWeek(HL.addDays(hs.wkStart, hs.wkSpan));
-    if (a === 'wk-span') { hs.wkSpan = Number(b.dataset.n); try { localStorage.setItem('ecos.home.span', String(hs.wkSpan)); } catch { /* */ } return gotoWeek(hs.wkStart); }
-    if (a === 'wk-today') return gotoWeek(HL.weekStart(new Date()));
+    if (a.startsWith('ag-')) {
+      const sel = `#home [data-h="${a}"]${b.dataset.d ? `[data-d="${b.dataset.d}"]` : ''}${b.dataset.v ? `[data-v="${b.dataset.v}"]` : ''}${b.dataset.k ? `[data-k="${b.dataset.k}"]` : ''}${b.dataset.day && a === 'ag-open' ? `[data-day="${b.dataset.day}"]` : ''}`;
+      const ymdDate = (k) => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
+      if (a === 'ag-step') agGo(null, HL.agStep(ag.view, ag.anchor, Number(b.dataset.d)));
+      else if (a === 'ag-today') agGo(null, new Date());
+      else if (a === 'ag-view') agGo(b.dataset.v);
+      else if (a === 'ag-filter') { ag.show[b.dataset.k] = !ag.show[b.dataset.k]; agSave(); render(); }
+      else if (a === 'ag-all') { ag.all = !ag.all; ag.open.clear(); agSave(); render(); }
+      else if (a === 'ag-open') {
+        const k = b.dataset.day;
+        if (ag.all) { ag.all = false; HL.weekDays(HL.weekStart(ag.anchor), 7).forEach((d) => ag.open.add(ymd(d))); agSave(); }
+        if (ag.open.has(k)) ag.open.delete(k); else ag.open.add(k);
+        render();
+      } else if (a === 'ag-goday') { agGo('day', ymdDate(b.dataset.day)); return refocus('#home [data-h="ag-view"][data-v="day"]'); }
+      else if (a === 'ag-gomonth') { agGo('month', new Date(ag.anchor.getFullYear(), Number(b.dataset.m), 1)); return refocus('#home [data-h="ag-view"][data-v="month"]'); }
+      return refocus(sel);
+    }
     if (a === 'wk-add') { const [y, m, d] = b.dataset.day.split('-').map(Number); return newDraft({ type: 'post', scheduleAt: calLocalInput(new Date(y, m - 1, d, 10, 0)) }); }
     if (a === 'photo') return openLightbox(hs.free.items.map((m) => ({ type: 'image', src: m.url })), Number(b.dataset.i));
     if (a === 'open') return openFromWp(Number(b.dataset.id), null, 'post');
