@@ -2493,3 +2493,24 @@ body:has(.tab.active .b-bulk.on) #toast { bottom: 120px; }
 .gp-grid { flex: 1 1 auto; max-height: 58vh; width: 100%; align-content: start; }
 .gp-tile { aspect-ratio: auto; min-height: 0; }
 .gp-tile::before { content: ''; display: block; padding-top: 100%; }
+
+/* Fondo de la página (panel lateral del editor) */
+.ai-opts.pagebg .hint { font-size: 11.5px; margin: 2px 0 6px; }
+.bg-prev { position: relative; height: 96px; border-radius: var(--r-m); overflow: hidden; margin: 4px 0 6px; background: var(--surface-c-high); border: 1px solid var(--outline-var); }
+.bg-prev-bg { position: absolute; inset: -6px; }
+.bg-prev-head { position: relative; height: 12px; background: #fff; border-bottom: 1px solid rgba(0,0,0,.08); }
+.bg-prev.hdr .bg-prev-head { background: transparent; border-bottom-color: transparent; }
+.bg-prev-card { position: relative; margin: 8px auto 0; height: 100%; background: #fff; padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; }
+.bg-prev-card i { display: block; height: 5px; border-radius: 3px; background: #d9d9d9; } .bg-prev-card i.s { width: 60%; }
+.bg-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.bg-btns .btn { flex: 1 1 auto; justify-content: center; }
+.bg-tray-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.bg-th { width: 38px; height: 38px; border-radius: 8px; border: 2px solid transparent; background-size: cover; background-position: center; cursor: pointer; padding: 0; }
+.bg-th.on, .bg-pre.on { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in oklab, var(--primary) 35%, transparent); }
+.bg-presets { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.bg-pre { aspect-ratio: 1; border-radius: 8px; border: 2px solid var(--outline-var); cursor: pointer; padding: 0; }
+.ai-opts .seg.mini.two { grid-template-columns: repeat(2, 1fr); margin-bottom: 4px; }
+.bg-range { display: grid; grid-template-columns: 1fr 52px; align-items: center; gap: 2px 8px; font-size: 12px; color: var(--on-surface-var); margin-top: 6px; }
+.bg-range input { grid-column: 1 / -1; grid-row: 2; width: 100%; accent-color: var(--primary); }
+.bg-range b { text-align: right; font-weight: 600; color: var(--on-surface); }
+.bg-body.hidden, .bg-prev.hidden { display: none; }

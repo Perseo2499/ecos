@@ -203,6 +203,35 @@
             <div class="field hidden" id="seo-desc-field"><label data-i18n>Descripción para buscadores</label><textarea id="d-seodesc" rows="3" data-i18n-ph placeholder="Lo que se ve bajo el título en Google"></textarea></div>
             <div class="field"><label data-i18n>Palabra clave</label><input id="d-kw" data-i18n-ph placeholder="Opcional: la búsqueda que quieres cubrir" autocomplete="off"></div>
             <div class="share-card" id="d-share" title=""></div>
+            <details class="ai-opts pagebg" id="d-bg">
+              <summary><span class="ms">wallpaper</span><span data-i18n>Fondo de la página</span><span class="ai-opts-sum" id="bg-sum"></span></summary>
+              <div class="bg-prev" id="bg-prev"><div class="bg-prev-head"></div><div class="bg-prev-card"><i></i><i></i><i class="s"></i></div></div>
+              <div class="hint" data-i18n>El contenido va sobre un panel blanco y el fondo se ve a los lados.</div>
+              <div class="ai-opt"><label data-i18n>Imagen</label>
+                <div class="bg-btns">
+                  <button id="bg-lib" class="btn tonal small"><span class="ms">photo_library</span><span data-i18n>Biblioteca</span></button>
+                  <button id="bg-up" class="btn tonal small"><span class="ms">upload</span><span data-i18n>Del ordenador</span></button>
+                  <button id="bg-gp" class="btn tonal small"><span class="ms">add_photo_alternate</span><span data-i18n>Google Fotos</span></button>
+                </div>
+                <div class="bg-tray" id="bg-tray"></div></div>
+              <div class="ai-opt"><label data-i18n>Fondos sugeridos</label><div class="bg-presets" id="bg-presets"></div></div>
+              <div class="bg-body" id="bg-body">
+                <div class="ai-opt"><label data-i18n>Cómo se ve</label>
+                  <div class="seg mini two" data-bg="fixed"><button data-v="1" data-i18n>Fija al hacer scroll</button><button data-v="0" data-i18n>Se desplaza</button></div>
+                  <div class="seg mini two" data-bg="mode"><button data-v="cover" data-i18n>Cubrir</button><button data-v="repeat" data-i18n>Repetir (trama)</button></div></div>
+                <div class="ai-opt"><label data-i18n>Velo sobre el fondo</label>
+                  <div class="seg mini" data-bg="ovc"><button data-v="white" data-i18n>Blanco</button><button data-v="black" data-i18n>Negro</button><button data-v="orange" data-i18n>Naranja</button></div>
+                  <label class="bg-range"><span data-i18n>Opacidad</span><input type="range" id="bg-ovo" min="0" max="80" step="5"><b id="bg-ovo-v"></b></label>
+                  <label class="bg-range"><span data-i18n>Desenfoque</span><input type="range" id="bg-blur" min="0" max="12" step="1"><b id="bg-blur-v"></b></label></div>
+                <div class="ai-opt"><label data-i18n>Tarjeta de contenido</label>
+                  <div class="seg mini" data-bg="width"><button data-v="760" data-i18n>Estrecho</button><button data-v="960" data-i18n>Medio</button><button data-v="1200" data-i18n>Ancho</button></div>
+                  <div class="seg mini" data-bg="shadow"><button data-v="none" data-i18n>Sin sombra</button><button data-v="soft" data-i18n>Suave</button><button data-v="strong" data-i18n>Marcada</button></div>
+                  <label class="bg-range"><span data-i18n>Esquinas</span><input type="range" id="bg-radius" min="0" max="40" step="2"><b id="bg-radius-v"></b></label>
+                  <label class="bg-range"><span data-i18n>Margen arriba y abajo</span><input type="range" id="bg-margin" min="0" max="120" step="5"><b id="bg-margin-v"></b></label></div>
+                <label class="switch small"><input type="checkbox" id="bg-header"><span data-i18n>Mostrar también detrás de la cabecera</span></label>
+                <button id="bg-off" class="btn text small"><span class="ms">hide_image</span><span data-i18n>Quitar fondo</span></button>
+              </div>
+            </details>
             <details class="ai-opts" id="ai-opts">
               <summary><span class="ms">tune</span><span data-i18n>Cómo convertir en artículo</span><span class="ai-opts-sum" id="ai-opts-sum"></span></summary>
               <div class="ai-opt"><label data-i18n>Extensión</label>
@@ -865,6 +894,7 @@
 <script src="newposts.js"></script>
 <script src="unify.js"></script>
 <script src="homelogic.js"></script>
+<script src="pagebg.js"></script>
 <script src="findreplace.js"></script>
 <script src="linkutil.js"></script>
 <script src="mosaic.js"></script>
@@ -882,6 +912,7 @@
 <script src="app/posts.js"></script>
 <script src="app/seo.js"></script>
 <script src="app/editor.js"></script>
+<script src="app/pagebg-ui.js"></script>
 <script src="app/tplpicker.js"></script>
 <script src="app/sections-ui.js"></script>
 <script src="app/cropper.js"></script>

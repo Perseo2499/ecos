@@ -364,7 +364,7 @@ function postFields(d, status) {
   const scheduled = status === 'future' && d.scheduleAt;
   return {
     ...(d.type === 'page' ? { type: 'page', parent: Number(d.parent) || 0 } : {}),
-    title: d.title, content: d.blocks ? composeBlocks(d.blocks, { spectra: isSelf() }) : composeContent(d.sections), status: scheduled ? 'future' : status,
+    title: d.title, content: d.blocks ? composeBlocks(d.blocks, { spectra: isSelf(), pageBg: d.pageBg || null }) : composeContent(d.sections), status: scheduled ? 'future' : status,
     tags: (d.tags || []).join(','), categories: (d.categories || []).join(','),
     excerpt: d.excerpt || '',
     ...(d.seoKey && isSelf() ? { seoKey: d.seoKey, seoDesc: d.seoDesc || '' } : {}),
@@ -408,7 +408,7 @@ handle('post:pull', async (id, type) => {
   // estado al día en las publicaciones exportadas
   for (const e of Object.values(cfg.exported || {})) if (e.postId === id) e.status = p.status;
   store.save(cfg);
-  return { ...p, contentChanged: sent !== undefined ? norm(sent) !== norm(p.content) : null, blocks: require('./src/parseblocks').parseBlocks(p.content), exported: cfg.exported };
+  return { ...p, contentChanged: sent !== undefined ? norm(sent) !== norm(p.content) : null, blocks: require('./src/parseblocks').parseBlocks(p.content), pageBg: require('./renderer/pagebg').parse(p.content), exported: cfg.exported };
 });
 
 // Bandeja del editor: subir fotos o vídeos del ordenador a la biblioteca de WordPress
@@ -1373,7 +1373,7 @@ function modernize(html) {
   const Nz = require('./renderer/normalize');
   const blocks = require('./src/parseblocks').parseBlocks(html);
   const r = Nz.normalizeBlocks(blocks, (type, extra = {}) => ({ id: 'n' + Date.now().toString(36) + (normSeq++).toString(36), type, ...extra }));
-  return composeBlocks(r.blocks, { spectra: isSelf() });
+  return composeBlocks(r.blocks, { spectra: isSelf(), pageBg: require('./renderer/pagebg').parse(html) });
 }
 // Entradas ya restauradas: se lee su contenido en WordPress, se normaliza y se guarda solo el contenido
 handle('backup:normalizeRestored', async (postIds) => {

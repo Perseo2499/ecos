@@ -84,7 +84,7 @@ async function openFromWp(postId, keys, type = 'post', opts = {}) {
   draft = {
     title: r.title, excerpt: r.excerpt || '', slug: r.slug || '', tags: r.tags || [], categories: r.categories || [], blocks: r.blocks,
     featuredImageId: r.featured || null, keepFeaturedInBody: true, date: r.date, postId, previewOnly: false, wpStatus: r.status, sections: [], sourceText: '',
-    type: type === 'page' ? 'page' : 'post', parent: r.parent || 0, seoDesc: r.seoDesc || '',
+    type: type === 'page' ? 'page' : 'post', parent: r.parent || 0, seoDesc: r.seoDesc || '', pageBg: r.pageBg || null,
     extraMedia: [...(r.featuredImg ? [{ ...r.featuredImg, type: 'image' }] : []), ...imgs.map((i) => ({ ...i, type: i.type || 'image' })), ...vids],
   };
   draftKeys = keys || Object.entries(exported).filter(([, v]) => v.postId === postId).map(([k]) => k);
@@ -160,6 +160,7 @@ function openEditor() {
   $('#d-slug').value = draft.slug || '';
   $('#d-seodesc').value = draft.seoDesc || ''; $('#d-kw').value = draft.focusKw || '';
   loadSeoInfo();
+  renderPageBg();
   $('#d-tags').value = draft.tags.join(', ');
   const f = CFG.format || {};
   const defCats = (f.categories || '').split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
@@ -584,6 +585,7 @@ const draftPayload = (status) => ({
   slug: slugify($('#d-slug').value),
   ...(seoInfo.writable ? { seoKey: seoInfo.key, seoDesc: $('#d-seodesc').value.trim() } : {}),
   recreate: !!draft.previewOnly,
+  pageBg: PageBg.normalize(draft.pageBg),
 });
 
 // Actualizar desde WordPress (la app envía y también recibe cambios)
@@ -619,7 +621,7 @@ $('#ed-pull').onclick = (e) => busy(e.currentTarget, async () => {
   $('#d-title').value = r.title; autoTitle();
   $('#d-excerpt').value = r.excerpt || '';
   window.BlockEditor.change(() => {
-    if (r.contentChanged) draft.blocks = r.blocks;
+    if (r.contentChanged) { draft.blocks = r.blocks; draft.pageBg = r.pageBg || null; renderPageBg(); }
     if (r.featured) { draft.featuredImageId = r.featured; draft.keepFeaturedInBody = true; }
   });
   // las fotos que ahora usa la entrada, también en la bandeja
@@ -694,7 +696,7 @@ document.addEventListener('keydown', (e) => {
 // Dentro de Ecos con los estilos reales de tu web (leídos de su portada); «Ver en mi web» guarda un
 // borrador y abre la vista previa de WordPress.
 // Ventana de vista previa con los estilos reales de la web (editor y entradas de una copia)
-async function showPreview({ title, date: when, cats = [], featured, content, web = false }) {
+async function showPreview({ title, date: when, cats = [], featured, content, web = false, pageBg = null }) {
   // enlaces de vídeo solos en una línea: el reproductor, como hace WordPress
   content = content.replace(/<p>\s*(https?:\/\/[^\s<]+)\s*<\/p>/g, (m, url) => {
     const e = window.BlockEditor.detectEmbed(url.replace(/&amp;/g, '&'));
@@ -707,6 +709,10 @@ async function showPreview({ title, date: when, cats = [], featured, content, we
     .wp-block-gallery{display:grid;grid-template-columns:repeat(var(--c,3),1fr);gap:10px}.wp-block-gallery img{width:100%;aspect-ratio:1;object-fit:cover}
     .wp-block-media-text{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center}.wp-block-media-text.has-media-on-the-right figure{order:2}
     blockquote{border-left:4px solid #ccc;margin:1.5em 0;padding-left:1em}`;
+  // Fondo de la página: misma estructura que Astra (#page > #content > .ast-container > #primary) y el mismo CSS que se envía
+  const bgCss = window.PageBg ? PageBg.css(pageBg) : '';
+  const bgOpen = bgCss ? '<div id="page" class="hfeed site"><div id="content" class="site-content"><div class="ast-container"><div id="primary" class="content-area">' : '';
+  const bgClose = bgCss ? '</div></div></div></div><div class="ecos-page-bg" hidden></div>' : '';
   $('#pv-frame').srcdoc = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
     <style>${site.css}</style><style>${generic}
       .ecos-pv{max-width:760px;margin:0 auto;padding:40px 24px 80px}
@@ -724,14 +730,14 @@ async function showPreview({ title, date: when, cats = [], featured, content, we
       .wp-block-pullquote{text-align:center;border-block:4px solid;padding:2em 0;margin:2em 0;font-size:1.5em}.wp-block-pullquote blockquote{margin:0;border:0;padding:0}
       .wp-block-details{border:1px solid #ddd;border-radius:10px;padding:.8em 1.1em;margin:1.5em 0}.wp-block-details summary{cursor:pointer;font-weight:600}
       .wp-element-caption{font-size:.85em;opacity:.75;text-align:center}
-    </style></head>
+    </style><style>${bgCss}</style></head>
     <body class="${escHtml(site.bodyClass.replace(/\bhome\b|\bblog\b|\bpage\b/g, ''))} single single-post wp-embed-responsive">
-    <main class="site-main"><article class="post type-post status-publish hentry ecos-pv">
+    ${bgOpen}<main class="site-main"><article class="post type-post status-publish hentry ecos-pv">
       <header class="entry-header">${cats.length ? `<div class="cat-links ecos-meta">${escHtml(cats.join(' · '))}</div>` : ''}
         <h1 class="entry-title wp-block-post-title">${escHtml(title)}</h1><div class="ecos-meta entry-meta">${date}</div></header>
       ${featured ? `<img class="ecos-featured wp-post-image" src="${escHtml(featured)}" alt="">` : ''}
       <div class="entry-content wp-block-post-content is-layout-constrained">${content}</div>
-    </article></main></body></html>`;
+    </article></main>${bgClose}</body></html>`;
   $('#pv-frame').onload = () => $('#pv-frame').contentDocument.querySelectorAll('[data-ecos-carousel]').forEach((el) => window.ecosCarousel(el));
   $('#pv-web').classList.toggle('hidden', !web);
   $('#pv-modal').classList.remove('hidden');
@@ -748,7 +754,7 @@ $('#preview').onclick = (e) => busy(e.target, async () => {
     });
   const featured = window.BlockEditor.flat(draft.blocks).flatMap((b) => (b.img ? [b.img] : b.images || [])).filter((i) => i.type !== 'video').find((i) => i.id === draft.featuredImageId);
   const cats = $$('#d-cats input:checked').map((i) => i.value);
-  await showPreview({ title: $('#d-title').value, date: $('#d-keepdate').checked ? draft.date : Date.now(), cats, featured: featured?.url, content, web: true });
+  await showPreview({ title: $('#d-title').value, date: $('#d-keepdate').checked ? draft.date : Date.now(), cats, featured: featured?.url, content, web: true, pageBg: draft.pageBg });
 });
 
 $$('#pv-size button').forEach((b) => b.onclick = () => {

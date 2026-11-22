@@ -2,6 +2,7 @@
 // de Ecos, para traer al editor los cambios hechos directamente en WordPress. Lo que Ecos no sabe editar
 // se conserva tal cual en un bloque «raw», que al enviar se devuelve sin tocar.
 const { FONTS, FX_MARK } = require('./transform');
+const PageBg = require('../renderer/pagebg');
 const DK = require('../renderer/sections');
 
 const FONT_KEY = Object.fromEntries(Object.entries(FONTS).map(([k, v]) => [v, k]));
@@ -143,6 +144,7 @@ function toBlock(t) {
     case 'html': {
       if (/^\s*<div class="ecos-clear"[^>]*><\/div>\s*$/.test(h)) return null; // corte tras una foto a un lado: se vuelve a poner al enviar
       if (new RegExp(`<style class="${FX_MARK}"`).test(h)) return null; // estilos de los efectos de Ecos: se vuelven a poner al enviar
+      if (PageBg.isBlock(h) || /^\s*<div class="ecos-page-bg"[^>]*><\/div>\s*$/.test(h)) return null; // fondo de la página: va a draft.pageBg (PageBg.parse), no es un bloque
       // mapa de Ecos: un iframe de Google Maps con la dirección en el enlace
       if (/class="ecos-mapa"/.test(h)) {
         const src = attr((h.match(/<iframe\b[^>]*>/i) || [''])[0], 'src');

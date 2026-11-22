@@ -662,7 +662,10 @@ function composeBlocks(blocks, opts = {}) {
   const ctx = { anchors: headingAnchors(all), all, fx: new Set() };
   const html = composeList(blocks, opts, ctx);
   // efectos propios (sombra de texto, zoom, blanco y negro): su CSS mínimo va en un bloque HTML al final
-  return ctx.fx.size ? (html ? html + '\n\n' : '') + fxBlock(ctx.fx) : html;
+  const withFx = ctx.fx.size ? (html ? html + '\n\n' : '') + fxBlock(ctx.fx) : html;
+  // «Fondo de la página» (opts.pageBg): su bloque con el CSS va al final; sin pageBg no cambia nada
+  const bg = opts.pageBg ? require('../renderer/pagebg').block(opts.pageBg) : '';
+  return bg ? (withFx ? withFx + '\n\n' : '') + bg : withFx;
 }
 
 // Corte tras una foto colocada a un lado (lo que sigue empieza por debajo de ella, como en el editor de Ecos)
