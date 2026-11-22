@@ -962,3 +962,10 @@ test('foto redondeada con zoom: el recorte del zoom también es redondeado (sin 
   assert.match(html, /\.wp-block-image\.ecos-zoom:has\(img\[style\*="border-radius:16px"\]\)\{border-radius:16px;width:fit-content/);
   assert.match(html, /border-radius:16px/);
 });
+
+test('descripción de una foto: se limpia lo que añade la IA (prefijos, comillas, ```)', () => {
+  const { cleanAlt } = require('../src/ai');
+  assert.equal(cleanAlt('Texto alternativo: «Un grupo de jóvenes pinta un mural»'), 'Un grupo de jóvenes pinta un mural');
+  assert.equal(cleanAlt('"Velas encendidas junto a un cartel que dice Dignidad"\n'), 'Velas encendidas junto a un cartel que dice Dignidad');
+  assert.ok(cleanAlt('x'.repeat(400)).length <= 220);
+});

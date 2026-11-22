@@ -674,6 +674,7 @@ handle('ai:article', async (input) => {
   return { ...art, sources: opts.web ? all.slice(0, 12) : [] };
 });
 handle('ai:alts', (urls, context) => ai.altTexts(cfg.ai, urls, context));
+handle('ai:alt', (url, context) => ai.altText(cfg.ai, url, context));
 handle('ai:seo', (input) => ai.seoSuggest(cfg.ai, { ...input, extra: cfg.aiInstructions || '' }));
 handle('wp:seoInfo', async () => (isSelf() ? WP().seoInfo(cfg) : { plugin: null, key: null, writable: false }));
 handle('ai:rewrite', (input) => ai.rewrite(cfg.ai, { ...input, extra: cfg.aiInstructions || '' }));

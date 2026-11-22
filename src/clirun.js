@@ -99,8 +99,10 @@ async function askOnce({ tool, model, web = false }, parts, schema, log = () => 
       images.push(name);
       text += `[${name}]\n`;
     }
-    const schemaText = JSON.stringify(schema);
-    const rules = '\n\nResponde ÚNICAMENTE con un objeto JSON válido (sin texto alrededor ni bloques de código) que cumpla este JSON Schema:\n' + schemaText;
+    const schemaText = schema ? JSON.stringify(schema) : '';
+    // sin esquema: respuesta en texto normal (más fiable para cosas cortas, p. ej. describir una foto)
+    const rules = schema ? '\n\nResponde ÚNICAMENTE con un objeto JSON válido (sin texto alrededor ni bloques de código) que cumpla este JSON Schema:\n' + schemaText
+      : '\n\nResponde solo con el texto pedido: sin comillas, sin explicaciones, sin títulos ni formato.';
     const imgNote = images.length ? `\n\nLas imágenes de la petición son los archivos ${images.join(', ')} de la carpeta actual; ábrelas para verlas.` : '';
     let res, data;
 
@@ -115,15 +117,16 @@ async function askOnce({ tool, model, web = false }, parts, schema, log = () => 
       res = await run(T.bin, args, { cwd: dir, input: text + imgNote + rules, ...(web ? { timeout: 300000 } : {}) });
       let j; try { j = JSON.parse(res.out); } catch { j = null; }
       if (res.code !== 0 || !j || j.is_error) throw new Error(`Claude Code: ${(j?.result || res.err || res.out || 'error').toString().trim().slice(0, 300)}.${loginHint(tool, res.err + res.out)}`);
-      data = j.structured_output || extractJson(j.result);
+      data = !schema ? String(j.result || '').trim() : j.structured_output || extractJson(j.result);
     } else if (tool === 'codex') {
-      fs.writeFileSync(path.join(dir, 'schema.json'), schemaText);
+      if (schema) fs.writeFileSync(path.join(dir, 'schema.json'), schemaText);
       const args = [...(web ? ['--search'] : []), 'exec', '--skip-git-repo-check', '--sandbox', 'read-only', '--ephemeral', '--color', 'never',
-        '--output-schema', 'schema.json', '-o', 'respuesta.txt', ...(model ? ['-m', model] : []), ...images.flatMap((n) => ['-i', n]), '-'];
+        ...(schema ? ['--output-schema', 'schema.json'] : []), '-o', 'respuesta.txt', ...(model ? ['-m', model] : []), ...images.flatMap((n) => ['-i', n]), '-'];
       res = await run(T.bin, args, { cwd: dir, input: text + rules, ...(web ? { timeout: 300000 } : {}) });
       const outFile = path.join(dir, 'respuesta.txt');
       if (res.code !== 0 || !fs.existsSync(outFile)) throw new Error(`Codex: ${(res.err || res.out || 'error').trim().split('\n').slice(-3).join(' ').slice(0, 300)}.${loginHint(tool, res.err + res.out)}`);
-      data = extractJson(fs.readFileSync(outFile, 'utf8'));
+      const outTxt = fs.readFileSync(outFile, 'utf8');
+      data = schema ? extractJson(outTxt) : outTxt.trim();
     } else {
       // Gemini CLI: modo de solo lectura (plan); las imágenes se citan con @archivo
       const atRefs = images.length ? '\n\nImágenes: ' + images.map((n) => '@' + n).join(' ') : '';
@@ -134,7 +137,7 @@ async function askOnce({ tool, model, web = false }, parts, schema, log = () => 
       let j = null;
       for (const txt of [res.out, res.err]) { try { j = extractJson(txt); if (j.response !== undefined || j.error) break; } catch { /* siguiente */ } }
       if (res.code !== 0 || !j || j.error) throw new Error(`Gemini CLI: ${(j?.error?.message || res.err || res.out || 'error').toString().trim().split('\n').slice(-3).join(' ').slice(0, 300)}.${loginHint(tool, (j?.error?.message || '') + res.err + res.out)}`);
-      data = extractJson(j.response);
+      data = schema ? extractJson(j.response) : String(j.response || '').trim();
     }
     log(`CLI ${T.name}: respuesta en ${((Date.now() - started) / 1000).toFixed(1)} s`);
     return data;

@@ -300,6 +300,13 @@
     'Ocultas': 'Hidden',
     'Ocultos': 'Hidden',
     // 1.2 (editor completo)
+    'Todas las fotos ya tienen descripción. ¿Volver a describirlas todas?': 'All photos already have a description. Describe them all again?',
+    'Describir de nuevo': 'Describe again',
+    'Foto {n}': 'Photo {n}',
+    'Describiendo {a} de {b}… (pulsa para parar)': 'Describing {a} of {b}… (click to stop)',
+    '{a} fotos descritas con IA y {b} con una descripción básica (revísalas).': '{a} photos described with AI and {b} with a basic description (review them).',
+    'Parado: {a} fotos descritas.': 'Stopped: {a} photos described.',
+    '{a} fotos descritas. Puedes corregirlas debajo de cada foto.': '{a} photos described. You can correct them under each photo.',
     'Texto alrededor': 'Text around',
     'El texto rodea la foto y sigue por debajo de ella (la foto queda a un lado, dentro del texto)': 'Text wraps around the photo and continues below it (the photo sits to one side, inside the text)',
     'Barra de formato fija arriba del editor (si no, aparece al seleccionar texto, como en Word)': 'Formatting bar fixed at the top of the editor (otherwise it appears when you select text, like in Word)',

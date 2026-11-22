@@ -384,6 +384,22 @@ async function altTexts(aiCfg, imageUrls, context = '') {
   return imageUrls.map((_, i) => r.alts.find((a) => a.index === i)?.alt || '');
 }
 
+// Descripción de una sola foto (se llama de una en una desde el editor, con su progreso)
+const OneAlt = z.object({ alt: z.string().describe('Texto alternativo de la foto, en español, una frase de 8 a 20 palabras') });
+function cleanAlt(s) {
+  return String(s || '').trim().replace(/^```[a-z]*|```$/g, '').trim().replace(/^\s*(texto alternativo|alt|descripci[oó]n)\s*:\s*/i, '')
+    .trim().replace(/^["«“']+|["»”']+$/g, '').replace(/\s+/g, ' ').trim().slice(0, 220);
+}
+async function altText(aiCfg, url, context = '') {
+  const prompt = `Describe esta foto para una persona que usa lector de pantalla (atributo alt de una web), en español, en UNA frase de 8 a 20 palabras: qué se ve y qué ocurre, sin empezar por «Imagen de» ni «Foto de», sin inventar nombres. Contexto de la página: ${String(context).slice(0, 300)}`;
+  const parts = [{ type: 'text', text: prompt }, { type: 'image', url }];
+  if (PROVIDERS[aiCfg?.active]?.cli) {
+    const c = current(aiCfg);
+    return cleanAlt(await require('./clirun').askText({ tool: c.tool, model: c.model }, parts, cliLog));
+  }
+  return cleanAlt((await askStructured(aiCfg, parts, OneAlt)).alt);
+}
+
 // --- Título y descripción para buscadores ---------------------------------------------
 const SeoSuggest = z.object({
   title: z.string().describe('Título para Google, máximo 60 caracteres, natural y sin comillas'),
@@ -487,4 +503,4 @@ ${html}
 
 const isCli = (aiCfg) => !!PROVIDERS[aiCfg?.active]?.cli;
 
-module.exports = { suggestCategories, refineTopics, isCli, research, rewrite, setCliLog, PROVIDERS, askStructured, listModels, testConnection, improveArticle, altTexts, seoSuggest };
+module.exports = { altText, cleanAlt, suggestCategories, refineTopics, isCli, research, rewrite, setCliLog, PROVIDERS, askStructured, listModels, testConnection, improveArticle, altTexts, seoSuggest };
