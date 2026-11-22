@@ -411,7 +411,9 @@ function mediaTextBlock(b, fx = null) {
   const fig = [];
   if (fill) fig.push(`background-image:url(${esc(img.url)})`, 'background-position:50% 50%');
   if (frame === 'border') fig.push(`border:2px solid ${SAFE_COLOR.test(b.frameColor || '') ? b.frameColor : '#333333'}`);
-  const text = sanitizeParagraphs(b.html).map(para).join('\n');
+  // el texto lleva el mismo formato que un párrafo (alineación, tamaño, fuente, color…), igual en cada párrafo
+  const st = blockStyle(b, { fx });
+  const text = sanitizeParagraphs(b.html).map((p) => `<!-- wp:paragraph${st.json} -->\n<p${st.cls ? ` class="${st.cls.trim()}"` : ''}${st.style}>${p}</p>\n<!-- /wp:paragraph -->`).join('\n');
   return `<!-- wp:media-text ${JSON.stringify(attrs).replace(/--/g, '\\u002d\\u002d')} -->\n<div class="${cls.join(' ')}"${grid}><figure class="wp-block-media-text__media"${fig.length ? ` style="${fig.join(';')}"` : ''}><img src="${esc(img.url)}" alt="${esc(img.alt || '')}" class="${imgId(img) ? `wp-image-${imgId(img)} ` : ''}size-full"/></figure><div class="wp-block-media-text__content">${text}</div></div>\n<!-- /wp:media-text -->`;
 }
 

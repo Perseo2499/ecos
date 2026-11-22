@@ -2574,3 +2574,7 @@ body:has(.tab.active .b-bulk.on) #toast { bottom: 120px; }
 :root[data-vinyl="on"] .ed-side :is(input, select, textarea):focus { border-color: var(--vinyl); }
 :root[data-vinyl="on"] .ed-side .field > label { color: #c8c8c8; }
 :root[data-vinyl="on"] .ed-media :is(.btn.tonal) { background: #1b1b1b !important; color: #fff; box-shadow: inset 0 0 0 1px #444; }
+
+/* La barra de formato queda siempre por encima de los bloques al hacer scroll (antes un bloque activo o una foto a un
+   lado, con z-index 20-30, se pintaba encima: la barra parecía transparente y los clics iban al bloque) */
+#ed-canvas .fmt-bar, .fmt-bar { z-index: 60; }

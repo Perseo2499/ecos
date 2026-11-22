@@ -698,6 +698,7 @@
           } else side.appendChild(this.dropZone(t('Arrastra una foto'), (m) => this.change(() => (b.img = { ...m }))));
           this.acceptPhoto(side, (img) => (b.img = img), { sameOk: (d) => !(d.kind === 'photo' && d.block === b.id) });
           const text = this.editable('div', b.html, t('Texto junto a la imagen…'), (h) => (b.html = h), { cls: 'mt-text', block: b });
+          applyStyle(text, b);
           row.append(side, text);
           if (b.img) row.appendChild(this.mtSplit(b, row));
           body.appendChild(row);

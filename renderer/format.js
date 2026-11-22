@@ -31,7 +31,8 @@
   }
   const hasSel = () => { const s = getSelection(); return s.rangeCount && !s.isCollapsed && E().active?.el.contains(s.anchorNode); };
   const fire = () => E().active?.el.dispatchEvent(new Event('input'));
-  const isText = (b) => b && E().TEXT_TYPES.includes(b.type);
+  // El texto de «Imagen y texto» también admite alineación, tamaño, fuente, color… (no se convierte en título ni lista)
+  const isText = (b) => b && (E().TEXT_TYPES.includes(b.type) || b.type === 'mediatext');
 
   // --- Formato del bloque (alineación, tamaño, fuente, colores, letra capital)
   function setBlock(prop, val) {
@@ -178,7 +179,7 @@
   $('#fmt-size').onchange = (e) => setBlock('size', e.target.value);
   $('#fmt-type').onchange = (e) => {
     const a = E().active, v = e.target.value;
-    if (!a || !isText(a.b)) return;
+    if (!a || !isText(a.b) || a.b.type === 'mediatext') return;
     if (v === 'paragraph') E().convert(a.b, 'paragraph');
     else if (/^h\d$/.test(v)) { if (a.b.type === 'heading') E().change(() => (a.b.level = Number(v[1]))); else E().convert(a.b, 'heading', { level: Number(v[1]) }); E().focus(a.b.id); }
     else if (v === 'quote') E().convert(a.b, 'quote');
@@ -196,12 +197,13 @@
     if (!ok) return;
     const b = a.b;
     if (text) {
-      $('#fmt-type').value = b.type === 'heading' ? 'h' + (b.level || 2) : b.type === 'list' ? (b.ordered ? 'ol' : 'ul') : b.type;
+      $('#fmt-type').value = b.type === 'heading' ? 'h' + (b.level || 2) : b.type === 'list' ? (b.ordered ? 'ol' : 'ul') : b.type === 'mediatext' ? 'paragraph' : b.type;
+      $('#fmt-type').disabled = b.type === 'mediatext';
       $('#fmt-font').value = b.font || '';
       $('#fmt-size').value = b.size || '';
       $('#fmt-ls').value = b.spacing || '';
       $('[data-x="shadow"]', bar).classList.toggle('on', !!b.shadow);
-      $$('[data-al]', bar).forEach((x) => { x.classList.toggle('on', (b.align || 'left') === x.dataset.al); x.disabled = !['paragraph', 'heading'].includes(b.type); });
+      $$('[data-al]', bar).forEach((x) => { x.classList.toggle('on', (b.align || 'left') === x.dataset.al); x.disabled = !['paragraph', 'heading', 'mediatext'].includes(b.type); });
       $('[data-x="drop"]', bar).disabled = b.type !== 'paragraph';
       $('[data-x="drop"]', bar).classList.toggle('on', !!b.dropCap);
     }

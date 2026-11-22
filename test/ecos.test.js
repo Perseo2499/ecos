@@ -930,3 +930,15 @@ test('carrusel de Spectra con esquinas redondeadas: se recorta el marco (sin esq
   const sq = T.composeBlocks([{ id: 'c', type: 'carousel', corners: 'square', images: imgs }], { spectra: true });
   assert.doesNotMatch(sq, /spectra-image-gallery__media\{border-radius/);
 });
+
+test('imagen y texto: el formato del texto (alineación, tamaño, color, fuente) llega a WordPress y vuelve', () => {
+  const { parseBlocks } = require('../src/parseblocks');
+  const mt = { id: 'm', type: 'mediatext', img: { id: 5, url: 'https://x/a.jpg' }, html: 'Uno<br><br>Dos', align: 'center', size: '20px', color: '#ff0000' };
+  const html = T.composeBlocks([mt]);
+  assert.equal((html.match(/<!-- wp:paragraph \{/g) || []).length, 2, 'cada párrafo con su formato');
+  const b = parseBlocks(html).find((x) => x.type === 'mediatext');
+  assert.ok(b, 'sigue siendo imagen y texto editable');
+  assert.equal(b.align, 'center'); assert.equal(b.size, '20px'); assert.equal(b.color, '#ff0000');
+  // sin formato, igual que antes
+  assert.doesNotMatch(T.composeBlocks([{ ...mt, align: undefined, size: undefined, color: undefined }]), /wp:paragraph \{/);
+});

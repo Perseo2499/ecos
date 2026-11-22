@@ -208,7 +208,9 @@ function toBlock(t) {
       const content = (h.match(/<div class="wp-block-media-text__content">([\s\S]*)<\/div>\s*<\/div>\s*$/i) || [])[1];
       if (!img || content === undefined) return raw();
       const kids = tokenize(content).filter((x) => x.name !== 'freeform' || x.inner.replace(/<[^>]+>|\s|&nbsp;/g, ''));
-      if (kids.some((x) => x.name !== 'paragraph' || Object.keys(x.attrs).length)) return raw();
+      // párrafos con el mismo formato todos (el que pone Ecos): se lee ese formato; si no, se conserva tal cual
+      const fmt0 = JSON.stringify(kids[0]?.attrs || {});
+      if (kids.some((x) => x.name !== 'paragraph' || JSON.stringify(x.attrs) !== fmt0)) return raw();
       const cn = String(a.className || '').split(/\s+/).filter(Boolean);
       const known = (c) => c === 'ecos-mt' || /^ecos-mt-(r-(1|4-3|3-2|16-9|9-16)|rounded|circle|shadow|border|zoom|bn)$/.test(c);
       if (!cn.every(known)) return raw();
@@ -216,7 +218,7 @@ function toBlock(t) {
       if (!Number.isInteger(mw) || mw < 10 || mw > 90) return raw();
       if (a.verticalAlignment !== undefined && !['top', 'center', 'bottom'].includes(a.verticalAlignment)) return raw();
       if (a.imageFill !== undefined && a.imageFill !== true) return raw();
-      const b = { id: bid(), type: 'mediatext', img, html: kids.map((x) => inner(x.inner, 'p')).join('<br><br>'), right: a.mediaPosition === 'right' };
+      const b = { id: bid(), type: 'mediatext', img, html: kids.map((x) => inner(x.inner, 'p')).join('<br><br>'), right: a.mediaPosition === 'right', ...(kids[0] ? styleFrom(kids[0].attrs) : {}) };
       if (mw !== 50) b.mediaWidth = mw;
       if (a.verticalAlignment) b.valign = a.verticalAlignment;
       if (a.imageFill) b.fill = true;
