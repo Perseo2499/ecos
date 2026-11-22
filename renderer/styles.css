@@ -2434,3 +2434,14 @@ body:has(.tab.active .b-bulk.on) #toast { bottom: 120px; }
 .ag-year { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
 @media (max-width: 640px) { .ag-cell { min-height: 52px; } .ag-cell .ag-pill .ms { display: none; } }
 .home-week .wk-bar .btn, .home-week .ag-filters .btn, .home-week .ag-dayview .btn { width: auto; margin: 0; }
+
+/* Agenda · desplegar un día con animación suave (sin volver a pintar la pantalla) */
+.ag-fold { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .3s cubic-bezier(.2, 0, 0, 1), opacity .2s ease; }
+.ag-fold > .wk-list { min-height: 0; overflow: hidden; }
+.wk-col.open > .ag-fold { grid-template-rows: 1fr; opacity: 1; }
+.ag-chev { transition: transform .3s cubic-bezier(.2, 0, 0, 1); }
+.wk-col.open .ag-chev { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .ag-fold, .ag-chev { transition: none; } }
+.home-week.ag-swap .wk-cal, .home-week.ag-swap .ag-month, .home-week.ag-swap .ag-year, .home-week.ag-swap .ag-dayview { animation: ag-in .22s ease both; }
+@keyframes ag-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .home-week.ag-swap * { animation: none !important; } }

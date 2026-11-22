@@ -252,8 +252,8 @@ const Home = (() => {
       const k = ymd(d), list = by[i], open = ag.all || ag.open.has(k);
       return `<div class="wk-col${k === todayK ? ' today' : ''}${open ? ' open' : ''}" data-day="${k}"><div class="wk-head"><span class="wk-wd">${escHtml(dayName(d, { weekday: 'short' }))}</span><span class="wk-n">${d.getDate()}</span>
         <button class="wk-add" data-h="wk-add" data-day="${k}" title="${escHtml(t('Nueva entrada para este día'))}"><span class="ms">add</span></button></div>
-        ${list.length ? `<button class="ag-sum" data-h="ag-open" data-day="${k}" aria-expanded="${open}" title="${escHtml(open ? t('Plegar') : t('Ver las entradas de este día'))}"><span class="ag-pills">${agPills(list)}</span><span class="ms">${open ? 'expand_less' : 'expand_more'}</span></button>
-        ${open ? `<div class="wk-list">${list.map(agCard).join('')}</div>` : ''}` : '<span class="wk-none">—</span>'}</div>`;
+        ${list.length ? `<button class="ag-sum" data-h="ag-open" data-day="${k}" aria-expanded="${open}" title="${escHtml(open ? t('Plegar') : t('Ver las entradas de este día'))}"><span class="ag-pills">${agPills(list)}</span><span class="ms ag-chev">expand_more</span></button>
+        <div class="ag-fold"${open ? '' : ' inert'}><div class="wk-list">${list.map(agCard).join('')}</div></div>` : '<span class="wk-none">—</span>'}</div>`;
     }).join('')}</div>`;
   }
   function agMonth(r, vis) {
@@ -338,13 +338,27 @@ const Home = (() => {
       }
       ag.cache.set(key, all.filter((x) => x.status !== 'trash')); ag.err = null;
     } catch (e) { ag.cache.set(key, []); ag.err = friendlyError(e).text; }
-    draw();
+    if (key === agKey()) agPaint();
   }
   function agGo(view, anchor) {
     if (view) ag.view = view;
     if (anchor) ag.anchor = anchor;
-    ag.err = null; agSave(); render(); agLoad();
+    ag.err = null; agSave(); agPaint(); agLoad();
   }
+  // Solo se vuelve a pintar la tarjeta de la agenda (el resto de Inicio no se toca)
+  function agPaint() {
+    const old = $('#home .home-week');
+    if (!old || !active()) return draw();
+    const tmp = document.createElement('div'); tmp.innerHTML = weekCard();
+    const nu = tmp.firstElementChild; nu.classList.add('ag-swap'); old.replaceWith(nu);
+  }
+  function agFold(col, open) {
+    col.classList.toggle('open', open);
+    const s = $('.ag-sum', col), f = $('.ag-fold', col);
+    if (s) { s.setAttribute('aria-expanded', String(open)); s.title = open ? t('Plegar') : t('Ver las entradas de este día'); }
+    if (f) f.inert = !open;
+  }
+  function agAllBtn(b) { b.innerHTML = `<span class="ms">${ag.all ? 'unfold_less' : 'unfold_more'}</span>${ag.all ? t('Plegar días') : t('Desplegar días')}`; }
   // Tras volver a pintar, el foco vuelve al mismo control (así se puede seguir con el teclado)
   function refocus(sel) { requestAnimationFrame(() => { const el = $(sel) || $('#home .home-week [data-h="ag-step"][data-d="1"]'); el?.focus(); }); }
   // «Ir a una fecha» (selector nativo) y teclado (← → T) con el foco en la agenda
@@ -490,13 +504,19 @@ const Home = (() => {
       if (a === 'ag-step') agGo(null, HL.agStep(ag.view, ag.anchor, Number(b.dataset.d)));
       else if (a === 'ag-today') agGo(null, new Date());
       else if (a === 'ag-view') agGo(b.dataset.v);
-      else if (a === 'ag-filter') { ag.show[b.dataset.k] = !ag.show[b.dataset.k]; agSave(); render(); }
-      else if (a === 'ag-all') { ag.all = !ag.all; ag.open.clear(); agSave(); render(); }
-      else if (a === 'ag-open') {
-        const k = b.dataset.day;
+      else if (a === 'ag-filter') { ag.show[b.dataset.k] = !ag.show[b.dataset.k]; agSave(); agPaint(); }
+      // plegar/desplegar: solo cambia la clase del día (animación en CSS), sin volver a pintar Inicio
+      else if (a === 'ag-all') {
+        ag.all = !ag.all; ag.open.clear(); agSave();
+        $$('#home .home-week .wk-col').forEach((c) => agFold(c, ag.all));
+        agAllBtn(b);
+        return;
+      } else if (a === 'ag-open') {
+        const k = b.dataset.day, col = b.closest('.wk-col'), open = !col.classList.contains('open');
         if (ag.all) { ag.all = false; HL.weekDays(HL.weekStart(ag.anchor), 7).forEach((d) => ag.open.add(ymd(d))); agSave(); }
-        if (ag.open.has(k)) ag.open.delete(k); else ag.open.add(k);
-        render();
+        if (open) ag.open.add(k); else ag.open.delete(k);
+        agFold(col, open);
+        return;
       } else if (a === 'ag-goday') { agGo('day', ymdDate(b.dataset.day)); return refocus('#home [data-h="ag-view"][data-v="day"]'); }
       else if (a === 'ag-gomonth') { agGo('month', new Date(ag.anchor.getFullYear(), Number(b.dataset.m), 1)); return refocus('#home [data-h="ag-view"][data-v="month"]'); }
       return refocus(sel);
