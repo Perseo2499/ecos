@@ -262,6 +262,9 @@ Object.assign(FX_CSS, {
   'mt-border': `${MT}.ecos-mt-border .wp-block-media-text__media{box-sizing:border-box}`,
   'mt-zoom': `${MT}.ecos-mt-zoom .wp-block-media-text__media{overflow:hidden}${MT}.ecos-mt-zoom img{transition:transform .5s cubic-bezier(.2,0,0,1)}${MT}.ecos-mt-zoom:hover img{transform:scale(1.08)}`,
   'mt-bw': `${MT}.ecos-mt-bn .wp-block-media-text__media{filter:grayscale(1)}`,
+  // WordPress deja un 8 % de margen a cada lado del texto: el texto queda metido hacia dentro. Ecos lo alinea con el
+  // resto de la página y deja solo una separación entre la foto y el texto (en el móvil, debajo de la foto)
+  mt: `${MT}.ecos-mt>.wp-block-media-text__content{padding:0 0 0 2em}${MT}.ecos-mt.has-media-on-the-right>.wp-block-media-text__content{padding:0 2em 0 0}@media (max-width:600px){${MT}.ecos-mt.is-stacked-on-mobile>.wp-block-media-text__content{padding:1em 0 0}}`,
 });
 for (const r of ['1', '4/3', '3/2', '16/9', '9/16']) { const c = r.replace('/', '-'); FX_CSS['mt-r-' + c] = `${MT}.ecos-mt-r-${c}:not(.is-image-fill) img{aspect-ratio:${r};object-fit:cover;height:auto}`; }
 const CAR_H = { s: '240px', m: '360px', l: '480px', xl: '70vh' };
@@ -381,7 +384,7 @@ function mediaTextBlock(b, fx = null) {
   const mw = Number.isInteger(Number(b.mediaWidth)) && b.mediaWidth >= 10 && b.mediaWidth <= 90 ? Number(b.mediaWidth) : 50;
   const va = ['top', 'center', 'bottom'].includes(b.valign) ? b.valign : '';
   const fill = !!b.fill;
-  const cn = [];
+  const cn = ['ecos-mt'];
   const ratio = MT_RATIOS.includes(b.ratio) ? b.ratio : '';
   if (ratio) cn.push('ecos-mt-r-' + ratio.replace('/', '-'));
   const frame = MT_FRAMES.includes(b.frame) ? b.frame : '';

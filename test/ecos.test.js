@@ -869,7 +869,7 @@ test('imagen y texto: cada marco, recorte y efecto sobrevive y los valores por d
     assert.deepEqual(got, want, JSON.stringify(o));
   }
   const plain = T.composeBlocks([{ id: 'm', type: 'mediatext', img: mtImg(7), html: 'T', right: false }]);
-  assert.doesNotMatch(plain, /mediaWidth|verticalAlignment|imageFill|grid-template|ecos-fx/);
+  assert.doesNotMatch(plain, /mediaWidth|verticalAlignment|imageFill|grid-template/);
   // un media-text de WordPress con cosas que Ecos no sabe escribir igual se conserva intacto
   const wp = '<!-- wp:media-text {"mediaId":3,"mediaType":"image","mediaSizeSlug":"large"} -->\n<div class="wp-block-media-text is-stacked-on-mobile"><figure class="wp-block-media-text__media"><img src="https://x/3.jpg" alt="" class="wp-image-3 size-large"/></figure><div class="wp-block-media-text__content"><!-- wp:paragraph -->\n<p>t</p>\n<!-- /wp:paragraph --></div></div>\n<!-- /wp:media-text -->';
   assert.equal(P.parseBlocks(wp)[0].type, 'raw');
@@ -912,4 +912,13 @@ test('foto flotante + párrafo ↔ imagen y texto: ambos resultados son bloques 
   const j = P.parseBlocks(T.composeBlocks(joined));
   assert.deepEqual(j.map((x) => x.type), ['mediatext']);
   assert.equal(j[0].html, 'El texto'); assert.equal(j[0].right, true); assert.equal(j[0].mediaWidth, 33);
+});
+
+test('imagen y texto: el texto no queda metido hacia dentro (sin el 8 % de margen de WordPress)', () => {
+  const { parseBlocks } = require('../src/parseblocks');
+  const html = T.composeBlocks([{ id: 'm', type: 'mediatext', img: { id: 5, url: 'https://x/a.jpg' }, html: 'Hola' }]);
+  assert.match(html, /class="wp-block-media-text ecos-mt/);
+  assert.match(html, /\.ecos-mt>\.wp-block-media-text__content\{padding:0 0 0 2em\}/);
+  const b = parseBlocks(html).find((x) => x.type === 'mediatext');
+  assert.ok(b && !b.frame && !b.ratio, 'vuelve como imagen y texto normal');
 });

@@ -210,7 +210,7 @@ function toBlock(t) {
       const kids = tokenize(content).filter((x) => x.name !== 'freeform' || x.inner.replace(/<[^>]+>|\s|&nbsp;/g, ''));
       if (kids.some((x) => x.name !== 'paragraph' || Object.keys(x.attrs).length)) return raw();
       const cn = String(a.className || '').split(/\s+/).filter(Boolean);
-      const known = (c) => /^ecos-mt-(r-(1|4-3|3-2|16-9|9-16)|rounded|circle|shadow|border|zoom|bn)$/.test(c);
+      const known = (c) => c === 'ecos-mt' || /^ecos-mt-(r-(1|4-3|3-2|16-9|9-16)|rounded|circle|shadow|border|zoom|bn)$/.test(c);
       if (!cn.every(known)) return raw();
       const mw = a.mediaWidth === undefined ? 50 : a.mediaWidth;
       if (!Number.isInteger(mw) || mw < 10 || mw > 90) return raw();
@@ -222,6 +222,7 @@ function toBlock(t) {
       if (a.imageFill) b.fill = true;
       for (const c of cn) {
         const r = c.match(/^ecos-mt-r-(.+)$/);
+        if (c === 'ecos-mt') continue;
         if (r) b.ratio = r[1].replace('-', '/');
         else if (c === 'ecos-mt-zoom') b.fx = 'zoom';
         else if (c === 'ecos-mt-bn') b.fx = 'bw';
