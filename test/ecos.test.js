@@ -735,3 +735,80 @@ test('agenda de Inicio: rangos de día, semana, mes y año, pasos y recuento por
   assert.ok(!HL.agIsNow('day', new Date(2026, 10, 21), d));
   assert.deepEqual(HL.agCount([{ status: 'publish' }, { status: 'private' }, { status: 'future' }, { status: 'draft' }, { status: 'pending' }]), { publish: 2, future: 1, draft: 2 });
 });
+
+// --- Juntar varias publicaciones de una actividad en una entrada ---
+const U = require('../renderer/unify');
+const mkPost = (id, day, text, n = 1, source = 'instagram') => ({ source, id, date: `2026-11-${String(day).padStart(2, '0')}T10:00:00Z`, text, permalink: '', media: Array.from({ length: n }, (_, i) => ({ type: 'image', url: `u${id}${i}.jpg` })) });
+const upAll = (ps) => new Map(ps.flatMap((p) => p.media.map((m) => [T.mediaKey(m), { id: 1, url: m.url }])));
+
+test('misma actividad: hashtag poco frecuente o texto parecido, a ≤10 días y sin las ya exportadas', () => {
+  const a = mkPost('a', 10, 'Primera jornada del campamento de verano con los niños en la sierra #CampamentoElin #elin');
+  const b = mkPost('b', 12, 'Seguimos con muchas actividades #CampamentoElin');
+  const c = mkPost('c', 11, 'Tarde de manualidades y juegos con los niños del campamento en la sierra');
+  const far = mkPost('d', 28, 'Otra cosa #CampamentoElin');
+  const other = mkPost('e', 11, 'Reunión de voluntarios #elin');
+  const exp = mkPost('f', 11, 'Más campamento #CampamentoElin');
+  const all = [a, b, c, far, other, exp, ...Array.from({ length: 12 }, (_, i) => mkPost('z' + i, 11, 'Cosa distinta número ' + i + ' #elin'))];
+  const r = U.relatedPosts(all, [a], { isExported: (p) => p.id === 'f' }).map((p) => p.id);
+  assert.deepEqual(r, ['c', 'b']); // «#elin» es demasiado frecuente; d está lejos; f ya exportada
+  assert.deepEqual(U.relatedPosts(all, []), []);
+  assert.ok(U.overlap('Jornada de manualidades con niños', 'Cena de gala') < 0.35);
+});
+
+test('quitar lo repetido: líneas idénticas en todas las publicaciones', () => {
+  const out = U.removeCommon(['Campamento 2026\nDía uno\n\nGracias a todos!', 'campamento 2026\nDía dos\n\nGracias a todos']);
+  assert.deepEqual(out, ['Día uno', 'Día dos']);
+  assert.deepEqual(U.removeCommon(['solo una']), ['solo una']);
+});
+
+const trio = () => [
+  mkPost('1', 12, 'Campamento 2026 en la sierra\nLlegada y juegos #camp', 2),
+  mkPost('2', 13, 'Campamento 2026 en la sierra\nExcursión al río #camp', 1),
+  mkPost('3', 14, 'Campamento 2026 en la sierra\nFiesta final #camp', 3),
+];
+const types = (bs) => bs.map((b) => b.type);
+
+test('buildDraft con unify: por jornadas, título común y sin lo repetido', () => {
+  const ps = trio();
+  const d = T.buildDraft(ps, upAll(ps), { unify: { layout: 'days', photos: 'each', dedupe: true } });
+  assert.equal(d.title, 'Campamento 2026 en la sierra');
+  const heads = d.blocks.filter((b) => b.type === 'heading');
+  assert.equal(heads.length, 3);
+  assert.equal(heads[0].level, 3);
+  assert.match(heads[0].html, /^Jornada 1 · .*12 de noviembre/);
+  assert.ok(!d.blocks.some((b) => b.type === 'separator'));
+  assert.ok(!d.blocks.some((b) => b.type === 'paragraph' && /Campamento 2026/.test(b.html)));
+  assert.deepEqual(types(d.blocks).filter((x) => x === 'gallery' || x === 'image'), ['gallery', 'image', 'gallery']);
+  assert.deepEqual(d.tags, ['camp']);
+  const keep = T.buildDraft(ps, upAll(ps), { unify: { layout: 'days', photos: 'each', dedupe: false, title: 'Mi título' } });
+  assert.equal(keep.title, 'Mi título');
+  assert.ok(keep.blocks.some((b) => b.type === 'paragraph' && /Campamento 2026/.test(b.html)));
+});
+
+test('buildDraft con unify: las tres opciones de fotos y «todo seguido»', () => {
+  const ps = trio();
+  const base = { layout: 'days', dedupe: true };
+  const end = T.buildDraft(ps, upAll(ps), { unify: { ...base, photos: 'end' } }).blocks;
+  assert.equal(end.filter((b) => b.type === 'gallery').length, 1);
+  assert.equal(end[end.length - 1].type, 'gallery');
+  assert.equal(end[end.length - 1].images.length, 6);
+  const car = T.buildDraft(ps, upAll(ps), { unify: { ...base, photos: 'carousel' } }).blocks;
+  assert.equal(car[0].type, 'carousel');
+  assert.equal(car[0].images.length, 6);
+  assert.ok(!car.some((b) => b.type === 'gallery' || b.type === 'image'));
+  const flow = T.buildDraft(ps, upAll(ps), { unify: { layout: 'flow', photos: 'each', dedupe: true } }).blocks;
+  assert.equal(flow.filter((b) => b.type === 'separator').length, 2);
+  assert.ok(!flow.some((b) => b.type === 'heading'));
+});
+
+test('buildDraft sin unify (o con una sola publicación) no cambia', () => {
+  const ps = trio();
+  const strip2 = (d) => JSON.stringify(d, (k, v) => (k === 'id' && typeof v === 'string' ? undefined : v));
+  const a = T.buildDraft(ps, upAll(ps), {}), b = T.buildDraft(ps, upAll(ps), { unify: undefined });
+  assert.equal(strip2(a), strip2(b));
+  assert.match(a.title, /^Resumen del 12 al 14 de noviembre/);
+  assert.equal(a.blocks.filter((x) => x.type === 'separator').length, 2);
+  const one = T.buildDraft([ps[0]], upAll(ps), { unify: { layout: 'days', photos: 'end', dedupe: true } });
+  assert.equal(one.title, 'Campamento 2026 en la sierra');
+  assert.ok(!one.blocks.some((x) => x.type === 'heading'));
+});

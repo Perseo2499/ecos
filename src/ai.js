@@ -458,6 +458,7 @@ const REWRITE = {
   longer: 'Desarróllalo un poco más (aprox. el doble) con explicaciones y transiciones, sin inventar hechos, cifras, nombres ni citas.',
   friendly: 'Reescríbelo con un tono más cercano y cálido.',
   formal: 'Reescríbelo con un tono más formal e institucional.',
+  intro: 'Escribe un párrafo introductorio breve (3 o 4 frases) para una entrada de blog que junta varias publicaciones de redes sociales de una misma actividad de varios días. Resume la actividad de forma cálida y fiel; no inventes hechos, cifras, nombres ni citas. Devuelve solo ese párrafo.',
   headline: 'Propón un título (encabezado) breve y atractivo para este fragmento, de menos de 70 caracteres, sin emojis.',
 };
 function rewrite(aiCfg, { html, action, title = '', kind = 'paragraph', extra = '' }) {

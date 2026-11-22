@@ -837,7 +837,7 @@
   <p class="ins-tip" data-i18n>Truco: en un párrafo vacío escribe «/» para abrir este menú, «## » para un título, «- » para una lista o pega un enlace de YouTube.</p>
 </div>
 <div id="fmt-pop" class="fmt-pop hidden"></div>
-<div id="selbar" class="selbar"><span id="sel-count"></span><button id="sel-clear" class="btn text" data-i18n>Quitar selección</button><button id="make" class="btn filled" disabled><span class="ms">post_add</span><span data-i18n>Crear entrada</span></button></div>
+<div id="selbar" class="selbar"><span id="sel-count"></span><button id="sel-clear" class="btn text" data-i18n>Quitar selección</button><button id="sel-more" class="btn tonal hidden"><span class="ms">playlist_add</span><span id="sel-more-t"></span></button><button id="make" class="btn filled" disabled><span class="ms" id="make-ic">post_add</span><span id="make-label" data-i18n>Crear entrada</span></button></div>
 <div id="drop" class="drop hidden"><div><span class="ms fill">file_download</span><span data-i18n>Suelta aquí</span></div></div>
 <div id="lock" class="lock hidden">
   <div class="lock-box">
@@ -863,6 +863,7 @@
 <script src="normalize.js"></script>
 <script src="blogcheck.js"></script>
 <script src="newposts.js"></script>
+<script src="unify.js"></script>
 <script src="homelogic.js"></script>
 <script src="findreplace.js"></script>
 <script src="linkutil.js"></script>

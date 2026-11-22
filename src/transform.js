@@ -10,6 +10,7 @@ const DEFAULT_FOOTER = 'Publicado originalmente en {redes}.';
 const SAFE_COLOR = /^(#[0-9a-f]{3,8}|rgba?\([\d.,\s%]+\))$/i;
 const NET = { instagram: 'Instagram', facebook: 'Facebook' };
 const DK = require('../renderer/sections');
+const U = require('../renderer/unify');
 
 function extractTags(text) {
   return [...new Set([...text.matchAll(HASHTAG)].map((m) => m[1]))];
@@ -141,8 +142,37 @@ function composeContent(sections) {
   }).join('\n\n<!-- wp:separator -->\n<hr class="wp-block-separator"/>\n<!-- /wp:separator -->\n\n');
 }
 
+// Título sugerido al juntar varias publicaciones: su primera línea común (si la hay) o «Resumen de…»
+function unifyTitle(posts, clean = true) {
+  const sorted = [...posts].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const line = sorted.length > 1 ? U.firstCommonLine(sorted.map((p) => p.text), (l) => tidyTitle(l).length >= 8) : '';
+  if (line) return makeTitle(line, sorted[0].date, clean);
+  return summaryTitle(sorted[0].date, sorted[sorted.length - 1].date);
+}
+
+// «lunes 12 de noviembre»
+const dayLabel = (d) => new Date(d).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }).replace(',', '');
+
+// Bloques de varias publicaciones juntas en una entrada (opts.unify: layout days|flow, photos each|end|carousel)
+function unifiedBlocks(sections, sorted, u) {
+  const keep = (u.photos || 'each') === 'each';
+  const all = sections.flatMap((s) => s.images);
+  const out = [];
+  sections.forEach((sec, i) => {
+    if (u.layout === 'flow') { if (i > 0) out.push({ id: bid(), type: 'separator' }); }
+    else out.push({ id: bid(), type: 'heading', level: 3, html: esc(`Jornada ${i + 1} · ${dayLabel(sorted[i].date)}`) });
+    out.push(...sectionsToBlocks([{ ...sec, images: keep ? sec.images : [] }]));
+  });
+  const gal = all.length === 1 ? { id: bid(), type: 'image', img: all[0], caption: '' }
+    : all.length > 1 ? { id: bid(), type: u.photos === 'carousel' ? 'carousel' : 'gallery', images: all, columns: Math.min(all.length, 3) } : null;
+  if (gal && u.photos === 'carousel') out.unshift(gal);
+  else if (gal && u.photos === 'end') out.push({ id: bid(), type: 'separator' }, gal);
+  return out;
+}
+
 function buildDraft(posts, uploaded, opts = {}) {
   const sorted = [...posts].sort((a, b) => new Date(a.date) - new Date(b.date));
+  if (opts.unify && sorted.length > 1) return buildUnified(sorted, uploaded, opts);
   const extra = (opts.extraTags || '').split(',').map((t) => t.trim().replace(/^#/, '')).filter(Boolean);
   const tags = [...new Set([...sorted.flatMap((p) => extractTags(p.text)), ...extra])];
   const title = sorted.length === 1
@@ -164,6 +194,20 @@ function buildDraft(posts, uploaded, opts = {}) {
   const firstImg = sections.flatMap((s) => s.images)[0];
   return {
     title, tags, sections, blocks: sectionsToBlocks(sections), featuredImageId: firstImg?.id,
+    date: sorted[sorted.length - 1].date, sourceText: sorted.map((p) => p.text).join('\n\n---\n\n'),
+  };
+}
+
+function buildUnified(sorted, uploaded, opts) {
+  const u = { layout: 'days', photos: 'each', dedupe: true, ...opts.unify };
+  const extra = (opts.extraTags || '').split(',').map((t) => t.trim().replace(/^#/, '')).filter(Boolean);
+  const tags = [...new Set([...sorted.flatMap((p) => extractTags(p.text)), ...extra])];
+  const title = String(u.title || '').trim() || unifyTitle(sorted, opts.cleanTitle !== false);
+  const texts = u.dedupe ? U.removeCommon(sorted.map((p) => p.text)) : sorted.map((p) => p.text);
+  const sections = sorted.map((p, i) => postToSection({ ...p, text: texts[i] }, uploaded, opts));
+  const firstImg = sections.flatMap((s) => s.images)[0];
+  return {
+    title, tags, sections, blocks: unifiedBlocks(sections, sorted, u), featuredImageId: firstImg?.id,
     date: sorted[sorted.length - 1].date, sourceText: sorted.map((p) => p.text).join('\n\n---\n\n'),
   };
 }
@@ -757,4 +801,4 @@ function mergeDuplicates(posts) {
 // Claves de todas las versiones de una publicación (para marcarla como exportada)
 const postKeys = (p) => [p.source + ':' + p.id, ...(p.alsoOn || []).map((a) => a.source + ':' + a.id)];
 
-module.exports = { PEEK_CSS, FONTS, FX_MARK, COL_PRESETS, GROUP_PAD, flatBlocks, VIDEO_PROVIDERS, composeBlocks, sectionsToBlocks, blockImages, buildDraft, composeContent, sanitizeParagraphs, summaryTitle, extractTags, mediaKey, makeTitle, tidyTitle, mergeDuplicates, postKeys, DEFAULT_FOOTER };
+module.exports = { PEEK_CSS, FONTS, FX_MARK, COL_PRESETS, GROUP_PAD, flatBlocks, VIDEO_PROVIDERS, composeBlocks, sectionsToBlocks, blockImages, buildDraft, unifyTitle, composeContent, sanitizeParagraphs, summaryTitle, extractTags, mediaKey, makeTitle, tidyTitle, mergeDuplicates, postKeys, DEFAULT_FOOTER };
