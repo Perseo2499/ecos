@@ -102,9 +102,18 @@ $$('#f-view [data-v]').forEach((b) => (b.onclick = () => {
 function updateCount() {
   $('#sel-count').textContent = t(selected.size === 1 ? '{n} seleccionada' : '{n} seleccionadas', { n: selected.size });
   $('#make').disabled = selected.size === 0;
+  const many = selected.size >= 2;
+  $('#make-label').textContent = many ? t('Juntar en una entrada ({n})', { n: selected.size }) : t('Crear entrada');
+  $('#make-ic').textContent = many ? 'merge' : 'post_add';
+  // Sugerencia: publicaciones sin seleccionar que parecen de la misma actividad
+  const rel = many ? relatedToSelection() : [];
+  $('#sel-more').classList.toggle('hidden', !rel.length);
+  $('#sel-more-t').textContent = t('+{n} de la misma actividad', { n: rel.length });
   // La barra flotante aparece al seleccionar algo (y se oculta mientras el editor está abierto)
   $('#selbar').classList.toggle('show', selected.size > 0 && $('#editor').classList.contains('hidden') && $('#tab-posts').classList.contains('active'));
 }
+const relatedToSelection = () => Unify.relatedPosts(posts, posts.filter((p) => selected.has(keyOf(p))), { isExported: liveExport });
+$('#sel-more').onclick = () => { relatedToSelection().forEach((p) => selected.add(keyOf(p))); updateCount(); renderFeed(); renderFeedCal(); };
 $('#sel-clear').onclick = () => { selected.clear(); updateCount(); renderFeed(); };
 async function addPosts(list, select = false) {
   const have = new Set(rawPosts.map(keyOf));

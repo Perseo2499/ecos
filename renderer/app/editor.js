@@ -6,12 +6,16 @@
 for (const id of ['#editor', '#term']) { const el = $(id); if (el && el.parentElement !== document.body) document.body.appendChild(el); }
 
 // ---------------------------------------------------------------- Editor visual
-async function makeDraft() {
+async function makeDraft({ unifyDialog = false } = {}) {
   const chosen = posts.filter((p) => selected.has(keyOf(p)));
+  // Varias publicaciones desde «Juntar en una entrada»: se pregunta cómo juntarlas
+  const unify = unifyDialog && chosen.length > 1 ? await unifyDialogFor(chosen) : null;
+  if (unifyDialog && chosen.length > 1 && !unify) return;
   const already = chosen.filter(liveExport);
   if (already.length && !await ask(t('{n} de las publicaciones elegidas ya están en el blog. ¿Crear otra entrada de todos modos?', { n: already.length }))) return;
   toast(t('Subiendo fotos a WordPress…'));
-  draft = (await window.api.buildDraft(chosen)) || {};
+  draft = (await window.api.buildDraft(chosen, unify || undefined)) || {};
+  if (unify?.ai) await unifyIntro(chosen);
   renderWpState(null);
   draft.excerpt = ''; draft.postId = null; draft.extraMedia = []; // postId: borrador ya guardado en WordPress
   draftKeys = chosen.flatMap(keysOf);
@@ -19,7 +23,54 @@ async function makeDraft() {
   if (draft.failed?.length) toast(t('No se pudieron subir {n} archivo(s): {e}', { n: draft.failed.length, e: draft.failed[0] }), true);
   else if (draft.notes?.includes('video')) toast(t('Tu plan de WordPress no admite subir vídeos: se insertará el vídeo original de la red social.'));
 }
-$('#make').onclick = (e) => busy(e.target, makeDraft);
+$('#make').onclick = (e) => busy(e.target, () => makeDraft({ unifyDialog: true }));
+
+// Diálogo «Juntar N publicaciones en una entrada». Devuelve las opciones de buildDraft (unify) o null si se cancela.
+async function unifyDialogFor(chosen) {
+  const sorted = [...chosen].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const title = await window.api.unifyTitle(chosen).catch(() => '');
+  const seg = (name, items) => `<div class="seg full" data-seg="${name}">${items.map(([v, label], i) => `<label><input type="radio" name="un-${name}" value="${v}"${i ? '' : ' checked'}>${label}</label>`).join('')}</div>`;
+  const row = (p) => {
+    const f = p.media.find((m) => m.type === 'image') || p.media[0];
+    const th = f && (f.url || (f.type === 'image' ? fileUrl(f.path) : null));
+    return `<div class="un-row">${th ? `<img src="${escHtml(th)}" alt="">` : '<span class="un-noimg"><span class="ms">image</span></span>'}<span class="un-date">${fmtDate(p.date)}</span><span class="badge ${p.source}">${p.source === 'instagram' ? 'IG' : 'FB'}</span></div>`;
+  };
+  return new Promise((resolve) => {
+    const prev = document.activeElement;
+    const d = document.createElement('div');
+    d.className = 'dlg-scrim';
+    d.innerHTML = `<div class="dlg un-dlg" role="dialog" aria-modal="true">
+      <span class="ms fill dlg-ic">merge</span><p class="dlg-msg"></p>
+      <div class="field"><label for="un-title">${t('Título')}</label><input id="un-title" type="text"></div>
+      <div class="field"><label>${t('Estructura')}</label>${seg('layout', [['days', t('Por jornadas')], ['flow', t('Todo seguido')]])}</div>
+      <div class="field"><label>${t('Fotos')}</label>${seg('photos', [['each', t('En cada jornada')], ['end', t('Todas al final en una galería')], ['carousel', t('Carrusel al principio')]])}</div>
+      <label class="switch"><input type="checkbox" id="un-dedupe" checked><span>${t('Quitar lo repetido (hashtags, firmas y líneas iguales en todas)')}</span></label>
+      ${CFG.aiConfigured ? `<label class="switch"><input type="checkbox" id="un-ai"><span>${t('Pedir a la IA una introducción')}</span></label>` : ''}
+      <div class="un-list">${sorted.map(row).join('')}</div>
+      <div class="dlg-actions"><button class="btn text" data-r="0">${t('Cancelar')}</button><button class="btn filled" data-r="1">${t('Crear entrada')}</button></div></div>`;
+    $('.dlg-msg', d).textContent = t('Juntar {n} publicaciones en una entrada', { n: chosen.length });
+    $('#un-title', d).value = title || '';
+    const val = (n) => $(`input[name="un-${n}"]:checked`, d).value;
+    const close = (v) => { d.classList.add('out'); setTimeout(() => d.remove(), 160); document.removeEventListener('keydown', key, true); prev?.focus?.(); resolve(v); };
+    const done = () => close({ title: $('#un-title', d).value.trim(), layout: val('layout'), photos: val('photos'), dedupe: $('#un-dedupe', d).checked, ai: !!$('#un-ai', d)?.checked });
+    const key = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(null); } else if (e.key === 'Enter' && e.target.tagName !== 'BUTTON') { e.preventDefault(); done(); } };
+    $$('[data-r]', d).forEach((b) => (b.onclick = () => (b.dataset.r === '1' ? done() : close(null))));
+    d.addEventListener('mousedown', (e) => { if (e.target === d) close(null); });
+    document.addEventListener('keydown', key, true);
+    document.body.appendChild(d);
+    $('[data-r="1"]', d).focus();
+  });
+}
+// Párrafo introductorio escrito por la IA como primer bloque; si falla, se sigue sin él
+async function unifyIntro(chosen) {
+  try {
+    toast(t('La IA está escribiendo la introducción…'));
+    const text = [...chosen].sort((a, b) => new Date(a.date) - new Date(b.date)).map((p) => p.text.replace(/#[\p{L}\p{N}_]+/gu, '').trim()).join('\n\n');
+    const html = await window.api.aiRewrite({ html: escHtml(text).replace(/\n/g, '<br>'), action: 'intro', title: draft.title, kind: 'paragraph' });
+    const clean = String(html || '').replace(/<br\s*\/?>(\s*<br\s*\/?>)*/gi, ' ').trim();
+    if (clean) draft.blocks = [window.BlockEditor.create('paragraph', { html: clean }), ...draft.blocks];
+  } catch (e) { toast(t('No se pudo escribir la introducción con la IA; sigues sin ella.'), true); }
+}
 
 // Abre en el editor de Ecos una entrada que ya está en WordPress (desde una publicación o desde el Blog).
 // Al enviar se actualiza esa misma entrada.

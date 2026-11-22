@@ -23,7 +23,8 @@ contextBridge.exposeInMainWorld('api', {
 
   // Publicaciones → entrada
   mergeDuplicates: (list) => call('posts:merge', list),
-  buildDraft: (posts) => call('draft:build', posts),
+  buildDraft: (posts, unify) => call('draft:build', posts, unify),
+  unifyTitle: (posts) => call('draft:unifyTitle', posts),
   publish: (d) => call('draft:publish', d),
   previewDraft: (d) => call('draft:preview', d),
   composeDraft: (blocks) => call('draft:compose', blocks),

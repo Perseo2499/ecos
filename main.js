@@ -302,7 +302,8 @@ handle('wp:categories', async () => {
 });
 
 // Sube los medios (remotos o locales) y genera el borrador para revisar
-handle('draft:build', async (posts) => {
+handle('draft:unifyTitle', (posts) => require('./src/transform').unifyTitle(posts, publicCfg().format?.cleanTitle !== false));
+handle('draft:build', async (posts, unify) => {
   if (!wpIsConnected()) throw new Error('Primero conecta tu WordPress en «Conexiones».');
   const items = new Map();
   for (const p of posts) for (const m of p.media) {
@@ -322,7 +323,7 @@ handle('draft:build', async (posts) => {
       if (m.type === 'video') { notes.push('video'); log('Vídeo no subido; se insertará el original:', e.message); } else failed.push(e.message);
     }
   }
-  return { ...buildDraft(posts, uploaded, publicCfg().format), failed, notes };
+  return { ...buildDraft(posts, uploaded, unify ? { ...publicCfg().format, unify } : publicCfg().format), failed, notes };
 });
 
 // --- Importaciones alternativas ---
