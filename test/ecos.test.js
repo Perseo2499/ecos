@@ -521,3 +521,16 @@ test('editar y quitar un botón con precisión', () => {
   const one = SM.removeButton(two, 0);
   assert.deepEqual(SM.extractLinks(one).buttons.map((x) => x.text), ['B']); assert.ok(one.includes('wp:buttons'));
 });
+
+test('foto a un lado: en WordPress lo que no la rodea empieza por debajo (corte), y el corte no vuelve al editor', () => {
+  const { parseBlocks } = require('../src/parseblocks');
+  const img = { id: 'i', type: 'image', img: { id: 3, url: 'https://x/a.jpg', alt: '' }, caption: '', align: 'right', width: 50 };
+  const html = T.composeBlocks([img, { id: 'p', type: 'paragraph', html: 'Texto al lado' }, { id: 'g', type: 'carousel', images: [{ id: 1, url: 'a.jpg' }, { id: 2, url: 'b.jpg' }] }]);
+  const iClear = html.indexOf('ecos-clear'), iPar = html.indexOf('Texto al lado'), iCar = html.indexOf('ecos-carrusel');
+  assert.ok(iClear > iPar && iClear < iCar, 'el corte va entre el texto y el carrusel');
+  assert.deepEqual(parseBlocks(html).map((b) => b.type), ['image', 'paragraph', 'carousel']);
+  // al final de todo también se cierra
+  assert.match(T.composeBlocks([img, { id: 'p', type: 'paragraph', html: 'x' }]), /ecos-clear/);
+  // sin fotos a un lado, no hay cortes
+  assert.doesNotMatch(T.composeBlocks([{ id: 'p', type: 'paragraph', html: 'x' }]), /ecos-clear/);
+});

@@ -73,6 +73,7 @@
       this.undo = []; this.redo = [];
       this.autoFeatured();
       this.liftFeatured(); // la destacada va arriba y sale del cuerpo
+      this.wireTools();
       this.render(); this.renderMedia();
     },
     // --- Árbol de bloques: las secciones, columnas y portadas llevan bloques dentro ---------------------------------
@@ -191,6 +192,26 @@
     insertAt(i, block, focus = true, arr = this.draft.blocks) {
       this.change(() => arr.splice(i, 0, block));
       if (focus) this.focus(block.id);
+    },
+    // Una sola barra a la vez: el bloque más interior bajo el ratón; si el ratón no está sobre ninguno, el que se edita
+    toolsOwner(el) {
+      const canvas = document.getElementById('ed-canvas');
+      if (!canvas) return;
+      const pick = el || canvas.querySelector('.blk:focus-within:not(:has(.blk:focus-within))');
+      canvas.querySelectorAll('.blk.tools-on').forEach((x) => { if (x !== pick) x.classList.remove('tools-on'); });
+      pick?.classList.add('tools-on');
+    },
+    wireTools() {
+      const canvas = document.getElementById('ed-canvas');
+      if (!canvas || canvas.dataset.toolsWired) return;
+      canvas.dataset.toolsWired = '1';
+      canvas.addEventListener('mouseover', (e) => {
+        const blk = e.target.closest('.blk');
+        // sobre la propia barra de un bloque, se queda la de ese bloque
+        if (blk && canvas.contains(blk)) this.toolsOwner(blk);
+      });
+      canvas.addEventListener('mouseleave', () => this.toolsOwner(null));
+      canvas.addEventListener('focusin', () => { if (!canvas.querySelector('.blk:hover')) this.toolsOwner(null); });
     },
     focus(id, atEnd = false) {
       requestAnimationFrame(() => {

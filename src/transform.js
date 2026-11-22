@@ -568,10 +568,17 @@ function composeBlocks(blocks, opts = {}) {
   return ctx.fx.size ? (html ? html + '\n\n' : '') + fxBlock(ctx.fx) : html;
 }
 
+// Corte tras una foto colocada a un lado (lo que sigue empieza por debajo de ella, como en el editor de Ecos)
+const CLEAR_BLOCK = '<!-- wp:html -->\n<div class="ecos-clear" style="clear:both"></div>\n<!-- /wp:html -->';
+const WRAPS = new Set(['paragraph', 'heading', 'list', 'quote']); // lo que puede ir al lado de la foto
 function composeList(blocks, opts, ctx) {
   const out = [];
   const anchors = ctx.anchors;
+  let floating = false;
   for (const b of blocks || []) {
+    // un bloque que no rodea la foto (o un título, que empieza apartado nuevo): primero el corte
+    if (floating && (!WRAPS.has(b.type) || b.type === 'heading')) { out.push(CLEAR_BLOCK); floating = false; }
+    if (b.type === 'image' && b.img && (b.align === 'left' || b.align === 'right')) floating = true;
     switch (b.type) {
       case 'paragraph': {
         const st = blockStyle(b, { dropCap: true, fx: ctx.fx });
@@ -650,6 +657,7 @@ function composeList(blocks, opts, ctx) {
       default: break;
     }
   }
+  if (floating) out.push(CLEAR_BLOCK);
   return out.join('\n\n');
 }
 

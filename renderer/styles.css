@@ -1926,3 +1926,10 @@ span.pv-pill[data-pill]:hover { background: var(--primary); color: var(--on-prim
 .blk.blk-image.img-left > .blk-tools, .blk.blk-image.img-right > .blk-tools, .blk.blk-image.img-center > .blk-tools { max-width: none; width: max-content; flex-wrap: nowrap; z-index: 30; }
 .blk.blk-image.img-right > .blk-tools { left: auto; right: 0; }
 .blk.blk-image.img-left:hover, .blk.blk-image.img-right:hover, .blk.blk-image.img-left:focus-within, .blk.blk-image.img-right:focus-within { z-index: 25; }
+
+/* Una sola barra de herramientas visible a la vez (la del bloque bajo el ratón o la del que se edita) */
+#ed-canvas .blk:not(.tools-on) > .blk-tools { opacity: 0 !important; pointer-events: none !important; }
+#ed-canvas .blk.tools-on > .blk-tools { opacity: 1 !important; pointer-events: auto !important; transform: none !important; }
+#ed-canvas .blk.tools-on { z-index: 20; }
+/* en columnas estrechas, la barra puede salir del ancho de la columna sin cortarse */
+#ed-canvas .blk.tools-on > .blk-tools { max-width: none; width: max-content; }

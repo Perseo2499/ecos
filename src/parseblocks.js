@@ -130,6 +130,7 @@ function toBlock(t) {
         : { id: bid(), type: 'gallery', images, columns: a.columnsDesk || 3 };
     }
     case 'html': {
+      if (/^\s*<div class="ecos-clear"[^>]*><\/div>\s*$/.test(h)) return null; // corte tras una foto a un lado: se vuelve a poner al enviar
       if (new RegExp(`<style class="${FX_MARK}"`).test(h)) return null; // estilos de los efectos de Ecos: se vuelven a poner al enviar
       // carrusel y mosaico de Ecos
       if (/class="ecos-(carrusel|mosaico|galeria)"/.test(h)) {
