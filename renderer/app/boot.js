@@ -197,10 +197,11 @@ window.api.onConfigChanged((c) => { CFG = { ...CFG, ...c }; renderStatus(); });
   updateCount(); renderFeed(); renderManualCount();
   window.api.updateStatus().then(renderUpdate).catch(() => {});
   window.api.appInfo().then((i) => ($('#about-info').textContent = `${t('Versión')} ${i.version} · Electron ${i.electron} · ${i.platform}`)).catch(() => {});
+  Home.show(); // Inicio es lo primero que se ve (se pinta enseguida y se rellena al llegar los datos)
   if (CFG.wpConnected) { loadCategories(); refreshExported(true); }
   checkTokenExpiry();
   if (CFG.metaConnected) {
-    try { renderPages(await window.api.metaAccounts()); checkPending(); } catch (e) { toast(e.message, true); }
+    try { renderPages(await window.api.metaAccounts()); checkNewSocial(); } catch (e) { toast(e.message, true); }
   }
   if (!CFG.wizardDone) openWizard();
   showRecoverBanner();

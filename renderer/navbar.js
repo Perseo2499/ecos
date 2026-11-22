@@ -7,13 +7,14 @@
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const root = document.documentElement;
-  const TABS = ['posts', 'blog', 'connections', 'settings'];
+  const TABS = ['home', 'posts', 'blog', 'connections', 'settings'];
   const n = TABS.length;
   const STEP = 72, PILL = 250, PAD = 5; // hueco de cada icono, ancho de la píldora, relleno de la pista
   const INNER = (n - 1) * STEP + PILL;
   const DUR = 400;
   // Iconos de puntos (pares x,y de 0 a 1): rombo, triángulo, cruz y aspa
   const STARS = {
+    home: [[0.5, 0.1], [0.9, 0.45], [0.78, 0.9], [0.22, 0.9], [0.1, 0.45]],
     posts: [[0.5, 0.1], [0.9, 0.5], [0.5, 0.9], [0.1, 0.5]],
     blog: [[0.5, 0.12], [0.9, 0.85], [0.1, 0.85]],
     connections: [[0.5, 0.1], [0.5, 0.5], [0.5, 0.9], [0.1, 0.5], [0.9, 0.5]],

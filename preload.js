@@ -127,6 +127,9 @@ contextBridge.exposeInMainWorld('api', {
   totpConfirm: (c) => call('totp:confirm', c),
   totpDisable: (x) => call('totp:disable', x),
   onBackupProgress: on('backup:progress'),
+  backupCreate: (opts) => call('backup:create', opts),
+  backupCancelCreate: () => call('backup:cancelCreate'),
+  onBackupCreateProgress: on('backup:createProgress'),
 
   // Modo desarrollador: terminal integrada
   devTools: () => call('dev:tools'),
