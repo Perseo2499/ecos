@@ -2640,3 +2640,12 @@ body:has(.tab.active .b-bulk.on) #toast { bottom: 120px; }
 .fmt-bar.float > select { flex: 1 1 calc(25% - 4px); min-width: 0; max-width: none; font-size: 12px; padding-left: 8px; padding-right: 18px; text-overflow: ellipsis; }
 .fmt-bar.float > .sep:first-of-type { flex-basis: 100%; height: 0; width: 0; margin: 0; border: 0; background: none; }
 .fmt-bar.float > button { width: 32px; height: 32px; min-width: 0; }
+
+/* Foto colocada a un lado del texto: siempre por encima del texto que la rodea (si no, al pasar el ratón por el texto
+   este se ponía delante y la foto ya no se podía pulsar ni editar) */
+#ed-canvas .blk.blk-image.img-left, #ed-canvas .blk.blk-image.img-right { z-index: 22; }
+#ed-canvas .blk.blk-image.img-left.tools-on, #ed-canvas .blk.blk-image.img-right.tools-on,
+#ed-canvas .blk.blk-image.img-left.pinned, #ed-canvas .blk.blk-image.img-right.pinned { z-index: 26; }
+/* la barra del texto que rodea una foto va en el lado contrario a la foto, para no quedar debajo de ella */
+#ed-canvas .blk.blk-image.img-left + .blk:not(.blk-image) > .blk-tools { left: auto; right: 10px; }
+#ed-canvas .blk.blk-image.img-right + .blk:not(.blk-image) > .blk-tools { left: 10px; right: auto; }

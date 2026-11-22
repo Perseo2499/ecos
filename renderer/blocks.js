@@ -213,7 +213,7 @@
       const canvas = document.getElementById('ed-canvas');
       if (!canvas) return;
       if (this.pinned && !canvas.contains(this.pinned)) this.pinned = null;
-      const pick = el || this.pinned || canvas.querySelector('.blk:focus-within:not(:has(.blk:focus-within))');
+      const pick = this.pinned || el || canvas.querySelector('.blk:focus-within:not(:has(.blk:focus-within))');
       canvas.querySelectorAll('.blk.tools-on').forEach((x) => { if (x !== pick) x.classList.remove('tools-on'); });
       pick?.classList.add('tools-on');
       // la barra no se sale del lienzo (en la última de varias columnas estrechas se desplaza hacia la izquierda)
