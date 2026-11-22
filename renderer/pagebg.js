@@ -95,7 +95,7 @@
       out.push(`${B}::before{content:"";position:${c.fixed ? 'fixed' : 'absolute'};${c.fixed ? `inset:-${bleed}px` : `top:-${bleed}px;bottom:-${bleed}px;left:0;right:0`};z-index:-1;pointer-events:none;background-image:${l.image};background-size:${l.size};background-repeat:${l.repeat};background-position:${pos};filter:blur(${c.blur}px);clip-path:inset(${bleed}px ${c.fixed ? bleed : 0}px)}`);
     }
     // 2) Contenedores de Astra (layouts «plain» y «separate») sin fondo para que se vea el de la página
-    const clear = ['#page', '.hfeed.site', '.site-content', '.ast-container', '.ast-plain-container .site-content', '.ast-plain-container #primary',
+    const clear = ['#page', '.hfeed.site', '.site-content', '.site-content > .ast-container', '.ast-plain-container .site-content', '.ast-plain-container #primary',
       '.ast-separate-container .site-main', '.site-main', '.ast-separate-container .ast-article-single', '.ast-separate-container .ast-article-post',
       '.ast-separate-container .ast-archive-description', '.ast-separate-container #primary', '.ast-plain-container .ast-article-single'];
     out.push(`${clear.map((s) => `${B} ${s}`).join(',')}{background:transparent!important;background-image:none!important}`);
@@ -107,7 +107,8 @@
     out.push(`${B} #primary{box-sizing:border-box!important;float:none!important;width:calc(100% - 32px)!important;max-width:${c.width}px!important;margin:${c.margin}px auto!important;padding:clamp(20px,4vw,48px)!important;background:#fff!important;border-radius:${c.radius}px!important;box-shadow:${SHADOW_CSS[c.shadow]}!important}`);
     out.push(`${B} #primary .ast-article-single,${B} #primary article{padding:0!important;margin:0!important;border:0!important;box-shadow:none!important;background:transparent!important}`);
     out.push(`${B} #primary img{max-width:100%;height:auto}`);
-    out.push(`${B} .ast-container{max-width:100%!important;padding-left:0!important;padding-right:0!important}`);
+    // solo el contenedor del contenido: el de la cabecera (logo y menú) no se toca
+    out.push(`${B} .site-content > .ast-container,${B} #content > .ast-container{max-width:100%!important;padding-left:0!important;padding-right:0!important}`);
     // 5) Móvil: tarjeta casi a todo el ancho y el fondo se desplaza (los móviles no soportan bien «fixed»)
     out.push(`@media (max-width:767px){${B}{background-attachment:scroll!important}${blurred && c.fixed ? `${B}::before{position:absolute;inset:auto;top:-${bleed}px;bottom:-${bleed}px;left:0;right:0;clip-path:inset(${bleed}px 0)}` : ''}${B} #primary{width:calc(100% - 20px)!important;margin:12px auto!important;padding:20px 16px!important;border-radius:${Math.min(c.radius, 16)}px!important}}`);
     return out.join('\n');

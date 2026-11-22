@@ -105,3 +105,11 @@ test('convive con el bloque de efectos de Ecos y no deja bloques «raw»', () =>
   assert.ok(html.includes('ecos-pagebg'));
   assert.equal(P.parseBlocks(html).filter((x) => x.type === 'raw').length, 0);
 });
+
+test('el fondo no cambia la cabecera: ninguna regla toca un .ast-container que no sea el del contenido', () => {
+  const css = PB.css({ img: IMG, header: false });
+  // cada selector con .ast-container debe ir dentro del contenido (.site-content o #content)
+  const sels = css.split('}').map((r) => r.split('{')[0]).flatMap((s) => s.split(',')).filter((s) => s.includes('.ast-container'));
+  assert.ok(sels.length > 0);
+  for (const s of sels) assert.match(s, /(\.site-content|#content) > \.ast-container/, s);
+});
