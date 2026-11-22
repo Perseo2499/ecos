@@ -236,7 +236,7 @@ function renderShare() {
       ${seoSugg.title ? `<div class="seo-sg-row"><div><small>${t('Título')} · ${Seo.clean(seoSugg.title).length}</small><div>${escHtml(seoSugg.title)}</div></div><button class="btn tonal small" data-seo="use-title">${t('Usar')}</button></div>` : ''}
       ${seoSugg.description ? `<div class="seo-sg-row"><div><small>${t('Descripción')} · ${Seo.clean(seoSugg.description).length}</small><div>${escHtml(seoSugg.description)}</div></div><button class="btn tonal small" data-seo="use-desc">${t('Usar')}</button></div>` : ''}
       <button class="btn text small" data-seo="discard">${t('Descartar')}</button></div>` : '';
-  const canShare = wpSt === 'publish' && CFG.metaConnected && wpUrl;
+  const canShare = wpSt === 'publish' && CFG.metaConnected && wpUrl && CFG.shareFacebook === true;
   box.innerHTML = `<div class="section-label">${t('Cómo se verá')}</div>
     <div class="seo-tabs" role="tablist"><button role="tab" class="${shareTab === 'google' ? 'on' : ''}" data-seo="tab-google">Google</button><button role="tab" class="${shareTab === 'social' ? 'on' : ''}" data-seo="tab-social">${t('Redes')}</button></div>
     ${shareTab === 'google'
@@ -591,7 +591,7 @@ $('#send').onclick = (e) => busy(e.target, async () => {
     : res.status === 'future' ? (pg ? t('Página programada para el {d}.', { d: fmtDate(res.date) }) : t('Entrada programada para el {d}.', { d: fmtDate(res.date) })) : (pg ? t('Borrador de página creado en WordPress.') : t('Borrador creado en WordPress.'));
   if (res.status !== 'future' && res.date) $('#sent-text').textContent += ' ' + t('Fecha de la entrada: {d}.', { d: fmtDate(res.date) });
   $('#sent').classList.remove('hidden');
-  $('#sent-share').classList.toggle('hidden', !(res.status === 'publish' && CFG.metaConnected));
+  $('#sent-share').classList.toggle('hidden', !(res.status === 'publish' && CFG.metaConnected && CFG.shareFacebook === true));
   selected.clear(); updateCount(); renderFeed(); blog.loaded = false;
 });
 $('#sent-edit').onclick = () => lastSent && window.api.open(lastSent.editUrl);

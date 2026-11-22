@@ -23,6 +23,7 @@ function applyPrefs() {
   $('#s-accent-custom').value = p.accent;
   if ($('#ai-providers').children.length) renderAi(); // logos claros/oscuros
   $('#s-check-new').checked = p.checkNew; $('#s-check-token').checked = p.checkToken;
+  $('#s-share-fb').checked = CFG.shareFacebook === true;
   if (window.I18N.lang !== p.lang) { window.I18N.setLang(p.lang); refreshTexts(); }
 }
 matchMedia('(prefers-color-scheme: dark)').onchange = applyPrefs;
@@ -43,6 +44,12 @@ const setObs = new IntersectionObserver((entries) => {
 }, { rootMargin: '-90px 0px -60% 0px' });
 $$('.set-body .card').forEach((c) => setObs.observe(c));
 $('#s-check-new').onchange = () => savePrefs({ checkNew: $('#s-check-new').checked });
+// Compartir en Facebook al publicar (apagado por defecto: Ecos pasa contenido de las redes al blog, no al revés)
+$('#s-share-fb').onchange = async () => {
+  CFG = await window.api.setConfig({ shareFacebook: $('#s-share-fb').checked });
+  if (typeof renderShare === 'function') renderShare();
+  if (!CFG.shareFacebook) $('#sent-share')?.classList.add('hidden');
+};
 $('#s-check-token').onchange = () => savePrefs({ checkToken: $('#s-check-token').checked });
 $$('.set-nav a').forEach((a) => a.onclick = (e) => { e.preventDefault(); $(a.getAttribute('href')).scrollIntoView({ behavior: 'smooth', block: 'start' }); });
 

@@ -662,3 +662,36 @@ test('Meta: la conexión normal no pide el permiso de publicar (evita «Invalid 
   const base = src.match(/const SCOPES = \[([^\]]*)\]/)[1];
   assert.doesNotMatch(base, /pages_manage_posts/);
 });
+
+test('Inicio: recuento de pendientes sin las ya exportadas, caché y semana', () => {
+  const H = require('../renderer/homelogic');
+  const posts = Array.from({ length: 10 }, (_, i) => ({ id: String(i), source: 'instagram', date: new Date(2026, 0, 1 + i).toISOString() }));
+  const done = new Set(['2', '9']);
+  const r = H.countPending(posts, (p) => done.has(p.id), 3);
+  assert.equal(r.total, 10); assert.equal(r.pending, 8);
+  assert.deepEqual(r.newest.map((p) => p.id), ['8', '7', '6']); // las más recientes sin exportar
+  assert.equal(H.countPending([], () => false).pending, 0);
+  // caché: nueva, de otra página o con más de 6 h → se rehace
+  const now = Date.now();
+  assert.equal(H.isStale(null, 'a|1', now), true);
+  assert.equal(H.isStale({ key: 'a|1', at: now - 3600e3 }, 'a|1', now), false);
+  assert.equal(H.isStale({ key: 'a|1', at: now - 7 * 3600e3 }, 'a|1', now), true);
+  assert.equal(H.isStale({ key: 'b|1', at: now }, 'a|1', now), true);
+  // semana de lunes a domingo (22/11/2026 es domingo → lunes 16)
+  const ws = H.weekStart(new Date(2026, 10, 22, 15));
+  assert.equal(H.ymd(ws), '2026-11-16');
+  assert.equal(H.ymd(H.weekStart(new Date(2026, 10, 16))), '2026-11-16');
+  const g = H.groupByWeekday([
+    { id: 1, date: new Date(2026, 10, 16, 18).toISOString() }, { id: 2, date: new Date(2026, 10, 16, 9).toISOString() },
+    { id: 3, date: new Date(2026, 10, 22, 10).toISOString() }, { id: 4, date: new Date(2026, 10, 23, 10).toISOString() },
+  ], ws);
+  assert.equal(g.length, 7);
+  assert.deepEqual(g[0].map((x) => x.id), [2, 1]); // ordenadas por hora
+  assert.deepEqual(g[6].map((x) => x.id), [3]);
+  assert.equal(g.flat().length, 3); // la del lunes siguiente queda fuera
+  // revisión y fotos sin entrada
+  const pi = H.problemItems({ noCat: [{ id: 1, date: '2026-01-01' }, { id: 2, date: '2026-02-01' }], noImg: [{ id: 1, date: '2026-01-01' }] });
+  assert.deepEqual(pi.map((x) => [x.id, !!x.cat, !!x.img]), [[2, true, false], [1, true, true]]);
+  const un = H.unusedPhotos([{ id: 1, type: 'image', date: '2026-01-01' }, { id: 2, type: 'image', date: '2026-03-01' }, { id: 3, type: 'video', date: '2026-04-01' }, { id: 4, type: 'image', date: '2026-02-01' }], { 1: [{ id: 9 }] }, 1);
+  assert.equal(un.total, 2); assert.deepEqual(un.items.map((m) => m.id), [2]);
+});
