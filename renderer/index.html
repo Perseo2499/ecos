@@ -121,6 +121,7 @@
             <button id="d-media-add" class="btn tonal small"><span class="ms">upload</span><span data-i18n>Subir fotos</span></button>
             <button id="d-media-paste" class="btn tonal small" data-i18n-title title="Pega una imagen copiada (también con Ctrl+V dentro del texto)"><span class="ms">content_paste</span><span data-i18n>Pegar imagen</span></button>
             <button id="d-media-lib" class="btn tonal small"><span class="ms">photo_library</span><span data-i18n>De la biblioteca</span></button>
+            <button id="d-media-gp" class="btn tonal small"><span class="ms">add_photo_alternate</span><span data-i18n>De Google Fotos</span></button>
             <p class="hint tiny" data-i18n>Arrástralas al texto, a una galería o a un carrusel.</p>
           </div>
           <!-- Lienzo -->
@@ -396,6 +397,30 @@
         <div class="card-actions">
           <button type="submit" class="btn text" data-i18n>Guardar</button>
           <button type="button" id="wp-login" class="btn filled"><span class="ms">login</span><span data-i18n>Conectar</span></button>
+        </div>
+      </form>
+
+      <form class="card" id="f-gp">
+        <div class="card-head"><span class="ms fill ic gp">photo_library</span><h2>Google Fotos</h2><span class="hint" data-i18n>Fotos para entradas y páginas</span></div>
+        <div class="field"><label>Client ID</label><input name="gpClientId" autocomplete="off"></div>
+        <div class="field"><label>Client Secret</label><input name="gpClientSecret" type="password" autocomplete="off"></div>
+        <button type="button" id="gp-json" class="btn outlined"><span class="ms">upload_file</span><span data-i18n>Cargar archivo de credenciales (JSON)</span></button>
+        <div class="field copy"><label data-i18n>URI de redireccionamiento</label><input id="gp-redirect" readonly><button type="button" class="btn text icon-only" data-copy="#gp-redirect" data-i18n-title title="Copiar"><span class="ms">content_copy</span></button></div>
+        <details class="help"><summary><span class="ms">info</span><span data-i18n>¿Cómo lo consigo?</span></summary>
+          <ol class="wz-list">
+            <li data-i18n>Entra en console.cloud.google.com con tu cuenta de Google y crea un proyecto nuevo (por ejemplo «Ecos»).</li>
+            <li data-i18n>Menú «APIs y servicios» → Biblioteca → busca «Google Photos Picker API» y pulsa «Habilitar».</li>
+            <li data-i18n>Pantalla de consentimiento de OAuth: tipo de usuario «Externo». Añade tu correo como «usuario de prueba» y, en los ámbitos, photospicker.mediaitems.readonly.</li>
+            <li data-i18n>Credenciales → Crear credenciales → ID de cliente de OAuth → tipo de aplicación «Aplicación de escritorio». Copia el ID de cliente y el secreto y pégalos aquí.</li>
+            <li data-i18n>Pulsa «Conectar con Google», elige tu cuenta y acepta el permiso.</li>
+          </ol>
+          <p class="hint" data-i18n>Aviso: mientras la app de Google esté en modo «Prueba», Google caduca el permiso a los 7 días y habrá que volver a pulsar «Conectar con Google». Para evitarlo, en la pantalla de consentimiento pulsa «Publicar aplicación» (no hace falta verificarla si solo la usas tú).</p>
+          <p class="hint" data-i18n>Ecos no puede ver toda tu biblioteca: solo recibe las fotos que elijas en la ventana de Google Fotos.</p>
+        </details>
+        <div class="card-actions">
+          <button type="submit" class="btn text" data-i18n>Guardar</button>
+          <button type="button" id="gp-logout" class="btn text danger hidden" data-i18n>Desconectar</button>
+          <button type="button" id="gp-login" class="btn filled"><span class="ms">login</span><span data-i18n>Conectar con Google</span></button>
         </div>
       </form>
 
@@ -859,6 +884,7 @@
 <script src="app/blog.js"></script>
 <script src="app/links.js"></script>
 <script src="app/media.js"></script>
+<script src="app/gphotos.js"></script>
 <script src="app/settings.js"></script>
 <script src="app/restore.js"></script>
 <script src="app/webbackup.js"></script>

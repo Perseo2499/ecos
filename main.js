@@ -140,6 +140,7 @@ const publicCfg = () => ({
   ...cfg,
   metaAppSecret: cfg.metaAppSecret ? '••••••' : '', wpClientSecret: cfg.wpClientSecret ? '••••••' : '',
   anthropicKey: cfg.anthropicKey ? '••••••' : '',
+  gpClientSecret: cfg.gpClientSecret ? '••••••' : '', gpAccessToken: undefined, gpRefreshToken: undefined, gpConnected: !!cfg.gpRefreshToken, gpRedirectUri: 'http://localhost:53682/google',
   metaUserToken: undefined, wpToken: undefined, __totp: undefined, __recovery: undefined, vault: undefined, sentContent: undefined,
   lock: cfg.lock ? { auto: cfg.lock.auto ?? 15, twoFactor: !!cfg.__totp, recoveryLeft: (cfg.__recovery || []).length, hello: !!cfg.lock.hello } : null,
   metaConnected: !!cfg.metaUserToken, wpConnected: wpIsConnected(),
@@ -193,7 +194,7 @@ const handle = (name, fn) => ipcMain.handle(name, async (_e, ...args) => {
   try { return { ok: true, data: await fn(...args) }; } catch (err) { return { ok: false, error: err.message }; }
 });
 
-const PROTECTED_KEYS = new Set(['lock', 'vault', '__totp', '__recovery', 'metaUserToken', 'wpToken', 'sentContent', 'restored', 'exported', 'origUploads', 'mediaHashes']);
+const PROTECTED_KEYS = new Set(['lock', 'vault', '__totp', '__recovery', 'metaUserToken', 'wpToken', 'gpAccessToken', 'gpRefreshToken', 'gpTokenExpires', 'sentContent', 'restored', 'exported', 'origUploads', 'mediaHashes']);
 handle('config:get', () => publicCfg());
 handle('config:set', (changes) => {
   // Si cambian los datos de la web propia, hay que volver a pulsar «Conectar»
@@ -419,6 +420,87 @@ handle('media:fetchImage', async (url) => {
   if (buf.length > 40 * 1024 * 1024) throw new Error('La imagen es demasiado grande para recortarla');
   return { bytes: new Uint8Array(buf), type };
 });
+// ---- Google Fotos (Photos Picker API): conectar y elegir fotos para subirlas a la biblioteca ----
+const gphotos = require('./src/gphotos').make({ save: () => store.save(cfg) });
+let gpPick = null; // elección en curso: { cancelled }
+const sendGpProgress = (p) => { try { mainWin?.webContents.send('gphotos:progress', p); } catch { /* ventana cerrada */ } };
+handle('gphotos:login', async () => {
+  const r = await gphotos.login(cfg);
+  cfg.gpAccessToken = r.accessToken; cfg.gpRefreshToken = r.refreshToken; cfg.gpTokenExpires = r.expiresAt;
+  store.save(cfg);
+  return publicCfg();
+});
+// Credenciales: archivo JSON de Google Cloud (el que se elige o el que se ha encontrado y la persona ha aceptado)
+let gpFound = [];
+const gpApplyCredentials = (file) => {
+  const c = require('./src/gphotos').parseCredentials(fs.readFileSync(file, 'utf8'));
+  cfg.gpClientId = c.clientId; cfg.gpClientSecret = c.clientSecret;
+  store.save(cfg);
+  return publicCfg();
+};
+handle('gphotos:loadCredentials', async (file) => {
+  if (file) { // solo un archivo que Ecos haya encontrado antes en sus carpetas
+    if (!gpFound.includes(file)) throw new Error('Archivo no permitido');
+    return gpApplyCredentials(file);
+  }
+  const r = await dialog.showOpenDialog(mainWin, { title: 'Credenciales de Google (client_secret….json)', properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] });
+  if (r.canceled || !r.filePaths[0]) return null;
+  return gpApplyCredentials(r.filePaths[0]);
+});
+// Busca client_secret*.json solo en las carpetas de Ecos; devuelve la ruta
+handle('gphotos:findCredentials', async () => {
+  if (cfg.gpClientId && cfg.gpClientSecret) return null;
+  const get = (n) => { try { return app.getPath(n); } catch { return ''; } };
+  const docs = get('documents');
+  const dirs = [app.getPath('userData'), path.dirname(process.execPath), docs && path.join(docs, 'Ecos'), get('downloads')].filter(Boolean);
+  gpFound = require('./src/gphotos').findCredentialFiles(dirs);
+  return gpFound[0] || null;
+});
+handle('gphotos:logout', () => { cfg.gpAccessToken = ''; cfg.gpRefreshToken = ''; cfg.gpTokenExpires = ''; store.save(cfg); return publicCfg(); });
+handle('gphotos:cancel', () => { if (gpPick) gpPick.cancelled = true; return true; });
+handle('gphotos:pick', async () => {
+  if (!isSelf()) throw new Error('La biblioteca de medios solo está disponible con «Mi web (wp-admin)» en Conexiones → WordPress.');
+  if (!cfg.gpRefreshToken) throw new Error('Google Fotos no está conectado. Conéctalo en Conexiones → Google Fotos.');
+  if (gpPick) throw new Error('Ya hay una selección de Google Fotos en marcha');
+  const job = gpPick = { cancelled: false };
+  let session = null;
+  try {
+    session = await gphotos.createSession(cfg);
+    // /autoclose: Google cierra la pestaña sola al pulsar «Listo»
+    await shell.openExternal(String(session.pickerUri).replace(/\/?$/, '') + '/autoclose');
+    sendGpProgress({ phase: 'waiting' });
+    await gphotos.pollSession(cfg, session, { isCancelled: () => job.cancelled });
+    const items = await gphotos.listItems(cfg, session.id);
+    const out = [];
+    let n = 0;
+    for (const it of items) {
+      if (job.cancelled) break;
+      n++;
+      sendGpProgress({ phase: 'uploading', done: n, total: items.length });
+      try {
+        const d = await gphotos.download(cfg, it);
+        let up;
+        if (isSelf()) {
+          up = await wpCall(() => wpself.uploadNamed(cfg, d.buf, d.name, { keep: true }));
+          if (d.date) await wpself.setMediaDate(cfg, up.id, new Date(d.date).toISOString()).catch(() => {});
+        } else {
+          up = await wpCall(() => WP().uploadNamed(cfg, d.buf, d.name, { keep: true }));
+        }
+        out.push({ id: up.id, url: up.url, type: d.type, alt: '' });
+      } catch (e) { log('Google Fotos', it.id, e.message); if (/Vuelve a conectar/.test(e.message)) throw e; }
+    }
+    if (items.length && !out.length && !job.cancelled) throw new Error('No se ha podido subir ninguna foto de Google Fotos');
+    mediaUsageCache = null;
+    return out;
+  } catch (e) {
+    if (e.cancelled) return [];
+    throw e;
+  } finally {
+    if (session) gphotos.deleteSession(cfg, session.id);
+    gpPick = null;
+  }
+});
+
 handle('media:upload', async () => {
   const r = await dialog.showOpenDialog(mainWin, {
     title: 'Fotos y vídeos para la entrada', properties: ['openFile', 'multiSelections'],
@@ -556,7 +638,7 @@ handle('ai:models', (id, draftKey, draftUrl) => {
 handle('ai:test', async () => { const c = await ai.testConnection(cfg.ai); return c.tool ? `${require('./src/clirun').TOOLS[c.tool].name}${c.model ? ' · ' + c.model : ''}` : `${ai.PROVIDERS[c.id].name} · ${c.model}`; });
 
 // --- Copia de seguridad de la configuración ---
-const BACKUP_KEYS = ['devDir', 'metaAppId', 'metaAppSecret', 'metaConfigId', 'graphVersion', 'wpMode', 'wpUrl', 'wpUser', 'wpAppPassword', 'wpSite', 'wpPublicUrl', 'wpEditor', 'wpClientId', 'wpClientSecret', 'ai', 'aiInstructions', 'format', 'templates', 'blockTemplates', 'blockSections', 'exported', 'prefs'];
+const BACKUP_KEYS = ['devDir', 'metaAppId', 'metaAppSecret', 'metaConfigId', 'graphVersion', 'wpMode', 'wpUrl', 'wpUser', 'wpAppPassword', 'wpSite', 'wpPublicUrl', 'wpEditor', 'wpClientId', 'wpClientSecret', 'gpClientId', 'gpClientSecret', 'ai', 'aiInstructions', 'format', 'templates', 'blockTemplates', 'blockSections', 'exported', 'prefs'];
 handle('config:export', async (withSecrets) => {
   const r = await dialog.showSaveDialog(mainWin, { title: 'Guardar copia de la configuración', defaultPath: `ecos-configuracion-${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] });
   if (r.canceled) return false;

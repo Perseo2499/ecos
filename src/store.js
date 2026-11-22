@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const V = require('./vault');
 
 const file = () => path.join(app.getPath('userData'), 'config.json');
-const SECRET_KEYS = ['metaAppSecret', 'metaUserToken', 'wpClientSecret', 'wpToken', 'wpAppPassword', 'anthropicKey'];
+const SECRET_KEYS = ['metaAppSecret', 'metaUserToken', 'wpClientSecret', 'wpToken', 'wpAppPassword', 'anthropicKey', 'gpClientSecret', 'gpAccessToken', 'gpRefreshToken'];
 const sys = { enc: (s) => (safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(s).toString('base64') : s), dec: (s) => (safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(Buffer.from(s, 'base64')) : s) };
 
 let key = null;      // llave de la bóveda (solo en memoria y solo mientras está desbloqueada)

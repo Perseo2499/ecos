@@ -224,7 +224,7 @@ function renderMediaLib() {
     return;
   }
   if (mediaLib) return; // ya está montada; «Actualizar» recarga
-  box.innerHTML = `<div class="mg-bar"><span class="mg-sel">${t('Pulsa una foto para seleccionarla; doble clic para verla en grande.')}</span><span class="mg-acts"></span></div><div class="mg-host"></div>`;
+  box.innerHTML = `<div class="mg-bar"><span class="mg-sel">${t('Pulsa una foto para seleccionarla; doble clic para verla en grande.')}</span><button id="gp-import" class="btn tonal small gp-import"><span class="ms">add_photo_alternate</span>${t('Importar de Google Fotos')}</button><span class="mg-acts"></span></div><div class="mg-host"></div>`;
   const acts = box.querySelector('.mg-acts'), label = box.querySelector('.mg-sel');
   const sync = () => {
     const n = mediaLib.sel.size, sel = [...mediaLib.sel.values()];
