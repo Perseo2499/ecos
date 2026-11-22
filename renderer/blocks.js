@@ -315,6 +315,90 @@
       });
     },
 
+    // Soltar una foto DENTRO de un párrafo: el párrafo se parte por el final de la frase más cercana y la foto queda
+    // entre las dos partes (si estaba a un lado del texto, el texto que sigue la rodea). Una línea marca dónde caerá.
+    splitPoint(rt, x, y) {
+      const txt = rt.textContent || '';
+      let node = null, off = 0;
+      if (document.caretRangeFromPoint) { const r = document.caretRangeFromPoint(x, y); if (r && rt.contains(r.startContainer)) { node = r.startContainer; off = r.startOffset; } }
+      if (!node) return null;
+      // posición del cursor en el texto plano
+      let pos = 0;
+      const w = document.createTreeWalker(rt, NodeFilter.SHOW_TEXT);
+      for (let n = w.nextNode(); n; n = w.nextNode()) { if (n === node) { pos += off; break; } pos += n.length; }
+      // fronteras: inicio, final y después de cada «. », «! », «? », «… » o «: »
+      const marks = [0, txt.length];
+      const re = /[.!?…:]["»”')\]]*\s+/g;
+      for (let m = re.exec(txt); m; m = re.exec(txt)) marks.push(m.index + m[0].length);
+      let best = 0;
+      for (const k of marks) if (Math.abs(k - pos) < Math.abs(best - pos)) best = k;
+      return { at: best, len: txt.length };
+    },
+    // rango DOM en la posición «at» del texto plano
+    rangeAt(rt, at) {
+      const r = document.createRange();
+      let acc = 0;
+      const w = document.createTreeWalker(rt, NodeFilter.SHOW_TEXT);
+      for (let n = w.nextNode(); n; n = w.nextNode()) {
+        if (acc + n.length >= at) { r.setStart(n, Math.max(0, at - acc)); r.collapse(true); return r; }
+        acc += n.length;
+      }
+      r.selectNodeContents(rt); r.collapse(false); return r;
+    },
+    acceptSplitDrop(el, rt, b) {
+      const okDrag = () => {
+        if (!drag) return false;
+        if (drag.kind === 'block') { const src = this.locate(drag.id)?.b; return !!src && src.type === 'image' && src.id !== b.id; }
+        return this.isPhoto(drag);
+      };
+      let mark = null;
+      const clear = () => { mark?.remove(); mark = null; el.classList.remove('split-over'); };
+      el.addEventListener('dragover', (e) => {
+        if (!okDrag() || e.target.closest('.blk') !== el) return;
+        e.preventDefault(); e.stopPropagation();
+        const sp = this.splitPoint(rt, e.clientX, e.clientY);
+        if (!sp) return;
+        const rr = sp.at >= sp.len ? null : this.rangeAt(rt, sp.at).getClientRects()[0];
+        const box = el.getBoundingClientRect(), rb = rt.getBoundingClientRect();
+        if (!mark) { mark = document.createElement('div'); mark.className = 'split-mark'; el.appendChild(mark); }
+        el.classList.add('split-over');
+        // línea horizontal en el punto donde se partirá (al principio o al final: borde del párrafo)
+        const top = sp.at <= 0 ? rb.top - 4 : sp.at >= sp.len || !rr ? rb.bottom + 2 : rr.top - 2;
+        Object.assign(mark.style, { top: Math.round(top - box.top) + 'px', left: Math.round(rb.left - box.left) + 'px', width: Math.round(rb.width) + 'px' });
+        mark.dataset.where = sp.at <= 0 ? 'antes' : sp.at >= sp.len ? 'después' : 'frase';
+      });
+      el.addEventListener('dragleave', (e) => { if (!el.contains(e.relatedTarget)) clear(); });
+      el.addEventListener('drop', (e) => {
+        if (!okDrag() || e.target.closest('.blk') !== el) return;
+        e.preventDefault(); e.stopPropagation();
+        const sp = this.splitPoint(rt, e.clientX, e.clientY);
+        clear();
+        const d = drag; drag = null; endDrag();
+        if (!sp) return;
+        // texto antes y después del punto (conservando negritas, enlaces…)
+        const r = this.rangeAt(rt, sp.at);
+        const pre = document.createRange(); pre.selectNodeContents(rt); pre.setEnd(r.startContainer, r.startOffset);
+        const post = document.createRange(); post.selectNodeContents(rt); post.setStart(r.startContainer, r.startOffset);
+        const html = (rg) => { const dv = document.createElement('div'); dv.appendChild(rg.cloneContents()); return dv.innerHTML.replace(/^(\s|&nbsp;|<br>)+|(\s|&nbsp;|<br>)+$/g, ''); };
+        const before = sp.at <= 0 ? '' : html(pre), after = sp.at >= sp.len ? '' : html(post);
+        this.change(() => {
+          // la foto: si viene de un bloque de imagen, se mueve el bloque entero (conserva lado, tamaño y estilo)
+          let imgBlock = null;
+          const srcId = d.kind === 'block' ? d.id : d.kind === 'photo' && d.index == null && this.locate(d.block)?.b.type === 'image' ? d.block : null;
+          if (srcId) { const from = this.locate(srcId); if (from) imgBlock = from.arr.splice(from.i, 1)[0]; }
+          else { const it = this.take(d); if (it) imgBlock = this.create('image', { img: it, align: 'left', width: 50 }); }
+          if (!imgBlock) return;
+          const loc = this.locate(b.id);
+          if (!loc) return;
+          const parts = [];
+          if (before) parts.push({ ...b, html: before });
+          parts.push(imgBlock);
+          if (after) parts.push(before ? this.create('paragraph', { ...Object.fromEntries(Object.entries(b).filter(([k]) => !['id', 'html', 'type'].includes(k))), html: after }) : { ...b, html: after });
+          loc.arr.splice(loc.i, 1, ...parts);
+        });
+      });
+    },
+
     // Portada (imagen destacada) encima del título: se suelta aquí una foto para elegirla
     renderCover() {
       const box = $('#d-cover');
@@ -436,6 +520,37 @@
       const handle = $('.blk-handle', el);
       handle.ondragstart = (e) => { drag = { kind: 'block', id: b.id }; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/x-ecos', 'block'); ghost(e, `<span class="ms">${T.icon}</span>${esc(T.name)}`); startDrag(el, 'dragging-block'); };
       handle.ondragend = () => { drag = null; endDrag(); };
+      // Un bloque arrastrado con el asa también se puede soltar ENCIMA de otro bloque: va antes o después de él según
+      // la mitad en la que se suelte (antes solo valía la línea fina entre bloques y parecía que el asa no hacía nada)
+      const canDropBlock = (e) => {
+        if (!drag || drag.kind !== 'block' || drag.id === b.id || e.target.closest('.blk') !== el) return false;
+        if (this.within(drag.id, b.id)) return false; // un contenedor no entra en sí mismo
+        const src = this.locate(drag.id)?.b;
+        return !(b.type === 'paragraph' && src?.type === 'image'); // foto sobre un párrafo: lo parte (acceptSplitDrop)
+      };
+      const sideOf = (e) => { const r = el.getBoundingClientRect(); return e.clientY > r.top + r.height / 2; };
+      const unmark = () => el.classList.remove('drop-before', 'drop-after');
+      el.addEventListener('dragover', (e) => {
+        if (!canDropBlock(e)) return;
+        e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move';
+        const after = sideOf(e);
+        el.classList.toggle('drop-before', !after); el.classList.toggle('drop-after', after);
+      });
+      el.addEventListener('dragleave', (e) => { if (!el.contains(e.relatedTarget)) unmark(); });
+      el.addEventListener('drop', (e) => {
+        if (!canDropBlock(e)) { unmark(); return; }
+        e.preventDefault(); e.stopPropagation();
+        const after = sideOf(e), id = drag.id;
+        unmark(); drag = null; endDrag();
+        this.change(() => {
+          const from = this.locate(id);
+          if (!from) return;
+          const [mv] = from.arr.splice(from.i, 1);
+          const to = this.locate(b.id);
+          if (!to) { from.arr.splice(from.i, 0, mv); return; }
+          to.arr.splice(to.i + (after ? 1 : 0), 0, mv);
+        });
+      });
       this.body(b, i, $('.blk-body', el), $('.blk-extra', el), arr);
       return el;
     },
@@ -548,7 +663,7 @@
       });
 
       switch (b.type) {
-        case 'paragraph': { const p = textBlock('p'); applyStyle(p, b); body.appendChild(p); break; }
+        case 'paragraph': { const p = textBlock('p'); applyStyle(p, b); body.appendChild(p); this.acceptSplitDrop(body.parentElement, p, b); break; }
 
         case 'heading': {
           const h = textBlock('h' + b.level, 'h'); applyStyle(h, b);
