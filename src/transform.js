@@ -251,6 +251,8 @@ const FX_CSS = {
   sombra: '.ecos-sombra{text-shadow:1px 2px 4px rgba(0,0,0,.35)}',
   zoom: '.wp-block-image.ecos-zoom{overflow:hidden}.wp-block-image.ecos-zoom img{transition:transform .5s cubic-bezier(.2,0,0,1)}.wp-block-image.ecos-zoom:hover img{transform:scale(1.08)}',
   bw: '.wp-block-image.ecos-bn img{filter:grayscale(1)}',
+  // el tema puede no traer la clase de WordPress para «justificado»: se asegura aquí (sin tocar el bloque, que sigue siendo válido en WordPress)
+  justify: '.has-text-align-justify{text-align:justify}',
   iconos: '.wp-block-list.ecos-iconos{list-style:none;padding-left:0}.wp-block-list.ecos-iconos li{margin:.4em 0}.ecos-iconos .ecos-ico{display:inline-block;min-width:1.6em;color:#fd9800;font-weight:700}',
 };
 // Imagen y texto (clases ecos-mt-*) y carrusel (clases ecos-c*): un trozo de CSS por clase usada
@@ -479,7 +481,7 @@ const FONTS = {
 };
 function blockStyle(b, { alignKey = 'align', align = true, dropCap = false, fx = null } = {}) {
   const attrs = {}, cls = [], css = [];
-  if (align && ['center', 'right', 'justify'].includes(b.align)) { attrs[alignKey] = b.align; cls.push('has-text-align-' + b.align); }
+  if (align && ['center', 'right', 'justify'].includes(b.align)) { attrs[alignKey] = b.align; cls.push('has-text-align-' + b.align); if (b.align === 'justify') fx?.add('justify'); }
   if (dropCap && b.dropCap) { attrs.dropCap = true; cls.push('has-drop-cap'); }
   const st = {};
   const color = SAFE_COLOR.test(b.color || '') && b.color, bg = SAFE_COLOR.test(b.bg || '') && b.bg;

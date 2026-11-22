@@ -942,3 +942,10 @@ test('imagen y texto: el formato del texto (alineación, tamaño, color, fuente)
   // sin formato, igual que antes
   assert.doesNotMatch(T.composeBlocks([{ ...mt, align: undefined, size: undefined, color: undefined }]), /wp:paragraph \{/);
 });
+
+test('texto justificado: la clase de WordPress y la regla que lo asegura aunque el tema no la traiga', () => {
+  const html = T.composeBlocks([{ id: 'p', type: 'paragraph', html: 'Hola', align: 'justify' }]);
+  assert.match(html, /class="has-text-align-justify"/);
+  assert.match(html, /<style class="ecos-fx">[^<]*\.has-text-align-justify\{text-align:justify\}/);
+  assert.doesNotMatch(T.composeBlocks([{ id: 'p', type: 'paragraph', html: 'Hola' }]), /ecos-fx/);
+});
