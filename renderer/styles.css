@@ -2379,3 +2379,13 @@ body:has(.tab.active .b-bulk.on) #toast { bottom: 120px; }
 :root[data-vinyl="on"] .hc-arrow { background: #000; border: 1px solid #3a3a3a; color: #fff; }
 :root[data-vinyl="on"] .hc-tag { background: transparent; border: 1px solid #3a3a3a; color: #ddd; }
 @media (prefers-reduced-motion: reduce) { .home-counting .spin, .hc-skel i, .wk-sk { animation: none; } }
+/* ---- Google Fotos ---- */
+.ic.gp { background: linear-gradient(135deg, #ea4335, #fbbc04 40%, #34a853 70%, #4285f4); color: #fff; }
+.gp-dlg .dlg { max-width: 420px; }
+.gp-dlg .gp-status { text-align: center; margin: 8px 0 0; }
+.gp-prog { margin-top: 12px; }
+.gp-bar { height: 6px; border-radius: 99px; background: var(--outline-var); overflow: hidden; }
+.gp-bar i { display: block; height: 100%; width: 0; background: var(--primary); transition: width .25s; }
+.mg-bar .gp-import { width: auto; margin: 0 8px 0 auto; }
+:root[data-vinyl="on"] .gp-bar { border-radius: 2px; }
+:root[data-vinyl="on"] .gp-bar i { border-radius: 0; }

@@ -4,7 +4,7 @@
 // ---------------------------------------------------------------- Conexiones en desplegables
 // Lista de conexiones, una encima de otra y a todo el ancho. Empiezan cerradas; cada una se abre o se cierra
 // pulsando su nombre o su flecha. Se recuerda lo que dejó abierto cada persona.
-const CONN = { 'f-meta': () => CFG.metaConnected, 'f-wp': () => CFG.wpConnected, 'ai-card': () => CFG.aiConfigured, 'dev-card': null };
+const CONN = { 'f-meta': () => CFG.metaConnected, 'f-wp': () => CFG.wpConnected, 'f-gp': () => CFG.gpConnected, 'ai-card': () => CFG.aiConfigured, 'dev-card': null };
 let connOpen = null;
 try { connOpen = JSON.parse(localStorage.getItem('ecos-conn-open') || 'null'); } catch { /* sin almacenamiento */ }
 function renderConnStates() {
@@ -99,6 +99,7 @@ function fillConnections() {
   $('#meta-redirect').value = CFG.metaRedirectUri; $('#wp-redirect').value = CFG.wpRedirectUri;
   for (const f of ['#f-meta', '#f-wp']) for (const el of $(f).elements) if (el.name) el.value = CFG[el.name] || '';
   setWpMode(CFG.wpMode || 'selfhosted');
+  if (typeof fillGPhotos === 'function') fillGPhotos();
 }
 // Modo de WordPress: web propia (wp-admin) o WordPress.com
 function setWpMode(m) {
