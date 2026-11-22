@@ -84,7 +84,7 @@
     // children = [bloques] (sección, portada) · cols = [{ width, children }] (columnas)
     kids(b) { return Array.isArray(b.children) ? [b.children] : Array.isArray(b.cols) ? b.cols.map((c) => (c.children = c.children || [])) : []; },
     // Todos los bloques, también los de dentro, en el orden del documento
-    flat(arr = this.draft.blocks, out = []) { for (const b of arr) { out.push(b); for (const l of this.kids(b)) this.flat(l, out); } return out; },
+    flat(arr = this.draft?.blocks || [], out = []) { for (const b of arr || []) { out.push(b); for (const l of this.kids(b)) this.flat(l, out); } return out; },
     // Dónde está un bloque: { arr, i, b, parent }
     locate(id, arr = this.draft.blocks, parent = null) {
       for (let i = 0; i < arr.length; i++) {
