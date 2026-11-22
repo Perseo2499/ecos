@@ -31,12 +31,37 @@ function run(bin, args, { cwd, input, timeout = 180000 }) {
 }
 
 // Saca el primer objeto JSON de un texto (por si la CLI lo envuelve en ``` o añade una frase)
+// Busca, respetando las comillas, cada objeto {…} o lista […] completo del texto y devuelve el más largo que sea JSON
+// válido (la CLI a veces escribe una frase antes, lo envuelve en ``` en mitad del texto o cita llaves en su explicación)
+function jsonCandidates(t) {
+  const out = [];
+  for (let i = 0; i < t.length; i++) {
+    const open = t[i];
+    if (open !== '{' && open !== '[') continue;
+    const stack = [];
+    let inStr = false, esc = false;
+    for (let j = i; j < t.length; j++) {
+      const c = t[j];
+      if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; continue; }
+      if (c === '"') inStr = true;
+      else if (c === '{' || c === '[') stack.push(c);
+      else if (c === '}' || c === ']') {
+        const o = stack.pop();
+        if ((c === '}' && o !== '{') || (c === ']' && o !== '[')) break;
+        if (!stack.length) { out.push(t.slice(i, j + 1)); break; }
+      }
+    }
+  }
+  return out.sort((a, b) => b.length - a.length);
+}
 function extractJson(text) {
-  const t = String(text || '').trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
-  try { return JSON.parse(t); } catch { /* buscar dentro */ }
-  const a = t.indexOf('{'), b = t.lastIndexOf('}');
-  if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch { /* nada */ } }
-  throw new Error('La CLI no devolvió un JSON válido');
+  const raw = String(text || '').trim();
+  const fenced = [...raw.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)].map((m) => m[1].trim());
+  for (const t of [raw, ...fenced]) { try { return JSON.parse(t); } catch { /* seguir */ } }
+  for (const c of jsonCandidates(raw)) { try { const v = JSON.parse(c); if (v && typeof v === 'object') return v; } catch { /* siguiente */ } }
+  const e = new Error('La CLI no devolvió un JSON válido');
+  e.code = 'BAD_JSON';
+  throw e;
 }
 
 const loginHint = (tool, text) => (/log ?in|sign ?in|auth|credential|api[ _]?key|unauthori[sz]ed|401/i.test(text)
@@ -44,7 +69,18 @@ const loginHint = (tool, text) => (/log ?in|sign ?in|auth|credential|api[ _]?key
 
 // parts: [{type:'text', text}, {type:'image', base64, mediaType} | {type:'image', url}]
 // schema: JSON Schema de la respuesta. Devuelve el objeto JSON (lo valida luego zod en ai.js).
-async function ask({ tool, model, web = false }, parts, schema, log = () => {}) {
+async function ask(cfg, parts, schema, log = () => {}) {
+  try { return await askOnce(cfg, parts, schema, log); } catch (e) {
+    if (e.code !== 'BAD_JSON') throw e;
+    log('CLI: respuesta sin JSON válido; se repite la petición una vez');
+    const strict = [...parts, { type: 'text', text: '\nIMPORTANTE: tu respuesta anterior no se pudo leer. Devuelve SOLO el objeto JSON, sin explicaciones, sin ``` y sin texto antes ni después.' }];
+    try { return await askOnce(cfg, strict, schema, log); } catch (e2) {
+      if (e2.code === 'BAD_JSON') throw new Error('La IA (CLI) respondió con un formato que Ecos no puede leer, dos veces seguidas. Prueba otra vez, elige otro modelo en Conexiones → IA o hazlo con menos fotos a la vez.');
+      throw e2;
+    }
+  }
+}
+async function askOnce({ tool, model, web = false }, parts, schema, log = () => {}) {
   const T = TOOLS[tool];
   if (!T) throw new Error('Elige una CLI (Claude Code, Codex o Gemini CLI)');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ecos-cli-'));
@@ -150,4 +186,4 @@ async function search({ tool, model }, prompt, log = () => {}) {
   }
 }
 
-module.exports = { ask, search, TOOLS, MODELS, extractJson };
+module.exports = { extractJson, ask, search, TOOLS, MODELS, extractJson };

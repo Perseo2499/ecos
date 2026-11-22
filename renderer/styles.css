@@ -2659,3 +2659,7 @@ body:has(.tab.active .b-bulk.on) #toast { bottom: 120px; }
 /* Soltar un bloque encima de otro: línea antes o después */
 #ed-canvas .blk.drop-before { box-shadow: 0 -4px 0 0 var(--primary); }
 #ed-canvas .blk.drop-after { box-shadow: 0 4px 0 0 var(--primary); }
+
+/* Etiqueta de estado del editor («Publicada · Ver», «Borrador»…): siempre en una línea */
+#editor .ed-wp { white-space: nowrap; flex: none; display: inline-flex; align-items: center; gap: 4px; }
+#editor .ed-wp * { white-space: nowrap; }

@@ -372,6 +372,11 @@ const AltTexts = z.object({
 });
 
 async function altTexts(aiCfg, imageUrls, context = '') {
+  if (imageUrls.length > 6) {
+    const out = [];
+    for (let k = 0; k < imageUrls.length; k += 6) out.push(...await altTexts(aiCfg, imageUrls.slice(k, k + 6), context));
+    return out;
+  }
   const parts = [];
   imageUrls.forEach((url, i) => { parts.push({ type: 'text', text: `Imagen ${i}:` }); parts.push({ type: 'image', url }); });
   parts.push({ type: 'text', text: `Escribe el texto alternativo (atributo alt) de cada imagen para personas que usan lector de pantalla, en español. Contexto de la entrada: ${context.slice(0, 500)}` });

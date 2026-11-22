@@ -949,3 +949,10 @@ test('texto justificado: la clase de WordPress y la regla que lo asegura aunque 
   assert.match(html, /<style class="ecos-fx">[^<]*\.has-text-align-justify\{text-align:justify\}/);
   assert.doesNotMatch(T.composeBlocks([{ id: 'p', type: 'paragraph', html: 'Hola' }]), /ecos-fx/);
 });
+
+test('respuesta de la IA por CLI: se encuentra el JSON aunque venga con texto, llaves en la explicación o ```', () => {
+  const { extractJson } = require('../src/clirun');
+  assert.deepEqual(extractJson('Aquí tienes: {"alts":[{"index":0,"alt":"Un {grupo}"}]} ¡Listo!'), { alts: [{ index: 0, alt: 'Un {grupo}' }] });
+  assert.deepEqual(extractJson('Explico {esto}.\n```json\n{"x":[1,2]}\n```\nfin'), { x: [1, 2] });
+  assert.throws(() => extractJson('sin nada'), (e) => e.code === 'BAD_JSON');
+});
