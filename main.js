@@ -150,6 +150,7 @@ const publicCfg = () => ({
   templates: cfg.templates || [],
   metaTokenExpires: cfg.metaTokenExpires || null,
   lastSeenAt: cfg.lastSeenAt || null,
+  lastSeenPostDate: cfg.lastSeenPostDate || null, // fecha de la última publicación de redes que se vio (aviso de nuevas)
   wizardDone: !!cfg.wizardDone || (!!cfg.metaUserToken && wpIsConnected()),
   ai: aiPublic(),
   aiConfigured: (() => { try { if (!ai) ai = require('./src/ai'); aiReady(); return true; } catch { return false; } })(),
@@ -1012,6 +1013,37 @@ handle('blog:fixLinks', async (changes) => {
   }
   log(`Revisar enlaces: cambiados en ${done} entradas, ${errors.length} errores`);
   return { done, errors };
+});
+
+// --- Copia de seguridad de la web: entradas, páginas y (si se quiere) fotos en un WXR / ZIP (src/backupcreate.js) ---
+let webBackupJob = null;
+handle('backup:cancelCreate', () => { if (webBackupJob) { webBackupJob.stop = true; webBackupJob.ctrl.abort(); } return true; });
+handle('backup:create', async (opts = {}) => {
+  if (!isSelf()) throw new Error('La copia de seguridad de la web solo está disponible con «Mi web (wp-admin)» en Conexiones → WordPress.');
+  if (webBackupJob) throw new Error('Ya se está creando una copia de seguridad');
+  const photos = opts.photos !== false;
+  const host = (() => { try { return new URL(wpself.publicBase(cfg)).hostname.replace(/^www\./, '').replace(/[^a-z0-9.-]/gi, ''); } catch { return 'web'; } })();
+  const pick = await dialog.showSaveDialog(mainWin, {
+    title: 'Guardar la copia de seguridad de la web',
+    defaultPath: path.join(app.getPath('documents'), `copia-${host}-${new Date().toISOString().slice(0, 10)}.${photos ? 'zip' : 'xml'}`),
+    filters: photos ? [{ name: 'ZIP (XML + fotos)', extensions: ['zip'] }] : [{ name: 'Exportación de WordPress (XML)', extensions: ['xml'] }],
+  });
+  if (pick.canceled || !pick.filePath) return null;
+  const job = webBackupJob = { stop: false, ctrl: new AbortController() };
+  const send = (p) => { if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('backup:createProgress', p); };
+  try {
+    const media = await mediaAll(false).catch(() => []);
+    const r = await require('./src/backupcreate').createBackup({
+      siteName: wpLabel() || host, siteUrl: wpself.publicBase(cfg) || '', media,
+      listAll: (route) => wpCall(() => wpself.allParallel(cfg, route, { onProgress: (d, t) => send({ step: 'entradas', done: d, total: t }) })),
+      download: async (url) => {
+        const res = await fetch(url, { signal: job.ctrl.signal });
+        return res.ok ? Buffer.from(await res.arrayBuffer()) : null;
+      },
+    }, { file: pick.filePath, photos, onProgress: send, cancelled: () => job.stop });
+    log(`Copia de seguridad de la web: ${r.posts} entradas, ${r.pages} páginas, ${r.files} fotos (${r.missing} sin poder bajar) → ${pick.filePath}`);
+    return r;
+  } finally { webBackupJob = null; }
 });
 
 // --- Restaurar entradas desde una copia de seguridad (src/backup.js) ---

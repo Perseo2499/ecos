@@ -92,6 +92,7 @@ function showTab(name) {
   if (name === 'blog' && !blog.loaded && !['structure', 'calendar'].includes(blog.type)) loadBlog();
   if (name === 'posts') refreshExported();
   updateCount();
+  window.onTabShown?.(name); // Inicio y el aviso de publicaciones nuevas (app/home.js)
 }
 $$('header nav button').forEach((b) => b.onclick = () => showTab(b.dataset.tab));
 

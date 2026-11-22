@@ -11,11 +11,13 @@
 <header class="appbar">
   <div class="brand"><span class="logo"><img src="assets/logo-mark.svg" alt=""></span><b>Ecos</b></div>
   <nav class="tabs">
-    <button data-tab="posts" class="active"><span class="ms">dynamic_feed</span><span data-i18n>Publicaciones</span></button>
+    <button data-tab="home" class="active"><span class="ms">home</span><span data-i18n>Inicio</span></button>
+    <button data-tab="posts"><span class="ms">dynamic_feed</span><span data-i18n>Publicaciones</span></button>
     <button data-tab="blog"><span class="ms">article</span><span data-i18n>Blog</span></button>
     <button data-tab="connections"><span class="ms">hub</span><span data-i18n>Conexiones</span></button>
     <button data-tab="settings"><span class="ms">settings</span><span data-i18n>Ajustes</span></button>
   </nav>
+  <button id="gs-open" class="btn text icon-only gs-open" data-i18n-title title="Buscar en todo (Ctrl+K)"><span class="ms">search</span></button>
   <div class="status"><span id="st-meta" class="pill"></span><span id="st-wp" class="pill"></span></div>
 </header>
 
@@ -23,8 +25,11 @@
 <div id="banners"></div>
 
 <main>
+  <!-- ============================ INICIO ============================ -->
+  <section id="tab-home" class="tab active"><div id="home" class="home"></div></section>
+
   <!-- ============================ PUBLICACIONES ============================ -->
-  <section id="tab-posts" class="tab active">
+  <section id="tab-posts" class="tab">
     <div class="surface toolbar-card">
       <div class="sources chips">
         <button data-src="api" class="chip active"><span class="ms">link</span><span data-i18n>Conectar con Meta</span></button>
@@ -544,6 +549,14 @@
             <button id="bk-import" class="btn outlined"><span class="ms">upload</span><span data-i18n>Importar</span></button>
             <button id="bk-export" class="btn filled"><span class="ms">download</span><span data-i18n>Exportar</span></button>
           </div>
+          <div class="bw" id="bw">
+            <h3><span class="ms">cloud_download</span><span data-i18n>Copia de seguridad de la web</span></h3>
+            <p class="hint" data-i18n>Descarga todas las entradas y páginas de tu web (texto, categorías, etiquetas, fechas e imagen destacada) en un archivo XML de WordPress. Sirve para restaurarlas con Ecos o importarlas en cualquier WordPress.</p>
+            <label class="switch"><input type="checkbox" id="bw-photos" checked><span data-i18n>Incluir las fotos</span></label>
+            <p class="hint" id="bw-note"></p>
+            <div class="bw-prog hidden" id="bw-prog"><div class="bw-bar"><i></i></div><span id="bw-txt"></span><button id="bw-cancel" class="btn text small" data-i18n>Cancelar</button></div>
+            <div class="card-actions"><button id="bw-create" class="btn filled"><span class="ms">cloud_download</span><span data-i18n>Crear copia de la web</span></button></div>
+          </div>
         </div>
 
         <div class="card restore-card" id="set-restore">
@@ -809,6 +822,7 @@
 <script src="carousel.js"></script>
 <script src="normalize.js"></script>
 <script src="blogcheck.js"></script>
+<script src="newposts.js"></script>
 <script src="findreplace.js"></script>
 <script src="linkutil.js"></script>
 <script src="mosaic.js"></script>
@@ -833,6 +847,9 @@
 <script src="app/media.js"></script>
 <script src="app/settings.js"></script>
 <script src="app/restore.js"></script>
+<script src="app/webbackup.js"></script>
+<script src="app/home.js"></script>
+<script src="app/search.js"></script>
 <script src="app/devcli.js"></script>
 <script src="app/boot.js"></script>
 </body>

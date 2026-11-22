@@ -534,3 +534,84 @@ test('foto a un lado: en WordPress lo que no la rodea empieza por debajo (corte)
   // sin fotos a un lado, no hay cortes
   assert.doesNotMatch(T.composeBlocks([{ id: 'p', type: 'paragraph', html: 'x' }]), /ecos-clear/);
 });
+
+// ---------------------------------------------------------------- copia de seguridad de la web (WXR + ZIP) y avisos de redes
+test('copia de la web: el WXR creado se lee de vuelta con las mismas entradas', async () => {
+  const BC = require('../src/backupcreate');
+  const items = [
+    { id: 7, type: 'post', title: 'Fiesta de Navidad', content: '<!-- wp:paragraph --><p>Hola ]]> mundo</p><!-- /wp:paragraph -->', excerpt: 'Resumen', date: '2025-12-20T10:30:00', dateGmt: '2025-12-20T09:30:00',
+      status: 'publish', slug: 'fiesta-de-navidad', categories: [{ name: 'Eventos', slug: 'eventos' }], tags: [{ name: 'Navidad', slug: 'navidad' }], featured: 50 },
+    { id: 8, type: 'page', title: 'Quiénes somos', content: '<p>Texto</p>', excerpt: '', date: '2024-01-02T08:00:00', dateGmt: '2024-01-02T07:00:00', status: 'draft', slug: 'quienes-somos', parent: 3, categories: [], tags: [] },
+  ];
+  const attachments = [{ id: 50, title: 'Foto navidad', url: 'https://x.org/wp-content/uploads/2025/12/navidad.jpg', rel: '2025/12/navidad.jpg', mime: 'image/jpeg', alt: 'Niños', date: '2025-12-19T10:00:00', parent: 7 }];
+  const xml = BC.buildWxr({ title: 'Asociación Elín', link: 'https://x.org', items, attachments, terms: { categories: [{ id: 2, name: 'Eventos', slug: 'eventos', parent: 0 }], tags: [{ id: 5, name: 'Navidad', slug: 'navidad' }] } });
+  const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ecos-wxr-')), 'copia.xml');
+  fs.writeFileSync(f, xml);
+  const an = await B.analyze([f]);
+  assert.equal(an.siteName, 'Asociación Elín');
+  assert.equal(an.posts.length, 2);
+  const p = an.posts.find((x) => x.id === '7'), g = an.posts.find((x) => x.id === '8');
+  assert.equal(p.title, 'Fiesta de Navidad'); assert.equal(p.status, 'publish'); assert.equal(p.slug, 'fiesta-de-navidad'); assert.equal(p.type, 'post');
+  assert.equal(p.content, items[0].content); assert.equal(p.excerpt, 'Resumen'); assert.equal(p.date, '2025-12-20 10:30:00');
+  assert.deepEqual(p.categories, ['Eventos']); assert.deepEqual(p.tags, ['Navidad']);
+  assert.equal(p.thumbRel, '2025/12/navidad.jpg'); // imagen destacada
+  assert.equal(g.type, 'page'); assert.equal(g.status, 'draft');
+  const wp = B.wpFromWxr(xml);
+  assert.equal(wp.posts.find((x) => x.ID === '8').post_parent, '3');
+});
+
+test('copia de la web: ZIP con uploads/ que el restaurador encuentra, y ZIP64 con desplazamientos grandes', async () => {
+  const BC = require('../src/backupcreate');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ecos-zip-'));
+  const media = [{ id: 1, name: 'a', url: 'https://x.org/wp-content/uploads/2024/05/a.jpg', mime: 'image/jpeg', date: '2024-05-01T00:00:00' }, { id: 2, name: 'b', url: 'https://x.org/wp-content/uploads/2024/05/b.png', date: '2024-05-01' }];
+  const rest = { id: 1, title: { raw: 'Hola' }, content: { raw: '<p>x</p>' }, excerpt: { raw: '' }, date: '2024-05-01T10:00:00', date_gmt: '2024-05-01T08:00:00', status: 'publish', slug: 'hola', categories: [3], tags: [], featured_media: 1 };
+  const deps = {
+    siteName: 'Web', siteUrl: 'https://x.org', media,
+    listAll: async (route) => (route.includes('/posts?') ? [rest] : route.includes('/categories') ? [{ id: 3, name: 'Cat', slug: 'cat', parent: 0 }] : []),
+    download: async (url) => (url.endsWith('b.png') ? null : Buffer.from('FOTO-' + url)),
+  };
+  const f = path.join(dir, 'copia.zip');
+  const steps = [];
+  const r = await BC.createBackup(deps, { file: f, photos: true, onProgress: (p) => steps.push(p.step) });
+  assert.equal(r.posts, 1); assert.equal(r.files, 1); assert.equal(r.missing, 1);
+  assert.ok(steps.includes('fotos') && steps.includes('guardar'));
+  const an = await B.analyze([f]);
+  assert.equal(an.posts.length, 1); assert.deepEqual(an.posts[0].categories, ['Cat']);
+  const hit = an.findFile('2024/05/a.jpg');
+  assert.ok(hit); assert.equal((await hit.src.read(hit.name)).toString(), 'FOTO-https://x.org/wp-content/uploads/2024/05/a.jpg');
+  an.sources.forEach((s) => s.close());
+  // sin fotos: solo el XML
+  const x = path.join(dir, 'copia.xml');
+  await BC.createBackup(deps, { file: x, photos: false });
+  assert.ok(fs.readFileSync(x, 'utf8').includes('<wp:wxr_version>1.2'));
+  // cancelar borra el archivo a medias
+  const c = path.join(dir, 'cancel.zip'); let n = 0;
+  await assert.rejects(BC.createBackup(deps, { file: c, photos: true, cancelled: () => ++n > 2 }), /Cancelado/);
+  assert.equal(fs.existsSync(c), false);
+  // ZIP64: se fuerza con un límite pequeño y yauzl lo lee igual
+  const z = path.join(dir, 'z64.zip');
+  const w = new BC.ZipWriter(z, { limit: 60 });
+  for (let i = 0; i < 4; i++) await w.add(`uploads/f${i}.jpg`, Buffer.from('dato' + i));
+  await w.finish();
+  const names = await new Promise((res, rej) => require('yauzl').open(z, { lazyEntries: true }, (e, zf) => {
+    if (e) return rej(e);
+    const out = []; zf.readEntry(); zf.on('entry', (en) => { out.push(en.fileName); zf.readEntry(); }); zf.on('end', () => res(out)); zf.on('error', rej);
+  }));
+  assert.deepEqual(names, [0, 1, 2, 3].map((i) => `uploads/f${i}.jpg`));
+  assert.equal(BC.safeRel('../x.jpg'), false); assert.equal(BC.safeRel('2024/05/a.jpg'), true);
+});
+
+test('publicaciones nuevas en redes: solo las posteriores a la última vista y no pasadas al blog', () => {
+  const N = require('../renderer/newposts');
+  const mk = (id, date, source = 'instagram') => ({ id, date, source });
+  const posts = [mk('1', '2026-11-20T10:00:00Z'), mk('2', '2026-11-18T10:00:00Z', 'facebook'), mk('3', '2026-11-10T10:00:00Z'), mk('4', '2026-11-19T10:00:00Z')];
+  const r = N.findNew(posts, '2026-11-15T00:00:00Z', (p) => p.id === '4');
+  assert.deepEqual(r.fresh.map((p) => p.id), ['1', '2']); // 3 es antigua y 4 ya está en el blog
+  assert.equal(r.baseline, null);
+  assert.deepEqual(N.networks(r.fresh), ['instagram', 'facebook']);
+  // primera vez: no se avisa, pero se fija desde dónde contar
+  const first = N.findNew(posts, null);
+  assert.equal(first.fresh.length, 0); assert.equal(first.baseline, '2026-11-20T10:00:00.000Z');
+  assert.equal(N.findNew([], '2026-11-15T00:00:00Z').fresh.length, 0);
+  assert.equal(N.newestDate([]), null);
+});
