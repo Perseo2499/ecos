@@ -1734,7 +1734,6 @@ button.dp-item:not(.keep) b { color: var(--error, #e5484d); }
 .blocks { display: flow-root; }
 .blocks > .blk { display: block; }
 .blocks > .ins { display: flex; }
-.blk.blk-image.img-left + .ins, .blk.blk-image.img-right + .ins { display: none; }
 .blk.blk-image.img-left, .blk.blk-image.img-right { position: relative; z-index: 4; }
 /* ===== Mapa: entrar en una página (vista de página, botones y enlaces) ===== */
 .mp-scroll { transition: transform .22s ease, opacity .22s ease; }
@@ -1921,3 +1920,9 @@ span.pv-pill[data-pill]:hover { background: var(--primary); color: var(--on-prim
 /* Barras de herramientas de bloques dentro de columnas estrechas: pasan a dos filas en vez de solaparse */
 .blk-tools { width: max-content; max-width: min(560px, 90vw); flex-wrap: wrap; height: auto !important; min-height: 38px; overflow: visible; }
 .blk-box > .blk-tools .blk-extra, .blk-image > .blk-tools .blk-extra, .blk-buttons > .blk-tools .blk-extra { flex-wrap: wrap; }
+
+/* Foto a un lado: su barra de opciones no cabe en el ancho de la foto; sale entera por encima (hacia dentro
+   del lienzo en las de la derecha) y por delante de lo demás */
+.blk.blk-image.img-left > .blk-tools, .blk.blk-image.img-right > .blk-tools, .blk.blk-image.img-center > .blk-tools { max-width: none; width: max-content; flex-wrap: nowrap; z-index: 30; }
+.blk.blk-image.img-right > .blk-tools { left: auto; right: 0; }
+.blk.blk-image.img-left:hover, .blk.blk-image.img-right:hover, .blk.blk-image.img-left:focus-within, .blk.blk-image.img-right:focus-within { z-index: 25; }

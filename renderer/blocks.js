@@ -549,9 +549,21 @@
             .map(([k, ic, n]) => `<button class="lv ${place === k ? 'on' : ''}" data-al="${k}" title="${n}"><span class="ms">${ic}</span></button>`).join('')
             + (place !== 'full' ? '<span class="lv-sep"></span>' + [[33, t('Pequeña')], [50, t('Mediana')], [75, t('Grande')]]
               .map(([w, n]) => `<button class="lv ${!b.w && (b.width || 50) === w ? 'on' : ''}" data-w="${w}" title="${n}">${n}</button>`).join('') : '');
-          $$('[data-al]', extra).forEach((x) => (x.onclick = () => this.change(() => {
-            if (x.dataset.al === 'full') { delete b.align; delete b.width; delete b.w; } else { b.align = x.dataset.al; if (!b.w) b.width = b.width || 50; }
-          })));
+          $$('[data-al]', extra).forEach((x) => (x.onclick = () => {
+            let moved = false;
+            this.change(() => {
+              if (x.dataset.al === 'full') { delete b.align; delete b.width; delete b.w; return; }
+              b.align = x.dataset.al; if (!b.w) b.width = b.width || 50;
+              // el texto que rodea la foto es el que va DESPUÉS de ella: si el texto está justo antes, se sube la foto
+              if (x.dataset.al !== 'center') {
+                const loc = this.locate(b.id), TXT = ['paragraph', 'heading', 'list', 'quote'];
+                if (loc && loc.i > 0 && TXT.includes(loc.arr[loc.i - 1].type) && !TXT.includes(loc.arr[loc.i + 1]?.type)) {
+                  loc.arr.splice(loc.i, 1); loc.arr.splice(loc.i - 1, 0, b); moved = true;
+                }
+              }
+            });
+            if (moved) toast(t('He puesto la foto antes del texto para que el texto la rodee. El texto que quieras a su lado tiene que ir justo debajo de la foto.'));
+          }));
           $$('[data-w]', extra).forEach((x) => (x.onclick = () => this.change(() => { b.width = Number(x.dataset.w); delete b.w; })));
           this.styleBtn(extra, b);
           break;
