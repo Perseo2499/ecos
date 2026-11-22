@@ -69,7 +69,7 @@ function postThumb(p) {
 const Home = (() => {
   const HL = window.HomeLogic;
   const hs = { drafts: null, health: null, probThumbs: {}, free: null, freeErr: null, loading: false, at: 0, err: null,
-    pend: null, counting: false, tok: 0, wkStart: HL.weekStart(new Date()), wk: new Map(), wkErr: null };
+    pend: null, counting: false, tok: 0, wkStart: HL.weekStart(new Date()), wkSpan: (() => { try { return Number(localStorage.getItem('ecos.home.span')) === 14 ? 14 : 7; } catch { return 7; } })(), wk: new Map(), wkErr: null };
   const ymd = HL.ymd;
   const lang = () => (prefs().lang === 'en' ? 'en-GB' : 'es-ES');
   const title = (x) => escHtml(decodeEntities(x.title || '') || t('(sin título)'));
@@ -114,22 +114,24 @@ const Home = (() => {
   async function countSocial(force) {
     if (!CFG.metaConnected || !$('#page').value || hs.counting) return;
     const key = pendKey(), c = readCache();
-    if (!force && !HL.isStale(c, key)) { hs.pend = { state: 'done', n: c.pending, thumbs: c.thumbs, at: c.at, capped: !!c.capped }; return draw(); }
+    if (!force && !HL.isStale(c, key)) { hs.pend = { state: 'done', n: c.pending, thumbs: c.thumbs, at: c.at, capped: !!c.capped, igTotal: c.igTotal ?? null }; return draw(); }
     if (!hs.pend && c && c.key === key) hs.pend = { state: 'done', n: c.pending, thumbs: c.thumbs, at: c.at, capped: !!c.capped, old: true };
-    const my = ++hs.tok, pageId = $('#page').value, srcs = ['instagram', 'facebook'];
+    const my = ++hs.tok, pageId = $('#page').value;
     hs.counting = true;
     const prev = hs.pend;
     const first = !prev && NS.page.length ? HL.countPending(NS.page, (p) => !!liveExport(p)) : null; // lo que ya se vio al arrancar
     hs.pend = { state: 'counting', n: prev?.n ?? first?.pending ?? 0, thumbs: prev?.thumbs || (first ? first.newest.map(toThumb) : []), at: prev?.at };
     draw();
     try {
-      let raw = [], cur, pages = 0, capped = false;
+      // listado ligero de 100 en 100 (id, texto, fecha y miniatura): no carga las publicaciones en Redes
+      let raw = [], cur = null, pages = 0, capped = false, igTotal = prev?.igTotal ?? null;
       for (;;) {
-        const r = await window.api.metaPosts(pageId, srcs, cur);
+        const r = await window.api.metaLight(pageId, cur);
         if (my !== hs.tok) return;
         raw = raw.concat(r.posts); cur = r.cursors; pages++;
+        if (r.igTotal != null) igTotal = r.igTotal;
         const pr = HL.countPending(raw, (p) => !!liveExport(p));
-        hs.pend = { state: 'counting', n: pr.pending, thumbs: pr.newest.map(toThumb), at: prev?.at };
+        hs.pend = { state: 'counting', n: pr.pending, thumbs: pr.newest.map(toThumb), at: prev?.at, igTotal, seen: raw.length };
         draw();
         if (!(cur && (cur.facebook || cur.instagram))) break;
         if (pages >= HL.LIMITS.pages || raw.length >= HL.LIMITS.posts) { capped = true; break; }
@@ -138,8 +140,8 @@ const Home = (() => {
       if (my !== hs.tok) return;
       const res = HL.countPending(merged, (p) => !!liveExport(p));
       const thumbs = res.newest.map(toThumb), at = Date.now();
-      writeCache({ key, at, total: res.total, pending: res.pending, thumbs, capped });
-      hs.pend = { state: 'done', n: res.pending, thumbs, at, capped };
+      writeCache({ key, at, total: res.total, pending: res.pending, thumbs, capped, igTotal });
+      hs.pend = { state: 'done', n: res.pending, thumbs, at, capped, igTotal, total: res.total };
     } catch (e) {
       if (my === hs.tok) hs.pend = prev && prev.state === 'done' ? prev : { state: 'error', n: 0, thumbs: [], err: friendlyError(e).text };
     } finally { if (my === hs.tok) { hs.counting = false; draw(); } }
@@ -152,7 +154,8 @@ const Home = (() => {
       const n = counting ? `${p.n}+` : `${p.n}${p.capped ? '+' : ''}`;
       const label = p.n === 1 && !counting ? t('publicación sin pasar al blog') : t('publicaciones sin pasar al blog');
       body = `<div class="home-big"><b class="${counting ? 'counting' : ''}">${n}</b><span>${label}</span></div>
-        ${counting ? `<p class="home-counting"><span class="spin"></span>${t('contando…')}</p>` : ''}
+        ${counting ? `<p class="home-counting"><span class="spin"></span>${p.igTotal != null ? t('contando… {a} revisadas (Instagram tiene {b})', { a: p.seen || 0, b: p.igTotal }) : t('contando…')}</p>`
+          : p.at ? `<p class="hint home-count-at">${p.igTotal != null ? t('Instagram: {b} publicaciones', { b: p.igTotal }) + ' · ' : ''}${t('contado {d}', { d: new Date(p.at).toLocaleTimeString(lang(), { hour: '2-digit', minute: '2-digit' }) })}</p>` : ''}
         ${p.state === 'error' ? `<p class="hint">${escHtml(p.err)}</p>` : ''}
         ${p.thumbs.length ? `<div class="home-thumbs">${thumbsHtml(p.thumbs)}</div>` : (!counting && p.state === 'done' ? `<p class="hint">${t('Todo lo que tienes en tus redes ya está en el blog.')}</p>` : '')}
         <div class="home-acts"><button class="btn tonal small" data-h="see-all"><span class="ms">arrow_forward</span>${t('Ver todas')}</button>
@@ -215,20 +218,28 @@ const Home = (() => {
   }
 
   // ---- semana completa
-  const wkKey = () => ymd(hs.wkStart);
+  const wkKey = () => `${ymd(hs.wkStart)}/${hs.wkSpan}`;
   function weekCard() {
-    let body, acts = '';
+    let body, acts = '', head;
     if (!wpOk()) body = needWp();
     else {
-      const start = hs.wkStart, days = HL.weekDays(start), items = hs.wk.get(wkKey());
-      const todayK = ymd(new Date());
+      const n = hs.wkSpan, start = hs.wkStart, days = HL.weekDays(start, n), items = hs.wk.get(wkKey());
+      const todayK = ymd(new Date()), isNow = ymd(HL.weekStart(new Date())) === ymd(start);
       const fmt = (d, o) => d.toLocaleDateString(lang(), o);
-      const range = `${fmt(days[0], { day: 'numeric', month: 'short' })} – ${fmt(days[6], { day: 'numeric', month: 'short', year: 'numeric' })}`;
-      acts = `<span class="wk-nav"><span class="wk-range">${escHtml(range)}</span>
-        <button class="btn text small icon-only" data-h="wk-prev" title="${escHtml(t('Semana anterior'))}"><span class="ms">chevron_left</span></button>
-        <button class="btn text small" data-h="wk-today">${t('Hoy')}</button>
-        <button class="btn text small icon-only" data-h="wk-next" title="${escHtml(t('Semana siguiente'))}"><span class="ms">chevron_right</span></button></span>`;
-      const by = items ? HL.groupByWeekday(items, start) : null;
+      const range = `${fmt(days[0], { day: 'numeric', month: 'short' })} – ${fmt(days[n - 1], { day: 'numeric', month: 'short', year: 'numeric' })}`;
+      const prevT = n === 7 ? t('Semana anterior') : t('Dos semanas antes'), nextT = n === 7 ? t('Semana siguiente') : t('Dos semanas después');
+      // Barra de navegación estándar de calendario: rango visible | ‹ Hoy › | ir a fecha | 1 / 2 semanas
+      body = `<div class="wk-bar" role="toolbar" aria-label="${escHtml(t('Navegar por las semanas'))}">
+        <div class="wk-step"><button class="btn text small icon-only" data-h="wk-prev" title="${escHtml(prevT)} (←)" aria-label="${escHtml(prevT)}"><span class="ms">chevron_left</span></button>
+          <button class="btn tonal small" data-h="wk-today"${isNow ? ' disabled' : ''} title="${escHtml(t('Volver a esta semana'))} (T)">${t('Hoy')}</button>
+          <button class="btn text small icon-only" data-h="wk-next" title="${escHtml(nextT)} (→)" aria-label="${escHtml(nextT)}"><span class="ms">chevron_right</span></button></div>
+        <label class="wk-range" title="${escHtml(t('Ir a una fecha'))}"><span class="ms">calendar_month</span><span>${escHtml(range)}</span>
+          <input type="date" class="wk-date" value="${ymd(start)}" aria-label="${escHtml(t('Ir a una fecha'))}"></label>
+        <span class="spacer"></span>
+        <div class="seg wk-span" role="radiogroup" aria-label="${escHtml(t('Días visibles'))}">
+          <button class="${n === 7 ? 'active' : ''}" data-h="wk-span" data-n="7" role="radio" aria-checked="${n === 7}">${t('1 semana')}</button>
+          <button class="${n === 14 ? 'active' : ''}" data-h="wk-span" data-n="14" role="radio" aria-checked="${n === 14}">${t('2 semanas')}</button></div></div>`;
+      const by = items ? HL.groupByWeekday(items, start, n) : null;
       const st = EX_STATUS();
       const cols = days.map((d, i) => {
         const k = ymd(d), list = by ? by[i] : null;
@@ -239,9 +250,10 @@ const Home = (() => {
         return `<div class="wk-col${k === todayK ? ' today' : ''}" data-day="${k}"><div class="wk-head"><span class="wk-wd">${escHtml(cap(fmt(d, { weekday: 'short' })))}</span><span class="wk-n">${d.getDate()}</span>
           <button class="wk-add" data-h="wk-add" data-day="${k}" title="${escHtml(t('Nueva entrada programada para este día'))}"><span class="ms">add</span></button></div><div class="wk-list">${cardsH}</div></div>`;
       }).join('');
-      body = `${hs.wkErr ? `<p class="hint">${escHtml(hs.wkErr)} <button class="btn text small" data-h="retry"><span class="ms">refresh</span>${t('Reintentar')}</button></p>` : ''}<div class="wk-cal">${cols}</div>`;
+      body += `${hs.wkErr ? `<p class="hint">${escHtml(hs.wkErr)} <button class="btn text small" data-h="retry"><span class="ms">refresh</span>${t('Reintentar')}</button></p>` : ''}<div class="wk-cal${n === 14 ? ' two' : ''}">${cols}</div>`;
+      head = isNow ? (n === 7 ? t('Esta semana') : t('Estas dos semanas')) : t('Calendario');
     }
-    return card('home-week', 'event', t('Esta semana'), body, acts, ['HOME · 04 WEEK', '週']);
+    return card('home-week', 'event', head || t('Esta semana'), body, acts, ['HOME · 04 WEEK', '週']);
   }
   function quickCard() {
     const q = (h, icon, label) => `<button class="home-q" data-h="${h}"><span class="ms">${icon}</span><span>${label}</span></button>`;
@@ -267,15 +279,33 @@ const Home = (() => {
 
   // ---- datos de la semana
   async function loadWeek(start) {
-    const k = ymd(start);
+    const k = `${ymd(start)}/${hs.wkSpan}`;
     if (hs.wk.has(k) || !wpOk()) return;
-    const end = HL.addDays(start, 7);
+    const end = HL.addDays(start, hs.wkSpan);
     try {
       const r = await window.api.blogList({ type: 'post', status: 'any', number: 100, after: start.toISOString(), before: end.toISOString() });
       hs.wk.set(k, r.items.filter((x) => x.status !== 'trash')); hs.wkErr = null;
     } catch (e) { hs.wk.set(k, []); hs.wkErr = friendlyError(e).text; }
     draw();
   }
+  // «Ir a una fecha» (selector nativo) y teclado (← → T) cuando el foco está en la tarjeta
+  document.addEventListener('change', (e) => {
+    if (!e.target.matches?.('#home .wk-date') || !e.target.value) return;
+    const [y, m, d] = e.target.value.split('-').map(Number);
+    gotoWeek(HL.weekStart(new Date(y, m - 1, d)));
+  });
+  document.addEventListener('click', (e) => {
+    const l = e.target.closest?.('#home .wk-range'); if (!l) return;
+    const i = $('.wk-date', l); try { i.showPicker(); } catch { i.focus(); }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (!e.target.closest?.('#home .home-week') || e.target.matches('input, textarea') || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.key === 'ArrowLeft') { e.preventDefault(); gotoWeek(HL.addDays(hs.wkStart, -hs.wkSpan)); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); gotoWeek(HL.addDays(hs.wkStart, hs.wkSpan)); }
+    else if (e.key === 't' || e.key === 'T') { e.preventDefault(); gotoWeek(HL.weekStart(new Date())); }
+    else return;
+    requestAnimationFrame(() => $('#home .home-week [data-h="wk-today"]:not([disabled])')?.focus() || $('#home .home-week [data-h="wk-next"]')?.focus());
+  });
   function gotoWeek(start) { hs.wkStart = start; hs.wkErr = null; render(); loadWeek(start); }
 
   async function dropOn(item, dayKey) {
@@ -399,8 +429,9 @@ const Home = (() => {
     if (a === 'media') return goBlog('media');
     if (a === 'unused') return openUnused();
     if (a === 'recount') return countSocial(true);
-    if (a === 'wk-prev') return gotoWeek(HL.addDays(hs.wkStart, -7));
-    if (a === 'wk-next') return gotoWeek(HL.addDays(hs.wkStart, 7));
+    if (a === 'wk-prev') return gotoWeek(HL.addDays(hs.wkStart, -hs.wkSpan));
+    if (a === 'wk-next') return gotoWeek(HL.addDays(hs.wkStart, hs.wkSpan));
+    if (a === 'wk-span') { hs.wkSpan = Number(b.dataset.n); try { localStorage.setItem('ecos.home.span', String(hs.wkSpan)); } catch { /* */ } return gotoWeek(hs.wkStart); }
     if (a === 'wk-today') return gotoWeek(HL.weekStart(new Date()));
     if (a === 'wk-add') { const [y, m, d] = b.dataset.day.split('-').map(Number); return newDraft({ type: 'post', scheduleAt: calLocalInput(new Date(y, m - 1, d, 10, 0)) }); }
     if (a === 'photo') return openLightbox(hs.free.items.map((m) => ({ type: 'image', src: m.url })), Number(b.dataset.i));

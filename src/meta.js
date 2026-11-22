@@ -91,6 +91,27 @@ async function instagramPosts(cfg, account, after = null, limit = 25) {
   return { posts, next };
 }
 
+// Recuento rápido: solo id, texto, fecha y una miniatura, de 100 en 100 (sin cargar las publicaciones completas)
+async function lightPosts(cfg, account, net, after = null) {
+  const ig = net === 'instagram';
+  if (ig && !account.igId) return { posts: [], next: null };
+  const json = await get(`${graph(cfg)}/${ig ? account.igId + '/media' : account.pageId + '/posts'}?` + new URLSearchParams({
+    fields: ig ? 'id,caption,timestamp,media_type,media_url,thumbnail_url' : 'id,message,created_time,full_picture',
+    limit: '100', access_token: account.pageToken, ...(after ? { after } : {}),
+  }));
+  const next = json.paging?.next ? json.paging.cursors?.after || null : null;
+  const posts = (json.data || []).map((m) => (ig
+    ? { source: 'instagram', id: m.id, text: m.caption || '', date: m.timestamp, media: [{ type: 'image', url: m.media_type === 'VIDEO' ? m.thumbnail_url : m.media_url }] }
+    : { source: 'facebook', id: m.id, text: m.message || '', date: m.created_time, media: m.full_picture ? [{ type: 'image', url: m.full_picture }] : [] }));
+  return { posts, next };
+}
+// Cuántas publicaciones tiene la cuenta de Instagram (una sola llamada)
+async function instagramCount(cfg, account) {
+  if (!account.igId) return null;
+  const j = await get(`${graph(cfg)}/${account.igId}?` + new URLSearchParams({ fields: 'media_count', access_token: account.pageToken }));
+  return Number.isFinite(j.media_count) ? j.media_count : null;
+}
+
 // Traduce los errores de la Graph API al publicar en una página a algo que se entienda
 function explainShareError(e = {}) {
   const msg = String(e.message || '');
@@ -122,4 +143,4 @@ async function sharePost(cfg, account, { message, link }) {
   return { id, url };
 }
 
-module.exports = { explainShareError, sharePost, REDIRECT, login, listAccounts, facebookPosts, instagramPosts };
+module.exports = { lightPosts, instagramCount, explainShareError, sharePost, REDIRECT, login, listAccounts, facebookPosts, instagramPosts };

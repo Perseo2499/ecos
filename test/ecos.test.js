@@ -695,3 +695,27 @@ test('Inicio: recuento de pendientes sin las ya exportadas, caché y semana', ()
   const un = H.unusedPhotos([{ id: 1, type: 'image', date: '2026-01-01' }, { id: 2, type: 'image', date: '2026-03-01' }, { id: 3, type: 'video', date: '2026-04-01' }, { id: 4, type: 'image', date: '2026-02-01' }], { 1: [{ id: 9 }] }, 1);
   assert.equal(un.total, 2); assert.deepEqual(un.items.map((m) => m.id), [2]);
 });
+
+test('recuento rápido de Meta: listado ligero de 100 en 100 y total de Instagram', async () => {
+  const meta = require('../src/meta');
+  const seen = [];
+  const orig = global.fetch;
+  global.fetch = async (u) => {
+    seen.push(String(u));
+    const url = new URL(u);
+    if (url.pathname.endsWith('/ig1')) return { json: async () => ({ media_count: 321 }) };
+    if (url.pathname.endsWith('/ig1/media')) return { json: async () => ({ data: [{ id: 'a', caption: 'Hola', timestamp: '2026-11-01T10:00:00Z', media_type: 'VIDEO', thumbnail_url: 'th.jpg', media_url: 'v.mp4' }], paging: { next: 'x', cursors: { after: 'C2' } } }) };
+    return { json: async () => ({ data: [{ id: 'f', message: 'Texto', created_time: '2026-11-02T10:00:00Z', full_picture: 'p.jpg' }] }) };
+  };
+  try {
+    const acc = { igId: 'ig1', pageId: 'pg', pageToken: 'tk' };
+    const ig = await meta.lightPosts({}, acc, 'instagram');
+    assert.equal(ig.next, 'C2');
+    assert.deepEqual(ig.posts[0], { source: 'instagram', id: 'a', text: 'Hola', date: '2026-11-01T10:00:00Z', media: [{ type: 'image', url: 'th.jpg' }] });
+    const fb = await meta.lightPosts({}, acc, 'facebook');
+    assert.equal(fb.next, null); assert.equal(fb.posts[0].source, 'facebook');
+    assert.equal(await meta.instagramCount({}, acc), 321);
+    assert.ok(seen.slice(0, 2).every((u) => /limit=100/.test(u) && !/children/.test(u)), 'pide 100 por página y sin hijos');
+    assert.equal(await meta.instagramCount({}, { pageId: 'pg' }), null);
+  } finally { global.fetch = orig; }
+});

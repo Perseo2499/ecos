@@ -238,6 +238,18 @@ handle('meta:share', async ({ pageId, message, link, postId }) => {
   return { ...r, exported: cfg.exported || {} };
 });
 // cursors: undefined = primera página; { facebook, instagram } = «Cargar más» (null = esa red no tiene más)
+// Recuento de Inicio: listado ligero de Instagram y Facebook a la vez (cursors null = primera página)
+handle('meta:light', async (pageId, cursors) => {
+  const acc = accounts.find((a) => a.pageId === pageId);
+  if (!acc) throw new Error('Página no encontrada; vuelve a conectar con Meta');
+  const none = { posts: [], next: null };
+  const [fb, ig, igTotal] = await Promise.all([
+    !cursors || cursors.facebook ? meta.lightPosts(cfg, acc, 'facebook', cursors?.facebook) : none,
+    !cursors || cursors.instagram ? meta.lightPosts(cfg, acc, 'instagram', cursors?.instagram) : none,
+    !cursors ? meta.instagramCount(cfg, acc).catch(() => null) : null,
+  ]);
+  return { posts: [...fb.posts, ...ig.posts], cursors: { facebook: fb.next, instagram: ig.next }, igTotal };
+});
 handle('meta:posts', async (pageId, sources, cursors) => {
   const acc = accounts.find((a) => a.pageId === pageId);
   if (!acc) throw new Error('Página no encontrada; vuelve a conectar con Meta');

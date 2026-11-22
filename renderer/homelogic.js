@@ -24,10 +24,10 @@
   const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
   const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   // Los 7 días (lunes a domingo) desde el lunes dado
-  const weekDays = (start) => Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  const weekDays = (start, n = 7) => Array.from({ length: n }, (_, i) => addDays(start, i));
   // items: [{date, ...}] → array de 7 listas (una por día, lunes primero), cada una ordenada por hora
-  function groupByWeekday(items, start) {
-    const days = weekDays(start), idx = new Map(days.map((d, i) => [ymd(d), i]));
+  function groupByWeekday(items, start, n = 7) {
+    const days = weekDays(start, n), idx = new Map(days.map((d, i) => [ymd(d), i]));
     const out = days.map(() => []);
     for (const it of items || []) { const i = idx.get(ymd(new Date(it.date))); if (i !== undefined) out[i].push(it); }
     out.forEach((l) => l.sort((a, b) => ms(a.date) - ms(b.date)));
