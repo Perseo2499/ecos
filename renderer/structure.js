@@ -485,6 +485,41 @@
 
   // --- Diálogo «Añadir / cambiar botón» --------------------------------------------------------
   // → { text, href, variant, where } | 'remove' | null
+  // Destinos posibles de un botón: los del índice de enlaces y todas las páginas de la estructura (también
+  // las recién creadas o en borrador, que el índice aún no conoce)
+  function allTargets(d) {
+    const out = [...(d?.targets || [])];
+    const have = new Set(out.map((x) => x.type + x.id));
+    for (const p of S.data?.pages || []) if (!have.has('page' + p.id)) out.push({ id: p.id, type: 'page', title: p.title, status: p.status, link: p.link });
+    return out.filter((x) => !(d && x.type === d.type && x.id === d.id));
+  }
+  // Parecido entre lo que se busca y un título, sin tildes ni mayúsculas y aguantando alguna errata
+  const fz = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9ñ ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  function lev(a, b) {
+    if (Math.abs(a.length - b.length) > 2) return 9;
+    let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+    for (let i = 1; i <= a.length; i++) {
+      const cur = [i];
+      for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = cur;
+    }
+    return prev[b.length];
+  }
+  function matchScore(q, title) {
+    const s = fz(q), tt = fz(title);
+    if (!s) return 0;
+    if (tt.includes(s)) return 0;
+    const words = tt.split(' ');
+    let score = 0;
+    for (const w of s.split(' ')) {
+      if (words.some((x) => x.startsWith(w))) continue;
+      // la palabra buscada frente al principio de cada palabra del título (puede estar a medio escribir)
+      const best = Math.min(...words.flatMap((x) => [w.length - 1, w.length, w.length + 1].map((k) => lev(w, x.slice(0, Math.max(k, 1))))));
+      if (best > (w.length > 6 ? 2 : 1)) return -1;
+      score += best;
+    }
+    return score + 1;
+  }
   function buttonDialog({ btn, target, targets }) {
     const edit = !!btn;
     return new Promise((resolve) => {
@@ -506,8 +541,8 @@
       const looksUrl = (s) => /^(https?:\/\/|mailto:|tel:)/i.test(s) || /^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(s);
       const paint = () => {
         selBox.innerHTML = sel ? `<span class="pv-chosen"><span class="ms">${sel.int ? 'description' : 'public'}</span><b>${esc(sel.label)}</b><button type="button" data-clear title="${t('Cambiar destino')}"><span class="ms">close</span></button></span>` : `<span class="hint">${t('Todavía no has elegido adónde lleva.')}</span>`;
-        const s = norm(q.value.trim());
-        let list = targets.filter((x) => !s || norm(x.title).includes(s));
+        const sq = q.value.trim();
+        let list = targets.map((x) => ({ x, sc: matchScore(sq, x.title) })).filter((o) => o.sc >= 0).sort((a, b) => a.sc - b.sc).map((o) => o.x);
         list = list.slice(0, 8);
         const raw = q.value.trim();
         res.innerHTML = list.map((x, i) => `<button type="button" data-t="${i}"><span class="ms">${x.type === 'post' ? 'article' : 'description'}</span>${esc(x.title)}${x.type === 'post' ? `<small>${t('Entrada')}</small>` : ''}</button>`).join('')
@@ -554,13 +589,13 @@
   }
   async function addButton(target) {
     const d = S.pl.get(plKey(S.zoom)); if (!d || !d.targets) return;
-    const r = await buttonDialog({ target, targets: d.targets.filter((x) => !(x.type === d.type && x.id === d.id)) });
+    const r = await buttonDialog({ target, targets: allTargets(d) });
     if (!r) return;
     await pvOp({ action: 'add', ...r }, t('Botón «{b}» añadido a la página.', { b: r.text }));
   }
   async function editBtn(i) {
     const d = S.pl.get(plKey(S.zoom)), b = d.buttons[i]; if (!b) return;
-    const r = await buttonDialog({ btn: b, targets: d.targets.filter((x) => !(x.type === d.type && x.id === d.id)) });
+    const r = await buttonDialog({ btn: b, targets: allTargets(d) });
     if (!r) return;
     if (r === 'remove') return delBtn(i, true);
     await pvOp({ action: 'edit', index: b.index, old: { text: b.text, href: b.href }, text: r.text, href: r.href, variant: r.variant }, t('Botón cambiado.'));
@@ -599,13 +634,13 @@
       const [type, id] = c.dataset.go.split(':');
       const go = () => zoomTo(Number(id), type, c, false);
       if (!c.hasAttribute('data-pill')) { c.onclick = go; c.onkeydown = (e) => { if (e.key === 'Enter') go(); }; }
-      else c.onclick = () => { const x = d?.targets?.find((y) => y.type === type && y.id === Number(id)); if (x) addButton(x).catch(fail); };
+      else c.onclick = () => { const x = allTargets(d).find((y) => y.type === type && y.id === Number(id)); if (x) addButton(x).catch(fail); else toast(t('No se ha encontrado esa página. Pulsa «Recargar» arriba.'), true); };
       // soltar el conector aquí: abre el diálogo con este destino
       c.ondragover = (e) => { if (pvDrag) { e.preventDefault(); c.classList.add('pv-over'); } };
       c.ondragleave = () => c.classList.remove('pv-over');
       c.ondrop = (e) => {
         c.classList.remove('pv-over'); if (!pvDrag) return; e.preventDefault(); pvDrag = false;
-        const x = d?.targets?.find((y) => y.type === type && y.id === Number(id));
+        const x = allTargets(d).find((y) => y.type === type && y.id === Number(id));
         if (x && !(x.type === z.type && x.id === z.id)) addButton(x).catch(fail);
       };
     });

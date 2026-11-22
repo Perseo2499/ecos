@@ -266,6 +266,7 @@
     'Modelo (opcional: si lo dejas vacío, usa el de la CLI)': 'Model (optional: leave empty to use the CLI default)',
     'Los botones de IA usarán {c}. Pulsa «Probar» para comprobarlo.': 'The AI buttons will use {c}. Click "Try it" to check.',
     // 1.2 (editor completo)
+    'No se ha encontrado esa página. Pulsa «Recargar» arriba.': 'That page was not found. Click «Reload» above.',
     'Elegir el icono': 'Choose the icon',
     'Quitar los iconos': 'Remove the icons',
     'Poner un icono en cada elemento': 'Put an icon on every item',

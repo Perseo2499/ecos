@@ -462,7 +462,7 @@ async function resolveFeatured(d) {
     return null;
   }
 }
-handle('draft:publish', async (d) => {
+handle('draft:publish', async (d) => { require('./src/pagelinks').forget();
   // Texto alternativo: se guarda también en la biblioteca de medios
   for (const img of d.blocks ? blockImages(d.blocks) : d.sections.flatMap((x) => x.images)) {
     if (img.alt && Number(img.id) > 0) await wpCall(() => WP().updateMedia(cfg, img.id, { alt: img.alt })).catch((e) => log('No se pudo guardar el alt', img.id, e.message));
@@ -575,7 +575,7 @@ function markExported(postId, status) {
   if (changed) store.save(cfg);
   return cfg.exported || {};
 }
-handle('blog:setStatus', async (id, status, type) => { await wpCall(() => WP().setPostStatus(cfg, id, status, type)); return markExported(id, status); });
+handle('blog:setStatus', async (id, status, type) => { require('./src/pagelinks').forget(); await wpCall(() => WP().setPostStatus(cfg, id, status, type)); return markExported(id, status); });
 handle('blog:setDate', async (id, iso, status) => {
   if (!isSelf()) throw new Error('Cambiar la fecha desde el calendario solo está disponible con «Mi web (wp-admin)» en Conexiones → WordPress.');
   const r = await wpCall(() => wpself.setPostDate(cfg, id, iso, status, 'post'));
@@ -583,7 +583,7 @@ handle('blog:setDate', async (id, iso, status) => {
   markExported(id, r.status);
   return r;
 });
-handle('blog:trash', async (id, type) => { await wpCall(() => WP().trashPost(cfg, id, type)); return markExported(id, 'trash'); });
+handle('blog:trash', async (id, type) => { require('./src/pagelinks').forget(); await wpCall(() => WP().trashPost(cfg, id, type)); return markExported(id, 'trash'); });
 // Estructura de la web (solo WordPress propio: WordPress.com no da acceso a menús ni ajustes por esta vía)
 const needSelf = () => { if (!isSelf()) throw new Error('La estructura de la web solo está disponible con «Mi web (wp-admin)» en Conexiones → WordPress.'); };
 handle('site:pages', async () => { if (!isSelf()) throw new Error('La lista de páginas solo está disponible con «Mi web (wp-admin)».'); return wpCall(() => wpself.listPagesLite(cfg)); });
@@ -595,11 +595,11 @@ handle('blog:duplicate', async (id, type) => {
 });
 handle('site:structure', async () => { needSelf(); return wpCall(() => wpself.siteStructure(cfg)); });
 handle('site:catPosts', async (catId) => { needSelf(); return wpCall(() => wpself.categoryPosts(cfg, catId)); });
-handle('site:createPage', async (o) => { needSelf(); return wpCall(() => wpself.createPage(cfg, o || {})); });
+handle('site:createPage', async (o) => { require('./src/pagelinks').forget(); needSelf(); return wpCall(() => wpself.createPage(cfg, o || {})); });
 handle('site:createCategory', async (o) => { needSelf(); return wpCall(() => wpself.createCategory(cfg, o || {})); });
-handle('site:trashPage', async (id) => { needSelf(); return wpCall(() => wpself.trashPage(cfg, id)); });
+handle('site:trashPage', async (id) => { require('./src/pagelinks').forget(); needSelf(); return wpCall(() => wpself.trashPage(cfg, id)); });
 handle('site:deleteCategory', async (id) => { needSelf(); return wpCall(() => wpself.deleteCategory(cfg, id)); });
-handle('site:save', async (changes) => { needSelf(); return wpCall(() => wpself.saveStructure(cfg, changes)); });
+handle('site:save', async (changes) => { require('./src/pagelinks').forget(); needSelf(); return wpCall(() => wpself.saveStructure(cfg, changes)); });
 handle('site:pageLinks', async (id, type) => { needSelf(); return wpCall(() => require('./src/pagelinks').pageLinks(cfg, Number(id), type)); });
 handle('site:buttonOp', async (id, type, op) => { needSelf(); return wpCall(() => require('./src/pagelinks').buttonOp(cfg, Number(id), type, op || {})); });
 // Biblioteca de medios (solo WordPress propio)
@@ -835,7 +835,7 @@ handle('media:upscaleDiscard', (token) => {
   return true;
 });
 // Borrado definitivo (no se puede deshacer): la entrada desaparece también de la papelera
-handle('blog:delete', async (id, type) => { await wpCall(() => WP().deletePost(cfg, id, type)); if (cfg.sentContent) delete cfg.sentContent[id]; return markExported(id, 'deleted'); });
+handle('blog:delete', async (id, type) => { require('./src/pagelinks').forget(); await wpCall(() => WP().deletePost(cfg, id, type)); if (cfg.sentContent) delete cfg.sentContent[id]; return markExported(id, 'deleted'); });
 
 // Consulta en WordPress el estado real de todas las entradas creadas desde Ecos
 handle('exported:refresh', async () => {
