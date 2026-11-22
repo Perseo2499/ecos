@@ -11,7 +11,7 @@ contextBridge.exposeInMainWorld('api', {
   // Configuración y conexiones
   getConfig: () => call('config:get'),
   setConfig: (c) => call('config:set', c),
-  metaLogin: () => call('meta:login'),
+  metaLogin: (opts) => call('meta:login', opts),
   metaAccounts: () => call('meta:accounts'),
   metaShare: (o) => call('meta:share', o),
   wpSeoInfo: () => call('wp:seoInfo'),

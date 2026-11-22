@@ -2,7 +2,10 @@
 const { loginInBrowser, redirectUri } = require('./oauth');
 
 const REDIRECT = redirectUri('meta');
-const SCOPES = ['pages_show_list', 'pages_read_engagement', 'instagram_basic', 'business_management', 'pages_manage_posts'];
+const SCOPES = ['pages_show_list', 'pages_read_engagement', 'instagram_basic', 'business_management'];
+// Publicar en la página: solo se pide al activar «Compartir en Facebook» (si la app de Meta no lo tiene dado de alta,
+// Meta rechazaría la conexión entera con «Invalid Scopes»)
+const PUBLISH_SCOPES = ['pages_manage_posts'];
 
 const gv = (cfg) => cfg.graphVersion || 'v23.0';
 const graph = (cfg) => `https://graph.facebook.com/${gv(cfg)}`;
@@ -14,13 +17,13 @@ async function get(url) {
   return json;
 }
 
-async function login(cfg) {
+async function login(cfg, { publish = false } = {}) {
   if (!cfg.metaAppId || !cfg.metaAppSecret) throw new Error('Falta el App ID o el App Secret de Meta');
   const result = await loginInBrowser('meta', (state) => {
     // Apps de tipo Empresa: los permisos van en una configuración (config_id) en lugar de en scope
     const params = { client_id: cfg.metaAppId, redirect_uri: REDIRECT, response_type: 'code', state };
     if (cfg.metaConfigId) params.config_id = cfg.metaConfigId.trim();
-    else params.scope = SCOPES.join(',');
+    else params.scope = [...SCOPES, ...(publish ? PUBLISH_SCOPES : [])].join(',');
     return `https://www.facebook.com/${gv(cfg)}/dialog/oauth?` + new URLSearchParams(params);
   });
   // Código → token corto → token largo (~60 días)
@@ -92,7 +95,7 @@ async function instagramPosts(cfg, account, after = null, limit = 25) {
 function explainShareError(e = {}) {
   const msg = String(e.message || '');
   if (e.code === 200 || e.code === 10 || /pages_manage_posts|permission/i.test(msg)) {
-    return 'Meta no permite publicar en la página: falta el permiso «pages_manage_posts». Ve a Conexiones, pulsa «Conectar con Meta» otra vez y acepta todos los permisos que pide (si tu app usa una configuración de Empresa, añade ese permiso en la configuración).';
+    return 'NEED_PUBLISH_PERMISSION';
   }
   if (e.code === 190 || /access token|session/i.test(msg)) return 'La conexión con Meta ha caducado. Ve a Conexiones y vuelve a conectar con Meta.';
   return 'Meta: ' + msg;

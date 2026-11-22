@@ -266,6 +266,11 @@
     'Modelo (opcional: si lo dejas vacío, usa el de la CLI)': 'Model (optional: leave empty to use the CLI default)',
     'Los botones de IA usarán {c}. Pulsa «Probar» para comprobarlo.': 'The AI buttons will use {c}. Click "Try it" to check.',
     // 1.2 (editor completo)
+    'Para publicar en tu página, Ecos necesita el permiso de Meta «Publicar en la página» (pages_manage_posts).': 'To post on your Page, Ecos needs the Meta permission “Publish on the Page” (pages_manage_posts).',
+    'Conceder permiso': 'Grant permission',
+    'Si Meta dice «Invalid Scopes»': 'If Meta says “Invalid Scopes”',
+    'Tu app de Meta aún no tiene ese permiso. En developers.facebook.com → tu app → Casos de uso → «Administrar todo en tu página» (o Facebook Login) → Personalizar → Permisos, añade «pages_manage_posts». Después pulsa «Conceder permiso» otra vez.': 'Your Meta app does not have that permission yet. In developers.facebook.com → your app → Use cases → “Manage everything on your Page” (or Facebook Login) → Customize → Permissions, add “pages_manage_posts”. Then click “Grant permission” again.',
+    'Permiso concedido. Pulsa «Publicar en Facebook» otra vez.': 'Permission granted. Click “Post on Facebook” again.',
     'Descripción para buscadores': 'Description for search engines',
     'Lo que se ve bajo el título en Google': 'What shows under the title on Google',
     'Palabra clave': 'Keyword',

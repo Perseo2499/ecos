@@ -322,7 +322,21 @@ async function openFbShare() {
       close();
       toast(t('Compartido en Facebook.'));
       if (r.url && await ask(t('Entrada compartida en Facebook. ¿Quieres verla?'), { ok: t('Ver en Facebook'), cancel: t('Cerrar') })) window.api.open(r.url);
-    } catch (ex) { err.textContent = ex.message || String(ex); err.classList.remove('hidden'); }
+    } catch (ex) {
+      const msg = String(ex.message || ex);
+      if (/NEED_PUBLISH_PERMISSION/.test(msg)) {
+        // falta el permiso de publicar: se pide aparte (y se explica qué hacer si la app de Meta no lo tiene)
+        err.innerHTML = `${t('Para publicar en tu página, Ecos necesita el permiso de Meta «Publicar en la página» (pages_manage_posts).')}
+          <button class="btn tonal small" data-perm>${t('Conceder permiso')}</button>
+          <details><summary>${t('Si Meta dice «Invalid Scopes»')}</summary>${t('Tu app de Meta aún no tiene ese permiso. En developers.facebook.com → tu app → Casos de uso → «Administrar todo en tu página» (o Facebook Login) → Personalizar → Permisos, añade «pages_manage_posts». Después pulsa «Conceder permiso» otra vez.')}</details>`;
+        err.classList.remove('hidden');
+        $('[data-perm]', err).onclick = (ev) => busy(ev.currentTarget, async () => {
+          await window.api.metaLogin({ publish: true });
+          err.classList.add('hidden');
+          toast(t('Permiso concedido. Pulsa «Publicar en Facebook» otra vez.'));
+        });
+      } else { err.textContent = msg; err.classList.remove('hidden'); }
+    }
   });
   document.body.appendChild(d);
   $('#fbs-text', d).focus();

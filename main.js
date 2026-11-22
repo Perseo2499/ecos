@@ -209,8 +209,8 @@ handle('config:set', (changes) => {
   return publicCfg();
 });
 
-handle('meta:login', async () => {
-  const r = await meta.login(cfg);
+handle('meta:login', async (opts) => {
+  const r = await meta.login(cfg, opts || {});
   cfg.metaUserToken = r.token; cfg.metaTokenExpires = r.expiresAt;
   store.save(cfg);
   accounts = await meta.listAccounts(cfg);

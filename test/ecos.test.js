@@ -653,6 +653,12 @@ test('SEO de la web: detecta Yoast/Rank Math solo si se puede escribir; la web r
 
 test('Meta: errores de publicación explican el permiso pages_manage_posts', () => {
   const { explainShareError } = require('../src/meta');
-  assert.match(explainShareError({ code: 200, message: '(#200) Requires pages_manage_posts permission' }), /pages_manage_posts.*Conectar con Meta/);
+  assert.match(explainShareError({ code: 200, message: '(#200) Requires pages_manage_posts permission' }), /NEED_PUBLISH_PERMISSION/);
   assert.match(explainShareError({ code: 190, message: 'Invalid OAuth access token' }), /caducado/);
+});
+
+test('Meta: la conexión normal no pide el permiso de publicar (evita «Invalid Scopes»)', () => {
+  const src = require('fs').readFileSync(require('path').join(__dirname, '../src/meta.js'), 'utf8');
+  const base = src.match(/const SCOPES = \[([^\]]*)\]/)[1];
+  assert.doesNotMatch(base, /pages_manage_posts/);
 });
