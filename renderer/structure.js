@@ -184,7 +184,7 @@
         <div class="st-col" data-col="menu">
           <div class="st-col-h"><span class="ms">menu</span><b>${t('Menú')}</b>
             ${d.menus.length > 1 ? `<select data-a="menu">${d.menus.map((x, i) => `<option value="${i}" ${i === S.menu ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : m ? `<span class="hint">${esc(m.name)}</span>` : ''}
-            ${m ? `<button class="btn tonal small st-add" data-do="addlink"><span class="ms">add_link</span>${t('+ Enlace')}</button>` : ''}
+            ${m ? `<button class="btn tonal small st-add" data-do="addlink"><span class="ms">add_link</span>${t('Enlace')}</button>` : ''}
           </div>
           ${m ? `${m.locations.length ? `<div class="hint st-loc">${t('Se muestra en: {l}', { l: esc(m.locations.join(', ')) })}</div>` : `<div class="hint st-loc">${t('Este menú no está asignado a ninguna zona del tema.')}</div>`}
             <div class="st-tree" data-tree="menu">${tree(m.items, 0, 'menu')}</div>
@@ -193,13 +193,13 @@
         </div>
         <div class="st-col" data-col="pages">
           <div class="st-col-h"><span class="ms">description</span><b>${t('Páginas')}</b><span class="hint">${d.pages.length}</span>
-            <button class="btn tonal small st-add" data-do="addpage"><span class="ms">add</span>${t('+ Página')}</button></div>
+            <button class="btn tonal small st-add" data-do="addpage"><span class="ms">add</span>${t('Página')}</button></div>
           <div class="st-tree" data-tree="page">${tree(d.pages, 0, 'page')}</div>
           <div class="st-drop-end" data-end="page">${t('Suelta aquí para dejarla en el nivel principal')}</div>
         </div>
         <div class="st-col" data-col="cats">
           <div class="st-col-h"><span class="ms">category</span><b>${t('Categorías y entradas')}</b>
-            <button class="btn tonal small st-add" data-do="addcat"><span class="ms">add</span>${t('+ Categoría')}</button></div>
+            <button class="btn tonal small st-add" data-do="addcat"><span class="ms">add</span>${t('Categoría')}</button></div>
           <div class="st-tree">${catTree(0)}</div>
         </div>
       </div>`}`;
@@ -262,7 +262,7 @@
         <div class="st-node ${kind === 'page' ? 'st-' + n.status : ''} ${typeof n.id === 'string' ? 'new' : ''} ${changed(kind, n) ? 'changed' : ''}" draggable="true" data-kind="${kind}" data-id="${n.id}">
           ${sub ? `<button class="st-tw" data-tw="${key}"><span class="ms">${S.open.has(key) ? 'expand_more' : 'chevron_right'}</span></button>` : '<span class="st-tw"></span>'}
           <span class="ms st-ic">${icon}</span><span class="st-t" ${kind === 'page' ? `data-do="ren" data-k="page" data-i="${n.id}" data-dbl="1"` : ''}>${esc(n.title)}</span>
-          ${front ? `<span class="st-tag home"><span class="ms">home</span>${t('Inicio')}</span>` : ''}${blogp ? `<span class="st-tag"><span class="ms">article</span>${t('Entradas')}</span>` : ''}
+          ${front ? `<span class="st-tag st-front"><span class="ms">home</span>${t('Inicio')}</span>` : ''}${blogp ? `<span class="st-tag"><span class="ms">article</span>${t('Entradas')}</span>` : ''}
           ${kind === 'page' && n.status !== 'publish' ? `<span class="st-tag off">${esc(st?.[0] || n.status)}</span>` : ''}
           ${kind === 'page' && un.has(n.id) ? `<span class="st-tag warn" title="${t('No se puede llegar a ella desde el menú')}"><span class="ms">link_off</span>${t('Fuera del menú')}</span>` : ''}
           ${pr ? `<span class="st-tag warn" title="${t('Apunta a una página oculta o borrada')}"><span class="ms">warning</span>${pr.why === 'trash' ? t('En la papelera') : esc(STATUS()[pr.page.status]?.[0] || pr.page.status)}</span>` : ''}
