@@ -27,8 +27,8 @@ async function openFromWp(postId, keys, type = 'post') {
   toast(type === 'page' ? t('Abriendo la página de WordPress…') : t('Abriendo la entrada de WordPress…'));
   const r = await window.api.pullPost(postId, type);
   exported = r.exported || exported;
-  const imgs = r.blocks.flatMap((b) => (b.img ? [b.img] : b.images || []));
-  const vids = r.blocks.filter((b) => b.type === 'video' && b.video?.id).map((b) => ({ ...b.video, type: 'video' }));
+  const imgs = window.BlockEditor.flat(r.blocks).flatMap((b) => (b.img ? [b.img] : b.images || []));
+  const vids = window.BlockEditor.flat(r.blocks).filter((b) => b.type === 'video' && b.video?.id).map((b) => ({ ...b.video, type: 'video' }));
   draft = {
     title: r.title, excerpt: r.excerpt || '', slug: r.slug || '', tags: r.tags || [], categories: r.categories || [], blocks: r.blocks,
     featuredImageId: r.featured || null, keepFeaturedInBody: true, date: r.date, postId, previewOnly: false, wpStatus: r.status, sections: [], sourceText: '',
@@ -49,7 +49,7 @@ function newDraft(opts = {}) {
 function startDraft({ type = 'post', title = '', categories: preCats = [], parent = 0, scheduleAt = '' } = {}, tpl = null) {
   const page = type === 'page';
   const BE = window.BlockEditor;
-  const blocks = tpl && tpl.blocks && tpl.blocks.length ? tpl.blocks.map(({ type: ty, ...rest }) => BE.create(ty, JSON.parse(JSON.stringify(rest)))) : [BE.create('paragraph')];
+  const blocks = tpl && tpl.blocks && tpl.blocks.length ? BE.fromTemplate(tpl.blocks) : [BE.create('paragraph')];
   let cats = page ? [] : (preCats && preCats.length ? [...preCats] : undefined);
   // La plantilla marca su categoría solo si existe en el blog
   const hit = !page && tpl && tpl.category ? categories.find((c) => c.name.toLowerCase() === tpl.category.toLowerCase()) : null;
@@ -129,6 +129,8 @@ function applyDraftType() {
   ['#d-tags-field', '#d-cats-label', '#d-cats'].forEach((s) => $(s).classList.toggle('hidden', page));
   $('#d-parent-field').classList.toggle('hidden', !page);
   $('#ed-bar-title').textContent = page ? t('Página') : t('Entrada');
+  // En una página el lienzo es más ancho para ver el diseño a lo ancho
+  $('#editor').classList.toggle('page-mode', page);
   if (page) fillParents(draft.parent || 0);
 }
 let sitePagesCache = null;
@@ -165,7 +167,7 @@ function renderShare() {
   const slug = slugify($('#d-slug').value) || slugify(title);
   $('#d-slug').placeholder = slugify(title) || 'direccion-de-la-entrada';
   $('#d-slug-base').textContent = host + '/…/';
-  const all = [...(draft.blocks || []).flatMap((b) => (b.img ? [b.img] : b.images || [])), ...(window.BlockEditor?.media || [])];
+  const all = [...window.BlockEditor.flat(draft.blocks || []).flatMap((b) => (b.img ? [b.img] : b.images || [])), ...(window.BlockEditor?.media || [])];
   const img = all.find((i) => i.id === draft.featuredImageId) || all.find((i) => i.type !== 'video' && i.url);
   const desc = $('#d-excerpt').value.trim() || (window.BlockEditor?.plainText?.() || '').slice(0, 200);
   const warn = [];
@@ -346,7 +348,7 @@ $('#d-normalize').onclick = () => {
   toast(t('Formato normalizado: {w}. Puedes deshacerlo con Ctrl+Z.', { w: what }));
 };
 $('#ai-alts').onclick = (e) => busy(e.target, async () => {
-  const imgs = draft.blocks.flatMap((b) => (b.img ? [b.img] : b.images || [])).filter((i) => i.type !== 'video');
+  const imgs = window.BlockEditor.flat(draft.blocks).flatMap((b) => (b.img ? [b.img] : b.images || [])).filter((i) => i.type !== 'video');
   if (!imgs.length) throw new Error(t('Esta entrada no tiene fotos'));
   const alts = await window.api.aiAlts(imgs.map((i) => i.url), $('#d-title').value);
   window.BlockEditor.change(() => imgs.forEach((img, i) => { if (alts[i]) img.alt = alts[i]; }));
@@ -355,7 +357,7 @@ $('#ai-alts').onclick = (e) => busy(e.target, async () => {
 
 // Dirección de la imagen destacada (por si en WordPress hay que buscarla o subirla)
 function featuredUrl() {
-  const all = [...(draft.blocks || []).flatMap((b) => (b.img ? [b.img] : b.images || [])), ...(window.BlockEditor?.media || []), ...(draft.extraMedia || [])];
+  const all = [...window.BlockEditor.flat(draft.blocks || []).flatMap((b) => (b.img ? [b.img] : b.images || [])), ...(window.BlockEditor?.media || []), ...(draft.extraMedia || [])];
   return all.find((i) => i.id === draft.featuredImageId)?.url || '';
 }
 // Datos de la entrada para enviar o previsualizar
@@ -528,7 +530,7 @@ $('#preview').onclick = (e) => busy(e.target, async () => {
       const e = window.BlockEditor.detectEmbed(url.replace(/&amp;/g, '&'));
       return e?.player ? `<div class="wp-block-embed__wrapper"><iframe src="${escHtml(e.player)}" style="width:100%;aspect-ratio:${/spotify/.test(e.player) ? '16/5' : '16/9'};border:0" allowfullscreen></iframe></div>` : m;
     });
-  const featured = draft.blocks.flatMap((b) => (b.img ? [b.img] : b.images || [])).filter((i) => i.type !== 'video').find((i) => i.id === draft.featuredImageId);
+  const featured = window.BlockEditor.flat(draft.blocks).flatMap((b) => (b.img ? [b.img] : b.images || [])).filter((i) => i.type !== 'video').find((i) => i.id === draft.featuredImageId);
   const cats = $$('#d-cats input:checked').map((i) => i.value);
   await showPreview({ title: $('#d-title').value, date: $('#d-keepdate').checked ? draft.date : Date.now(), cats, featured: featured?.url, content, web: true });
 });

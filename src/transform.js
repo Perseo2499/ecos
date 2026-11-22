@@ -196,15 +196,52 @@ const caption = (c) => (c && inline(c) ? `<figcaption class="wp-element-caption"
 
 // Tamaños de una foto colocada a un lado o centrada (en píxeles: el ancho de texto del blog es ~760)
 const IMG_W = { 33: 250, 50: 380, 75: 570 };
-function imageBlockFull(img, cap = '', place = {}) {
+// Recortes por proporción (aspectRatio + scale:'cover' de core/image, WordPress 6.3+)
+const IMG_RATIOS = ['1', '4/3', '3/2', '16/9', '9/16'];
+const IMG_SHADOW = '6px 6px 9px rgba(0, 0, 0, 0.2)';
+const IMG_FX = { zoom: 'ecos-zoom', bw: 'ecos-bn' };
+// Estilos mínimos de los efectos propios (clases ecos-*): van en un bloque HTML con <style> al final del contenido
+const FX_CSS = {
+  sombra: '.ecos-sombra{text-shadow:1px 2px 4px rgba(0,0,0,.35)}',
+  zoom: '.wp-block-image.ecos-zoom{overflow:hidden}.wp-block-image.ecos-zoom img{transition:transform .5s cubic-bezier(.2,0,0,1)}.wp-block-image.ecos-zoom:hover img{transform:scale(1.08)}',
+  bw: '.wp-block-image.ecos-bn img{filter:grayscale(1)}',
+};
+const FX_MARK = 'ecos-fx';
+function fxBlock(set) {
+  const css = Object.keys(FX_CSS).filter((k) => set.has(k)).map((k) => FX_CSS[k]).join('');
+  return `<!-- wp:html -->\n<style class="${FX_MARK}">${css}</style>\n<!-- /wp:html -->`;
+}
+function imageBlockFull(img, cap = '', place = {}, fx = null) {
   const alt = img.alt ? ` alt="${esc(img.alt)}"` : ' alt=""';
   const align = ['left', 'right', 'center'].includes(place.align) ? place.align : '';
-  const px = align && IMG_W[place.width] ? IMG_W[place.width] : 0;
-  if (!align) return `<!-- wp:image ${imageBlockAttrs(img)} -->\n<figure class="wp-block-image size-large"><img src="${esc(img.url)}"${alt}${imgClass(img)}/>${caption(cap)}</figure>\n<!-- /wp:image -->`;
+  const preset = align && IMG_W[place.width] ? `${IMG_W[place.width]}px` : '';
+  const free = /^\d{1,4}(\.\d+)?(px|%)$/.test(place.w || '') ? place.w : '';
+  const width = free || preset;
+  const ratio = IMG_RATIOS.includes(place.ratio) ? place.ratio : '';
+  const frame = ['rounded', 'circle', 'border', 'shadow'].includes(place.frame) ? place.frame : '';
+  const effect = IMG_FX[place.fx] ? place.fx : '';
+  if (!align && !width && !ratio && !frame && !effect) return `<!-- wp:image ${imageBlockAttrs(img)} -->\n<figure class="wp-block-image size-large"><img src="${esc(img.url)}"${alt}${imgClass(img)}/>${caption(cap)}</figure>\n<!-- /wp:image -->`;
   const attrs = JSON.parse(imageBlockAttrs(img));
-  Object.assign(attrs, { align, ...(px ? { width: `${px}px` } : {}) });
+  const figCls = ['wp-block-image'], css = [], st = {}, cn = [];
+  if (align) { attrs.align = align; figCls.push('align' + align); }
+  figCls.push('size-large');
+  if (width) { attrs.width = width; figCls.push('is-resized'); css.push('width:' + width); }
+  if (ratio) { attrs.aspectRatio = ratio; attrs.scale = 'cover'; css.push('aspect-ratio:' + ratio, 'object-fit:cover'); }
+  if (frame === 'circle') cn.push('is-style-rounded');
+  if (frame === 'rounded') { st.border = { radius: '16px' }; css.push('border-radius:16px'); }
+  if (frame === 'border') {
+    const col = SAFE_COLOR.test(place.frameColor || '') ? place.frameColor : '#333333';
+    st.border = { color: col, style: 'solid', width: '2px' };
+    css.push('border-color:' + col, 'border-style:solid', 'border-width:2px');
+  }
+  if (frame === 'rounded' || frame === 'border') figCls.push('has-custom-border');
+  if (frame === 'shadow') { st.shadow = IMG_SHADOW; css.push('box-shadow:' + IMG_SHADOW); }
+  if (effect) { cn.push(IMG_FX[effect]); fx?.add(effect); }
+  if (cn.length) attrs.className = cn.join(' ');
+  if (Object.keys(st).length) attrs.style = st;
+  figCls.push(...cn);
   const cls = imgId(img) ? `wp-image-${imgId(img)}` : '';
-  return `<!-- wp:image ${JSON.stringify(attrs)} -->\n<figure class="wp-block-image align${align} size-large${px ? ' is-resized' : ''}"><img src="${esc(img.url)}"${alt}${cls ? ` class="${cls}"` : ''}${px ? ` style="width:${px}px"` : ''}/>${caption(cap)}</figure>\n<!-- /wp:image -->`;
+  return `<!-- wp:image ${JSON.stringify(attrs)} -->\n<figure class="${figCls.join(' ')}"><img src="${esc(img.url)}"${alt}${cls ? ` class="${cls}"` : ''}${css.length ? ` style="${css.join(';')}"` : ''}/>${caption(cap)}</figure>\n<!-- /wp:image -->`;
 }
 
 // Carrusel: diapositivas que se deslizan (scroll-snap, funciona sin JavaScript) con la foto activa
@@ -288,7 +325,7 @@ const FONTS = {
   serif: 'Georgia, Times New Roman, serif', sans: 'Helvetica Neue, Arial, sans-serif', round: 'Trebuchet MS, Segoe UI, sans-serif',
   mono: 'Courier New, monospace', hand: 'Segoe Print, Comic Sans MS, cursive',
 };
-function blockStyle(b, { alignKey = 'align', align = true, dropCap = false } = {}) {
+function blockStyle(b, { alignKey = 'align', align = true, dropCap = false, fx = null } = {}) {
   const attrs = {}, cls = [], css = [];
   if (align && ['center', 'right', 'justify'].includes(b.align)) { attrs[alignKey] = b.align; cls.push('has-text-align-' + b.align); }
   if (dropCap && b.dropCap) { attrs.dropCap = true; cls.push('has-drop-cap'); }
@@ -300,11 +337,20 @@ function blockStyle(b, { alignKey = 'align', align = true, dropCap = false } = {
     if (bg) { st.color.background = bg; cls.push('has-background'); css.push('background-color:' + bg); }
   }
   const size = /^\d{1,3}px$/.test(b.size || '') && b.size, font = FONTS[b.font];
-  if (size || font) {
+  const spacing = /^\d{1,2}(\.\d)?px$/.test(b.spacing || '') && b.spacing;
+  if (size || font || spacing) {
     st.typography = {};
     if (font) { st.typography.fontFamily = font; css.push('font-family:' + font); }
     if (size) { st.typography.fontSize = size; css.push('font-size:' + size); }
+    if (spacing) { st.typography.letterSpacing = spacing; css.push('letter-spacing:' + spacing); }
   }
+  // Resaltado de bloque: el color de fondo lleva margen interior y esquinas suaves
+  if (bg && align) {
+    st.spacing = { padding: { top: '14px', right: '18px', bottom: '14px', left: '18px' } };
+    st.border = { radius: '10px' };
+    css.push('border-radius:10px', 'padding-top:14px', 'padding-right:18px', 'padding-bottom:14px', 'padding-left:18px');
+  }
+  if (b.shadow && align) { attrs.className = 'ecos-sombra'; cls.push('ecos-sombra'); fx?.add('sombra'); }
   if (Object.keys(st).length) attrs.style = st;
   const json = Object.keys(attrs).length ? ' ' + JSON.stringify(attrs) : '';
   return { json, attrs, cls: cls.length ? ' ' + cls.join(' ') : '', style: css.length ? ` style="${css.join(';')}"` : '' };
@@ -346,13 +392,135 @@ function tableBlock(b) {
   return `<!-- wp:table ${JSON.stringify(attrs)} -->\n<figure class="wp-block-table${b.stripes ? ' is-style-stripes' : ''}"><table>${head}<tbody>${body}</tbody></table>${b.caption && inline(b.caption) ? `<figcaption class="wp-element-caption">${inline(b.caption)}</figcaption>` : ''}</figure>\n<!-- /wp:table -->`;
 }
 
+const BTN_RADIUS = { square: '0px', round: '8px', pill: '9999px' };
+const BTN_SIZE = { s: { pad: ['8px', '18px'], font: '14px' }, l: { pad: ['18px', '40px'], font: '20px' } };
 function buttonsBlock(b) {
   const text = inline(b.html || '');
   if (!text) return '';
   const href = /^(https?:|mailto:|tel:|#)/i.test(b.url || '') ? ` href="${esc(b.url)}"` : '';
-  const just = ['center', 'right'].includes(b.align) ? { layout: { type: 'flex', justifyContent: b.align } } : null;
+  const full = !!b.full;
+  const just = !full && ['center', 'right'].includes(b.align) ? { layout: { type: 'flex', justifyContent: b.align } } : null;
   const outline = b.variant === 'outline';
-  return `<!-- wp:buttons${just ? ' ' + JSON.stringify(just) : ''} -->\n<div class="wp-block-buttons"><!-- wp:button${outline ? ' {"className":"is-style-outline"}' : ''} -->\n<div class="wp-block-button${outline ? ' is-style-outline' : ''}"><a class="wp-block-button__link wp-element-button"${href}>${text}</a></div>\n<!-- /wp:button --></div>\n<!-- /wp:buttons -->`;
+  // Estilo del botón con atributos estándar de core/button
+  const st = {}, aCls = ['wp-block-button__link'], css = [];
+  const bg = !outline && SAFE_COLOR.test(b.bg || '') && b.bg, fg = SAFE_COLOR.test(b.color || '') && b.color;
+  const rad = BTN_RADIUS[b.radius], sz = BTN_SIZE[b.size];
+  if (rad) { st.border = { radius: rad }; css.push('border-radius:' + rad); }
+  if (fg || bg) {
+    st.color = {};
+    if (fg) { st.color.text = fg; aCls.push('has-text-color'); css.push('color:' + fg); }
+    if (bg) { st.color.background = bg; aCls.push('has-background'); css.push('background-color:' + bg); }
+  }
+  if (sz) {
+    st.spacing = { padding: { top: sz.pad[0], right: sz.pad[1], bottom: sz.pad[0], left: sz.pad[1] } };
+    st.typography = { fontSize: sz.font };
+    aCls.push('has-custom-font-size');
+    css.push(`padding-top:${sz.pad[0]}`, `padding-right:${sz.pad[1]}`, `padding-bottom:${sz.pad[0]}`, `padding-left:${sz.pad[1]}`, 'font-size:' + sz.font);
+  }
+  aCls.push('wp-element-button');
+  const attrs = {};
+  if (outline) attrs.className = 'is-style-outline';
+  if (full) attrs.width = 100;
+  if (Object.keys(st).length) attrs.style = st;
+  const divCls = ['wp-block-button'];
+  if (outline) divCls.push('is-style-outline');
+  if (full) divCls.push('has-custom-width', 'wp-block-button__width-100');
+  const attrJson = Object.keys(attrs).length ? ' ' + JSON.stringify(attrs) : '';
+  return `<!-- wp:buttons${just ? ' ' + JSON.stringify(just) : ''} -->\n<div class="wp-block-buttons"><!-- wp:button${attrJson} -->\n<div class="${divCls.join(' ')}"><a class="${aCls.join(' ')}"${href}${css.length ? ` style="${css.join(';')}"` : ''}>${text}</a></div>\n<!-- /wp:button --></div>\n<!-- /wp:buttons -->`;
+}
+
+// --- Contenedores: sección (core/group), columnas (core/columns + core/column) y portada (core/cover) ---------------
+// Cada contenedor lleva bloques dentro: b.children = [bloques] (sección y portada) o b.cols = [{ width, children }] (columnas).
+const kidLists = (b) => (Array.isArray(b.children) ? [b.children] : Array.isArray(b.cols) ? b.cols.map((c) => c.children || []) : []);
+function flatBlocks(blocks, out = []) {
+  for (const b of blocks || []) { out.push(b); for (const l of kidLists(b)) flatBlocks(l, out); }
+  return out;
+}
+// Margen interior de una sección: arriba y abajo / a los lados, en píxeles
+const GROUP_PAD = { s: [24, 24], m: [48, 32], l: [80, 40] };
+const GROUP_SHADOW = '6px 6px 9px rgba(0, 0, 0, 0.2)';
+const ALIGNS = ['wide', 'full'];
+// Proporciones de columnas (porcentajes) según el número de columnas
+const COL_PRESETS = {
+  1: [[100]], 2: [[50, 50], [33.33, 66.66], [66.66, 33.33]], 3: [[33.33, 33.33, 33.33], [25, 50, 25], [50, 25, 25], [25, 25, 50]], 4: [[25, 25, 25, 25]],
+};
+const equalCols = (cols) => cols.length < 2 || cols.every((c) => parseFloat(c.width) === parseFloat(cols[0].width));
+
+function groupBlock(b, opts, ctx) {
+  const inner = composeList(b.children || [], opts, ctx);
+  const attrs = {}, st = {}, cls = ['wp-block-group'], css = [];
+  const align = ALIGNS.includes(b.width) ? b.width : '';
+  if (align) { attrs.align = align; cls.push('align' + align); }
+  const bg = SAFE_COLOR.test(b.bg || '') && b.bg, fg = SAFE_COLOR.test(b.color || '') && b.color;
+  if (bg || fg) {
+    st.color = {};
+    if (bg) { st.color.background = bg; cls.push('has-background'); css.push('background-color:' + bg); }
+    if (fg) { st.color.text = fg; cls.push('has-text-color'); css.push('color:' + fg); }
+  }
+  const pad = GROUP_PAD[b.pad];
+  if (pad) {
+    const [v, h] = pad;
+    st.spacing = { padding: { top: v + 'px', right: h + 'px', bottom: v + 'px', left: h + 'px' } };
+    css.push(`padding-top:${v}px`, `padding-right:${h}px`, `padding-bottom:${v}px`, `padding-left:${h}px`);
+  }
+  const rad = Math.max(0, Math.min(60, Number(b.radius) || 0));
+  if (rad) { st.border = { radius: rad + 'px' }; css.unshift(`border-radius:${rad}px`); }
+  if (b.shadow) { st.shadow = GROUP_SHADOW; css.push('box-shadow:' + GROUP_SHADOW); }
+  if (Object.keys(st).length) attrs.style = st;
+  attrs.layout = { type: 'constrained' };
+  return `<!-- wp:group ${JSON.stringify(attrs)} -->\n<div class="${cls.join(' ')}"${css.length ? ` style="${css.join(';')}"` : ''}>${inner ? '\n' + inner + '\n' : ''}</div>\n<!-- /wp:group -->`;
+}
+
+function columnsBlock(b, opts, ctx) {
+  const cols = (b.cols || []).filter(Boolean);
+  if (!cols.length) return '';
+  const valign = ['top', 'center', 'bottom'].includes(b.valign) ? b.valign : '';
+  const attrs = {};
+  const cls = ['wp-block-columns'];
+  if (valign) { attrs.verticalAlignment = valign; cls.push('are-vertically-aligned-' + valign); }
+  if (b.stack === false) { attrs.isStackedOnMobile = false; cls.push('is-not-stacked-on-mobile'); }
+  const eq = equalCols(cols);
+  const inner = cols.map((c) => {
+    const a = {}, cc = ['wp-block-column'];
+    const w = !eq && /^\d{1,3}(\.\d+)?%$/.test(c.width || '') ? c.width : '';
+    if (valign) { a.verticalAlignment = valign; cc.push('is-vertically-aligned-' + valign); }
+    if (w) a.width = w;
+    const body = composeList(c.children || [], opts, ctx);
+    return `<!-- wp:column${Object.keys(a).length ? ' ' + JSON.stringify(a) : ''} -->\n<div class="${cc.join(' ')}"${w ? ` style="flex-basis:${w}"` : ''}>${body ? '\n' + body + '\n' : ''}</div>\n<!-- /wp:column -->`;
+  }).join('\n\n');
+  return `<!-- wp:columns${Object.keys(attrs).length ? ' ' + JSON.stringify(attrs) : ''} -->\n<div class="${cls.join(' ')}">${inner}</div>\n<!-- /wp:columns -->`;
+}
+
+// ¿El color es oscuro? (para decidir si el texto de la portada va en blanco o en negro)
+function isDarkColor(c) {
+  const m = String(c || '').match(/^#([0-9a-f]{3}|[0-9a-f]{6})/i);
+  if (!m) return true;
+  const h = m[1].length === 3 ? m[1].split('').map((x) => x + x).join('') : m[1];
+  const [r, g, bl] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  return (0.299 * r + 0.587 * g + 0.114 * bl) / 255 < 0.55;
+}
+function coverBlock(b, opts, ctx) {
+  const inner = composeList(b.children || [], opts, ctx);
+  const overlay = /^#[0-9a-f]{6}$/i.test(b.overlay || '') ? b.overlay : '#000000';
+  const dim = Math.max(0, Math.min(100, Math.round(Number(b.dim ?? 50) / 10) * 10));
+  const h = Number(b.height) > 0 ? Math.min(1200, Math.round(Number(b.height))) : 0;
+  const img = b.img && b.img.url ? b.img : null;
+  const attrs = {};
+  if (img) { attrs.url = img.url; if (imgId(img)) attrs.id = imgId(img); }
+  attrs.dimRatio = dim; attrs.customOverlayColor = overlay;
+  if (h) { attrs.minHeight = h; attrs.minHeightUnit = 'px'; }
+  const dark = dim < 40 && img ? true : isDarkColor(overlay);
+  if (!dark) attrs.isDark = false;
+  const align = ALIGNS.includes(b.width) ? b.width : '';
+  if (align) attrs.align = align;
+  attrs.layout = { type: 'constrained' };
+  const cls = ['wp-block-cover'];
+  if (align) cls.push('align' + align);
+  if (!dark) cls.push('is-light');
+  const dimCls = ['wp-block-cover__background', 'has-background-dim'];
+  if (dim !== 50) dimCls.push(`has-background-dim-${dim}`);
+  const imgTag = img ? `<img class="wp-block-cover__image-background${imgId(img) ? ` wp-image-${imgId(img)}` : ''}" alt="${esc(img.alt || '')}" src="${esc(img.url)}" data-object-fit="cover"/>` : '';
+  return `<!-- wp:cover ${JSON.stringify(attrs)} -->\n<div class="${cls.join(' ')}"${h ? ` style="min-height:${h}px"` : ''}><span aria-hidden="true" class="${dimCls.join(' ')}" style="background-color:${overlay}"></span>${imgTag}<div class="wp-block-cover__inner-container">${inner ? '\n' + inner + '\n' : ''}</div></div>\n<!-- /wp:cover -->`;
 }
 
 // Mosaico: fotos de distintos tamaños encajadas en una rejilla (la primera grande). Bloque HTML, como el carrusel.
@@ -393,19 +561,27 @@ function mixedGalleryBlock(b, cols) {
 }
 
 function composeBlocks(blocks, opts = {}) {
+  const all = flatBlocks(blocks);
+  const ctx = { anchors: headingAnchors(all), all, fx: new Set() };
+  const html = composeList(blocks, opts, ctx);
+  // efectos propios (sombra de texto, zoom, blanco y negro): su CSS mínimo va en un bloque HTML al final
+  return ctx.fx.size ? (html ? html + '\n\n' : '') + fxBlock(ctx.fx) : html;
+}
+
+function composeList(blocks, opts, ctx) {
   const out = [];
-  const anchors = headingAnchors(blocks);
-  for (const b of blocks) {
+  const anchors = ctx.anchors;
+  for (const b of blocks || []) {
     switch (b.type) {
       case 'paragraph': {
-        const st = blockStyle(b, { dropCap: true });
+        const st = blockStyle(b, { dropCap: true, fx: ctx.fx });
         for (const p of sanitizeParagraphs(b.html)) out.push(`<!-- wp:paragraph${st.json} -->\n<p${st.cls ? ` class="${st.cls.trim()}"` : ''}${st.style}>${p}</p>\n<!-- /wp:paragraph -->`);
         break;
       }
       case 'heading': {
         const l = [2, 3, 4, 5].includes(b.level) ? b.level : 2;
         if (!inline(b.html)) break;
-        const st = blockStyle(b, { alignKey: 'textAlign' });
+        const st = blockStyle(b, { alignKey: 'textAlign', fx: ctx.fx });
         const attrs = { ...(l === 2 ? {} : { level: l }), ...st.attrs };
         const id = anchors.get(b.id);
         out.push(`<!-- wp:heading${Object.keys(attrs).length ? ' ' + JSON.stringify(attrs) : ''} -->\n<h${l} class="wp-block-heading${st.cls}"${id ? ` id="${id}"` : ''}${st.style}>${inline(b.html)}</h${l}>\n<!-- /wp:heading -->`);
@@ -440,13 +616,16 @@ function composeBlocks(blocks, opts = {}) {
         break;
       }
       case 'toc': {
-        const items = blocks.filter((h) => h.type === 'heading' && anchors.has(h.id) && (h.level || 2) <= 3);
+        const items = ctx.all.filter((h) => h.type === 'heading' && anchors.has(h.id) && (h.level || 2) <= 3);
         if (!items.length) break;
         const head = b.title && inline(b.title) ? `<!-- wp:paragraph -->\n<p><strong>${inline(b.title)}</strong></p>\n<!-- /wp:paragraph -->\n\n` : '';
         out.push(head + `<!-- wp:list -->\n<ul class="wp-block-list">${items.map((h) => `<!-- wp:list-item -->\n<li><a href="#${anchors.get(h.id)}">${inline(h.html).replace(/<[^>]+>/g, '')}</a></li>\n<!-- /wp:list-item -->`).join('\n')}</ul>\n<!-- /wp:list -->`);
         break;
       }
-      case 'image': if (b.img) out.push(imageBlockFull(b.img, b.caption, { align: b.align, width: b.width })); break;
+      case 'image': if (b.img) out.push(imageBlockFull(b.img, b.caption, { align: b.align, width: b.width, w: b.w, ratio: b.ratio, frame: b.frame, frameColor: b.frameColor, fx: b.fx }, ctx.fx)); break;
+      case 'group': out.push(groupBlock(b, opts, ctx)); break;
+      case 'columns': { const c = columnsBlock(b, opts, ctx); if (c) out.push(c); break; }
+      case 'cover': out.push(coverBlock(b, opts, ctx)); break;
       case 'gallery': {
         if (!b.images?.length) break;
         if (b.layout === 'mosaic' && b.images.length > 1) { out.push(mosaicBlock(b)); break; }
@@ -475,7 +654,7 @@ function composeBlocks(blocks, opts = {}) {
 }
 
 // Todas las imágenes de los bloques (para el texto alternativo y la imagen destacada)
-const blockImages = (blocks) => blocks.flatMap((b) => (b.img ? [b.img] : b.images || [])).filter((i) => i && i.type !== 'video');
+const blockImages = (blocks) => flatBlocks(blocks).flatMap((b) => (b.img ? [b.img] : b.images || [])).filter((i) => i && i.type !== 'video');
 
 // «Resumen de noviembre de 2026» / «Resumen del 3 al 16 de noviembre» / «Resumen de octubre y noviembre de 2026»
 function summaryTitle(from, to) {
@@ -511,4 +690,4 @@ function mergeDuplicates(posts) {
 // Claves de todas las versiones de una publicación (para marcarla como exportada)
 const postKeys = (p) => [p.source + ':' + p.id, ...(p.alsoOn || []).map((a) => a.source + ':' + a.id)];
 
-module.exports = { PEEK_CSS, FONTS, VIDEO_PROVIDERS, composeBlocks, sectionsToBlocks, blockImages, buildDraft, composeContent, sanitizeParagraphs, summaryTitle, extractTags, mediaKey, makeTitle, tidyTitle, mergeDuplicates, postKeys, DEFAULT_FOOTER };
+module.exports = { PEEK_CSS, FONTS, FX_MARK, COL_PRESETS, GROUP_PAD, flatBlocks, VIDEO_PROVIDERS, composeBlocks, sectionsToBlocks, blockImages, buildDraft, composeContent, sanitizeParagraphs, summaryTitle, extractTags, mediaKey, makeTitle, tidyTitle, mergeDuplicates, postKeys, DEFAULT_FOOTER };

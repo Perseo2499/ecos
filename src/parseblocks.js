@@ -1,7 +1,7 @@
 // Lee el contenido de una entrada de WordPress (bloques de Gutenberg) y lo convierte en bloques del editor
 // de Ecos, para traer al editor los cambios hechos directamente en WordPress. Lo que Ecos no sabe editar
 // se conserva tal cual en un bloque «raw», que al enviar se devuelve sin tocar.
-const { FONTS } = require('./transform');
+const { FONTS, FX_MARK } = require('./transform');
 
 const FONT_KEY = Object.fromEntries(Object.entries(FONTS).map(([k, v]) => [v, k]));
 let seq = 0;
@@ -54,6 +54,8 @@ function styleFrom(a) {
   if (st.color?.background) o.bg = st.color.background;
   if (st.typography?.fontSize) o.size = st.typography.fontSize;
   if (st.typography?.fontFamily && FONT_KEY[st.typography.fontFamily]) o.font = FONT_KEY[st.typography.fontFamily];
+  if (st.typography?.letterSpacing && /^\d{1,2}(\.\d)?px$/.test(st.typography.letterSpacing)) o.spacing = st.typography.letterSpacing;
+  if (/(^|\s)ecos-sombra(\s|$)/.test(a.className || '')) o.shadow = true;
   return o;
 }
 
@@ -71,12 +73,23 @@ function toBlock(t) {
       const img = imgOf(h);
       if (!img) return raw();
       const b = { id: bid(), type: 'image', img, caption: inner(h, 'figcaption') };
-      // colocada a un lado (texto alrededor) o centrada a un tamaño
-      if (['left', 'right', 'center'].includes(a.align)) {
-        b.align = a.align;
-        const px = parseInt(a.width, 10);
-        if (px) b.width = px <= 300 ? 33 : px <= 470 ? 50 : px <= 650 ? 75 : 100;
+      // colocada a un lado (texto alrededor) o centrada, con un ancho (en px o %)
+      if (['left', 'right', 'center'].includes(a.align)) b.align = a.align;
+      const wd = String(a.width || '');
+      if (/^\d+(\.\d+)?%$/.test(wd)) b.w = wd;
+      else if (parseInt(wd, 10)) {
+        const px = parseInt(wd, 10), preset = { 250: 33, 380: 50, 570: 75 }[px];
+        if (b.align && preset) b.width = preset; else if (/^\d+(\.\d+)?px$/.test(wd)) b.w = wd; else if (b.align) b.width = px <= 300 ? 33 : px <= 470 ? 50 : px <= 650 ? 75 : 100;
       }
+      if (['1', '4/3', '3/2', '16/9', '9/16'].includes(String(a.aspectRatio))) b.ratio = String(a.aspectRatio);
+      // marco y efecto (atributos estándar y clases propias)
+      const cn = String(a.className || '').split(/\s+/);
+      const bd = a.style?.border || {};
+      if (cn.includes('is-style-rounded')) b.frame = 'circle';
+      else if (bd.width) { b.frame = 'border'; if (bd.color) b.frameColor = bd.color; }
+      else if (bd.radius) b.frame = 'rounded';
+      else if (a.style?.shadow) b.frame = 'shadow';
+      if (cn.includes('ecos-zoom')) b.fx = 'zoom'; else if (cn.includes('ecos-bn')) b.fx = 'bw';
       return b;
     }
     case 'gallery': {
@@ -96,7 +109,16 @@ function toBlock(t) {
       const btns = tokenize(h).filter((x) => /(^|\/)button$/.test(x.name));
       if (btns.length !== 1) return raw();
       const link = (btns[0].inner.match(/<a\b[^>]*>[\s\S]*?<\/a>/i) || [''])[0];
-      return { id: bid(), type: 'buttons', html: inner(link, 'a'), url: attr(link, 'href'), align: a.layout?.justifyContent || 'left', variant: /is-style-outline/.test(btns[0].attrs.className || '') ? 'outline' : 'fill' };
+      const ba = btns[0].attrs, bst = ba.style || {};
+      const out = { id: bid(), type: 'buttons', html: inner(link, 'a'), url: attr(link, 'href'), align: a.layout?.justifyContent || 'left', variant: /is-style-outline/.test(ba.className || '') ? 'outline' : 'fill' };
+      if (bst.color?.background) out.bg = bst.color.background;
+      if (bst.color?.text) out.color = bst.color.text;
+      const rad = parseInt(bst.border?.radius, 10);
+      if (!Number.isNaN(rad)) out.radius = rad === 0 ? 'square' : rad >= 100 ? 'pill' : 'round';
+      const pt = parseInt(bst.spacing?.padding?.top, 10);
+      if (pt === 8) out.size = 's'; else if (pt === 18) out.size = 'l';
+      if (Number(ba.width) === 100) out.full = true;
+      return out;
     }
     case 'details': return { id: bid(), type: 'details', summary: inner(h, 'summary'), html: all(h, 'p').map((p) => `<p>${p}</p>`).join('') };
     case 'uagb/image-gallery': {
@@ -108,6 +130,7 @@ function toBlock(t) {
         : { id: bid(), type: 'gallery', images, columns: a.columnsDesk || 3 };
     }
     case 'html': {
+      if (new RegExp(`<style class="${FX_MARK}"`).test(h)) return null; // estilos de los efectos de Ecos: se vuelven a poner al enviar
       // carrusel y mosaico de Ecos
       if (/class="ecos-(carrusel|mosaico|galeria)"/.test(h)) {
         // fotos y vídeos en orden (sin las imágenes de fondo desenfocado del carrusel, que repiten cada foto)
@@ -124,8 +147,81 @@ function toBlock(t) {
       }
       return raw();
     }
+    case 'group': {
+      if (!groupKnown(a)) return raw();
+      const st = a.style || {}, kids = parseList(h, true);
+      if (kids.lossy) return raw();
+      const b = { id: bid(), type: 'group', children: kids };
+      if (ALIGN_OK.includes(a.align)) b.width = a.align;
+      if (st.color?.background) b.bg = st.color.background;
+      if (st.color?.text) b.color = st.color.text;
+      b.pad = padOf(st.spacing?.padding);
+      const rad = parseInt(st.border?.radius, 10);
+      if (rad > 0) b.radius = rad;
+      if (st.shadow) b.shadow = true;
+      return b;
+    }
+    case 'columns': {
+      if (!onlyKeys(a, ['verticalAlignment', 'isStackedOnMobile'])) return raw();
+      const cols = tokenize(h).filter((x) => x.name !== 'freeform' || x.inner.replace(/<[^>]+>|\s|&nbsp;/g, ''));
+      if (!cols.length || cols.some((x) => x.name !== 'column' || !onlyKeys(x.attrs, ['width', 'verticalAlignment']))) return raw();
+      const eq = pctString(100 / cols.length);
+      const lists = cols.map((x) => parseList(x.inner, true));
+      if (lists.some((l) => l.lossy)) return raw();
+      const b = { id: bid(), type: 'columns', cols: cols.map((x, k) => ({ width: /^\d{1,3}(\.\d+)?%$/.test(x.attrs.width || '') ? x.attrs.width : eq, children: lists[k] })) };
+      if (['top', 'center', 'bottom'].includes(a.verticalAlignment)) b.valign = a.verticalAlignment;
+      if (a.isStackedOnMobile === false) b.stack = false;
+      return b;
+    }
+    case 'cover': {
+      if (!onlyKeys(a, ['url', 'id', 'dimRatio', 'customOverlayColor', 'minHeight', 'minHeightUnit', 'isDark', 'align', 'layout', 'alt'])) return raw();
+      if (a.minHeightUnit && a.minHeightUnit !== 'px') return raw();
+      if (a.layout && !(a.layout.type === 'constrained' && Object.keys(a.layout).length === 1)) return raw();
+      if (a.customOverlayColor && !/^#[0-9a-f]{6}$/i.test(a.customOverlayColor)) return raw();
+      const kids = parseList(h, true);
+      if (kids.lossy) return raw();
+      const tag = (h.match(/<img\b[^>]*wp-block-cover__image-background[^>]*>/i) || [''])[0];
+      const b = { id: bid(), type: 'cover', img: a.url ? { id: Number(a.id) || a.url, url: a.url, alt: attr(tag, 'alt') } : null, overlay: a.customOverlayColor || '#000000', dim: a.dimRatio ?? 100, height: Number(a.minHeight) || 0, children: kids };
+      if (ALIGN_OK.includes(a.align)) b.width = a.align;
+      return b;
+    }
     default: return raw();
   }
+}
+
+// --- Contenedores (sección, columnas, portada) ---------------------------------------------------------------
+const ALIGN_OK = ['wide', 'full'];
+const onlyKeys = (o, keys) => Object.keys(o || {}).every((k) => keys.includes(k));
+const pctString = (n) => `${Math.round(n * 100) / 100}%`;
+// Solo se convierte en sección lo que Ecos sabe volver a escribir igual; el resto se conserva tal cual (bloque «raw»)
+function groupKnown(a) {
+  if (!onlyKeys(a, ['align', 'style', 'layout'])) return false;
+  if (a.align && !ALIGN_OK.includes(a.align)) return false;
+  if (a.layout && !(a.layout.type === 'constrained' && Object.keys(a.layout).length === 1)) return false;
+  const st = a.style || {};
+  if (!onlyKeys(st, ['spacing', 'color', 'border', 'shadow'])) return false;
+  if (!onlyKeys(st.spacing, ['padding']) || !onlyKeys(st.color, ['background', 'text']) || !onlyKeys(st.border, ['radius'])) return false;
+  if (st.spacing?.padding && (typeof st.spacing.padding !== 'object' || !/^\d+px$/.test(String(st.spacing.padding.top ?? '0px')))) return false;
+  if (st.border?.radius !== undefined && !/^\d+px$/.test(String(st.border.radius))) return false;
+  return true;
+}
+function padOf(p) {
+  const v = parseInt(p?.top, 10);
+  return !v ? 'none' : v <= 36 ? 's' : v <= 64 ? 'm' : 'l';
+}
+// Bloques de dentro de un contenedor (los envoltorios <div> sin texto no cuentan)
+function parseList(content, nested) {
+  const out = [];
+  let lossy = false;
+  for (const t of tokenize(String(content || ''))) {
+    if (t.name === 'freeform') {
+      if (nested) { if (!t.inner.replace(/<[^>]+>|&nbsp;|\s/g, '')) continue; lossy = true; } // texto suelto dentro de un contenedor: no es de Gutenberg
+      out.push(...classicBlocks(t.inner));
+    } else { const b = toBlock(t); if (Array.isArray(b)) out.push(...b); else if (b) out.push(b); }
+  }
+  const res = out.filter((b) => b.type !== 'paragraph' || (b.html || '').replace(/<[^>]+>|&nbsp;|\s/g, ''));
+  if (lossy) res.lossy = true;
+  return res;
 }
 
 // --- Contenido «clásico» (sin bloques: editor clásico, importaciones, copias de seguridad) ------------
@@ -254,12 +350,6 @@ function classicBlocks(html) {
   return blocks;
 }
 
-function parseBlocks(content) {
-  const out = [];
-  for (const t of tokenize(String(content || ''))) {
-    if (t.name === 'freeform') out.push(...classicBlocks(t.inner)); else { const b = toBlock(t); if (Array.isArray(b)) out.push(...b); else out.push(b); }
-  }
-  return out.filter((b) => b.type !== 'paragraph' || (b.html || '').replace(/<[^>]+>|&nbsp;|\s/g, ''));
-}
+function parseBlocks(content) { return parseList(content, false); }
 
 module.exports = { parseBlocks, tokenize, classicBlocks };

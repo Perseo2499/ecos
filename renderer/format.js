@@ -168,10 +168,12 @@
   $('[data-x="clear"]', bar).onclick = () => {
     const a = E().active; if (!a) return;
     if (hasSel()) { restore(); document.execCommand('removeFormat'); unwrapMarks(); document.execCommand('unlink'); fire(); }
-    else if (isText(a.b)) { E().change(() => ['align', 'size', 'font', 'color', 'bg', 'dropCap'].forEach((k) => delete a.b[k])); }
+    else if (isText(a.b)) { E().change(() => ['align', 'size', 'font', 'color', 'bg', 'dropCap', 'shadow', 'spacing'].forEach((k) => delete a.b[k])); }
   };
   $('[data-x="ai"]', bar).onclick = (e) => aiPop(e.currentTarget);
   $('#fmt-font').onchange = (e) => setBlock('font', e.target.value);
+  $('#fmt-ls').onchange = (e) => setBlock('spacing', e.target.value);
+  $('[data-x="shadow"]', bar).onclick = () => { const a = E().active; if (a && isText(a.b)) setBlock('shadow', !a.b.shadow); };
   $('#fmt-size').onchange = (e) => setBlock('size', e.target.value);
   $('#fmt-type').onchange = (e) => {
     const a = E().active, v = e.target.value;
@@ -188,7 +190,7 @@
     const ok = !!a && document.contains(a.el);
     bar.classList.toggle('off', !ok);
     const text = ok && isText(a.b);
-    $$('select, [data-al], [data-x="drop"]', bar).forEach((x) => (x.disabled = !text));
+    $$('select, [data-al], [data-x="drop"], [data-x="shadow"]', bar).forEach((x) => (x.disabled = !text));
     $$('[data-cmd], [data-x="link"], [data-x="color"], [data-x="bg"], [data-x="code"], [data-x="clear"], [data-x="ai"]', bar).forEach((x) => (x.disabled = !ok));
     if (!ok) return;
     const b = a.b;
@@ -196,6 +198,8 @@
       $('#fmt-type').value = b.type === 'heading' ? 'h' + (b.level || 2) : b.type === 'list' ? (b.ordered ? 'ol' : 'ul') : b.type;
       $('#fmt-font').value = b.font || '';
       $('#fmt-size').value = b.size || '';
+      $('#fmt-ls').value = b.spacing || '';
+      $('[data-x="shadow"]', bar).classList.toggle('on', !!b.shadow);
       $$('[data-al]', bar).forEach((x) => { x.classList.toggle('on', (b.align || 'left') === x.dataset.al); x.disabled = !['paragraph', 'heading'].includes(b.type); });
       $('[data-x="drop"]', bar).disabled = b.type !== 'paragraph';
       $('[data-x="drop"]', bar).classList.toggle('on', !!b.dropCap);
@@ -213,7 +217,7 @@
       const ed = E(), box = $('#d-review');
       if (!ed?.draft || !box) return;
       const { words, minutes } = ed.stats();
-      const blocks = ed.draft.blocks;
+      const blocks = ed.flat();
       const heads = blocks.filter((b) => b.type === 'heading' && (b.html || '').replace(/<[^>]+>/g, '').trim());
       const imgs = blocks.flatMap((b) => (b.img ? [b.img] : b.images || [])).filter((i) => i.type !== 'video');
       const noAlt = imgs.filter((i) => !(i.alt || '').trim()).length;

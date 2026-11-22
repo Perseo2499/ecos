@@ -18,6 +18,7 @@
     separator: { icon: 'horizontal_rule', name: t('Separador') }, table: { icon: 'table', name: t('Tabla') },
     buttons: { icon: 'smart_button', name: t('Botón') }, spacer: { icon: 'height', name: t('Espacio') },
     details: { icon: 'expand_circle_down', name: t('Desplegable') }, toc: { icon: 'toc', name: t('Índice') },
+    group: { icon: 'web_asset', name: t('Sección') }, columns: { icon: 'view_column', name: t('Columnas') }, cover: { icon: 'wallpaper', name: t('Portada') },
     raw: { icon: 'code_blocks', name: t('De WordPress') },
   });
   const TEXT_TYPES = ['paragraph', 'heading', 'quote', 'list'];
@@ -54,7 +55,14 @@
     el.style.padding = b.bg ? '14px 18px' : '';
     el.style.borderRadius = b.bg ? '10px' : '';
     el.classList.toggle('drop-cap', !!b.dropCap);
+    el.style.letterSpacing = b.spacing || '';
+    el.classList.toggle('ecos-sombra', !!b.shadow);
   }
+
+  // Proporciones de columnas (como las que escribe composeBlocks)
+  const COLS = { 2: [[50, 50], [33.33, 66.66], [66.66, 33.33]], 3: [[33.33, 33.33, 33.33], [25, 50, 25], [50, 25, 25], [25, 25, 50]], 4: [[25, 25, 25, 25]] };
+  const pct = (n) => `${Math.round(n * 100) / 100}%`;
+  const SWATCH = ['#ffffff', '#f5f1ea', '#e8f0fe', '#fde8e8', '#e6f4ea', '#fff3c4', '#c62828', '#1565c0', '#1f2937', '#000000'];
 
   const E = {
     draft: null, media: [], onChange: () => {}, onOpenMedia: () => {},
@@ -67,8 +75,36 @@
       this.liftFeatured(); // la destacada va arriba y sale del cuerpo
       this.render(); this.renderMedia();
     },
+    // --- Árbol de bloques: las secciones, columnas y portadas llevan bloques dentro ---------------------------------
+    // children = [bloques] (sección, portada) · cols = [{ width, children }] (columnas)
+    kids(b) { return Array.isArray(b.children) ? [b.children] : Array.isArray(b.cols) ? b.cols.map((c) => (c.children = c.children || [])) : []; },
+    // Todos los bloques, también los de dentro, en el orden del documento
+    flat(arr = this.draft.blocks, out = []) { for (const b of arr) { out.push(b); for (const l of this.kids(b)) this.flat(l, out); } return out; },
+    // Dónde está un bloque: { arr, i, b, parent }
+    locate(id, arr = this.draft.blocks, parent = null) {
+      for (let i = 0; i < arr.length; i++) {
+        const b = arr[i];
+        if (b.id === id) return { arr, i, b, parent };
+        for (const l of this.kids(b)) { const r = this.locate(id, l, b); if (r) return r; }
+      }
+      return null;
+    },
+    // ¿El bloque `b` (o algo de dentro) es el que tiene ese id? (para no meter un contenedor dentro de sí mismo)
+    holds(b, id) { return this.flat([b]).some((x) => x.id === id); },
+    within(dragId, ownerId) { const loc = this.locate(dragId); return !!loc && this.holds(loc.b, ownerId); },
+    // Copia de un bloque con identificadores nuevos (también los de dentro)
+    cloneBlock(b) { const c = JSON.parse(JSON.stringify(b)); this.flat([c]).forEach((x) => (x.id = bid())); return c; },
+    // Plantillas: lista de bloques sin id (con hijos) → bloques de verdad
+    fromTemplate(list) {
+      return (list || []).map(({ type, children, cols, ...rest }) => {
+        const b = this.create(type, JSON.parse(JSON.stringify(rest)));
+        if (children) b.children = this.fromTemplate(children);
+        if (cols) b.cols = cols.map((c) => ({ width: c.width, children: this.fromTemplate(c.children) }));
+        return b;
+      });
+    },
     // Fotos del cuerpo de la entrada
-    bodyImages() { return this.draft.blocks.flatMap((b) => (b.img ? [b.img] : b.images || [])); },
+    bodyImages() { return this.flat().flatMap((b) => (b.img ? [b.img] : b.images || [])); },
     // Si la entrada tiene una sola foto y ninguna destacada, esa foto pasa a ser también la destacada (es la que se
     // ve en la lista del blog y al compartir) y se queda en el cuerpo, para que el texto no pierda sentido.
     // No se hace si se quitó la destacada a mano.
@@ -85,11 +121,15 @@
       const id = this.draft.featuredImageId;
       if (id == null || this.draft.keepFeaturedInBody) return false;
       let found = false;
-      for (let i = this.draft.blocks.length - 1; i >= 0; i--) {
-        const b = this.draft.blocks[i];
-        if (b.img?.id === id) { found = true; if (b.type === 'image') this.draft.blocks.splice(i, 1); else b.img = null; }
-        if (b.images?.some((x) => x.id === id)) { found = true; b.images = b.images.filter((x) => x.id !== id); }
-      }
+      const lift = (arr) => {
+        for (let i = arr.length - 1; i >= 0; i--) {
+          const b = arr[i];
+          if (b.img?.id === id) { found = true; if (b.type === 'image') { arr.splice(i, 1); continue; } b.img = null; }
+          if (b.images?.some((x) => x.id === id)) { found = true; b.images = b.images.filter((x) => x.id !== id); }
+          for (const l of this.kids(b)) lift(l);
+        }
+      };
+      lift(this.draft.blocks);
       return found;
     },
 
@@ -140,10 +180,16 @@
       if (type === 'spacer') b.height = 40;
       if (type === 'details') { b.summary = ''; b.html = ''; }
       if (type === 'toc') b.title = t('En esta entrada');
+      if (type === 'group') { b.children = [this.create('paragraph')]; b.pad = 'm'; }
+      if (type === 'columns') { b.cols = [0, 1].map(() => ({ width: '50%', children: [this.create('paragraph')] })); b.stack = true; }
+      if (type === 'cover') {
+        b.img = null; b.overlay = '#000000'; b.dim = 50; b.height = 360;
+        b.children = [this.create('heading', { level: 2, align: 'center', ph: t('Título de la portada') }), this.create('paragraph', { align: 'center', ph: t('Un texto breve…') }), this.create('buttons', { align: 'center', ph: t('Texto del botón') })];
+      }
       return Object.assign(b, extra);
     },
-    insertAt(i, block, focus = true) {
-      this.change(() => this.draft.blocks.splice(i, 0, block));
+    insertAt(i, block, focus = true, arr = this.draft.blocks) {
+      this.change(() => arr.splice(i, 0, block));
       if (focus) this.focus(block.id);
     },
     focus(id, atEnd = false) {
@@ -173,6 +219,7 @@
       $('#ed-undo').disabled = !this.undo.length; $('#ed-redo').disabled = !this.redo.length;
       this.renderMedia();
       if (this.active && !document.contains(this.active.el)) { this.active = null; window.FormatBar?.update(); }
+      if (this.pop && !this.popLock) this.openStyle(this.pop.id, true);
     },
 
     // --- Arrastrar fotos ---------------------------------------------------------------
@@ -183,7 +230,7 @@
     isItem(d) { return !!d && (d.kind === 'photo' || d.kind === 'media'); },
     peek(d) {
       if (d.kind === 'media') return { ...d.media };
-      const b = this.draft.blocks.find((x) => x.id === d.block);
+      const b = this.locate(d.block)?.b;
       return b ? (d.index == null ? b.img : b.images[d.index]) : null;
     },
     // Saca la foto de donde estaba (si viene de un bloque) y la devuelve; llamar dentro de change()
@@ -192,12 +239,12 @@
         const { type, poster, ...m } = d.media;
         return type === 'video' ? { ...m, type: 'video', ...(poster ? { poster } : {}) } : { ...m, alt: m.alt || '' };
       }
-      const i = this.draft.blocks.findIndex((x) => x.id === d.block);
-      const b = this.draft.blocks[i];
+      const loc = this.locate(d.block);
+      const b = loc?.b;
       if (!b) return null;
       if (d.index != null) return b.images.splice(d.index, 1)[0];
       const img = b.img;
-      if (b.type === 'image') this.draft.blocks.splice(i, 1); else b.img = null;
+      if (b.type === 'image') loc.arr.splice(loc.i, 1); else b.img = null;
       return img;
     },
     // Hace que un elemento acepte fotos soltadas; onDrop(img) se ejecuta ya dentro de change()
@@ -240,54 +287,70 @@
       }
     },
 
-    // Línea con «+» entre bloques; también recibe fotos y bloques arrastrados
-    inserter(i) {
+    // Línea con «+» entre bloques; también recibe fotos y bloques arrastrados.
+    // arr: la lista donde se inserta (la de la entrada o la de dentro de una sección o columna) · owner: id del contenedor
+    inserter(i, arr = this.draft.blocks, owner = null) {
       const el = document.createElement('div');
       el.className = 'ins';
       el.innerHTML = `<button class="ins-btn" title="${t('Añadir bloque')}"><span class="ms">add</span></button>`;
-      el.querySelector('button').onclick = (e) => this.openMenu(e.currentTarget, (type) => this.insertAt(i, this.create(type)));
-      el.ondragover = (e) => { if (drag) { e.preventDefault(); el.classList.add('over'); } };
+      el.querySelector('button').onclick = (e) => this.openMenu(e.currentTarget, (type) => this.insertAt(i, this.create(type), true, arr));
+      // un contenedor no puede entrar en sí mismo
+      const ok = () => drag && !(drag.kind === 'block' && owner && this.within(drag.id, owner));
+      el.ondragover = (e) => { if (ok()) { e.preventDefault(); e.stopPropagation(); el.classList.add('over'); } };
       el.ondragleave = () => el.classList.remove('over');
       el.ondrop = (e) => {
-        e.preventDefault(); el.classList.remove('over');
+        e.preventDefault(); e.stopPropagation(); el.classList.remove('over');
         const d = drag; drag = null; endDrag();
-        if (!d) return;
+        if (!d || (d.kind === 'block' && owner && this.within(d.id, owner))) return;
         // posición estable: el bloque que estaba justo después de la línea (puede moverse al sacar la foto)
-        const after = this.draft.blocks[i]?.id;
-        const at = () => (after ? this.draft.blocks.findIndex((b) => b.id === after) : this.draft.blocks.length);
+        const after = arr[i]?.id;
+        const at = () => (after ? arr.findIndex((b) => b.id === after) : arr.length);
         if (d.kind === 'block') {
-          const from = this.draft.blocks.findIndex((b) => b.id === d.id);
-          if (from < 0 || from === i || from === i - 1) return;
-          this.change(() => { const [b] = this.draft.blocks.splice(from, 1); this.draft.blocks.splice(at(), 0, b); });
+          const from = this.locate(d.id);
+          if (!from || (from.arr === arr && (from.i === i || from.i === i - 1))) return;
+          this.change(() => { const [b] = from.arr.splice(from.i, 1); arr.splice(at(), 0, b); });
         } else if (d.kind === 'media' && d.media.type === 'video') {
-          this.change(() => this.draft.blocks.splice(at(), 0, this.create('video', { video: d.media })));
+          this.change(() => arr.splice(at(), 0, this.create('video', { video: d.media })));
         } else {
           // foto de la bandeja o sacada de un bloque → bloque de imagen propio en esa posición
           this.change(() => {
             const it = this.take(d);
             if (!it) return;
-            if (it.type === 'video') { const { type, ...video } = it; this.draft.blocks.splice(at(), 0, this.create('video', { video })); } else this.draft.blocks.splice(at(), 0, this.create('image', { img: it }));
+            if (it.type === 'video') { const { type, ...video } = it; arr.splice(at(), 0, this.create('video', { video })); } else arr.splice(at(), 0, this.create('image', { img: it }));
           });
         }
       };
       return el;
     },
 
+    // Lista de bloques con sus «+» (la de la entrada, o la de dentro de una sección o columna)
+    list(arr, owner) {
+      const wrap = document.createElement('div');
+      wrap.className = 'blocks nested' + (arr.length ? '' : ' empty');
+      const first = this.inserter(0, arr, owner);
+      if (!arr.length) first.dataset.label = t('Añade bloques aquí');
+      wrap.appendChild(first);
+      arr.forEach((b, i) => { wrap.appendChild(this.block(b, i, arr, owner)); wrap.appendChild(this.inserter(i + 1, arr, owner)); });
+      return wrap;
+    },
+
     openMenu(anchor, pick) {
       const menu = $('#ins-menu');
       const r = anchor.getBoundingClientRect();
+      menu.classList.toggle('page', this.draft?.type === 'page');
       menu.classList.remove('hidden');
       const h = menu.offsetHeight;
       menu.style.left = Math.min(innerWidth - menu.offsetWidth - 12, Math.max(12, r.left - 120)) + 'px';
-      menu.style.top = (r.bottom + h + 12 > innerHeight ? r.top - h - 6 : r.bottom + 6) + 'px';
+      menu.style.top = Math.max(8, Math.min(innerHeight - h - 8, r.bottom + h + 12 > innerHeight ? r.top - h - 6 : r.bottom + 6)) + 'px';
       $$('button', menu).forEach((b) => (b.onclick = () => { menu.classList.add('hidden'); pick(b.dataset.type); }));
       setTimeout(() => document.addEventListener('mousedown', function off(e) { if (!menu.contains(e.target)) { menu.classList.add('hidden'); document.removeEventListener('mousedown', off); } }), 0);
     },
 
-    block(b, i) {
+    block(b, i, arr = this.draft.blocks, owner = null) {
       const T = TYPES()[b.type] || { icon: 'help', name: b.type };
       const el = document.createElement('div');
-      el.className = `blk blk-${b.type}` + (b.type === 'image' && b.align ? ` img-${b.align} imgw-${b.width || 50}` : '');
+      el.className = `blk blk-${b.type}` + (['group', 'columns', 'cover'].includes(b.type) ? ' blk-box' : '') + (b.type === 'image' && b.align ? ` img-${b.align} imgw-${b.width || 50}` : '') + (this.pop?.id === b.id ? ' sty-open' : '');
+      if (b.type === 'image' && b.w) el.style.width = b.w;
       el.dataset.id = b.id;
       el.innerHTML = `
         <div class="blk-tools">
@@ -296,22 +359,25 @@
           <span class="blk-extra"></span>
           <span class="spacer"></span>
           <button data-a="up" title="${t('Subir')}" ${i === 0 ? 'disabled' : ''}><span class="ms">arrow_upward</span></button>
-          <button data-a="down" title="${t('Bajar')}" ${i === this.draft.blocks.length - 1 ? 'disabled' : ''}><span class="ms">arrow_downward</span></button>
+          <button data-a="down" title="${t('Bajar')}" ${i === arr.length - 1 ? 'disabled' : ''}><span class="ms">arrow_downward</span></button>
+          ${owner ? `<button data-a="out" title="${t('Sacar del contenedor')}"><span class="ms">north_west</span></button>` : ''}
           <button data-a="dup" title="${t('Duplicar')}"><span class="ms">content_copy</span></button>
           <button data-a="del" title="${t('Eliminar bloque')}"><span class="ms">delete</span></button>
         </div>
         <div class="blk-body"></div>`;
       const act = {
-        up: () => this.change(() => { const a = this.draft.blocks; [a[i - 1], a[i]] = [a[i], a[i - 1]]; }),
-        down: () => this.change(() => { const a = this.draft.blocks; [a[i + 1], a[i]] = [a[i], a[i + 1]]; }),
-        dup: () => this.change(() => this.draft.blocks.splice(i + 1, 0, { ...JSON.parse(JSON.stringify(b)), id: bid() })),
-        del: () => this.change(() => this.draft.blocks.splice(i, 1)),
+        up: () => this.change(() => { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; }),
+        down: () => this.change(() => { [arr[i + 1], arr[i]] = [arr[i], arr[i + 1]]; }),
+        dup: () => this.change(() => arr.splice(i + 1, 0, this.cloneBlock(b))),
+        del: () => this.change(() => arr.splice(i, 1)),
+        // sacarlo del contenedor: va justo debajo de él
+        out: () => { const par = this.locate(owner); if (par) this.change(() => { arr.splice(i, 1); par.arr.splice(par.i + 1, 0, b); }); },
       };
       $$('.blk-tools [data-a]', el).forEach((btn) => (btn.onclick = act[btn.dataset.a]));
       const handle = $('.blk-handle', el);
       handle.ondragstart = (e) => { drag = { kind: 'block', id: b.id }; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/x-ecos', 'block'); ghost(e, `<span class="ms">${T.icon}</span>${esc(T.name)}`); startDrag(el, 'dragging-block'); };
       handle.ondragend = () => { drag = null; endDrag(); };
-      this.body(b, i, $('.blk-body', el), $('.blk-extra', el));
+      this.body(b, i, $('.blk-body', el), $('.blk-extra', el), arr);
       return el;
     },
 
@@ -349,9 +415,9 @@
     active: null,
     setActive(b, el, styleEl) { this.active = { b, el, styleEl: styleEl || el }; window.FormatBar?.update(); },
     replaceBlock(b, nb, focus = true) {
-      const i = this.draft.blocks.indexOf(b);
-      if (i < 0) return;
-      this.change(() => this.draft.blocks.splice(i, 1, nb));
+      const loc = this.locate(b.id);
+      if (!loc) return;
+      this.change(() => loc.arr.splice(loc.i, 1, nb));
       if (focus) this.focus(nb.id);
     },
     // Atajos al estilo Markdown al principio de un párrafo: «## », «- », «1. », «> », «---» y «/» para el menú
@@ -383,7 +449,7 @@
     convert(b, type, extra = {}) {
       const text = b.type === 'list' ? (b.items || []).join('<br>') : b.html || '';
       const nb = this.create(type, extra);
-      for (const k of ['align', 'size', 'font', 'color', 'bg']) if (b[k]) nb[k] = b[k];
+      for (const k of ['align', 'size', 'font', 'color', 'bg', 'shadow', 'spacing']) if (b[k]) nb[k] = b[k];
       if (type === 'list') nb.items = b.type === 'list' ? b.items : text.split(/<br\s*\/?>/i).filter((x) => x.replace(/<[^>]+>/g, '').trim()).concat(text ? [] : ['']);
       else nb.html = text;
       if (type === 'list' && !nb.items.length) nb.items = [''];
@@ -391,7 +457,7 @@
       this.replaceBlock(b, nb);
     },
     refreshToc() {
-      const heads = this.draft.blocks.filter((h) => h.type === 'heading' && (h.level || 2) <= 3 && (h.html || '').replace(/<[^>]+>/g, '').trim());
+      const heads = this.flat().filter((h) => h.type === 'heading' && (h.level || 2) <= 3 && (h.html || '').replace(/<[^>]+>/g, '').trim());
       $$('.toc-list').forEach((ul) => {
         ul.innerHTML = heads.length ? heads.map((h) => `<li class="lvl${h.level || 2}">${esc(h.html.replace(/<[^>]+>/g, ''))}</li>`).join('')
           : `<li class="hint">${t('Añade títulos (H2 o H3) y aparecerán aquí.')}</li>`;
@@ -403,7 +469,7 @@
       return { words, minutes: Math.max(1, Math.round(words / 200)) };
     },
 
-    body(b, i, body, extra) {
+    body(b, i, body, extra, arr = this.draft.blocks) {
       const self = this;
       const textBlock = (tag, cls) => this.editable(tag, b.html, b.ph ? b.ph : b.type === 'paragraph' ? t('Escribe aquí… (pulsa / para elegir un bloque)') : t('Escribe aquí…'), (h) => (b.html = h), {
         cls, block: b,
@@ -411,12 +477,12 @@
           // Intro al final de un párrafo crea otro; Retroceso en un bloque vacío lo borra
           if (b.type === 'paragraph' && e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            self.insertAt(i + 1, self.create('paragraph'));
+            self.insertAt(i + 1, self.create('paragraph'), true, arr);
           }
-          if (e.key === 'Backspace' && !el.textContent.trim() && self.draft.blocks.length > 1 && ['paragraph', 'heading'].includes(b.type)) {
+          if (e.key === 'Backspace' && !el.textContent.trim() && arr.length > 1 && ['paragraph', 'heading'].includes(b.type)) {
             e.preventDefault();
-            const prev = self.draft.blocks[i - 1];
-            self.change(() => self.draft.blocks.splice(i, 1));
+            const prev = arr[i - 1];
+            self.change(() => arr.splice(i, 1));
             if (prev) self.focus(prev.id, true);
           }
         },
@@ -468,34 +534,26 @@
         case 'image': {
           if (!b.img) { body.appendChild(this.dropZone(t('Arrastra aquí una foto'), (m) => this.change(() => (b.img = { ...m })))); this.acceptPhoto(body, (img) => (b.img = img)); break; }
           const fig = document.createElement('figure');
-          fig.appendChild(this.photo(b.img, () => this.change(() => this.draft.blocks.splice(this.draft.blocks.indexOf(b), 1)), b));
+          const ph = this.photo(b.img, () => this.change(() => arr.splice(arr.indexOf(b), 1)), b);
+          this.imgLook(ph, b);
+          ph.appendChild(this.resizeHandle(b, body));
+          fig.appendChild(ph);
           fig.appendChild(this.editable('figcaption', b.caption, t('Pie de foto (opcional)'), (h) => (b.caption = h)));
           body.appendChild(fig);
           // soltar otra foto sobre esta imagen las junta en una galería
           this.acceptPhoto(body, (img) => { b.type = 'gallery'; b.images = [b.img, img]; b.columns = 2; delete b.img; delete b.caption; },
             { sameOk: (d) => !(d.kind === 'photo' && d.block === b.id) });
-          // Colocación: a todo el ancho, a la izquierda o a la derecha con el texto alrededor, o centrada; y tamaño
+          // Barra: colocación (a todo el ancho, a un lado con el texto alrededor, o centrada) · tamaño · «Estilo» (recorte, marco, efecto)
           const place = b.align || 'full';
           extra.innerHTML = [['full', 'crop_landscape', t('A todo el ancho')], ['left', 'format_image_left', t('A la izquierda, con el texto alrededor')], ['center', 'format_align_center', t('Centrada')], ['right', 'format_image_right', t('A la derecha, con el texto alrededor')]]
             .map(([k, ic, n]) => `<button class="lv ${place === k ? 'on' : ''}" data-al="${k}" title="${n}"><span class="ms">${ic}</span></button>`).join('')
             + (place !== 'full' ? '<span class="lv-sep"></span>' + [[33, t('Pequeña')], [50, t('Mediana')], [75, t('Grande')]]
-              .map(([w, n]) => `<button class="lv ${(b.width || 50) === w ? 'on' : ''}" data-w="${w}" title="${n}">${n}</button>`).join('') : '');
+              .map(([w, n]) => `<button class="lv ${!b.w && (b.width || 50) === w ? 'on' : ''}" data-w="${w}" title="${n}">${n}</button>`).join('') : '');
           $$('[data-al]', extra).forEach((x) => (x.onclick = () => this.change(() => {
-            if (x.dataset.al === 'full') { delete b.align; delete b.width; } else { b.align = x.dataset.al; b.width = b.width || 50; }
+            if (x.dataset.al === 'full') { delete b.align; delete b.width; delete b.w; } else { b.align = x.dataset.al; if (!b.w) b.width = b.width || 50; }
           })));
-          $$('[data-w]', extra).forEach((x) => (x.onclick = () => this.change(() => (b.width = Number(x.dataset.w)))));
-          // Convertir en galería, mosaico o carrusel (empieza con esta foto; luego se sueltan más)
-          extra.insertAdjacentHTML('beforeend', '<span class="lv-sep"></span>' + [['grid', 'grid_view', t('Convertir en galería')], ['mosaic', 'dashboard', t('Convertir en mosaico')], ['carousel', 'view_carousel', t('Convertir en carrusel')]]
-            .map(([k, ic, n]) => `<button class="lv" data-conv="${k}" title="${n}"><span class="ms">${ic}</span></button>`).join(''));
-          $$('[data-conv]', extra).forEach((x) => (x.onclick = () => {
-            this.change(() => {
-              const img = b.img, k = x.dataset.conv;
-              b.img = undefined; b.caption = undefined; b.align = undefined; b.width = undefined;
-              b.images = [img];
-              if (k === 'carousel') b.type = 'carousel'; else { b.type = 'gallery'; b.layout = k; b.columns = 2; }
-            });
-            toast(t('Ahora suelta aquí más fotos desde la bandeja (o pulsa el recuadro para elegirlas).'));
-          }));
+          $$('[data-w]', extra).forEach((x) => (x.onclick = () => this.change(() => { b.width = Number(x.dataset.w); delete b.w; })));
+          this.styleBtn(extra, b);
           break;
         }
 
@@ -536,8 +594,8 @@
               const vs = b.images.filter((i) => i.type === 'video');
               if (vs.length) {
                 b.images = b.images.filter((i) => i.type !== 'video');
-                const at = this.draft.blocks.indexOf(b) + 1;
-                this.draft.blocks.splice(at, 0, ...vs.map(({ type, ...video }) => this.create('video', { video })));
+                const loc = this.locate(b.id);
+                loc.arr.splice(loc.i + 1, 0, ...vs.map(({ type, ...video }) => this.create('video', { video })));
                 toast(t('Los vídeos no van en el carrusel: se han puesto debajo como bloques de vídeo.'));
               }
               b.type = 'carousel';
@@ -631,18 +689,25 @@
 
         case 'buttons': {
           const wrap = document.createElement('div');
-          wrap.className = 'ed-btns'; wrap.style.justifyContent = b.align === 'center' ? 'center' : b.align === 'right' ? 'flex-end' : 'flex-start';
-          const btn = this.editable('span', b.html, b.ph || t('Texto del botón'), (h) => (b.html = h), { cls: 'ed-btn' + (b.variant === 'outline' ? ' outline' : ''), block: b, onKey(e) { if (e.key === 'Enter') e.preventDefault(); } });
+          wrap.className = 'ed-btns' + (b.full ? ' full' : ''); wrap.style.justifyContent = b.align === 'center' ? 'center' : b.align === 'right' ? 'flex-end' : 'flex-start';
+          const btn = this.editable('span', b.html, b.ph ? b.ph : t('Texto del botón'), (h) => (b.html = h), { cls: 'ed-btn' + (b.variant === 'outline' ? ' outline' : ''), block: b, onKey(e) { if (e.key === 'Enter') e.preventDefault(); } });
+          const st = btn.style;
+          if (b.bg && b.variant !== 'outline') st.setProperty('--eb-bg', b.bg);
+          if (b.color) st.setProperty('--eb-fg', b.color);
+          if (b.radius) st.setProperty('--eb-r', { square: '0', round: '8px', pill: '9999px' }[b.radius]);
+          if (b.size === 's') { st.setProperty('--eb-py', '8px'); st.setProperty('--eb-px', '18px'); st.setProperty('--eb-fs', '14px'); }
+          if (b.size === 'l') { st.setProperty('--eb-py', '18px'); st.setProperty('--eb-px', '40px'); st.setProperty('--eb-fs', '20px'); }
           wrap.appendChild(btn);
           body.appendChild(wrap);
           const url = document.createElement('input');
           url.className = 'ed-btn-url'; url.placeholder = t('Enlace del botón (https://…)'); url.value = b.url || '';
           url.oninput = () => { b.url = url.value.trim(); this.onChange(); };
           body.appendChild(url);
-          extra.innerHTML = ['left', 'center', 'right'].map((a) => `<button class="lv ${b.align === a ? 'on' : ''}" data-al="${a}"><span class="ms">format_align_${a}</span></button>`).join('')
-            + `<button class="lv ${b.variant !== 'outline' ? 'on' : ''}" data-v="fill" title="${t('Relleno')}"><span class="ms fill">smart_button</span></button><button class="lv ${b.variant === 'outline' ? 'on' : ''}" data-v="outline" title="${t('Contorno')}"><span class="ms">smart_button</span></button>`;
+          extra.innerHTML = ['left', 'center', 'right'].map((a) => `<button class="lv ${b.align === a ? 'on' : ''}" data-al="${a}" title="${t('Alineación')}"><span class="ms">format_align_${a}</span></button>`).join('')
+            + `<span class="lv-sep"></span><button class="lv ${b.variant !== 'outline' ? 'on' : ''}" data-v="fill" title="${t('Relleno')}"><span class="ms fill">smart_button</span></button><button class="lv ${b.variant === 'outline' ? 'on' : ''}" data-v="outline" title="${t('Contorno')}"><span class="ms">smart_button</span></button>`;
           $$('[data-al]', extra).forEach((x) => (x.onclick = () => this.change(() => (b.align = x.dataset.al))));
           $$('[data-v]', extra).forEach((x) => (x.onclick = () => this.change(() => (b.variant = x.dataset.v))));
+          this.styleBtn(extra, b);
           break;
         }
 
@@ -673,6 +738,58 @@
           break;
         }
 
+        case 'group': {
+          const g = document.createElement('div');
+          g.className = `ed-group pad-${b.pad || 'none'} w-${b.width || 'normal'}`;
+          Object.assign(g.style, { backgroundColor: b.bg || '', color: b.color || '', borderRadius: b.radius ? b.radius + 'px' : '', boxShadow: b.shadow ? '6px 6px 9px rgba(0, 0, 0, 0.2)' : '' });
+          g.appendChild(this.list(b.children, b.id));
+          body.appendChild(g);
+          this.styleBtn(extra, b, false);
+          break;
+        }
+
+        case 'columns': {
+          const row = document.createElement('div');
+          row.className = 'ed-cols' + (b.valign ? ' va-' + b.valign : '');
+          b.cols.forEach((c) => {
+            const col = document.createElement('div');
+            col.className = 'ed-col';
+            col.style.flexGrow = String(parseFloat(c.width) || 100 / b.cols.length);
+            col.appendChild(this.list(c.children, b.id));
+            row.appendChild(col);
+          });
+          body.appendChild(row);
+          const n = b.cols.length, cur = b.cols.map((c) => parseFloat(c.width));
+          const same = (p) => p.length === cur.length && p.every((w, k) => Math.abs(w - cur[k]) < 0.6);
+          extra.innerHTML = [2, 3, 4].map((c) => `<button class="lv ${n === c ? 'on' : ''}" data-n="${c}" title="${t('{n} columnas', { n: c })}">${c}<span class="ms">view_column</span></button>`).join('')
+            + '<span class="lv-sep"></span>' + (COLS[n] || []).map((p, k) => `<button class="lv ${same(p) ? 'on' : ''}" data-p="${k}" title="${t('Proporción de las columnas')}">${p.map((w) => Math.floor(w)).join('/')}</button>`).join('');
+          $$('[data-n]', extra).forEach((x) => (x.onclick = () => this.setColumns(b, Number(x.dataset.n))));
+          $$('[data-p]', extra).forEach((x) => (x.onclick = () => this.change(() => COLS[n][Number(x.dataset.p)].forEach((w, k) => (b.cols[k].width = pct(w))))));
+          this.styleBtn(extra, b);
+          break;
+        }
+
+        case 'cover': {
+          const cv = document.createElement('div');
+          cv.className = `ed-cover w-${b.width || 'normal'}`;
+          cv.style.minHeight = (Number(b.height) || 0) + 'px';
+          if (b.img) cv.style.backgroundImage = `url("${String(b.img.url).replace(/"/g, '%22')}")`;
+          const dim = document.createElement('div');
+          dim.className = 'ed-cover-dim'; dim.style.background = b.overlay || '#000000'; dim.style.opacity = String((Number(b.dim ?? 50)) / 100);
+          const inn = document.createElement('div');
+          inn.className = 'ed-cover-in';
+          const drop = document.createElement('div');
+          drop.className = 'cover-bgdrop' + (b.img ? ' has' : '');
+          drop.innerHTML = `<span class="ms">add_photo_alternate</span>${b.img ? t('Cambiar la imagen de fondo') : t('Arrastra aquí la imagen de fondo')}`;
+          drop.onclick = () => this.pickFromTray((m) => this.change(() => (b.img = { ...m })), 'image');
+          this.acceptPhoto(drop, (img) => (b.img = img), { sameOk: (d) => !(d.kind === 'photo' && d.block === b.id) });
+          inn.append(drop, this.list(b.children, b.id));
+          cv.append(dim, inn);
+          body.appendChild(cv);
+          this.styleBtn(extra, b);
+          break;
+        }
+
         case 'separator': body.innerHTML = '<hr>'; break;
         case 'raw': {
           const text = (b.markup || '').replace(/<!--[\s\S]*?-->/g, '').replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -681,6 +798,204 @@
         }
         default: body.textContent = b.type;
       }
+    },
+
+    // --- Imagen: recorte, marco, efecto y tamaño libre (se ven igual en el editor y en la web) ------------------------------
+    imgLook(ph, b) {
+      const im = $('img', ph);
+      if (!im) return;
+      if (b.ratio) { im.style.aspectRatio = b.ratio; im.style.objectFit = 'cover'; im.style.maxHeight = 'none'; }
+      if (b.frame === 'rounded') im.style.borderRadius = '16px';
+      if (b.frame === 'circle') im.style.borderRadius = '9999px';
+      if (b.frame === 'border') im.style.border = `2px solid ${b.frameColor || '#333333'}`;
+      if (b.frame === 'shadow') im.style.boxShadow = '6px 6px 9px rgba(0, 0, 0, 0.2)';
+      ph.classList.toggle('ecos-zoom', b.fx === 'zoom');
+      ph.classList.toggle('ecos-bn', b.fx === 'bw');
+    },
+    // Tirador de la esquina: arrastrándolo se cambia el ancho (en % del ancho disponible o en px, según lo que ya tenga)
+    resizeHandle(b, body) {
+      const h = document.createElement('span');
+      h.className = 'rs-handle'; h.title = t('Arrastra para cambiar el ancho');
+      h.innerHTML = '<span class="ms">open_in_full</span>';
+      h.draggable = false;
+      h.onmousedown = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const blk = body.closest('.blk');
+        if (!blk) return;
+        const avail = blk.parentElement.clientWidth, w0 = blk.getBoundingClientRect().width, x0 = e.clientX;
+        const px = /px$/.test(b.w || '');
+        const tip = document.createElement('span');
+        tip.className = 'rs-tip'; blk.appendChild(tip);
+        let w = w0;
+        const label = () => (px ? Math.round(w) + 'px' : Math.round((w / avail) * 100) + '%');
+        const move = (ev) => { w = Math.max(60, Math.min(avail, w0 + (ev.clientX - x0))); blk.style.width = w + 'px'; tip.textContent = label(); };
+        const up = () => {
+          document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up);
+          const v = label(); tip.remove();
+          this.change(() => { b.w = v; delete b.width; if (!b.align) b.align = 'center'; });
+        };
+        document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+      };
+      return h;
+    },
+    // Convierte una imagen en galería, mosaico o carrusel (empieza con esta foto; luego se sueltan más)
+    convertImage(b, k) {
+      this.change(() => {
+        const img = b.img;
+        for (const x of ['img', 'caption', 'align', 'width', 'w', 'ratio', 'frame', 'frameColor', 'fx']) delete b[x];
+        b.images = [img];
+        if (k === 'carousel') b.type = 'carousel'; else { b.type = 'gallery'; b.layout = k; b.columns = 2; }
+      });
+      toast(t('Ahora suelta aquí más fotos desde la bandeja (o pulsa el recuadro para elegirlas).'));
+    },
+    // Columnas: cambia el número conservando lo que hay dentro (las que sobran se juntan en la última)
+    setColumns(b, n) {
+      if (b.cols.length === n) return;
+      this.change(() => {
+        while (b.cols.length > n) { const last = b.cols.pop(); b.cols[b.cols.length - 1].children.push(...last.children.filter((x) => !(x.type === 'paragraph' && !(x.html || '').trim()))); }
+        while (b.cols.length < n) b.cols.push({ width: '', children: [this.create('paragraph')] });
+        COLS[n][0].forEach((w, k) => (b.cols[k].width = pct(w)));
+      });
+    },
+
+    // --- Panel «Estilo»: ventanita con las opciones de un bloque, ordenadas por grupos -------------------------------------------
+    pop: null, popLock: false, popSnap: false,
+    styleBtn(extra, b, sep = true) {
+      extra.insertAdjacentHTML('beforeend', `${sep ? '<span class="lv-sep"></span>' : ''}<button class="lv sty-btn ${this.pop?.id === b.id ? 'on' : ''}" data-sty="1" title="${t('Estilo del bloque')}"><span class="ms">tune</span><span class="lbl">${t('Estilo')}</span></button>`);
+      $('[data-sty]', extra).onclick = (e) => {
+        if (this.pop?.id === b.id) { this.closeStyle(); return; }
+        const r = e.currentTarget.getBoundingClientRect();
+        this.pop = { id: b.id, x: r.left, y: r.bottom + 8 };
+        this.openStyle(b.id, true);
+        this.render();
+      };
+    },
+    closeStyle() {
+      const el = $('#sty-pop');
+      if (el) el.classList.add('hidden');
+      const was = this.pop; this.pop = null; this.popLock = false; this.popSnap = false;
+      if (was) $$('.blk.sty-open').forEach((x) => x.classList.remove('sty-open'));
+      $$('.sty-btn.on').forEach((x) => x.classList.remove('on'));
+    },
+    // Cambio en directo (colores, deslizadores): un solo paso de «deshacer» por gesto y sin reconstruir el panel
+    live(fn) {
+      if (!this.popSnap) { this.snapshot(); this.popSnap = true; }
+      this.popLock = true;
+      fn();
+      this.render();
+      this.onChange();
+    },
+    // Filas del panel de cada tipo de bloque: { label, chips:[{t, ic, title, on, off, fn}] | color:{get,set,none} | range:{...} | html+wire }
+    styleRows(b) {
+      const chip = (txt, on, fn, o = {}) => ({ t: txt, on, fn, ...o });
+      const set = (k, v) => () => { if (v === undefined || v === null || v === '') delete b[k]; else b[k] = v; };
+      const choose = (k, opts) => opts.map(([v, n, o]) => chip(n, (b[k] ?? '') === v, set(k, v), o));
+      const widthRow = () => ({ label: t('Ancho'), chips: choose('width', [['', t('Normal')], ['wide', t('Ancho')], ['full', t('Completo')]]) });
+      const rows = [];
+      if (b.type === 'image') {
+        const px = /px$/.test(b.w || '');
+        rows.push({ label: t('Recorte'), chips: [['', t('Original')], ['1', '1:1'], ['4/3', '4:3'], ['3/2', '3:2'], ['16/9', '16:9'], ['9/16', '9:16']]
+          .map(([v, n]) => chip(n, (b.ratio || '') === v, () => { set('ratio', v)(); if (v !== '1' && b.frame === 'circle') delete b.frame; })) });
+        rows.push({
+          label: t('Ancho'),
+          html: `<input type="number" class="sp-num" min="5" max="2000" value="${parseFloat(b.w) || ''}" placeholder="${t('auto')}"><button class="sp-chip ${!px ? 'on' : ''}" data-u="%">%</button><button class="sp-chip ${px ? 'on' : ''}" data-u="px">px</button><button class="sp-chip" data-u="">${t('Auto')}</button>`,
+          wire: (root) => {
+            const num = $('.sp-num', root), unit = () => (/px$/.test(b.w || '') ? 'px' : '%');
+            num.onchange = () => { const v = Math.max(5, Math.min(2000, parseFloat(num.value) || 0)); this.change(() => { if (!v) { delete b.w; return; } b.w = v + (unit() === 'px' ? 'px' : '%'); delete b.width; if (!b.align) b.align = 'center'; }); };
+            $$('[data-u]', root).forEach((x) => (x.onclick = () => this.change(() => {
+              const u = x.dataset.u;
+              if (!u) { delete b.w; return; }
+              const cur = parseFloat(b.w) || (u === 'px' ? 400 : 60);
+              b.w = cur + u; delete b.width; if (!b.align) b.align = 'center';
+            })));
+          },
+        });
+        rows.push({ label: t('Marco'), chips: [
+          chip(t('Sin marco'), !b.frame, () => { delete b.frame; }),
+          chip(t('Redondeado'), b.frame === 'rounded', () => { b.frame = 'rounded'; }),
+          chip(t('Círculo'), b.frame === 'circle', () => { b.frame = 'circle'; }, { off: b.ratio !== '1', title: t('Elige primero el recorte 1:1 para usar el círculo') }),
+          chip(t('Borde'), b.frame === 'border', () => { b.frame = 'border'; }),
+          chip(t('Sombra'), b.frame === 'shadow', () => { b.frame = 'shadow'; }),
+        ] });
+        if (b.frame === 'border') rows.push({ label: t('Color del borde'), color: { get: () => b.frameColor || '#333333', set: (v) => { b.frameColor = v; } } });
+        rows.push({ label: t('Efecto'), chips: [chip(t('Ninguno'), !b.fx, () => { delete b.fx; }), chip(t('Zoom al pasar el ratón'), b.fx === 'zoom', () => { b.fx = 'zoom'; }), chip(t('Blanco y negro'), b.fx === 'bw', () => { b.fx = 'bw'; })] });
+        rows.push({ label: t('Convertir en'), chips: [['grid', 'grid_view', t('Galería')], ['mosaic', 'dashboard', t('Mosaico')], ['carousel', 'view_carousel', t('Carrusel')]].map(([k, ic, n]) => ({ t: n, ic, on: false, raw: () => this.convertImage(b, k) })) });
+      } else if (b.type === 'group') {
+        rows.push({ label: t('Color de fondo'), color: { get: () => b.bg || '', set: (v) => set('bg', v)(), none: true } });
+        rows.push({ label: t('Color del texto'), color: { get: () => b.color || '', set: (v) => set('color', v)(), none: true } });
+        rows.push({ label: t('Margen interior'), chips: choose('pad', [['none', t('Ninguno')], ['s', t('Pequeño')], ['m', t('Medio')], ['l', t('Grande')]]).map((c, k) => ({ ...c, on: (b.pad || 'none') === ['none', 's', 'm', 'l'][k] })) });
+        rows.push(widthRow());
+        rows.push({ label: t('Esquinas'), chips: [[0, t('Rectas')], [12, t('Suaves')], [28, t('Redondas')]].map(([v, n]) => chip(n, (Number(b.radius) || 0) === v, () => { if (v) b.radius = v; else delete b.radius; })) });
+        rows.push({ label: t('Sombra'), chips: [chip(t('No'), !b.shadow, () => { delete b.shadow; }), chip(t('Sí'), !!b.shadow, () => { b.shadow = true; })] });
+        rows.push({ label: t('Imagen de fondo'), chips: [{ t: t('Poner una imagen de fondo…'), ic: 'wallpaper', on: false, raw: () => this.pickFromTray((m) => this.change(() => { b.type = 'cover'; b.img = { ...m }; b.overlay = '#000000'; b.dim = 40; b.height = 300; delete b.bg; delete b.pad; delete b.radius; delete b.shadow; }), 'image') }] });
+      } else if (b.type === 'columns') {
+        rows.push({ label: t('Columnas'), chips: [2, 3, 4].map((n) => chip(String(n), b.cols.length === n, () => {}, { raw: () => this.setColumns(b, n), on: b.cols.length === n })) });
+        const cur = b.cols.map((c) => parseFloat(c.width));
+        rows.push({ label: t('Proporción'), chips: (COLS[b.cols.length] || []).map((p) => ({ t: p.map((w) => Math.floor(w)).join(' / '), on: p.length === cur.length && p.every((w, k) => Math.abs(w - cur[k]) < 0.6), fn: () => p.forEach((w, k) => (b.cols[k].width = pct(w))) })) });
+        rows.push({ label: t('Alineación vertical'), chips: [['', t('Arriba')], ['center', t('Centro')], ['bottom', t('Abajo')]].map(([v, n]) => chip(n, (b.valign || '') === v, () => { if (v) b.valign = v; else delete b.valign; })) });
+        rows.push({ label: t('Apilar en móvil'), chips: [chip(t('Sí'), b.stack !== false, () => { b.stack = true; }), chip(t('No'), b.stack === false, () => { b.stack = false; })] });
+      } else if (b.type === 'cover') {
+        rows.push({ label: t('Imagen de fondo'), chips: [{ t: t('Cambiar imagen…'), ic: 'add_photo_alternate', on: false, raw: () => this.pickFromTray((m) => this.change(() => (b.img = { ...m })), 'image') }, chip(t('Quitar imagen'), false, () => { b.img = null; }, { off: !b.img })] });
+        rows.push({ label: t('Capa de color'), color: { get: () => b.overlay || '#000000', set: (v) => { b.overlay = v; } } });
+        rows.push({ label: t('Opacidad de la capa'), range: { min: 0, max: 100, step: 10, get: () => Number(b.dim ?? 50), set: (v) => { b.dim = v; }, fmt: (v) => v + '%' } });
+        rows.push({ label: t('Altura'), chips: [[0, t('Auto')], [240, t('Baja')], [360, t('Media')], [480, t('Alta')], [600, t('Muy alta')]].map(([v, n]) => chip(n, (Number(b.height) || 0) === v, () => { b.height = v; })) });
+        rows.push(widthRow());
+      } else if (b.type === 'buttons') {
+        if (b.variant !== 'outline') rows.push({ label: t('Color de fondo'), color: { get: () => b.bg || '', set: (v) => set('bg', v)(), none: true } });
+        rows.push({ label: b.variant === 'outline' ? t('Color del borde y del texto') : t('Color del texto'), color: { get: () => b.color || '', set: (v) => set('color', v)(), none: true } });
+        rows.push({ label: t('Esquinas'), chips: [['', t('Tema')], ['square', t('Recto')], ['round', t('Redondeado')], ['pill', t('Píldora')]].map(([v, n]) => chip(n, (b.radius || '') === v, () => set('radius', v)())) });
+        rows.push({ label: t('Tamaño'), chips: [['s', t('Pequeño')], ['', t('Mediano')], ['l', t('Grande')]].map(([v, n]) => chip(n, (b.size || '') === v, () => set('size', v)())) });
+        rows.push({ label: t('Ancho'), chips: [chip(t('Normal'), !b.full, () => { delete b.full; }), chip(t('Completo'), !!b.full, () => { b.full = true; })] });
+      }
+      return rows;
+    },
+    openStyle(id, reopen) {
+      const loc = this.locate(id);
+      let el = $('#sty-pop');
+      if (!loc) { this.closeStyle(); return; }
+      if (!el) {
+        el = document.createElement('div'); el.id = 'sty-pop'; el.className = 'sty-pop hidden';
+        document.body.appendChild(el);
+        document.addEventListener('mousedown', (e) => { if (this.pop && !e.target.closest('#sty-pop, [data-sty]')) this.closeStyle(); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && this.pop) this.closeStyle(); });
+      }
+      const b = loc.b, rows = this.styleRows(b);
+      if (!rows.length) { this.closeStyle(); return; }
+      const T = TYPES()[b.type];
+      const h = [`<div class="sp-title"><span class="ms">${T.icon}</span>${esc(T.name)}<button class="sp-x" title="${t('Cerrar')}"><span class="ms">close</span></button></div>`];
+      rows.forEach((r, ri) => {
+        let body = '';
+        if (r.chips) body = `<div class="sp-chips">${r.chips.map((c, ci) => `<button class="sp-chip ${c.on ? 'on' : ''}" data-r="${ri}" data-c="${ci}" ${c.off ? 'disabled' : ''} ${c.title ? `title="${esc(c.title)}"` : ''}>${c.ic ? `<span class="ms">${c.ic}</span>` : ''}${esc(c.t)}</button>`).join('')}</div>`;
+        else if (r.color) {
+          const cur = r.color.get() || '';
+          body = `<div class="sp-chips sp-sws">${r.color.none ? `<button class="sp-chip ${!cur ? 'on' : ''}" data-r="${ri}" data-sw="">${t('Ninguno')}</button>` : ''}${SWATCH.map((c) => `<button class="sp-sw ${cur.toLowerCase() === c ? 'on' : ''}" data-r="${ri}" data-sw="${c}" style="background:${c}" title="${c}"></button>`).join('')}<label class="sp-sw sp-custom" title="${t('Otro color')}"><span class="ms">palette</span><input type="color" data-r="${ri}" value="${/^#[0-9a-f]{6}$/i.test(cur) ? cur : '#888888'}"></label></div>`;
+        } else if (r.range) body = `<div class="sp-range"><input type="range" data-r="${ri}" min="${r.range.min}" max="${r.range.max}" step="${r.range.step}" value="${r.range.get()}"><output>${r.range.fmt(r.range.get())}</output></div>`;
+        else if (r.html) body = `<div class="sp-chips sp-custom-row" data-r="${ri}">${r.html}</div>`;
+        h.push(`<div class="sp-row"><div class="sp-lbl">${esc(r.label)}</div>${body}</div>`);
+      });
+      el.innerHTML = h.join('');
+      el.classList.remove('hidden');
+      // posición: bajo el botón «Estilo» (se conserva al reconstruir)
+      const pos = this.pop || (this.pop = { id, x: 200, y: 120 });
+      pos.id = id;
+      const w = el.offsetWidth, hh = el.offsetHeight;
+      el.style.left = Math.max(8, Math.min(innerWidth - w - 8, pos.x)) + 'px';
+      el.style.top = Math.max(8, Math.min(innerHeight - hh - 8, pos.y)) + 'px';
+      $('.sp-x', el).onclick = () => { this.closeStyle(); this.render(); };
+      $$('.sp-chip[data-c]', el).forEach((x) => (x.onclick = () => { const c = rows[Number(x.dataset.r)].chips[Number(x.dataset.c)]; if (c.raw) c.raw(); else this.change(c.fn); }));
+      $$('[data-sw]', el).forEach((x) => (x.onclick = () => this.change(() => rows[Number(x.dataset.r)].color.set(x.dataset.sw))));
+      $$('input[type=color]', el).forEach((x) => {
+        const r = rows[Number(x.dataset.r)];
+        x.oninput = () => this.live(() => r.color.set(x.value));
+        x.onchange = () => { this.popLock = false; this.popSnap = false; this.openStyle(id, true); };
+      });
+      $$('input[type=range]', el).forEach((x) => {
+        const r = rows[Number(x.dataset.r)];
+        x.oninput = () => { $('output', x.parentElement).textContent = r.range.fmt(Number(x.value)); this.live(() => r.range.set(Number(x.value))); };
+        x.onchange = () => { this.popLock = false; this.popSnap = false; this.openStyle(id, true); };
+      });
+      $$('.sp-custom-row', el).forEach((x) => rows[Number(x.dataset.r)].wire(x));
+      void reopen;
     },
 
     // Foto dentro de un bloque: ★ destacada, × quitar, alt, arrastrar para ordenar o sacar de la galería
@@ -713,7 +1028,7 @@
       // Dentro de una galería o carrusel: soltar sobre una foto la coloca en su lugar
       if (index !== null) {
         this.acceptPhoto(fig, (got, d) => {
-          const b = this.draft.blocks.find((x) => x.id === block.id);
+          const b = this.locate(block.id).b;
           let at = index;
           if (d.kind === 'photo' && d.block === block.id && d.index < index) at -= 1; // ya se sacó de antes
           b.images.splice(at + (d.kind === 'photo' && d.block === block.id && d.index < index ? 1 : 0), 0, got);
@@ -792,8 +1107,11 @@
             d.hiddenMedia = [...new Set([...(d.hiddenMedia || []), m.id])];
             d.extraMedia = (d.extraMedia || []).filter((x) => !same(x));
             if (d.featuredImageId === m.id) d.featuredImageId = null;
-            d.blocks = d.blocks.filter((b) => !(['image', 'video'].includes(b.type) && (same(b.img) || same(b.video))));
-            for (const b of d.blocks) { if (b.images) b.images = b.images.filter((x) => !same(x)); if (same(b.img)) b.img = null; }
+            const prune = (arr) => {
+              for (let k = arr.length - 1; k >= 0; k--) if (['image', 'video'].includes(arr[k].type) && (same(arr[k].img) || same(arr[k].video))) arr.splice(k, 1);
+              for (const b of arr) { if (b.images) b.images = b.images.filter((x) => !same(x)); if (same(b.img)) b.img = null; for (const l of this.kids(b)) prune(l); }
+            };
+            prune(d.blocks);
           });
           this.media = this.media.filter((x) => x.id !== m.id);
           this.renderMedia();
@@ -818,7 +1136,7 @@
     },
 
     plainText() {
-      return this.draft.blocks.map((b) => [b.summary, b.html, b.cite, ...(b.items || []), ...(b.rows || []).flat()].filter(Boolean).join('\n')).join('\n\n').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim();
+      return this.flat().map((b) => [b.summary, b.html, b.cite, ...(b.items || []), ...(b.rows || []).flat()].filter(Boolean).join('\n')).join('\n\n').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim();
     },
   };
 

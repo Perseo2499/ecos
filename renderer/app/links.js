@@ -73,7 +73,7 @@ function lkMapBlock(b, fn) {
 function lkCollectDraft() {
   const found = new Map();
   const add = (l, flags) => { const o = found.get(l.url) || { url: l.url, text: l.text || '', kind: l.kind, canChange: false, canRemove: false }; if (!o.text && l.text) o.text = l.text; Object.assign(o, Object.fromEntries(Object.entries(flags).filter(([, v]) => v))); found.set(l.url, o); };
-  for (const b of draft.blocks) {
+  for (const b of window.BlockEditor.flat(draft.blocks)) {
     lkMapBlock({ ...b }, (s) => { for (const l of window.LinkUtil.extractLinks(s)) add(l, { canChange: true, canRemove: l.kind !== 'image' }); return s; });
     if ((b.type === 'buttons' || b.type === 'embed') && /^https?:\/\//i.test(b.url || '')) add({ url: b.url.replace(/&amp;/g, '&').trim(), text: b.type === 'buttons' ? (window.LinkUtil.extractLinks(`<a href="${escHtml(b.url)}">${b.html || ''}</a>`)[0]?.text || '') : t('Vídeo incrustado') }, { canChange: b.type === 'buttons' });
   }
@@ -81,7 +81,7 @@ function lkCollectDraft() {
 }
 function lkApplyDraft(url, to) { // to === null → quitar el enlace
   window.BlockEditor.change(() => {
-    for (const b of draft.blocks) {
+    for (const b of window.BlockEditor.flat(draft.blocks)) {
       if (to === null) { lkMapBlock(b, (s) => window.LinkUtil.unlinkInHtml(s, url)); continue; }
       if (b.type !== 'embed') lkMapBlock(b, (s) => window.LinkUtil.replaceLinkInHtml(s, url, to));
       if (b.type === 'buttons' && (b.url || '').replace(/&amp;/g, '&').trim() === url) b.url = to;
@@ -118,7 +118,7 @@ async function lkEditorOpen() {
     const todo = rows.map((r, k) => [r, k]).filter(([r]) => usable(r) && !r.done);
     window.BlockEditor.change(() => {
       for (const [r] of todo) {
-        for (const b of draft.blocks) {
+        for (const b of window.BlockEditor.flat(draft.blocks)) {
           if (b.type !== 'embed') lkMapBlock(b, (s) => window.LinkUtil.replaceLinkInHtml(s, r.url, r.suggestion));
           if (b.type === 'buttons' && (b.url || '').replace(/&amp;/g, '&').trim() === r.url) b.url = r.suggestion;
         }

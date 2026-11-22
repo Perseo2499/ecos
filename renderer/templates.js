@@ -6,6 +6,10 @@
   const BTN = (html, extra) => ({ type: 'buttons', html, url: '', align: 'left', variant: 'fill', ...extra });
   const QUOTE = (ph) => ({ type: 'quote', html: '', cite: '', ph });
   const LIST = (items, ph) => ({ type: 'list', ordered: false, items, ph });
+  // Diseño de página: sección y columnas (cada columna lleva su lista de bloques)
+  const SECTION = (children, extra) => ({ type: 'group', pad: 'm', children, ...extra });
+  const COLUMNS = (cols, extra) => ({ type: 'columns', stack: true, cols: cols.map((c) => (Array.isArray(c) ? { width: pct(100 / cols.length), children: c } : c)), ...extra });
+  const pct = (n) => `${Math.round(n * 100) / 100}%`;
 
   // Plantillas incluidas. `types`: dónde se ofrecen · `category`: categoría que se marca si existe · `featured`: hueco de foto destacada
   const BUILTIN = [
@@ -52,11 +56,13 @@
     },
     {
       id: 'informativa', icon: 'article', name: 'Página informativa', types: ['page'],
-      desc: 'Secciones con títulos y preguntas frecuentes desplegables.',
+      desc: 'Presentación en una sección destacada, dos columnas con contenido y preguntas frecuentes.',
       blocks: [
-        P('', 'Presenta la página en una o dos frases.'),
-        H2('Primera sección'), P('', 'Escribe aquí el contenido.'),
-        H2('Segunda sección'), P('', 'Escribe aquí el contenido.'),
+        SECTION([H2('Título de la página'), P('', 'Presenta la página en una o dos frases.')], { bg: '#f5f1ea', pad: 'l', width: 'full', radius: 0 }),
+        COLUMNS([
+          [H2('Primera sección'), P('', 'Escribe aquí el contenido.')],
+          [H2('Segunda sección'), P('', 'Escribe aquí el contenido.')],
+        ]),
         H2('Preguntas frecuentes'),
         { type: 'details', summary: '', html: '', ph: 'Pregunta frecuente' },
         { type: 'details', summary: '', html: '', ph: 'Otra pregunta frecuente' },
@@ -64,29 +70,37 @@
     },
     {
       id: 'contacto', icon: 'contact_mail', name: 'Contacto', types: ['page'],
-      desc: 'Cómo localizarnos: texto, datos de contacto y botón.',
+      desc: 'Cómo localizarnos: dos columnas con los datos de contacto y un botón.',
       blocks: [
-        P('', 'Cuenta cómo y cuándo pueden contactar con la asociación.'),
-        LIST(['', '', ''], 'Dirección, teléfono, correo u horario'),
-        BTN('Escríbenos', { align: 'center' }),
+        H2('Contacto'),
+        COLUMNS([
+          [P('', 'Cuenta cómo y cuándo pueden contactar con la asociación.'), BTN('Escríbenos', { align: 'left' })],
+          [SECTION([LIST(['', '', ''], 'Dirección, teléfono, correo u horario')], { bg: '#f5f1ea', pad: 's', radius: 12 })],
+        ]),
       ],
     },
   ];
 
   // Convierte bloques en la estructura de una plantilla propia: conserva textos y estructura, quita las fotos concretas
   // (pasan a huecos) y los identificadores. No toca el original.
+  function cleanBlock(src) {
+    const b = JSON.parse(JSON.stringify(src));
+    delete b.id;
+    if (b.type === 'image') { b.img = null; b.caption = ''; }
+    else if (b.type === 'gallery' || b.type === 'carousel') b.images = [];
+    else if (b.type === 'mediatext') b.img = null;
+    else if (b.type === 'cover') b.img = null;
+    else if (b.type === 'video') b.video = null;
+    if (Array.isArray(b.children)) b.children = blocksToTemplate(b.children);
+    if (Array.isArray(b.cols)) b.cols = b.cols.map((c) => ({ width: c.width, children: blocksToTemplate(c.children) }));
+    return b;
+  }
   function blocksToTemplate(blocks) {
     const out = [];
     for (const src of blocks || []) {
       if (!src || !src.type) continue;
-      const b = JSON.parse(JSON.stringify(src));
-      delete b.id;
-      if (b.type === 'image') { b.img = null; b.caption = ''; }
-      else if (b.type === 'gallery' || b.type === 'carousel') b.images = [];
-      else if (b.type === 'mediatext') b.img = null;
-      else if (b.type === 'video') b.video = null;
-      else if (b.type === 'raw' && /<img\b|wp-image/i.test(b.markup || '')) continue; // bloque suelto con fotos de la web: no es estructura
-      out.push(b);
+      if (src.type === 'raw' && /<img\b|wp-image/i.test(src.markup || '')) continue; // bloque suelto con fotos de la web: no es estructura
+      out.push(cleanBlock(src));
     }
     return out;
   }
@@ -111,7 +125,7 @@
     if (featured) rows.push('cover');
     for (const b of blocks || []) {
       const ty = b.type;
-      rows.push(ty === 'heading' ? 'h' : ty === 'list' ? 'list' : ty === 'quote' ? 'quote' : ty === 'buttons' ? 'btn'
+      rows.push(ty === 'group' ? 'sec' : ty === 'columns' ? 'cols' : ty === 'cover' ? 'cover' : ty === 'heading' ? 'h' : ty === 'list' ? 'list' : ty === 'quote' ? 'quote' : ty === 'buttons' ? 'btn'
         : ty === 'gallery' || ty === 'carousel' ? 'gal' : ty === 'image' || ty === 'video' || ty === 'mediatext' ? 'cover'
         : ty === 'separator' ? 'sep' : ty === 'details' ? 'det' : 'p');
     }

@@ -148,6 +148,9 @@
                 <option value="" data-i18n>Tamaño normal</option><option value="14px" data-i18n>Pequeño</option><option value="22px" data-i18n>Mediano</option>
                 <option value="28px" data-i18n>Grande</option><option value="36px" data-i18n>Muy grande</option><option value="48px" data-i18n>Enorme</option>
               </select>
+              <select id="fmt-ls" data-i18n-title title="Espaciado entre letras">
+                <option value="" data-i18n>Letras: normal</option><option value="1px" data-i18n>Letras: separadas</option><option value="2px" data-i18n>Letras: más separadas</option><option value="4px" data-i18n>Letras: muy separadas</option>
+              </select>
               <span class="sep"></span>
               <button data-cmd="bold" data-i18n-title title="Negrita (Ctrl+B)"><span class="ms">format_bold</span></button>
               <button data-cmd="italic" data-i18n-title title="Cursiva (Ctrl+I)"><span class="ms">format_italic</span></button>
@@ -167,6 +170,7 @@
               <button data-cmd="subscript" data-i18n-title title="Subíndice"><span class="ms">subscript</span></button>
               <button data-x="code" data-i18n-title title="Código"><span class="ms">code</span></button>
               <button data-x="drop" data-i18n-title title="Letra capital (primera letra grande)"><span class="ms">text_fields</span></button>
+              <button data-x="shadow" data-i18n-title title="Sombra del texto"><span class="ms">blur_on</span></button>
               <button data-x="clear" data-i18n-title title="Quitar formato"><span class="ms">format_clear</span></button>
               <span class="sep"></span>
               <button data-x="ai" class="ai-fmt" data-i18n-title title="IA para este bloque"><span class="ms">auto_awesome</span></button>
@@ -742,6 +746,15 @@
 </div>
 
 <div id="ins-menu" class="ins-menu hidden">
+  <div class="ins-design">
+    <p class="ins-sec" data-i18n>Diseño</p>
+    <button data-type="group"><span class="ms">web_asset</span><span data-i18n>Sección</span></button>
+    <button data-type="columns"><span class="ms">view_column</span><span data-i18n>Columnas</span></button>
+    <button data-type="cover"><span class="ms">wallpaper</span><span data-i18n>Portada</span></button>
+    <button data-type="spacer"><span class="ms">height</span><span data-i18n>Espaciador</span></button>
+    <button data-type="separator"><span class="ms">horizontal_rule</span><span data-i18n>Separador</span></button>
+    <p class="ins-sec" data-i18n>Contenido</p>
+  </div>
   <button data-type="paragraph"><span class="ms">notes</span><span data-i18n>Párrafo</span></button>
   <button data-type="heading"><span class="ms">title</span><span data-i18n>Título</span></button>
   <button data-type="image"><span class="ms">image</span><span data-i18n>Imagen</span></button>
@@ -757,8 +770,8 @@
   <button data-type="buttons"><span class="ms">smart_button</span><span data-i18n>Botón</span></button>
   <button data-type="details"><span class="ms">expand_circle_down</span><span data-i18n>Desplegable</span></button>
   <button data-type="toc"><span class="ms">toc</span><span data-i18n>Índice</span></button>
-  <button data-type="spacer"><span class="ms">height</span><span data-i18n>Espacio</span></button>
-  <button data-type="separator"><span class="ms">horizontal_rule</span><span data-i18n>Separador</span></button>
+  <button data-type="spacer" class="std"><span class="ms">height</span><span data-i18n>Espacio</span></button>
+  <button data-type="separator" class="std"><span class="ms">horizontal_rule</span><span data-i18n>Separador</span></button>
   <p class="ins-tip" data-i18n>Truco: en un párrafo vacío escribe «/» para abrir este menú, «## » para un título, «- » para una lista o pega un enlace de YouTube.</p>
 </div>
 <div id="fmt-pop" class="fmt-pop hidden"></div>

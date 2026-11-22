@@ -88,9 +88,14 @@
   }
 
   // → [{ blockId, field, index?, start, end }] en el orden del documento
+  // Todos los bloques, también los de dentro de secciones y columnas
+  function flatAll(blocks, out = []) {
+    for (const b of blocks || []) { out.push(b); if (Array.isArray(b.children)) flatAll(b.children, out); if (Array.isArray(b.cols)) b.cols.forEach((c) => flatAll(c.children, out)); }
+    return out;
+  }
   function findInBlocks(blocks, query, opts) {
     const out = [];
-    for (const b of blocks || []) {
+    for (const b of flatAll(blocks)) {
       for (const f of fieldsOf(b)) {
         for (const m of matchesIn(f.get(), query, opts, f.html)) {
           const hit = { blockId: b.id, field: f.field, start: m.start, end: m.end };
@@ -106,7 +111,7 @@
   // onlyMatch: una de las coincidencias de findInBlocks para cambiar solo esa. → { blocks, count }
   function replaceInBlocks(blocks, query, replacement, opts, onlyMatch) {
     let count = 0;
-    for (const b of blocks || []) {
+    for (const b of flatAll(blocks)) {
       if (onlyMatch && b.id !== onlyMatch.blockId) continue;
       for (const f of fieldsOf(b)) {
         if (onlyMatch && (f.field !== onlyMatch.field || String(f.index ?? '') !== String(onlyMatch.index ?? ''))) continue;
