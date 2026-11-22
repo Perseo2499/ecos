@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data: file:; frame-src https://www.youtube-nocookie.com https://player.vimeo.com https://www.dailymotion.com https://open.spotify.com; media-src * data: file: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data: file: blob:; frame-src https://www.google.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.dailymotion.com https://open.spotify.com; media-src * data: file: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'">
 <title>Ecos</title>
 <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
 <link rel="stylesheet" href="styles.css">
@@ -94,6 +94,11 @@
           <b class="ed-bar-title" id="ed-bar-title">Entrada</b>
           <span class="hint" id="ed-count"></span>
           <span class="spacer"></span>
+          <span class="ed-dev" id="ed-dev" role="group" data-i18n-title title="Cómo se verá en cada dispositivo">
+            <button data-dev="desktop" data-i18n-title title="Ordenador"><span class="ms">computer</span></button>
+            <button data-dev="tablet" data-i18n-title title="Tablet"><span class="ms">tablet_mac</span></button>
+            <button data-dev="mobile" data-i18n-title title="Móvil"><span class="ms">smartphone</span></button>
+          </span>
           <span id="ed-wp" class="ed-wp hidden"></span>
           <button id="ed-pull" class="btn text" data-i18n-title title="Comprobar en WordPress si la entrada se ha publicado o cambiado allí y traer los cambios"><span class="ms">sync</span><span data-i18n>Actualizar</span></button>
           <button id="ed-history" class="btn text hidden" data-i18n-title title="Ver y recuperar versiones anteriores de esta entrada"><span class="ms">history</span><span data-i18n>Historial</span></button>
@@ -748,9 +753,12 @@
 <div id="ins-menu" class="ins-menu hidden">
   <div class="ins-design">
     <p class="ins-sec" data-i18n>Diseño</p>
+    <button data-type="sections" class="ins-wide"><span class="ms">dashboard_customize</span><span data-i18n>Secciones listas</span></button>
     <button data-type="group"><span class="ms">web_asset</span><span data-i18n>Sección</span></button>
     <button data-type="columns"><span class="ms">view_column</span><span data-i18n>Columnas</span></button>
     <button data-type="cover"><span class="ms">wallpaper</span><span data-i18n>Portada</span></button>
+    <button data-type="card"><span class="ms">badge</span><span data-i18n>Tarjeta</span></button>
+    <button data-type="figure"><span class="ms">pin</span><span data-i18n>Cifra</span></button>
     <button data-type="spacer"><span class="ms">height</span><span data-i18n>Espaciador</span></button>
     <button data-type="separator"><span class="ms">horizontal_rule</span><span data-i18n>Separador</span></button>
     <p class="ins-sec" data-i18n>Contenido</p>
@@ -764,6 +772,8 @@
   <button data-type="mediatext"><span class="ms">vertical_split</span><span data-i18n>Imagen y texto</span></button>
   <button data-type="quote"><span class="ms">format_quote</span><span data-i18n>Cita</span></button>
   <button data-type="list"><span class="ms">format_list_bulleted</span><span data-i18n>Lista</span></button>
+  <button data-type="iconlist"><span class="ms">checklist</span><span data-i18n>Lista con iconos</span></button>
+  <button data-type="map"><span class="ms">map</span><span data-i18n>Mapa</span></button>
   <button data-type="video"><span class="ms">movie</span><span data-i18n>Vídeo</span></button>
   <button data-type="embed"><span class="ms">smart_display</span><span data-i18n>Vídeo de un enlace</span></button>
   <button data-type="table"><span class="ms">table</span><span data-i18n>Tabla</span></button>
@@ -803,6 +813,7 @@
 <script src="linkutil.js"></script>
 <script src="mosaic.js"></script>
 <script src="templates.js"></script>
+<script src="sections.js"></script>
 <script src="blocks.js"></script>
 <script src="format.js"></script>
 <script src="sitemap.js"></script>
@@ -815,6 +826,8 @@
 <script src="app/posts.js"></script>
 <script src="app/editor.js"></script>
 <script src="app/tplpicker.js"></script>
+<script src="app/sections-ui.js"></script>
+<script src="app/cropper.js"></script>
 <script src="app/blog.js"></script>
 <script src="app/links.js"></script>
 <script src="app/media.js"></script>

@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('api', {
   siteStyles: () => call('site:styles'),
   uploadMedia: () => call('media:upload'),
   uploadPasted: (bytes, name, type) => call('media:uploadPasted', { bytes, name, type }),
+  mediaFetchImage: (url) => call('media:fetchImage', url),
   mediaList: (opts) => call('media:list', opts),
   mediaUsage: (force) => call('media:usage', force),
   mediaAll: (force) => call('media:all', force),

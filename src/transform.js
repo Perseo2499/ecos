@@ -9,6 +9,7 @@ const HASHTAG = /#([\p{L}\p{N}_]+)/gu;
 const DEFAULT_FOOTER = 'Publicado originalmente en {redes}.';
 const SAFE_COLOR = /^(#[0-9a-f]{3,8}|rgba?\([\d.,\s%]+\))$/i;
 const NET = { instagram: 'Instagram', facebook: 'Facebook' };
+const DK = require('../renderer/sections');
 
 function extractTags(text) {
   return [...new Set([...text.matchAll(HASHTAG)].map((m) => m[1]))];
@@ -205,6 +206,7 @@ const FX_CSS = {
   sombra: '.ecos-sombra{text-shadow:1px 2px 4px rgba(0,0,0,.35)}',
   zoom: '.wp-block-image.ecos-zoom{overflow:hidden}.wp-block-image.ecos-zoom img{transition:transform .5s cubic-bezier(.2,0,0,1)}.wp-block-image.ecos-zoom:hover img{transform:scale(1.08)}',
   bw: '.wp-block-image.ecos-bn img{filter:grayscale(1)}',
+  iconos: '.wp-block-list.ecos-iconos{list-style:none;padding-left:0}.wp-block-list.ecos-iconos li{margin:.4em 0}.ecos-iconos .ecos-ico{display:inline-block;min-width:1.6em;color:#fd9800;font-weight:700}',
 };
 const FX_MARK = 'ecos-fx';
 function fxBlock(set) {
@@ -446,25 +448,46 @@ const COL_PRESETS = {
 };
 const equalCols = (cols) => cols.length < 2 || cols.every((c) => parseFloat(c.width) === parseFloat(cols[0].width));
 
+// Diseño avanzado de contenedores (fase 2): margen exterior arriba/abajo, separación entre columnas y degradado de fondo,
+// con los atributos estándar de WordPress (style.spacing.margin, style.spacing.blockGap, style.color.gradient)
+const px = (n, max) => Math.max(0, Math.min(max, Math.round(Number(n) || 0)));
+const has = (v) => v !== undefined && v !== null && v !== '';
+function marginOf(b) {
+  const m = {}, css = [];
+  if (has(b.mt)) { const v = px(b.mt, 200); m.top = v + 'px'; css.push(`margin-top:${v}px`); }
+  if (has(b.mb)) { const v = px(b.mb, 200); m.bottom = v + 'px'; css.push(`margin-bottom:${v}px`); }
+  return { margin: Object.keys(m).length ? m : null, css };
+}
+const gapOf = (b) => (has(b.gap) ? px(b.gap, 120) + 'px' : '');
+
 function groupBlock(b, opts, ctx) {
   const inner = composeList(b.children || [], opts, ctx);
   const attrs = {}, st = {}, cls = ['wp-block-group'], css = [];
   const align = ALIGNS.includes(b.width) ? b.width : '';
   if (align) { attrs.align = align; cls.push('align' + align); }
-  const bg = SAFE_COLOR.test(b.bg || '') && b.bg, fg = SAFE_COLOR.test(b.color || '') && b.color;
-  if (bg || fg) {
+  const bg = SAFE_COLOR.test(b.bg || '') && b.bg, fg = SAFE_COLOR.test(b.color || '') && b.color, grad = DK.safeGradient(b.gradient);
+  if (bg || fg || grad) {
     st.color = {};
-    if (bg) { st.color.background = bg; cls.push('has-background'); css.push('background-color:' + bg); }
+    if (grad) { st.color.gradient = grad; cls.push('has-background'); css.push('background:' + grad); }
+    else if (bg) { st.color.background = bg; cls.push('has-background'); css.push('background-color:' + bg); }
     if (fg) { st.color.text = fg; cls.push('has-text-color'); css.push('color:' + fg); }
   }
-  const pad = GROUP_PAD[b.pad];
+  const pad = GROUP_PAD[b.pad], mar = marginOf(b);
+  if (pad || mar.margin) st.spacing = {};
   if (pad) {
     const [v, h] = pad;
-    st.spacing = { padding: { top: v + 'px', right: h + 'px', bottom: v + 'px', left: h + 'px' } };
+    st.spacing.padding = { top: v + 'px', right: h + 'px', bottom: v + 'px', left: h + 'px' };
     css.push(`padding-top:${v}px`, `padding-right:${h}px`, `padding-bottom:${v}px`, `padding-left:${h}px`);
   }
+  if (mar.margin) { st.spacing.margin = mar.margin; css.push(...mar.css); }
   const rad = Math.max(0, Math.min(60, Number(b.radius) || 0));
-  if (rad) { st.border = { radius: rad + 'px' }; css.unshift(`border-radius:${rad}px`); }
+  const bc = SAFE_COLOR.test(b.border || '') && b.border;
+  if (rad || bc) {
+    st.border = {};
+    if (rad) st.border.radius = rad + 'px';
+    if (bc) { st.border.width = '1px'; st.border.color = bc; st.border.style = 'solid'; cls.push('has-border-color'); css.unshift(`border-color:${bc}`, 'border-style:solid', 'border-width:1px'); }
+    if (rad) css.unshift(`border-radius:${rad}px`);
+  }
   if (b.shadow) { st.shadow = GROUP_SHADOW; css.push('box-shadow:' + GROUP_SHADOW); }
   if (Object.keys(st).length) attrs.style = st;
   attrs.layout = { type: 'constrained' };
@@ -476,9 +499,14 @@ function columnsBlock(b, opts, ctx) {
   if (!cols.length) return '';
   const valign = ['top', 'center', 'bottom'].includes(b.valign) ? b.valign : '';
   const attrs = {};
-  const cls = ['wp-block-columns'];
+  const cls = ['wp-block-columns'], css = [];
   if (valign) { attrs.verticalAlignment = valign; cls.push('are-vertically-aligned-' + valign); }
   if (b.stack === false) { attrs.isStackedOnMobile = false; cls.push('is-not-stacked-on-mobile'); }
+  // diseño: degradado o color de fondo, separación entre columnas y margen exterior
+  const st = {}, grad = DK.safeGradient(b.gradient), bg = SAFE_COLOR.test(b.bg || '') && b.bg, gap = gapOf(b), mar = marginOf(b);
+  if (grad || bg) { st.color = grad ? { gradient: grad } : { background: bg }; cls.push('has-background'); css.push(grad ? 'background:' + grad : 'background-color:' + bg); }
+  if (gap || mar.margin) { st.spacing = {}; if (gap) st.spacing.blockGap = gap; if (mar.margin) { st.spacing.margin = mar.margin; css.push(...mar.css); } }
+  if (Object.keys(st).length) attrs.style = st;
   const eq = equalCols(cols);
   const inner = cols.map((c) => {
     const a = {}, cc = ['wp-block-column'];
@@ -488,7 +516,7 @@ function columnsBlock(b, opts, ctx) {
     const body = composeList(c.children || [], opts, ctx);
     return `<!-- wp:column${Object.keys(a).length ? ' ' + JSON.stringify(a) : ''} -->\n<div class="${cc.join(' ')}"${w ? ` style="flex-basis:${w}"` : ''}>${body ? '\n' + body + '\n' : ''}</div>\n<!-- /wp:column -->`;
   }).join('\n\n');
-  return `<!-- wp:columns${Object.keys(attrs).length ? ' ' + JSON.stringify(attrs) : ''} -->\n<div class="${cls.join(' ')}">${inner}</div>\n<!-- /wp:columns -->`;
+  return `<!-- wp:columns${Object.keys(attrs).length ? ' ' + JSON.stringify(attrs) : ''} -->\n<div class="${cls.join(' ')}"${css.length ? ` style="${css.join(';')}"` : ''}>${inner}</div>\n<!-- /wp:columns -->`;
 }
 
 // ¿El color es oscuro? (para decidir si el texto de la portada va en blanco o en negro)
@@ -505,22 +533,47 @@ function coverBlock(b, opts, ctx) {
   const dim = Math.max(0, Math.min(100, Math.round(Number(b.dim ?? 50) / 10) * 10));
   const h = Number(b.height) > 0 ? Math.min(1200, Math.round(Number(b.height))) : 0;
   const img = b.img && b.img.url ? b.img : null;
+  const grad = DK.safeGradient(b.gradient);
+  const fpv = (v) => Math.round(Math.max(0, Math.min(1, Number(v))) * 100) / 100;
+  const fp = b.focalPoint && Number.isFinite(Number(b.focalPoint.x)) && Number.isFinite(Number(b.focalPoint.y)) ? { x: fpv(b.focalPoint.x), y: fpv(b.focalPoint.y) } : null;
+  const focal = img && fp && (fp.x !== 0.5 || fp.y !== 0.5) ? fp : null;
+  const parallax = !!b.parallax && !!img;
   const attrs = {};
   if (img) { attrs.url = img.url; if (imgId(img)) attrs.id = imgId(img); }
+  if (focal) attrs.focalPoint = focal;
+  if (parallax) attrs.hasParallax = true;
   attrs.dimRatio = dim; attrs.customOverlayColor = overlay;
+  if (grad) attrs.customGradient = grad;
   if (h) { attrs.minHeight = h; attrs.minHeightUnit = 'px'; }
-  const dark = dim < 40 && img ? true : isDarkColor(overlay);
+  const dark = dim < 40 && img ? true : grad ? true : isDarkColor(overlay);
   if (!dark) attrs.isDark = false;
   const align = ALIGNS.includes(b.width) ? b.width : '';
   if (align) attrs.align = align;
+  const mar = marginOf(b);
+  if (mar.margin) attrs.style = { spacing: { margin: mar.margin } };
   attrs.layout = { type: 'constrained' };
   const cls = ['wp-block-cover'];
   if (align) cls.push('align' + align);
+  if (parallax) cls.push('has-parallax');
   if (!dark) cls.push('is-light');
   const dimCls = ['wp-block-cover__background', 'has-background-dim'];
+  if (grad) dimCls.push('has-background-gradient');
   if (dim !== 50) dimCls.push(`has-background-dim-${dim}`);
-  const imgTag = img ? `<img class="wp-block-cover__image-background${imgId(img) ? ` wp-image-${imgId(img)}` : ''}" alt="${esc(img.alt || '')}" src="${esc(img.url)}" data-object-fit="cover"/>` : '';
-  return `<!-- wp:cover ${JSON.stringify(attrs)} -->\n<div class="${cls.join(' ')}"${h ? ` style="min-height:${h}px"` : ''}><span aria-hidden="true" class="${dimCls.join(' ')}" style="background-color:${overlay}"></span>${imgTag}<div class="wp-block-cover__inner-container">${inner ? '\n' + inner + '\n' : ''}</div></div>\n<!-- /wp:cover -->`;
+  const pos = focal ? `${Math.round(focal.x * 100)}% ${Math.round(focal.y * 100)}%` : '';
+  const wpImg = imgId(img || {}) ? ` wp-image-${imgId(img)}` : '';
+  let imgTag = '';
+  if (img && parallax) imgTag = `<div role="img" class="wp-block-cover__image-background${wpImg} has-parallax" style="background-position:${pos || '50% 50%'};background-image:url(${esc(img.url)})" aria-label="${esc(img.alt || '')}"></div>`;
+  else if (img) imgTag = `<img class="wp-block-cover__image-background${wpImg}" alt="${esc(img.alt || '')}" src="${esc(img.url)}"${pos ? ` style="object-position:${pos}"` : ''} data-object-fit="cover"${pos ? ` data-object-position="${pos}"` : ''}/>`;
+  const style = [h ? `min-height:${h}px` : '', ...mar.css].filter(Boolean).join(';');
+  return `<!-- wp:cover ${JSON.stringify(attrs)} -->\n<div class="${cls.join(' ')}"${style ? ` style="${style}"` : ''}><span aria-hidden="true" class="${dimCls.join(' ')}" style="${grad ? 'background:' + grad : 'background-color:' + overlay}"></span>${imgTag}<div class="wp-block-cover__inner-container">${inner ? '\n' + inner + '\n' : ''}</div></div>\n<!-- /wp:cover -->`;
+}
+
+// Mapa: una dirección en un mapa de Google incrustado (bloque HTML), con alto y esquinas redondeadas
+function mapBlock(b) {
+  const address = String(b.address || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (!address) return '';
+  const h = px(b.height || 360, 800) || 360, rad = px(has(b.radius) ? b.radius : 16, 40);
+  return `<!-- wp:html -->\n<div class="ecos-mapa" style="border-radius:${rad}px;overflow:hidden;line-height:0"><iframe src="${esc(DK.mapUrl(address))}" width="100%" height="${h}" style="border:0;display:block" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="${esc(address)}" allowfullscreen></iframe></div>\n<!-- /wp:html -->`;
 }
 
 // Mosaico: fotos de distintos tamaños encajadas en una rejilla (la primera grande). Bloque HTML, como el carrusel.
@@ -606,12 +659,17 @@ function composeList(blocks, opts, ctx) {
         break;
       }
       case 'list': {
-        const items = (b.items || []).map(inline).filter(Boolean);
+        // con iconos: cada elemento lleva delante su símbolo (clase ecos-iconos; su CSS va en el bloque de efectos)
+        const iconic = Array.isArray(b.icons);
+        const items = (b.items || []).map((x, k) => ({ html: inline(x), ico: iconic ? DK.safeIcon(b.icons[k]) : '' })).filter((x) => x.html);
         if (!items.length) break;
-        const tag = b.ordered ? 'ol' : 'ul';
+        const tag = b.ordered && !iconic ? 'ol' : 'ul';
         const st = blockStyle(b, { align: false });
-        const attrs = { ...(b.ordered ? { ordered: true } : {}), ...st.attrs };
-        out.push(`<!-- wp:list${Object.keys(attrs).length ? ' ' + JSON.stringify(attrs) : ''} -->\n<${tag} class="wp-block-list${st.cls}"${st.style}>${items.map((i) => `<!-- wp:list-item -->\n<li>${i}</li>\n<!-- /wp:list-item -->`).join('\n')}</${tag}>\n<!-- /wp:list -->`);
+        const attrs = { ...(b.ordered && !iconic ? { ordered: true } : {}), ...st.attrs };
+        let cls = st.cls;
+        if (iconic) { attrs.className = [attrs.className, 'ecos-iconos'].filter(Boolean).join(' '); cls += ' ecos-iconos'; ctx.fx.add('iconos'); }
+        const li = (x) => `<li>${x.ico ? `<span class="ecos-ico" aria-hidden="true">${esc(x.ico)}</span> ` : ''}${x.html}</li>`;
+        out.push(`<!-- wp:list${Object.keys(attrs).length ? ' ' + JSON.stringify(attrs) : ''} -->\n<${tag} class="wp-block-list${cls}"${st.style}>${items.map((x) => `<!-- wp:list-item -->\n${li(x)}\n<!-- /wp:list-item -->`).join('\n')}</${tag}>\n<!-- /wp:list -->`);
         break;
       }
       case 'table': out.push(tableBlock(b)); break;
@@ -622,6 +680,7 @@ function composeList(blocks, opts, ctx) {
         out.push(`<!-- wp:details -->\n<details class="wp-block-details"><summary>${inline(b.summary)}</summary>${sanitizeParagraphs(b.html).map(para).join('\n')}</details>\n<!-- /wp:details -->`);
         break;
       }
+      case 'map': { const m = mapBlock(b); if (m) out.push(m); break; }
       case 'toc': {
         const items = ctx.all.filter((h) => h.type === 'heading' && anchors.has(h.id) && (h.level || 2) <= 3);
         if (!items.length) break;

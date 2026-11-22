@@ -12,8 +12,9 @@
   const pop = $('#fmt-pop');
   if (!bar) return;
 
-  const TEXT_COLORS = ['#1f1f1f', '#5f6368', '#c62828', '#e65100', '#f9a825', '#2e7d32', '#00838f', '#1565c0', '#6a1b9a', '#ad1457'];
-  const BG_COLORS = ['#fff3c4', '#ffe0b2', '#ffcdd2', '#f8bbd0', '#e1bee7', '#c5cae9', '#bbdefb', '#b2ebf2', '#c8e6c9', '#eeeeee'];
+  // Paleta común de todos los selectores de color del editor (marca, blanco, negro y grises); «Otro color» aparte
+  const TEXT_COLORS = window.Sections.PALETTE;
+  const BG_COLORS = window.Sections.PALETTE;
 
   // --- Selección: se guarda para poder volver a ella tras usar un desplegable o un campo
   let range = null;

@@ -387,6 +387,18 @@ handle('media:uploadPasted', async ({ bytes, name, type }) => {
   try { const up = await wpCall(() => WP().uploadFile(cfg, tmp)); return { ...up, alt: '', type: 'image' }; }
   finally { fs.rm(tmp, { force: true }, () => {}); }
 });
+// Descarga una imagen de la web para recortarla en el editor (el lienzo no puede leer imágenes de otro dominio)
+handle('media:fetchImage', async (url) => {
+  const u = String(url || '');
+  if (!/^https?:\/\//i.test(u)) throw new Error('Dirección de imagen no válida');
+  const r = await fetch(u, { redirect: 'follow', signal: AbortSignal.timeout(30000) });
+  if (!r.ok) throw new Error('No se pudo descargar la imagen (' + r.status + ')');
+  const type = String(r.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+  if (!/^image\/(png|jpe?g|webp|gif|avif|bmp)$/.test(type)) throw new Error('El enlace no es una imagen');
+  const buf = Buffer.from(await r.arrayBuffer());
+  if (buf.length > 40 * 1024 * 1024) throw new Error('La imagen es demasiado grande para recortarla');
+  return { bytes: new Uint8Array(buf), type };
+});
 handle('media:upload', async () => {
   const r = await dialog.showOpenDialog(mainWin, {
     title: 'Fotos y vídeos para la entrada', properties: ['openFile', 'multiSelections'],
@@ -522,7 +534,7 @@ handle('ai:models', (id, draftKey, draftUrl) => {
 handle('ai:test', async () => { const c = await ai.testConnection(cfg.ai); return c.tool ? `${require('./src/clirun').TOOLS[c.tool].name}${c.model ? ' · ' + c.model : ''}` : `${ai.PROVIDERS[c.id].name} · ${c.model}`; });
 
 // --- Copia de seguridad de la configuración ---
-const BACKUP_KEYS = ['devDir', 'metaAppId', 'metaAppSecret', 'metaConfigId', 'graphVersion', 'wpMode', 'wpUrl', 'wpUser', 'wpAppPassword', 'wpSite', 'wpPublicUrl', 'wpEditor', 'wpClientId', 'wpClientSecret', 'ai', 'aiInstructions', 'format', 'templates', 'exported', 'prefs'];
+const BACKUP_KEYS = ['devDir', 'metaAppId', 'metaAppSecret', 'metaConfigId', 'graphVersion', 'wpMode', 'wpUrl', 'wpUser', 'wpAppPassword', 'wpSite', 'wpPublicUrl', 'wpEditor', 'wpClientId', 'wpClientSecret', 'ai', 'aiInstructions', 'format', 'templates', 'blockTemplates', 'blockSections', 'exported', 'prefs'];
 handle('config:export', async (withSecrets) => {
   const r = await dialog.showSaveDialog(mainWin, { title: 'Guardar copia de la configuración', defaultPath: `ecos-configuracion-${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] });
   if (r.canceled) return false;

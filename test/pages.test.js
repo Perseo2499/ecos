@@ -93,7 +93,7 @@ test('lo que no se reconoce dentro de un contenedor sigue como raw, y un grupo c
   const other = '<!-- wp:group {"className":"mi-clase","layout":{"type":"flex"}} -->\n<div class="wp-block-group mi-clase"><!-- wp:paragraph -->\n<p>x</p>\n<!-- /wp:paragraph --></div>\n<!-- /wp:group -->';
   const r = P.parseBlocks(other);
   assert.equal(r[0].type, 'raw'); assert.equal(T.composeBlocks(r), other);
-  const cover = '<!-- wp:cover {"url":"https://x/a.jpg","hasParallax":true,"dimRatio":50} -->\n<div class="wp-block-cover has-parallax"><span aria-hidden="true" class="wp-block-cover__background has-background-dim"></span><div class="wp-block-cover__inner-container"></div></div>\n<!-- /wp:cover -->';
+  const cover = '<!-- wp:cover {"url":"https://x/a.jpg","useFeaturedImage":true,"dimRatio":50} -->\n<div class="wp-block-cover has-parallax"><span aria-hidden="true" class="wp-block-cover__background has-background-dim"></span><div class="wp-block-cover__inner-container"></div></div>\n<!-- /wp:cover -->';
   assert.equal(P.parseBlocks(cover)[0].type, 'raw');
 });
 

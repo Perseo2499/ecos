@@ -2,6 +2,7 @@
 // de Ecos, para traer al editor los cambios hechos directamente en WordPress. Lo que Ecos no sabe editar
 // se conserva tal cual en un bloque «raw», que al enviar se devuelve sin tocar.
 const { FONTS, FX_MARK } = require('./transform');
+const DK = require('../renderer/sections');
 
 const FONT_KEY = Object.fromEntries(Object.entries(FONTS).map(([k, v]) => [v, k]));
 let seq = 0;
@@ -66,7 +67,17 @@ function toBlock(t) {
   switch (n) {
     case 'paragraph': return { id: bid(), type: 'paragraph', html: inner(h, 'p'), ...styleFrom(a) };
     case 'heading': { const l = a.level || 2; return { id: bid(), type: 'heading', level: [2, 3, 4, 5].includes(l) ? l : 2, html: inner(h, 'h' + l), ...styleFrom(a) }; }
-    case 'list': return { id: bid(), type: 'list', ordered: !!a.ordered, items: all(h, 'li').map((x) => x.replace(/<!--[\s\S]*?-->/g, '').trim()), ...styleFrom({ ...a, align: null }) };
+    case 'list': {
+      let items = all(h, 'li').map((x) => x.replace(/<!--[\s\S]*?-->/g, '').trim());
+      const b = { id: bid(), type: 'list', ordered: !!a.ordered, items, ...styleFrom({ ...a, align: null }) };
+      // lista con iconos de Ecos: el símbolo de cada elemento va en un <span class="ecos-ico"> delante del texto
+      if (/(^|\s)ecos-iconos(\s|$)/.test(a.className || '')) {
+        b.icons = items.map((x) => (x.match(/^<span class="ecos-ico"[^>]*>([^<]*)<\/span>\s?/) || [])[1] || '');
+        b.items = items.map((x) => x.replace(/^<span class="ecos-ico"[^>]*>[^<]*<\/span>\s?/, ''));
+        b.ordered = false;
+      }
+      return b;
+    }
     case 'quote': return { id: bid(), type: 'quote', html: all(h, 'p').join('<br>'), cite: inner(h, 'cite'), ...styleFrom({ ...a, align: null }) };
     case 'pullquote': return { id: bid(), type: 'quote', pull: true, html: all(h, 'p').join('<br>'), cite: inner(h, 'cite'), ...styleFrom({ ...a, align: null }) };
     case 'image': {
@@ -132,6 +143,15 @@ function toBlock(t) {
     case 'html': {
       if (/^\s*<div class="ecos-clear"[^>]*><\/div>\s*$/.test(h)) return null; // corte tras una foto a un lado: se vuelve a poner al enviar
       if (new RegExp(`<style class="${FX_MARK}"`).test(h)) return null; // estilos de los efectos de Ecos: se vuelven a poner al enviar
+      // mapa de Ecos: un iframe de Google Maps con la dirección en el enlace
+      if (/class="ecos-mapa"/.test(h)) {
+        const src = attr((h.match(/<iframe\b[^>]*>/i) || [''])[0], 'src');
+        const address = DK.addressFromMap(src);
+        const wrap = (h.match(/<div class="ecos-mapa"[^>]*>/) || [''])[0];
+        if (address && /^https:\/\/www\.google\.com\/maps\?/.test(src)) {
+          return { id: bid(), type: 'map', address, height: parseInt(attr((h.match(/<iframe\b[^>]*>/i) || [''])[0], 'height'), 10) || 360, radius: parseInt((wrap.match(/border-radius:(\d+)px/) || [])[1], 10) || 0 };
+        }
+      }
       // carrusel y mosaico de Ecos
       if (/class="ecos-(carrusel|mosaico|galeria)"/.test(h)) {
         // fotos y vídeos en orden (sin las imágenes de fondo desenfocado del carrusel, que repiten cada foto)
@@ -154,16 +174,19 @@ function toBlock(t) {
       if (kids.lossy) return raw();
       const b = { id: bid(), type: 'group', children: kids };
       if (ALIGN_OK.includes(a.align)) b.width = a.align;
+      if (st.color?.gradient) b.gradient = st.color.gradient;
       if (st.color?.background) b.bg = st.color.background;
       if (st.color?.text) b.color = st.color.text;
       b.pad = padOf(st.spacing?.padding);
       const rad = parseInt(st.border?.radius, 10);
       if (rad > 0) b.radius = rad;
+      if (st.border?.color) b.border = st.border.color;
+      Object.assign(b, marginFrom(st.spacing));
       if (st.shadow) b.shadow = true;
       return b;
     }
     case 'columns': {
-      if (!onlyKeys(a, ['verticalAlignment', 'isStackedOnMobile'])) return raw();
+      if (!onlyKeys(a, ['verticalAlignment', 'isStackedOnMobile', 'style']) || !columnsStyleKnown(a.style)) return raw();
       const cols = tokenize(h).filter((x) => x.name !== 'freeform' || x.inner.replace(/<[^>]+>|\s|&nbsp;/g, ''));
       if (!cols.length || cols.some((x) => x.name !== 'column' || !onlyKeys(x.attrs, ['width', 'verticalAlignment']))) return raw();
       const eq = pctString(100 / cols.length);
@@ -172,18 +195,30 @@ function toBlock(t) {
       const b = { id: bid(), type: 'columns', cols: cols.map((x, k) => ({ width: /^\d{1,3}(\.\d+)?%$/.test(x.attrs.width || '') ? x.attrs.width : eq, children: lists[k] })) };
       if (['top', 'center', 'bottom'].includes(a.verticalAlignment)) b.valign = a.verticalAlignment;
       if (a.isStackedOnMobile === false) b.stack = false;
+      if (a.style?.color?.gradient) b.gradient = a.style.color.gradient;
+      if (a.style?.color?.background) b.bg = a.style.color.background;
+      if (a.style?.spacing?.blockGap) b.gap = parseInt(a.style.spacing.blockGap, 10);
+      Object.assign(b, marginFrom(a.style?.spacing));
       return b;
     }
     case 'cover': {
-      if (!onlyKeys(a, ['url', 'id', 'dimRatio', 'customOverlayColor', 'minHeight', 'minHeightUnit', 'isDark', 'align', 'layout', 'alt'])) return raw();
+      if (!onlyKeys(a, ['url', 'id', 'dimRatio', 'customOverlayColor', 'customGradient', 'minHeight', 'minHeightUnit', 'isDark', 'align', 'layout', 'alt', 'focalPoint', 'hasParallax', 'style'])) return raw();
+      if (a.style && !(onlyKeys(a.style, ['spacing']) && onlyKeys(a.style.spacing, ['margin']) && marginKnown(a.style.spacing.margin))) return raw();
+      if (a.customGradient && !DK.safeGradient(a.customGradient)) return raw();
+      if (a.focalPoint && !(onlyKeys(a.focalPoint, ['x', 'y']) && [a.focalPoint.x, a.focalPoint.y].every((v) => typeof v === 'number' && v >= 0 && v <= 1))) return raw();
+      if (a.hasParallax !== undefined && a.hasParallax !== true) return raw();
       if (a.minHeightUnit && a.minHeightUnit !== 'px') return raw();
       if (a.layout && !(a.layout.type === 'constrained' && Object.keys(a.layout).length === 1)) return raw();
       if (a.customOverlayColor && !/^#[0-9a-f]{6}$/i.test(a.customOverlayColor)) return raw();
       const kids = parseList(h, true);
       if (kids.lossy) return raw();
-      const tag = (h.match(/<img\b[^>]*wp-block-cover__image-background[^>]*>/i) || [''])[0];
-      const b = { id: bid(), type: 'cover', img: a.url ? { id: Number(a.id) || a.url, url: a.url, alt: attr(tag, 'alt') } : null, overlay: a.customOverlayColor || '#000000', dim: a.dimRatio ?? 100, height: Number(a.minHeight) || 0, children: kids };
+      const tag = (h.match(/<(?:img|div)\b[^>]*wp-block-cover__image-background[^>]*>/i) || [''])[0];
+      const b = { id: bid(), type: 'cover', img: a.url ? { id: Number(a.id) || a.url, url: a.url, alt: attr(tag, 'alt') || attr(tag, 'aria-label') } : null, overlay: a.customOverlayColor || '#000000', dim: a.dimRatio ?? 100, height: Number(a.minHeight) || 0, children: kids };
       if (ALIGN_OK.includes(a.align)) b.width = a.align;
+      if (a.customGradient) b.gradient = a.customGradient;
+      if (a.focalPoint) b.focalPoint = { x: a.focalPoint.x, y: a.focalPoint.y };
+      if (a.hasParallax) b.parallax = true;
+      Object.assign(b, marginFrom(a.style?.spacing));
       return b;
     }
     default: return raw();
@@ -201,9 +236,30 @@ function groupKnown(a) {
   if (a.layout && !(a.layout.type === 'constrained' && Object.keys(a.layout).length === 1)) return false;
   const st = a.style || {};
   if (!onlyKeys(st, ['spacing', 'color', 'border', 'shadow'])) return false;
-  if (!onlyKeys(st.spacing, ['padding']) || !onlyKeys(st.color, ['background', 'text']) || !onlyKeys(st.border, ['radius'])) return false;
+  if (!onlyKeys(st.spacing, ['padding', 'margin']) || !onlyKeys(st.color, ['background', 'text', 'gradient']) || !onlyKeys(st.border, ['radius', 'width', 'color', 'style'])) return false;
+  if (st.color?.gradient && !DK.safeGradient(st.color.gradient)) return false;
+  if (st.spacing?.margin !== undefined && !marginKnown(st.spacing.margin)) return false;
+  // borde propio de Ecos: 1 px sólido de un color; si no, es de WordPress
+  if (st.border && (st.border.width !== undefined || st.border.color !== undefined || st.border.style !== undefined)
+    && !(st.border.width === '1px' && st.border.style === 'solid' && /^#[0-9a-f]{3,8}$/i.test(st.border.color || ''))) return false;
   if (st.spacing?.padding && (typeof st.spacing.padding !== 'object' || !/^\d+px$/.test(String(st.spacing.padding.top ?? '0px')))) return false;
   if (st.border?.radius !== undefined && !/^\d+px$/.test(String(st.border.radius))) return false;
+  return true;
+}
+// Margen exterior (arriba y abajo, en píxeles) y estilos de columnas
+const marginKnown = (m) => !!m && typeof m === 'object' && onlyKeys(m, ['top', 'bottom']) && Object.values(m).every((v) => /^\d{1,3}px$/.test(String(v)));
+const marginFrom = (sp) => {
+  const m = sp?.margin, o = {};
+  if (m?.top !== undefined) o.mt = parseInt(m.top, 10);
+  if (m?.bottom !== undefined) o.mb = parseInt(m.bottom, 10);
+  return o;
+};
+function columnsStyleKnown(st) {
+  if (st === undefined) return true;
+  if (!st || !onlyKeys(st, ['color', 'spacing'])) return false;
+  if (st.color && !(onlyKeys(st.color, ['gradient', 'background']) && (!st.color.gradient || DK.safeGradient(st.color.gradient)) && (!st.color.background || /^#[0-9a-f]{3,8}$/i.test(st.color.background)))) return false;
+  if (st.color?.gradient && st.color?.background) return false;
+  if (st.spacing && !(onlyKeys(st.spacing, ['blockGap', 'margin']) && (st.spacing.blockGap === undefined || /^\d{1,3}px$/.test(String(st.spacing.blockGap))) && (st.spacing.margin === undefined || marginKnown(st.spacing.margin)))) return false;
   return true;
 }
 function padOf(p) {
