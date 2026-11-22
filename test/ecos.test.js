@@ -956,3 +956,9 @@ test('respuesta de la IA por CLI: se encuentra el JSON aunque venga con texto, l
   assert.deepEqual(extractJson('Explico {esto}.\n```json\n{"x":[1,2]}\n```\nfin'), { x: [1, 2] });
   assert.throws(() => extractJson('sin nada'), (e) => e.code === 'BAD_JSON');
 });
+
+test('foto redondeada con zoom: el recorte del zoom también es redondeado (sin picos al pasar el ratón)', () => {
+  const html = T.composeBlocks([{ id: 'i', type: 'image', img: { id: 3, url: 'https://x/a.jpg' }, align: 'right', width: 50, frame: 'rounded', fx: 'zoom' }]);
+  assert.match(html, /\.wp-block-image\.ecos-zoom:has\(img\[style\*="border-radius:16px"\]\)\{border-radius:16px;width:fit-content/);
+  assert.match(html, /border-radius:16px/);
+});

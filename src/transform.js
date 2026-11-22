@@ -249,7 +249,8 @@ const IMG_FX = { zoom: 'ecos-zoom', bw: 'ecos-bn' };
 // Estilos mínimos de los efectos propios (clases ecos-*): van en un bloque HTML con <style> al final del contenido
 const FX_CSS = {
   sombra: '.ecos-sombra{text-shadow:1px 2px 4px rgba(0,0,0,.35)}',
-  zoom: '.wp-block-image.ecos-zoom{overflow:hidden}.wp-block-image.ecos-zoom img{transition:transform .5s cubic-bezier(.2,0,0,1)}.wp-block-image.ecos-zoom:hover img{transform:scale(1.08)}',
+  // con esquinas redondeadas, el marco que recorta el zoom también las lleva (si no, al ampliar salen picos)
+  zoom: '.wp-block-image.ecos-zoom:has(img[style*="border-radius:16px"]){border-radius:16px;width:fit-content;max-width:100%}.wp-block-image.ecos-zoom.is-style-rounded{border-radius:9999px;width:fit-content;max-width:100%}.wp-block-image.ecos-zoom{overflow:hidden}.wp-block-image.ecos-zoom img{transition:transform .5s cubic-bezier(.2,0,0,1)}.wp-block-image.ecos-zoom:hover img{transform:scale(1.08)}',
   bw: '.wp-block-image.ecos-bn img{filter:grayscale(1)}',
   // el tema puede no traer la clase de WordPress para «justificado»: se asegura aquí (sin tocar el bloque, que sigue siendo válido en WordPress)
   justify: '.has-text-align-justify{text-align:justify}',
