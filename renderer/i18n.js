@@ -300,6 +300,8 @@
     'Ocultas': 'Hidden',
     'Ocultos': 'Hidden',
     // 1.2 (editor completo)
+    'Listo. {n} tramo(s) se han dejado como estaban porque la IA no los devolvió. Revisa el texto antes de enviarlo.': 'Done. {n} section(s) were left as they were because the AI did not return them. Review the text before sending it.',
+    'Listo: el texto está reescrito y las fotos siguen en su sitio. Revísalo antes de enviarlo (Ctrl+Z para deshacer).': 'Done: the text is rewritten and the photos stay in place. Review it before sending (Ctrl+Z to undo).',
     'Categoría': 'Category',
     'Todas las fotos ya tienen descripción. ¿Volver a describirlas todas?': 'All photos already have a description. Describe them all again?',
     'Describir de nuevo': 'Describe again',

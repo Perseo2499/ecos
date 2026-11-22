@@ -235,7 +235,57 @@ const TONE = {
   activist: 'Usa un tono reivindicativo y movilizador, firme y respetuoso.',
 };
 
-function improveArticle(aiCfg, { title, text, extra = '', opts = {} }) {
+// Reescritura por tramos: el texto entre foto y foto (o entre bloques que no son texto) se manda como tramos T1, T2…
+// y vuelve cada uno reescrito con su mismo id; las fotos, vídeos, galerías y demás bloques se quedan donde están.
+const SegBlock = z.object({ kind: z.enum(['h2', 'h3', 'p', 'li', 'quote']).describe('h2/h3 = subtítulo; p = párrafo; li = elemento de lista; quote = cita'), text: z.string().describe('Texto plano, sin HTML ni Markdown ni hashtags') });
+const ArticleSegments = z.object({
+  title: z.string().describe('Titular claro y atractivo, sin emojis, máximo 90 caracteres'),
+  excerpt: z.string().describe('Resumen de 1-2 frases para el extracto del blog y buscadores'),
+  sections: z.array(z.object({ id: z.string().describe('El id del tramo, tal cual (T1, T2…)'), blocks: z.array(SegBlock) })).describe('Un elemento por cada tramo recibido, en el mismo orden y con el mismo id'),
+  tags: z.array(z.string()).describe('Entre 3 y 8 etiquetas en minúsculas, sin #'),
+  sources: z.array(z.object({ title: z.string(), url: z.string() })).describe('Fuentes de internet usadas (vacío si no se buscó nada)'),
+});
+function improveSegments(aiCfg, { title, segments, layout, extra = '', opts = {} }) {
+  const o = { length: 'same', tone: 'same', headings: true, spelling: true, ...opts };
+  const rules = [
+    'La entrada tiene fotos, vídeos y otros bloques que NO se mueven, NO se quitan y NO se describen: solo reescribes el TEXTO de cada tramo (T1, T2…). Cada tramo vuelve en su sitio, con su mismo id y en el mismo orden; no pases contenido de un tramo a otro. Devuelve TODOS los tramos (si uno no necesita cambios, devuélvelo igual).',
+    'Mantén los hechos, nombres, fechas y lugares. No inventes datos, citas ni cifras.',
+    'Quita hashtags, emojis decorativos y fórmulas propias de redes («link en bio», «MÁXIMA DIFUSIÓN»…).',
+    LENGTH[o.length] || LENGTH.same,
+    TONE[o.tone] || TONE.same,
+    o.headings ? 'Puedes añadir subtítulos (kind = "h2") dentro de un tramo largo; respeta los subtítulos y listas que ya haya.' : 'No añadas subtítulos nuevos; conserva los que ya haya.',
+    o.spelling ? 'Corrige la ortografía, la gramática y la puntuación.' : '',
+    'Escribe en el mismo idioma que el original.',
+    o.searchNow ? 'Antes de escribir, haz como mucho 3 búsquedas web rápidas sobre el tema. Incorpora solo datos relevantes y verificables, atribúyelos en el texto («según…») y pon cada fuente en «sources».' : '',
+    o.research ? 'Usa la información de internet de abajo para ampliar y contextualizar, atribuyendo los datos en el texto («según…»).' : '',
+    extra ? `Indicaciones generales de la asociación: ${extra}` : '',
+  ].filter(Boolean).map((r) => '- ' + r).join('\n');
+  const notes = String(o.notes || '').trim();
+  const prompt = `Eres editor del blog de una asociación. Mejora el texto de esta entrada${notes ? ' siguiendo, ante todo, lo que te pide la persona' : ''}.
+${notes ? `
+INSTRUCCIONES DE LA PERSONA (prioridad máxima: cúmplelas al pie de la letra, aunque contradigan otras reglas; si piden no cambiar algo, no lo cambies):
+«${notes}»
+` : ''}
+Reglas:
+${rules}
+
+Título actual: ${title}
+
+Cómo está organizada la entrada (los [·] son bloques que no se tocan):
+${layout}
+
+Tramos de texto a reescribir:
+${segments.map((s) => `[[${s.id}]]\n${s.text}`).join('\n\n')}${o.research ? `
+
+Información de internet (con sus fuentes):
+<<<
+${o.research}
+>>>` : ''}`;
+  return askStructured(aiCfg, [{ type: 'text', text: prompt }], ArticleSegments, { effort: o.length === 'longer' ? 'medium' : 'low', web: !!o.searchNow });
+}
+
+function improveArticle(aiCfg, { title, text, extra = '', opts = {}, segments, layout }) {
+  if (Array.isArray(segments) && segments.length) return improveSegments(aiCfg, { title, segments, layout, extra, opts });
   const o = { length: 'same', tone: 'same', headings: true, spelling: true, ...opts };
   const rules = [
     'Mantén los hechos, nombres, fechas y lugares del original. No inventes datos, citas ni cifras.',
@@ -248,10 +298,12 @@ function improveArticle(aiCfg, { title, text, extra = '', opts = {} }) {
     o.searchNow ? 'Antes de escribir, haz como mucho 3 búsquedas web rápidas sobre el tema (contexto, datos oficiales, informes de ONG o prensa reconocida). No abras páginas: usa los resultados. Incorpora solo datos relevantes y verificables, atribúyelos en el texto («según…») y pon cada fuente usada en «sources» (título y URL). Si no encuentras nada fiable, escribe sin ellos.' : '',
     o.research ? 'Usa la información de internet de abajo para ampliar y contextualizar el artículo: incorpora solo los datos relevantes y verificables, atribúyelos en el texto («según…») y no copies frases literales. Si algo no encaja con el original, no lo uses.' : '',
     extra ? `Indicaciones generales de la asociación: ${extra}` : '',
-    o.notes ? `Indicaciones para esta entrada: ${o.notes}` : '',
   ].filter(Boolean).map((r) => '- ' + r).join('\n');
   const prompt = `Eres editor del blog de una asociación. Convierte esta publicación de redes sociales en una entrada de blog de calidad.
-
+${o.notes ? `
+INSTRUCCIONES DE LA PERSONA (prioridad máxima: cúmplelas al pie de la letra, aunque contradigan otras reglas):
+«${o.notes}»
+` : ''}
 Reglas:
 ${rules}
 
