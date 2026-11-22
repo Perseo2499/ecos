@@ -255,6 +255,28 @@
     },
 
     // --- Dibujo ----------------------------------------------------------------------
+    // Cambio que solo afecta a un bloque (opciones de estilo, menús del carrusel…): se vuelve a pintar solo ese bloque,
+    // sin redibujar todo el editor ni cerrar el menú abierto (antes cada opción hacía parpadear la pantalla entera)
+    repaintBlock(id) {
+      const loc = this.locate(id), old = document.querySelector(`#d-blocks .blk[data-id="${CSS.escape(String(id))}"]`);
+      if (!loc || !old) return false;
+      const nu = this.block(loc.b, loc.i, loc.arr, loc.parent ? loc.parent.id : null);
+      for (const c of ['tools-on', 'pinned']) if (old.classList.contains(c)) nu.classList.add(c);
+      if (this.pinned === old) this.pinned = nu;
+      old.replaceWith(nu);
+      $$('img', nu).forEach((im) => { im.draggable = false; });
+      window.FormatBar?.review();
+      $('#ed-undo').disabled = !this.undo.length; $('#ed-redo').disabled = !this.redo.length;
+      if (this.active && !document.contains(this.active.el)) { this.active = null; window.FormatBar?.update(); }
+      if (this.pop && !this.popLock) this.openStyle(this.pop.id, true);
+      return true;
+    },
+    changeBlock(id, fn) {
+      this.snapshot();
+      fn();
+      if (!this.repaintBlock(id)) this.render();
+      this.onChange();
+    },
     render() {
       $('#dd-pop')?.classList.add('hidden');
       this.renderCover();
@@ -1246,7 +1268,7 @@
       // la posición se fija al abrir (la barra puede ocultarse al llevar el ratón al menú)
       el.style.left = Math.max(8, Math.min(innerWidth - el.offsetWidth - 8, this.dd.x)) + 'px';
       el.style.top = Math.max(8, Math.min(innerHeight - el.offsetHeight - 8, this.dd.y)) + 'px';
-      $$('.sp-chip', el).forEach((x) => (x.onclick = () => { const o = m.groups[Number(x.dataset.g)].opts[Number(x.dataset.o)]; this.change(o[3]); }));
+      $$('.sp-chip', el).forEach((x) => (x.onclick = () => { const o = m.groups[Number(x.dataset.g)].opts[Number(x.dataset.o)]; this.changeBlock(b.id, o[3]); }));
       void b;
     },
 
@@ -1469,9 +1491,9 @@
       el.style.left = Math.max(8, Math.min(innerWidth - w - 8, pos.x)) + 'px';
       el.style.top = Math.max(8, Math.min(innerHeight - hh - 8, pos.y)) + 'px';
       $('.sp-x', el).onclick = () => { this.closeStyle(); this.render(); };
-      $$('.sp-chip[data-c]', el).forEach((x) => (x.onclick = () => { const c = rows[Number(x.dataset.r)].chips[Number(x.dataset.c)]; if (c.raw) c.raw(); else this.change(c.fn); }));
-      $$('[data-sw]', el).forEach((x) => (x.onclick = () => this.change(() => rows[Number(x.dataset.r)].color.set(x.dataset.sw))));
-      $$('[data-gr]', el).forEach((x) => (x.onclick = () => this.change(() => rows[Number(x.dataset.r)].grad.set(x.dataset.gr))));
+      $$('.sp-chip[data-c]', el).forEach((x) => (x.onclick = () => { const c = rows[Number(x.dataset.r)].chips[Number(x.dataset.c)]; if (c.raw) c.raw(); else this.changeBlock(id, c.fn); }));
+      $$('[data-sw]', el).forEach((x) => (x.onclick = () => this.changeBlock(id, () => rows[Number(x.dataset.r)].color.set(x.dataset.sw))));
+      $$('[data-gr]', el).forEach((x) => (x.onclick = () => this.changeBlock(id, () => rows[Number(x.dataset.r)].grad.set(x.dataset.gr))));
       $$('input[type=color]', el).forEach((x) => {
         const r = rows[Number(x.dataset.r)];
         x.oninput = () => this.live(() => r.color.set(x.value));
