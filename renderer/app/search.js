@@ -28,7 +28,7 @@ const GS = (() => {
     { icon: 'note_add', label: t('Nueva página'), kw: 'crear escribir pagina', run: () => newDraft({ type: 'page' }) },
     { icon: 'download', label: t('Cargar publicaciones'), kw: 'instagram facebook meta redes traer', run: () => { showTab('posts'); $('#load').click(); } },
     { icon: 'home', label: t('Ir a Inicio'), kw: 'portada resumen', run: () => showTab('home') },
-    { icon: 'dynamic_feed', label: t('Ir a Publicaciones'), kw: 'redes instagram facebook', run: () => showTab('posts') },
+    { icon: 'dynamic_feed', label: t('Ir a Redes'), kw: 'redes instagram facebook', run: () => showTab('posts') },
     { icon: 'article', label: t('Ir a Blog'), kw: 'entradas', run: () => Home.goBlog('post') },
     { icon: 'description', label: t('Ir a Páginas'), kw: 'paginas', run: () => Home.goBlog('page') },
     { icon: 'photo_library', label: t('Ir a Medios'), kw: 'fotos imagenes biblioteca videos', run: () => Home.goBlog('media') },
@@ -43,7 +43,7 @@ const GS = (() => {
     { icon: 'palette', label: t('Ajustes → Personalización'), kw: 'tema color aspecto vinilo zoom', run: settingsAt('#set-look') },
     { icon: 'translate', label: t('Ajustes → Idioma'), kw: 'ingles español language', run: settingsAt('#set-lang') },
     { icon: 'settings_backup_restore', label: t('Restaurar copia'), kw: 'copia de seguridad restaurar recuperar entradas updraft', run: () => openRestore() },
-    { icon: 'filter_none', label: t('Buscar fotos repetidas'), kw: 'duplicadas medios limpiar', run: () => { Home.goBlog('media'); setTimeout(() => findDuplicates().catch((e) => toast(e.message, true)), 120); } },
+    { icon: 'filter_none', label: t('Buscar fotos repetidas'), kw: 'duplicadas medios limpiar', run: () => { Home.goBlog('media'); setTimeout(() => findDuplicates().catch((e) => toastError(e)), 120); } },
     { icon: 'contrast', label: t('Cambiar tema'), kw: 'claro oscuro modo color', run: () => { const next = NEXT_THEME[prefs().theme] || 'light'; savePrefs({ theme: next }); toast(t('Tema: {x}', { x: next === 'dark' ? t('oscuro') : next === 'light' ? t('claro') : t('automático') })); } },
   ];
 
@@ -132,7 +132,7 @@ const GS = (() => {
     }, 280);
   }
 
-  async function openPost(id, type) { try { await openFromWp(id, null, type); } catch (e) { toast(e.message, true); } }
+  async function openPost(id, type) { try { await openFromWp(id, null, type); } catch (e) { toastError(e); } }
   function openMedia(m) {
     Home.goBlog('media');
     setTimeout(() => { const i = $('#b-media .mg-search'); if (i) { i.value = m.name; i.dispatchEvent(new Event('input', { bubbles: true })); } }, 60);

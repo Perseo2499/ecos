@@ -67,7 +67,7 @@ async function openTerminal({ cwd, cmd, title } = {}) {
   term.loadAddon(fit); term.open(pane); fit.fit();
   let info;
   try { info = await window.api.ptySpawn({ cwd: cwd || CFG.devDir || undefined, cols: term.cols, rows: term.rows }); }
-  catch (e) { pane.remove(); toast(e.message, true); return; }
+  catch (e) { pane.remove(); toastError(e); return; }
   const tab = document.createElement('div'); tab.className = 'term-tab';
   tab.innerHTML = `<span class="ms">terminal</span><span class="tt"></span><button title="${t('Cerrar')}"><span class="ms">close</span></button>`;
   tab.querySelector('.tt').textContent = title || (info.shell.split(/[\\/]/).pop());

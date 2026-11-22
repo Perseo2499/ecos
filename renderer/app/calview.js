@@ -53,7 +53,7 @@ async function calendarView(box, state, opts) {
   try {
     if (opts.beforeLoad) await opts.beforeLoad(from);
     items = (await opts.load(from, to)).filter((it) => { const d = new Date(it.date); return d >= from && d < to; });
-  } catch (e) { $('.cal-body', box).innerHTML = `<div class="empty"><span class="ms">cloud_off</span><span>${escHtml(e.message)}</span></div>`; return; }
+  } catch (e) { errBox($('.cal-body', box), e, redraw); return; }
   if (state.month !== m || (state.mode === 'year') !== year) return; // se cambió mientras cargaba
   const body = $('.cal-body', box);
   const weekdays = [...Array(7)].map((_, i) => new Date(2024, 0, 1 + i).toLocaleDateString(loc, { weekday: 'short' })); // lunes primero

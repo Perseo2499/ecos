@@ -153,7 +153,7 @@
             else b.html = out;
           });
           window.toast?.(t('Listo. Puedes deshacerlo con Ctrl+Z.'));
-        } catch (e) { window.toast?.(e.message, true); } finally { $$('.ai-busy').forEach((x) => x.classList.remove('ai-busy')); }
+        } catch (e) { window.toastError?.(e); } finally { $$('.ai-busy').forEach((x) => x.classList.remove('ai-busy')); }
       })));
   }
 

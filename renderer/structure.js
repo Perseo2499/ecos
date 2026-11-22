@@ -45,22 +45,47 @@
   const flat = (list, pid = 0, out = []) => { for (const x of kids(list, pid)) { out.push(x); flat(list, x.id, out); } return out; };
   const clone = (x) => JSON.parse(JSON.stringify(x));
 
+  // --- Datos incompletos: se rellena lo que falte para pintar siempre lo que haya ---------------
+  const arr = (x) => (Array.isArray(x) ? x.filter((i) => i && typeof i === 'object') : []);
+  const withId = (x) => arr(x).filter((i) => i.id != null);
+  const num = (n) => (Number.isFinite(Number(n)) ? Number(n) : 0);
+  function sanitize(d) {
+    d = d && typeof d === 'object' ? d : {};
+    const st = d.settings && typeof d.settings === 'object' ? d.settings : null;
+    return {
+      ...d,
+      settings: st && { ...st, title: st.title || '', showOnFront: st.showOnFront || 'posts', pageOnFront: num(st.pageOnFront), pageForPosts: num(st.pageForPosts) },
+      pages: withId(d.pages).map((p) => ({ ...p, title: p.title || t('(sin título)'), status: p.status || 'publish', parent: num(p.parent), order: num(p.order), link: p.link || '' })),
+      categories: withId(d.categories).map((c) => ({ ...c, name: String(c.name ?? ''), count: num(c.count), parent: num(c.parent), link: c.link || '' })),
+      menus: withId(d.menus).map((m) => ({ ...m, name: m.name || '', locations: Array.isArray(m.locations) ? m.locations : [],
+        items: withId(m.items).map((i) => ({ ...i, title: i.title || '', parent: num(i.parent), order: num(i.order), type: i.type || 'custom', object: i.object || '', url: i.url || '' })) })),
+      navigation: arr(d.navigation).map((n) => ({ ...n, title: n.title || '' })),
+      menuNote: d.menuNote || '',
+    };
+  }
+  const saneCatPosts = (list) => withId(list).map((p) => ({ ...p, title: p.title || t('(sin título)'), status: p.status || 'publish', sticky: !!p.sticky, categories: Array.isArray(p.categories) ? p.categories : [], date: p.date || '' }));
+  const saneLinks = (d) => {
+    if (!d || typeof d !== 'object') return { err: t('No se han podido leer los enlaces de esta página.') };
+    if (d.err || d.loading) return d;
+    return { ...d, title: d.title || '', buttons: arr(d.buttons), incoming: arr(d.incoming), links: arr(d.links), outline: Array.isArray(d.outline) ? d.outline : [] };
+  };
+
   // --- Cargar ---------------------------------------------------------------------------------
   async function open(force) {
     if (S.data && !force) { render(); return; }
     box().innerHTML = `<p class="hint pad">${t('Leyendo la estructura de tu web…')}</p>`;
     try {
-      const d = await window.api.siteStructure();
+      const d = sanitize(await window.api.siteStructure());
       S.data = d; S.orig = clone(d);
       S.posts.clear(); S.postsOrig.clear(); S.loaded.clear(); S.del.clear(); S.menu = 0; S.sel = null;
       for (const p of d.pages) S.open.add('p' + p.id);
       d.menus.forEach((m) => m.items.forEach((i) => S.open.add('m' + i.id)));
       render();
-    } catch (e) { box().innerHTML = `<div class="empty"><span class="ms">cloud_off</span><span>${esc(e.message)}</span></div>`; }
+    } catch (e) { errBox(box(), e, () => open(true)); }
   }
   async function loadCat(id) {
     if (S.loaded.has(id)) return;
-    const list = await window.api.siteCatPosts(id);
+    const list = saneCatPosts(await window.api.siteCatPosts(id));
     for (const p of list) if (!S.posts.has(p.id)) { S.posts.set(p.id, p); S.postsOrig.set(p.id, JSON.stringify({ c: [...p.categories].sort(), s: p.sticky })); }
     S.loaded.add(id);
   }
@@ -369,7 +394,7 @@
     const k = plKey(z), cur = S.pl.get(k);
     if (!force && cur && !cur.err) return;
     S.pl.set(k, { loading: true });
-    try { S.pl.set(k, await window.api.sitePageLinks(z.id, z.type)); } catch (e) { S.pl.set(k, { err: e.message }); }
+    try { S.pl.set(k, saneLinks(await window.api.sitePageLinks(z.id, z.type))); } catch (e) { S.pl.set(k, { err: friendlyError(e).text }); }
     if (S.zoom && plKey(S.zoom) === k) render();
   }
   // Entra en una página. fromMap: viene del mapa (se anima el zoom desde la tarjeta pulsada y se empieza una miga nueva)
@@ -611,7 +636,7 @@
     const root = box();
     if (!S.zoom) return;
     const z = S.zoom, d = S.pl.get(plKey(z));
-    const fail = (e) => toast(e.message, true);
+    const fail = (e) => toastError(e);
     S.pvAnim = false;
     $$('[data-pv]', root).forEach((b) => {
       b.onclick = (e) => {
@@ -704,7 +729,7 @@
         if (parent) S.open.add('p' + parent.id);
         S.sel = 'pg' + p.id;
         toast(t('Página «{p}» creada como borrador.', { p: p.title }));
-      } catch (e) { toast(e.message, true); }
+      } catch (e) { toastError(e); }
       return render();
     }
     if (a === 'addcat' || a === 'subcat') {
@@ -716,7 +741,7 @@
         if (cat) S.open.add('c' + cat.id);
         S.sel = 'ct' + c.id;
         toast(t('Categoría «{c}» creada.', { c: c.name }));
-      } catch (e) { toast(e.message, true); }
+      } catch (e) { toastError(e); }
       return render();
     }
     if (a === 'newpost') {
@@ -754,7 +779,7 @@
         await window.api.siteTrashPage(page.id);
         d.pages = d.pages.filter((x) => x.id !== page.id); S.orig.pages = S.orig.pages.filter((x) => x.id !== page.id); S.sel = null; S.zoom = null; S.trail = [];
         toast(t('Página enviada a la papelera.'));
-      } catch (e) { toast(e.message, true); }
+      } catch (e) { toastError(e); }
       return render();
     }
     if (a === 'delcat') {
@@ -764,7 +789,7 @@
         await window.api.siteDeleteCategory(cat.id);
         d.categories = d.categories.filter((x) => x.id !== cat.id); S.orig.categories = S.orig.categories.filter((x) => x.id !== cat.id); S.sel = null;
         toast(t('Categoría borrada.'));
-      } catch (e) { toast(e.message, true); }
+      } catch (e) { toastError(e); }
       return render();
     }
   }
@@ -779,14 +804,14 @@
     $$('details.st-rev', root).forEach((x) => (x.ontoggle = () => { S.revOpen = x.open; }));
     $$('[data-sel]', root).forEach((c) => (c.onclick = () => { const z = cardPage(c.dataset.sel); if (z) return zoomTo(z.id, z.type, c, true); S.sel = S.sel === c.dataset.sel ? null : c.dataset.sel; render(); }));
     $$('[data-do]', root).forEach((b) => {
-      const go = (e) => { e.stopPropagation(); const i = b.dataset.i; run(b.dataset.do, b.dataset.k, /^t/.test(i || '') ? i : Number(i), b).catch((err) => toast(err.message, true)); };
+      const go = (e) => { e.stopPropagation(); const i = b.dataset.i; run(b.dataset.do, b.dataset.k, /^t/.test(i || '') ? i : Number(i), b).catch((err) => toastError(err)); };
       if (b.dataset.dbl) b.ondblclick = go; else b.onclick = go;
     });
     $$('[data-set]', root).forEach((s) => (s.onchange = () => { d.settings[s.dataset.set] = s.dataset.set === 'showOnFront' ? s.value : Number(s.value); render(); }));
     $$('[data-tw]', root).forEach((b) => (b.onclick = async (e) => {
       e.stopPropagation();
       const k = b.dataset.tw;
-      if (S.open.has(k)) S.open.delete(k); else { S.open.add(k); if (k[0] === 'c') { render(); await loadCat(Number(k.slice(1))).catch((err) => toast(err.message, true)); } }
+      if (S.open.has(k)) S.open.delete(k); else { S.open.add(k); if (k[0] === 'c') { render(); await loadCat(Number(k.slice(1))).catch((err) => toastError(err)); } }
       render();
     }));
     $$('[data-vis]', root).forEach((b) => (b.onclick = () => { const p = d.pages.find((x) => x.id === Number(b.dataset.vis)); p.status = p.status === 'publish' ? 'draft' : 'publish'; render(); }));
@@ -880,7 +905,7 @@
         if (r.errors.length) toast(t('Algunos cambios no se pudieron guardar: {e}', { e: r.errors.slice(0, 2).join(' · ') }), true);
         else toast(t('Estructura guardada en tu web.'));
         await open(true);
-      } catch (e) { toast(e.message, true); render(); }
+      } catch (e) { toastError(e); render(); }
     }
   }
 

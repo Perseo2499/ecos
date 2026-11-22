@@ -35,6 +35,6 @@ $('#bw-create').onclick = async (e) => {
     const msg = t('Copia guardada: {a} entradas y páginas', { a: r.posts + r.pages }) + ($('#bw-photos').checked ? ' · ' + t('{n} fotos', { n: r.files }) : '');
     toast(r.missing ? msg + ' · ' + t('{n} fotos no se pudieron bajar', { n: r.missing }) : msg, !!r.missing);
     $('#bw-note').textContent = r.file;
-  } catch (err) { if (!/Cancelado/.test(err.message)) toast(err.message, true); else toast(t('Copia cancelada')); }
+  } catch (err) { if (!/Cancelado/.test(err.message)) toastError(err); else toast(t('Copia cancelada')); }
   finally { $('#bw-prog').classList.add('hidden'); b.innerHTML = label; bwNote(); }
 };

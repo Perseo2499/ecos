@@ -939,7 +939,7 @@
     async cropImage(b) {
       if (!b.img || !window.Cropper) return;
       let res;
-      try { res = await window.Cropper.crop(b.img); } catch (e) { window.toast?.(e.message || String(e), true); return; }
+      try { res = await window.Cropper.crop(b.img); } catch (e) { window.toastError?.(e); return; }
       if (!res) return;
       window.toast?.(t('Subiendo la foto recortada…'));
       try {
@@ -954,7 +954,7 @@
           if (typeof window.mediaPool === 'function') this.media = window.mediaPool();
         });
         window.toast?.(t('Foto recortada. La original sigue en tu biblioteca.'));
-      } catch (e) { window.toast?.(e.message || String(e), true); }
+      } catch (e) { window.toastError?.(e); }
     },
 
     // --- Imagen: recorte, marco, efecto y tamaño libre (se ven igual en el editor y en la web) ------------------------------
