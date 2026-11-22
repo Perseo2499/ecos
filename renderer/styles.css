@@ -2663,3 +2663,6 @@ body:has(.tab.active .b-bulk.on) #toast { bottom: 120px; }
 /* Etiqueta de estado del editor («Publicada · Ver», «Borrador»…): siempre en una línea */
 #editor .ed-wp { white-space: nowrap; flex: none; display: inline-flex; align-items: center; gap: 4px; }
 #editor .ed-wp * { white-space: nowrap; }
+
+/* Menús de opciones: al pulsar solo cambia la opción marcada (sin animación de entrada otra vez) */
+.sty-pop .sp-chip { transition: background-color .12s, color .12s, box-shadow .12s; }

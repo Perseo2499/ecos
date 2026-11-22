@@ -255,6 +255,24 @@
     },
 
     // --- Dibujo ----------------------------------------------------------------------
+    // Pone el HTML en un menú flotante. Si el menú ya está abierto con la misma estructura, NO se reconstruye: solo se
+    // copian las clases (opción marcada), valores y textos, así no parpadea ni se mueve al pulsar una opción.
+    setPopHtml(el, html) {
+      const visible = !el.classList.contains('hidden');
+      const tmp = document.createElement('div'); tmp.innerHTML = html;
+      const a = [...el.querySelectorAll('*')], b = [...tmp.querySelectorAll('*')];
+      const same = visible && a.length === b.length && a.every((x, i) => x.tagName === b[i].tagName);
+      if (!same) { el.innerHTML = html; return false; }
+      a.forEach((x, i) => {
+        const y = b[i];
+        if (x.className !== y.className) x.className = y.className;
+        if ('disabled' in x && x.disabled !== y.disabled) x.disabled = y.hasAttribute('disabled');
+        if (x.tagName === 'INPUT' && x !== document.activeElement && x.getAttribute('value') !== y.getAttribute('value')) { x.setAttribute('value', y.getAttribute('value') || ''); x.value = y.getAttribute('value') || ''; }
+        if (x.tagName === 'OUTPUT' && x.textContent !== y.textContent) x.textContent = y.textContent;
+        const st = y.getAttribute('style'); if (st !== x.getAttribute('style') && x.tagName !== 'INPUT') { if (st == null) x.removeAttribute('style'); else x.setAttribute('style', st); }
+      });
+      return true;
+    },
     // Cambio que solo afecta a un bloque (opciones de estilo, menús del carrusel…): se vuelve a pintar solo ese bloque,
     // sin redibujar todo el editor ni cerrar el menú abierto (antes cada opción hacía parpadear la pantalla entera)
     repaintBlock(id) {
@@ -1262,13 +1280,17 @@
         document.addEventListener('mousedown', (e) => { if (this.dd && !e.target.closest('#dd-pop, [data-dd]')) this.closeDrop(); });
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && this.dd) this.closeDrop(); });
       }
-      el.innerHTML = m.groups.map((g, gi) => `<div class="sp-row"><div class="sp-lbl">${esc(g.label)}</div><div class="sp-chips">${g.opts.map(([, n, on], oi) => `<button class="sp-chip ${on ? 'on' : ''}" data-g="${gi}" data-o="${oi}">${esc(n)}</button>`).join('')}</div></div>`).join('');
+      const kept = el.dataset.for === `${b.id}:${this.dd.key}` && this.setPopHtml(el, m.groups.map((g, gi) => `<div class="sp-row"><div class="sp-lbl">${esc(g.label)}</div><div class="sp-chips">${g.opts.map(([, n, on], oi) => `<button class="sp-chip ${on ? 'on' : ''}" data-g="${gi}" data-o="${oi}">${esc(n)}</button>`).join('')}</div></div>`).join(''));
+      if (!kept) el.innerHTML = m.groups.map((g, gi) => `<div class="sp-row"><div class="sp-lbl">${esc(g.label)}</div><div class="sp-chips">${g.opts.map(([, n, on], oi) => `<button class="sp-chip ${on ? 'on' : ''}" data-g="${gi}" data-o="${oi}">${esc(n)}</button>`).join('')}</div></div>`).join('');
+      el.dataset.for = `${b.id}:${this.dd.key}`;
       el.classList.remove('hidden');
       btn.classList.add('on');
-      // la posición se fija al abrir (la barra puede ocultarse al llevar el ratón al menú)
-      el.style.left = Math.max(8, Math.min(innerWidth - el.offsetWidth - 8, this.dd.x)) + 'px';
-      el.style.top = Math.max(8, Math.min(innerHeight - el.offsetHeight - 8, this.dd.y)) + 'px';
-      $$('.sp-chip', el).forEach((x) => (x.onclick = () => { const o = m.groups[Number(x.dataset.g)].opts[Number(x.dataset.o)]; this.changeBlock(b.id, o[3]); }));
+      // la posición se fija al abrir (la barra puede ocultarse al llevar el ratón al menú); si ya estaba abierto, no se mueve
+      if (!kept) {
+        el.style.left = Math.max(8, Math.min(innerWidth - el.offsetWidth - 8, this.dd.x)) + 'px';
+        el.style.top = Math.max(8, Math.min(innerHeight - el.offsetHeight - 8, this.dd.y)) + 'px';
+      }
+      $$('.sp-chip', el).forEach((x) => (x.onclick = () => { const o = m.groups[Number(x.dataset.g)].opts[Number(x.dataset.o)]; $$(`.sp-chip[data-g="${x.dataset.g}"]`, el).forEach((y) => y.classList.toggle('on', y === x)); this.changeBlock(b.id, o[3]); }));
       void b;
     },
 
@@ -1482,7 +1504,9 @@
         else if (r.html) body = `<div class="sp-chips sp-custom-row" data-r="${ri}">${r.html}</div>`;
         h.push(`<div class="sp-row"><div class="sp-lbl">${esc(r.label)}</div>${body}</div>`);
       });
-      el.innerHTML = h.join('');
+      const keptSty = el.dataset.for === String(id) && this.setPopHtml(el, h.join(''));
+      if (!keptSty) el.innerHTML = h.join('');
+      el.dataset.for = String(id);
       el.classList.remove('hidden');
       // posición: bajo el botón «Estilo» (se conserva al reconstruir)
       const pos = this.pop || (this.pop = { id, x: 200, y: 120 });
