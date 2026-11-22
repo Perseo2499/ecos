@@ -115,7 +115,7 @@ const Home = (() => {
   function draftsCard() {
     let body;
     if (!wpOk()) body = needWp();
-    else if (!hs.drafts) body = hs.err ? `<p class="hint">${escHtml(hs.err)}</p>` : skel(4);
+    else if (!hs.drafts) body = hs.err ? `<p class="hint">${escHtml(hs.err)} <button class="btn text small" data-h="retry"><span class="ms">refresh</span>${t('Reintentar')}</button></p>` : skel(4);
     else if (!hs.drafts.length) body = `<div class="home-empty"><span class="ms">task_alt</span><span>${t('No tienes borradores pendientes.')}</span></div>`;
     else body = `<ul class="home-list">${hs.drafts.map((d) => `<li><div class="home-li-t"><b>${title(d)}</b><span>${t('Editado el {d}', { d: fmtDay(d.modified || d.date) })}</span></div>
       <button class="btn text small" data-h="edit" data-id="${d.id}"><span class="ms">edit</span>${t('Seguir editando')}</button></li>`).join('')}</ul>`;
@@ -152,7 +152,7 @@ const Home = (() => {
     let body;
     if (!wpOk()) body = needWp();
     else if (CFG.wpMode !== 'selfhosted') body = `<p class="hint">${t('La revisión solo está disponible con «Mi web (wp-admin)».')}</p>`;
-    else if (!hs.health) body = hs.errHealth ? `<p class="hint">${escHtml(hs.errHealth)}</p>` : `${skel(2)}<p class="hint">${t('Comprobando las entradas…')}</p>`;
+    else if (!hs.health) body = hs.errHealth ? `<p class="hint">${escHtml(hs.errHealth)} <button class="btn text small" data-h="retry"><span class="ms">refresh</span>${t('Reintentar')}</button></p>` : `${skel(2)}<p class="hint">${t('Comprobando las entradas…')}</p>`;
     else {
       const nc = hs.health.noCat.length, ni = hs.health.noImg.length;
       body = !nc && !ni ? `<div class="home-empty ok"><span class="ms fill">task_alt</span><span>${t('Todo en orden: todas las entradas tienen categoría e imagen destacada.')}</span></div>`
@@ -180,7 +180,7 @@ const Home = (() => {
     const draw = () => { if ($('#tab-home').classList.contains('active')) render(); };
     const now = Date.now(), DAY = 864e5;
     const jobs = [
-      window.api.blogList({ type: 'post', status: 'draft', number: 5, orderby: 'modified' }).then((r) => { hs.drafts = r.items; hs.err = null; }, (e) => { hs.drafts = hs.drafts || []; hs.err = e.message; }),
+      window.api.blogList({ type: 'post', status: 'draft', number: 5, orderby: 'modified' }).then((r) => { hs.drafts = r.items; hs.err = null; }, (e) => { hs.drafts = hs.drafts || []; hs.err = friendlyError(e).text; }),
       window.api.blogList({ type: 'post', status: 'any', number: 50, after: new Date(now - 7 * DAY).toISOString(), before: new Date(now + 7 * DAY).toISOString() })
         .then((r) => { hs.week = r.items.filter((x) => x.status === 'publish' || x.status === 'future'); }, () => { hs.week = hs.week || []; }),
     ];
@@ -190,7 +190,7 @@ const Home = (() => {
       jobs.push((bh.data ? Promise.resolve(bh.data) : window.api.blogHealth(false)).then((r) => {
         hs.health = { noCat: r?.noCat || [], noImg: r?.noImg || [] }; hs.errHealth = null;
         if (!bh.data) bh.data = { total: 0, at: Date.now(), ...(r || {}), noCat: hs.health.noCat, noImg: hs.health.noImg };
-      }, (e) => { hs.errHealth = e.message; }).then(draw));
+      }, (e) => { hs.errHealth = friendlyError(e).text; }).then(draw));
     }
     await Promise.allSettled(jobs);
     hs.loading = false; draw();
@@ -202,6 +202,7 @@ const Home = (() => {
     const b = e.target.closest('#home [data-h]');
     if (!b) return;
     const a = b.dataset.h;
+    if (a === 'retry') { hs.err = null; hs.errHealth = null; return load(true); }
     if (a === 'conn') return showTab('connections');
     if (a === 'see-all') return goPosts('pending');
     if (a === 'new-see') return goPosts('pending');

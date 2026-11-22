@@ -206,6 +206,6 @@ $('#ai-test').onclick = (e) => busy(e.target, async () => {
   renderAi();
   $('#ai-test-status').textContent = t('Probando…');
   try { const who = await window.api.aiTest(); $('#ai-test-status').textContent = t('Listo para usar.') + ' ' + who; $('#ai-test-status').className = 'ok-text'; }
-  catch (err) { $('#ai-test-status').textContent = err.message; $('#ai-test-status').className = 'err-text'; }
+  catch (err) { $('#ai-test-status').textContent = friendlyError(err).text; $('#ai-test-status').className = 'err-text'; }
 });
 $('#ai-instr-save').onclick = async () => { CFG = await window.api.setConfig({ aiInstructions: $('#ai-instructions').value }); toast(t('Guardado')); };

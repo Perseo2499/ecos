@@ -50,7 +50,7 @@ window.SectionsUI = (() => {
             CFG = await window.api.setConfig({ blockSections: (CFG.blockSections || []).filter((_, k) => k !== i) });
             $('#sg-own', d).innerHTML = ownHtml(); wire();
             toast(t('Sección borrada'));
-          } catch (err) { toast(err.message, true); }
+          } catch (err) { toastError(err); }
         }));
       };
       wire();
@@ -71,7 +71,7 @@ window.SectionsUI = (() => {
       const sec = SK().makeUserSection(name, block);
       CFG = await window.api.setConfig({ blockSections: [...(CFG.blockSections || []), sec] });
       toast(t('Sección «{p}» guardada en «Mis secciones» (sin fotos)', { p: sec.name }));
-    } catch (e) { toast(e.message, true); }
+    } catch (e) { toastError(e); }
   }
 
   // --- Vista por dispositivo ---------------------------------------------------------------------------------------

@@ -2,7 +2,7 @@
 // (Comparte el ámbito global con los demás archivos de renderer/app, que se cargan en orden desde index.html.)
 
 // El editor (y la terminal) son capas a pantalla completa: van directamente en <body> para que se vean
-// desde cualquier pantalla (antes el editor estaba dentro de «Publicaciones» y desde Blog no se veía).
+// desde cualquier pantalla (antes el editor estaba dentro de «Redes» y desde Blog no se veía).
 for (const id of ['#editor', '#term']) { const el = $(id); if (el && el.parentElement !== document.body) document.body.appendChild(el); }
 
 // ---------------------------------------------------------------- Editor visual
@@ -11,7 +11,7 @@ async function makeDraft() {
   const already = chosen.filter(liveExport);
   if (already.length && !await ask(t('{n} de las publicaciones elegidas ya están en el blog. ¿Crear otra entrada de todos modos?', { n: already.length }))) return;
   toast(t('Subiendo fotos a WordPress…'));
-  draft = await window.api.buildDraft(chosen);
+  draft = (await window.api.buildDraft(chosen)) || {};
   renderWpState(null);
   draft.excerpt = ''; draft.postId = null; draft.extraMedia = []; // postId: borrador ya guardado en WordPress
   draftKeys = chosen.flatMap(keysOf);
@@ -25,7 +25,8 @@ $('#make').onclick = (e) => busy(e.target, makeDraft);
 // Al enviar se actualiza esa misma entrada.
 async function openFromWp(postId, keys, type = 'post', opts = {}) {
   toast(type === 'page' ? t('Abriendo la página de WordPress…') : t('Abriendo la entrada de WordPress…'));
-  const r = await window.api.pullPost(postId, type);
+  const r = (await window.api.pullPost(postId, type)) || {};
+  r.blocks = Array.isArray(r.blocks) ? r.blocks : [];
   exported = r.exported || exported;
   const imgs = window.BlockEditor.flat(r.blocks).flatMap((b) => (b.img ? [b.img] : b.images || []));
   const vids = window.BlockEditor.flat(r.blocks).filter((b) => b.type === 'video' && b.video?.id).map((b) => ({ ...b.video, type: 'video' }));
@@ -90,7 +91,17 @@ function mediaPool() {
   return out.filter((m) => !hidden.has(m.id));
 }
 
+// Si WordPress o la IA devuelven un borrador sin algunos campos (bloques, etiquetas, categorías…), se rellenan
+function fixDraftShape() {
+  if (!draft || typeof draft !== 'object') draft = {};
+  const A = (x) => (Array.isArray(x) ? x : []);
+  draft.title = draft.title == null ? '' : String(draft.title);
+  draft.blocks = A(draft.blocks); draft.tags = A(draft.tags).map(String); draft.sections = A(draft.sections); draft.extraMedia = A(draft.extraMedia);
+  if (draft.categories != null) draft.categories = A(draft.categories).map(String);
+  if (!draft.blocks.length && window.BlockEditor?.create) draft.blocks = [window.BlockEditor.create('paragraph')];
+}
 function openEditor() {
+  fixDraftShape();
   $('#sent').classList.add('hidden'); $('#send').classList.remove('hidden');
   $('#d-title').value = draft.title;
   requestAnimationFrame(autoTitle); document.fonts?.ready.then(autoTitle);
@@ -161,7 +172,7 @@ async function fillParents(sel) {
     if (box.value !== String(sel || 0)) box.value = '0';
   };
   set(sitePagesCache || []);
-  try { sitePagesCache = await window.api.sitePages(); if (isPageDraft()) set(sitePagesCache || []); } catch (e) { toast(e.message || String(e), true); }
+  try { sitePagesCache = await window.api.sitePages(); if (isPageDraft()) set(sitePagesCache || []); } catch (e) { toastError(e); }
 }
 $('#d-parent').onchange = () => autosaveSoon();
 // El título crece en varias líneas (y no admite saltos de línea)
@@ -340,7 +351,7 @@ async function showRecoverBanner() {
 new ResizeObserver(() => autoTitle()).observe($('#ed-canvas')); // al cambiar el ancho, el título vuelve a encajar
 $('#d-title').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); const first = $('#d-blocks [contenteditable]'); first?.focus(); } };
 const closeEditor = async () => {
-  if (!$('#sent').classList.contains('hidden') || !draftDirty || await ask(t('¿Cerrar el editor? La entrada queda guardada en este ordenador y podrás recuperarla desde «Publicaciones».'))) {
+  if (!$('#sent').classList.contains('hidden') || !draftDirty || await ask(t('¿Cerrar el editor? La entrada queda guardada en este ordenador y podrás recuperarla desde «Redes».'))) {
     if (draftDirty) { await autosaveNow(); showRecoverBanner(); }
     $('#editor').classList.add('hidden'); document.body.classList.remove('editing'); updateCount();
   }
@@ -369,7 +380,7 @@ async function pasteImages(files) {
   toast(files.length === 1 ? t('Subiendo la imagen pegada…') : t('Subiendo {n} imágenes pegadas…', { n: files.length }));
   const ups = [];
   for (const f of files) {
-    try { ups.push(await window.api.uploadPasted(new Uint8Array(await f.arrayBuffer()), f.name || '', f.type || 'image/png')); } catch (e) { toast(e.message, true); }
+    try { ups.push(await window.api.uploadPasted(new Uint8Array(await f.arrayBuffer()), f.name || '', f.type || 'image/png')); } catch (e) { toastError(e); }
   }
   if (!ups.length) return;
   draft.extraMedia = [...(draft.extraMedia || []), ...ups];
@@ -722,7 +733,7 @@ async function openHistory() {
   document.body.appendChild(scrim);
   prev.innerHTML = `<p class="hist-msg">${t('Cargando versiones…')}</p>`;
   let revs;
-  try { revs = await window.api.postRevisions(draft.postId, draft.type); } catch (e) { close(); return toast(e.message || String(e), true); }
+  try { revs = await window.api.postRevisions(draft.postId, draft.type); } catch (e) { close(); return toastError(e); }
   if (!scrim.isConnected) return;
   if (!revs.length) { prev.innerHTML = `<p class="hist-msg">${isPageDraft() ? t('WordPress aún no ha guardado versiones anteriores de esta página.') : t('WordPress aún no ha guardado versiones anteriores de esta entrada.')}</p>`; scrim.classList.add('empty'); return; }
   const curTexts = histBlockTexts(draft.blocks), curWords = curTexts.join(' ').split(/\s+/).filter(Boolean).length;

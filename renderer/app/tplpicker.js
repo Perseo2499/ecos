@@ -85,4 +85,4 @@ async function saveAsTemplate() {
   if (typeof renderBlockTemplates === 'function') renderBlockTemplates();
   toast(t('Plantilla «{p}» guardada (sin fotos ni título)', { p: tp.name }));
 }
-$('#d-tpl-save').onclick = async () => { try { await saveAsTemplate(); } catch (e) { toast(e.message, true); } };
+$('#d-tpl-save').onclick = async () => { try { await saveAsTemplate(); } catch (e) { toastError(e); } };

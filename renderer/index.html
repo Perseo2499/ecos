@@ -12,7 +12,7 @@
   <div class="brand"><span class="logo"><img src="assets/logo-mark.svg" alt=""></span><b>Ecos</b></div>
   <nav class="tabs">
     <button data-tab="home" class="active"><span class="ms">home</span><span data-i18n>Inicio</span></button>
-    <button data-tab="posts"><span class="ms">dynamic_feed</span><span data-i18n>Publicaciones</span></button>
+    <button data-tab="posts"><span class="ms">dynamic_feed</span><span data-i18n>Redes</span></button>
     <button data-tab="blog"><span class="ms">article</span><span data-i18n>Blog</span></button>
     <button data-tab="connections"><span class="ms">hub</span><span data-i18n>Conexiones</span></button>
     <button data-tab="settings"><span class="ms">settings</span><span data-i18n>Ajustes</span></button>
@@ -251,7 +251,8 @@
 
   <!-- ================================ BLOG ================================ -->
   <section id="tab-blog" class="tab">
-    <div class="row filters">
+    <div class="b-head">
+    <div class="row b-tabs">
       <div class="seg" id="b-type">
         <button data-type="post" class="active"><span class="ms">article</span><span data-i18n>Entradas</span></button>
         <button data-type="page"><span class="ms">description</span><span data-i18n>Páginas</span></button>
@@ -259,6 +260,8 @@
         <button data-type="media"><span class="ms">photo_library</span><span data-i18n>Medios</span></button>
         <button data-type="structure"><span class="ms">account_tree</span><span data-i18n>Estructura</span></button>
       </div>
+    </div>
+    <div class="row b-filters">
       <select id="b-status">
         <option value="any" data-i18n>Todos los estados</option>
         <option value="publish" data-i18n>Publicadas</option>
@@ -269,8 +272,24 @@
         <option value="trash" data-i18n>Papelera</option>
       </select>
       <div class="field search"><span class="ms">search</span><input id="b-search" type="search" data-i18n-ph placeholder="Buscar…"></div>
+      <div id="b-range" class="b-range">
+        <select id="b-preset" data-i18n-title title="Entradas de un periodo">
+          <option value="all" data-i18n>Todas las fechas</option>
+          <option value="month" data-i18n>Este mes</option>
+          <option value="lastmonth" data-i18n>Mes pasado</option>
+          <option value="3m" data-i18n>Últimos 3 meses</option>
+          <option value="year" data-i18n>Este año</option>
+          <option value="custom" data-i18n>De una fecha a otra…</option>
+        </select>
+        <span id="b-dates" class="b-dates hidden">
+          <label class="b-date"><span data-i18n>Desde</span><input type="date" id="b-from"></label>
+          <label class="b-date"><span data-i18n>Hasta</span><input type="date" id="b-to"></label>
+        </span>
+        <button id="b-range-clear" class="btn text icon-only hidden" data-i18n-title title="Quitar el filtro de fechas"><span class="ms">close</span></button>
+      </div>
+      <button id="b-health-btn" class="btn tonal b-health-btn hidden" aria-expanded="false" aria-controls="b-health"><span class="ms">fact_check</span><span data-i18n>Revisión</span><span id="b-health-badge" class="b-badge hidden"></span></button>
+      <button id="b-find" class="btn text icon-only hidden" data-i18n-title title="Buscar y reemplazar"><span class="ms">find_replace</span></button>
       <button id="b-refresh" class="btn text icon-only" data-i18n-title title="Actualizar"><span class="ms">refresh</span></button>
-      <button id="b-find" class="btn text hidden"><span class="ms">find_replace</span><span data-i18n>Buscar y reemplazar</span></button>
       <span class="spacer"></span>
       <span class="b-new-wrap" id="b-new-wrap"><button id="b-new" class="btn filled"><span class="ms">add</span><span data-i18n>Nueva</span></button>
         <div id="b-new-menu" class="b-new-menu hidden">
@@ -279,29 +298,18 @@
           <button data-new="wp"><span class="ms">open_in_new</span><span data-i18n>Abrir en WordPress</span></button>
         </div></span>
     </div>
-    <div id="b-range" class="b-range">
-      <span class="ms">date_range</span>
-      <select id="b-preset" data-i18n-title title="Entradas de un periodo">
-        <option value="all" data-i18n>Todas las fechas</option>
-        <option value="month" data-i18n>Este mes</option>
-        <option value="lastmonth" data-i18n>Mes pasado</option>
-        <option value="3m" data-i18n>Últimos 3 meses</option>
-        <option value="year" data-i18n>Este año</option>
-        <option value="custom" data-i18n>De una fecha a otra…</option>
-      </select>
-      <label class="b-date"><span data-i18n>Desde</span><input type="date" id="b-from"></label>
-      <label class="b-date"><span data-i18n>Hasta</span><input type="date" id="b-to"></label>
-      <button id="b-range-clear" class="btn text icon-only hidden" data-i18n-title title="Quitar el filtro de fechas"><span class="ms">close</span></button>
-      <span class="spacer"></span>
-      <button id="b-selrange" class="btn tonal"><span class="ms">select_all</span><span id="b-selrange-l"></span></button>
     </div>
     <div id="b-health" class="b-health hidden"></div>
     <div id="b-bulk" class="b-bulk hidden">
-      <label class="b-check" data-i18n-title title="Seleccionar todas las de esta página"><input type="checkbox" id="b-all"></label>
       <span id="b-count" class="b-count"></span>
       <span id="b-bulk-actions" class="b-bulk-actions"></span>
       <span class="spacer"></span>
       <button id="b-clear" class="btn text icon-only" data-i18n-title title="Quitar la selección"><span class="ms">close</span></button>
+    </div>
+    <div id="b-listhead" class="b-listhead hidden">
+      <label class="b-check" data-i18n-title title="Seleccionar todas las de esta página"><input type="checkbox" id="b-all"><span data-i18n>Seleccionar todo</span></label>
+      <span class="spacer"></span>
+      <button id="b-selrange" class="btn text small"><span class="ms">select_all</span><span id="b-selrange-l"></span></button>
     </div>
     <div id="b-list" class="blog-list"></div>
     <div id="b-structure" class="st-wrap hidden"></div>
@@ -821,6 +829,7 @@
 </div>
 <div id="toast"></div>
 <script src="i18n.js"></script>
+<script src="errors.js"></script>
 <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
 <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
 <script src="carousel.js"></script>

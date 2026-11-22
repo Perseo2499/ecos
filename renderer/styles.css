@@ -2214,3 +2214,64 @@ span.pv-pill[data-pill]:hover { background: var(--primary); color: var(--on-prim
 .dlg.fbs .sc-body { text-align: left; }
 .dlg.fbs .dlg-actions { justify-content: flex-end; gap: 8px; }
 .dlg.fbs .field label { display: block; margin-bottom: 4px; }
+/* ================= Interfaz 2.28: cabecera del Blog compacta, menú «⋯», avisos y errores ================= */
+/* Cabecera del Blog: una fila de pestañas y una de filtros, fijas bajo la barra superior */
+.b-head { position: sticky; top: var(--appbar-h, 64px); z-index: 15; display: flex; flex-direction: column; gap: 8px; margin: 0 -24px 14px; padding: 10px 24px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent); backdrop-filter: blur(18px) saturate(1.4); }
+.b-head .row { margin: 0; gap: 8px; }
+.b-filters > select, .b-range select { width: auto; min-width: 150px; flex: none; border-radius: var(--r-full); }
+.b-filters .field.search { flex: 1 1 180px; min-width: 150px; max-width: 320px; }
+.b-range { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; background: none; box-shadow: none; }
+.b-range.active { box-shadow: none; }
+.b-range.active #b-preset { box-shadow: inset 0 0 0 2px var(--primary); }
+.b-dates { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.b-health-btn { position: relative; width: auto; margin: 0; gap: 6px; }
+.b-health-btn.open { box-shadow: inset 0 0 0 2px var(--primary); }
+.b-health-btn.busy .ms:first-child { animation: pulse 1.2s ease-in-out infinite; }
+.b-badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 99px; background: #e8a33d; color: #1c1b1f; font-size: 12px; font-weight: 700; line-height: 1; }
+.b-badge.hidden { display: none; }
+#b-health { margin: 0 0 12px; }
+/* Cabecera de la lista: «Seleccionar todo» y «Seleccionar las N» */
+.b-listhead { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; padding: 2px 14px 2px 10px; }
+.b-listhead .b-check { display: inline-flex; width: auto; gap: 10px; font-size: 13px; font-weight: 600; color: var(--on-surface-var); }
+.b-listhead .btn.small { width: auto; margin: 0; height: 34px; padding: 0 12px; }
+.b-bulk:not(.on) { display: none; }
+/* Filas: acción principal + menú «⋯» */
+.b-actions { align-items: center; gap: 6px; }
+.b-actions .b-more { width: 36px; padding: 0; flex: none; }
+.b-actions .b-more.working { opacity: .5; }
+.pop-menu { position: fixed; z-index: 80; min-width: 250px; max-width: calc(100vw - 16px); padding: 6px; border-radius: var(--r-m); border: 1px solid var(--outline-var);
+  background: var(--surface-c-high); box-shadow: var(--e3); animation: pop .14s var(--ease, ease-out); }
+.pop-it { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 12px; border: 0; border-radius: 8px; background: none; color: var(--on-surface);
+  font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.pop-it .ms { font-size: 20px; color: var(--on-surface-var); }
+.pop-it:hover, .pop-it:focus-visible { background: color-mix(in srgb, var(--on-surface) 10%, transparent); outline: none; }
+.pop-it:focus-visible { box-shadow: inset 0 0 0 2px var(--primary); }
+.pop-it.danger, .pop-it.danger .ms { color: var(--error); }
+.pop-sep { height: 1px; margin: 6px 4px; background: var(--outline-var); }
+/* Avisos: abajo a la derecha, hasta 3 apilados, sin tapar las barras flotantes */
+#toast { position: fixed; left: auto; right: 20px; top: auto; bottom: 20px; transform: none; width: min(400px, calc(100vw - 32px)); max-width: none; padding: 0;
+  display: flex; flex-direction: column; gap: 8px; background: none; box-shadow: none; border-radius: 0; opacity: 1; pointer-events: none; transition: none; z-index: 70; white-space: normal; cursor: default; }
+body:has(.selbar.show) #toast { bottom: 96px; }
+body:has(.tab.active .b-bulk.on) #toast { bottom: 120px; }
+.toast-item { display: flex; align-items: flex-start; gap: 10px; padding: 12px 8px 12px 14px; border-radius: var(--r-m); background: var(--on-surface); color: var(--surface);
+  box-shadow: var(--e3); pointer-events: auto; animation: toast-in .28s var(--spring, ease-out); font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.toast-item.out { opacity: 0; transform: translateX(24px); transition: all .2s ease-in; }
+.toast-item.error { background: var(--error-container); color: var(--on-surface); }
+.toast-ic { font-size: 20px; margin-top: 1px; color: color-mix(in srgb, var(--primary) 60%, var(--surface)); }
+.toast-item.error .toast-ic { color: var(--error); }
+.toast-body { flex: 1; min-width: 0; white-space: pre-line; }
+.toast-act { flex: none; align-self: center; border: 0; background: none; padding: 6px 10px; border-radius: 8px; font: inherit; font-weight: 700; cursor: pointer; color: color-mix(in srgb, var(--primary) 55%, var(--surface)); }
+.toast-item.error .toast-act { color: var(--on-surface); text-decoration: underline; }
+.toast-act:hover { background: color-mix(in srgb, currentColor 14%, transparent); }
+.toast-x { flex: none; align-self: flex-start; display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 50%; background: none; color: inherit; opacity: .7; cursor: pointer; }
+.toast-x:hover, .toast-x:focus-visible { opacity: 1; background: color-mix(in srgb, currentColor 14%, transparent); }
+.toast-x .ms { font-size: 18px; }
+@keyframes toast-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+/* Errores en español con el detalle técnico plegado */
+.err-box { flex-direction: column; gap: 10px; text-align: center; }
+.err-box .btn { width: auto; margin: 0; }
+.err-detail { margin-top: 6px; font-size: 12px; opacity: .85; text-align: left; }
+.err-detail summary { cursor: pointer; }
+.err-detail code { display: block; margin-top: 4px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11.5px; }
+@media (max-width: 720px) { #toast { right: 12px; left: 12px; width: auto; } }

@@ -1,4 +1,4 @@
-// Ecos · Pantalla «Publicaciones»: lista, selección y resumen de un periodo.
+// Ecos · Pantalla «Redes»: lista, selección y resumen de un periodo.
 // (Comparte el ámbito global con los demás archivos de renderer/app, que se cargan en orden desde index.html.)
 
 // ---------------------------------------------------------------- Publicaciones: lista
@@ -195,7 +195,7 @@ window.addEventListener('drop', async (e) => {
     if ($('.sources button.active').dataset.src === 'shots') return importShots(media.filter((p) => !/\.(mp4|mov)$/i.test(p)));
     manualFiles = manualFiles.concat(media); renderManualCount(); showSource('manual');
     toast(t('{n} archivo(s) añadidos. Escribe el texto y pulsa «Añadir a la lista».', { n: media.length }));
-  } catch (err) { toast(err.message, true); }
+  } catch (err) { toastError(err); }
 });
 
 // ---------------------------------------------------------------- Resumen de un periodo

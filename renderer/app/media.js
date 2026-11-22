@@ -161,14 +161,14 @@ function mediaGrid(host, o = {}) {
       }
     } catch (e) {
       if (gen !== st.gen) return;
-      st.err = e.message; st.items = [];
+      st.err = friendlyError(e).text; st.items = [];
     }
     st.loading = false; render();
   }
   // Uso de cada medio (en segundo plano; la rejilla se pinta antes)
   function usageReady(force) {
     if (!o.usage) return Promise.resolve();
-    return window.api.mediaUsage(!!force).then((u) => { st.usage = u || {}; st.usageErr = false; }).catch((e) => { st.usage = null; st.usageErr = true; toast(t('No se pudo comprobar qué fotos se usan: {e}', { e: e.message }), true); });
+    return window.api.mediaUsage(!!force).then((u) => { st.usage = u || {}; st.usageErr = false; }).catch((e) => { st.usage = null; st.usageErr = true; toast(t('No se pudo comprobar qué fotos se usan: {e}', { e: friendlyError(e).text }), true); });
   }
   async function reload(force) {
     st.pool = null; st.force = !!force;
@@ -419,7 +419,7 @@ function upscaleDialog(m, remaining) {
       q('[data-r="use"]').classList.remove('hidden');
       if (remaining > 0) q('[data-r="next"]').classList.remove('hidden');
       setClip(50);
-    }).catch((e) => { if (!gone) { toast(e.message, true); finish('stop'); } });
+    }).catch((e) => { if (!gone) { toastError(e); finish('stop'); } });
   });
 }
 

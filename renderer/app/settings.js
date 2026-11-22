@@ -136,7 +136,7 @@ function renderUpdate(st) {
     latest: t('Tienes la última versión.'),
     downloading: t('Descargando la versión {v}… {p} %', { v: st.version, p: st.percent || 0 }),
     ready: t('La versión {v} está lista. Se instalará al cerrar Ecos, o ahora mismo si reinicias.', { v: st.version }),
-    error: t('No se pudo comprobar si hay actualizaciones: {e}', { e: st.message }),
+    error: t('No se pudo comprobar si hay actualizaciones: {e}', { e: friendlyError(st.message).text }),
     unsupported: st.reason === 'portable' ? t('La versión portable no se actualiza sola. Usa el instalador para recibir actualizaciones automáticas.') : t('Las actualizaciones solo funcionan en la versión instalada.'),
   };
   $('#update-detail').textContent = texts[st.state] || '';

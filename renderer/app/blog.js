@@ -50,7 +50,7 @@ function renderCalendar() {
       tray = r.items.slice().sort((a, b) => new Date(b.modified || 0) - new Date(a.modified || 0))
         .map((it) => ({ id: it.id, status: 'draft', title: decodeEntities(it.title), thumb: it.image || '', fromTray: true, draggable: canDrag }));
       drawTray();
-    } catch (e) { $('#cal-tray-list').innerHTML = `<p class="hint">${escHtml(e.message)}</p>`; }
+    } catch (e) { $('#cal-tray-list').innerHTML = `<p class="hint">${escHtml(friendlyError(e).text)}</p>`; }
   })();
 
   const when = (d) => d.toLocaleDateString(prefs().lang === 'en' ? 'en-GB' : 'es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -90,7 +90,7 @@ function renderCalendar() {
       if (item.fromTray) { list.splice(list.indexOf(entry), 1); tray.splice(Math.max(trayAt, 0), 0, item); drawTray(); }
       else { Object.assign(item, was); restyle(item); }
       refresh();
-      toast(t('No se pudo cambiar la fecha: {m}', { m: e.message }), true);
+      toast(t('No se pudo cambiar la fecha: {m}', { m: friendlyError(e).text }), true);
     }
   }
 
@@ -134,7 +134,57 @@ async function loadBlog() {
     const r = await window.api.blogList({ ...blogFilters(), page: blog.page, number: blog.per });
     blog.loaded = true; blog.found = r.found; syncRange(); syncFindBtn();
     renderBlog(r.items); bhSync();
-  } catch (e) { list.innerHTML = `<div class="empty"><span class="ms">cloud_off</span><span>${escHtml(e.message)}</span></div>`; }
+  } catch (e) { errBox(list, e, loadBlog); }
+}
+// Menú emergente «⋯» (accesible con teclado: flechas, Inicio/Fin, Esc; se cierra al pulsar fuera)
+let popEl = null;
+function closePop(refocus) {
+  if (!popEl) return;
+  const { el, anchor, off } = popEl; popEl = null; off(); el.remove();
+  anchor.setAttribute('aria-expanded', 'false');
+  if (refocus) anchor.focus();
+}
+function openPop(anchor, items) {
+  if (popEl && popEl.anchor === anchor) return closePop(true);
+  closePop();
+  const el = document.createElement('div');
+  el.className = 'pop-menu'; el.setAttribute('role', 'menu');
+  items.forEach((x) => {
+    if (x.sep) { const d = document.createElement('div'); d.className = 'pop-sep'; d.setAttribute('role', 'separator'); el.appendChild(d); return; }
+    const b = document.createElement('button');
+    b.className = 'pop-it' + (x.danger ? ' danger' : ''); b.setAttribute('role', 'menuitem'); b.tabIndex = -1;
+    b.innerHTML = `<span class="ms">${x.icon || ''}</span><span class="pop-l"></span>`;
+    b.querySelector('.pop-l').textContent = x.label;
+    b.onclick = () => { closePop(false); x.fn(); };
+    el.appendChild(b);
+  });
+  document.body.appendChild(el);
+  const r = anchor.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
+  el.style.left = Math.max(8, Math.min(r.right - w, innerWidth - w - 8)) + 'px';
+  el.style.top = (r.bottom + 4 + h > innerHeight - 8 ? Math.max(8, r.top - h - 4) : r.bottom + 4) + 'px';
+  anchor.setAttribute('aria-expanded', 'true');
+  const its = () => [...el.querySelectorAll('.pop-it')];
+  const down = (e) => { if (!el.contains(e.target) && !anchor.contains(e.target)) closePop(false); };
+  const key = (e) => {
+    const l = its(), i = l.indexOf(document.activeElement);
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closePop(true); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); l[(i + 1) % l.length].focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); l[(i - 1 + l.length) % l.length].focus(); }
+    else if (e.key === 'Home') { e.preventDefault(); l[0].focus(); }
+    else if (e.key === 'End') { e.preventDefault(); l[l.length - 1].focus(); }
+    else if (e.key === 'Tab') closePop(false);
+  };
+  const away = () => closePop(false);
+  document.addEventListener('mousedown', down, true);
+  el.addEventListener('keydown', key);
+  window.addEventListener('resize', away); window.addEventListener('scroll', away, true);
+  popEl = { el, anchor, off: () => { document.removeEventListener('mousedown', down, true); window.removeEventListener('resize', away); window.removeEventListener('scroll', away, true); } };
+  its()[0]?.focus();
+}
+// Ejecuta una acción del menú con el botón «⋯» ocupado (y los errores, en un aviso)
+async function runPopItem(anchor, fn) {
+  anchor.disabled = true; anchor.classList.add('working');
+  try { await fn(); } catch (e) { toastError(e); } finally { anchor.disabled = false; anchor.classList.remove('working'); }
 }
 function renderBlog(items) {
   const list = $('#b-list');
@@ -176,36 +226,48 @@ function renderBlog(items) {
     };
     row.querySelector('.b-ex').textContent = decodeEntities(it.excerpt);
     const actions = row.querySelector('.b-actions');
-    const btn = (label, fn, cls = '') => {
+    const btn = (label, fn, cls = 'text') => {
       const b = document.createElement('button');
-      b.className = 'btn ' + (cls === 'primary' ? 'tonal' : cls === 'danger' ? 'text danger' : 'text');
+      b.className = 'btn ' + cls;
       b.textContent = label; b.onclick = () => busy(b, fn); actions.appendChild(b);
     };
-    // cualquier entrada se puede editar en Ecos (el HTML antiguo se convierte en bloques)
-    if (it.status !== 'trash') btn(t('Editar en Ecos'), () => openFromWp(it.id, null, it.type === 'page' ? 'page' : 'post'), 'primary');
-    if (it.status !== 'trash') btn(it.type === 'page' ? t('Convertir en página de Ecos') : t('Convertir en entrada de Ecos'), () => openFromWp(it.id, null, it.type === 'page' ? 'page' : 'post', { convert: true }));
-    if (it.status !== 'trash') btn(t('Editar en WordPress'), async () => window.api.open(await window.api.blogEditUrl(it.id, it.type)));
-    if (it.status !== 'trash' && CFG.wpMode === 'selfhosted') btn(t('Duplicar'), () => duplicateItems([it]));
+    const kind = it.type === 'page' ? 'page' : 'post';
+    const trashed = it.status === 'trash';
+    const doStatus = async (st, msg) => { exported = await window.api.blogSetStatus(it.id, st, it.type); toast(msg); loadBlog(); renderFeed(); };
+    // A la vista: la acción principal (Editar en Ecos) y «Ver» si está publicada; el resto, en el menú «⋯»
+    // (cualquier entrada se puede editar en Ecos: el HTML antiguo se convierte en bloques)
+    if (!trashed) btn(t('Editar'), () => openFromWp(it.id, null, kind), 'tonal');
+    else btn(t('Restaurar como borrador'), () => doStatus('draft', t('Restaurada como borrador')), 'tonal');
     if (it.status === 'publish') btn(t('Ver'), async () => window.api.open(it.url));
-    if (['draft', 'pending', 'private'].includes(it.status)) btn(t('Publicar'), async () => {
+    const menu = [];
+    if (!trashed) menu.push({ icon: 'transform', label: it.type === 'page' ? t('Convertir en página de Ecos') : t('Convertir en entrada de Ecos'), fn: () => openFromWp(it.id, null, kind, { convert: true }) });
+    if (!trashed) menu.push({ icon: 'open_in_new', label: t('Editar en WordPress'), fn: async () => window.api.open(await window.api.blogEditUrl(it.id, it.type)) });
+    if (!trashed && CFG.wpMode === 'selfhosted') menu.push({ icon: 'content_copy', label: t('Duplicar'), fn: () => duplicateItems([it]) });
+    if (['draft', 'pending', 'private'].includes(it.status)) menu.push({ icon: 'public', label: t('Publicar'), fn: async () => {
       if (!await ask(t('¿Publicar «{x}»? Será visible en la web.', { x: title }))) return;
-      exported = await window.api.blogSetStatus(it.id, 'publish', it.type); toast(t('Publicada')); loadBlog(); renderFeed();
-    }, 'primary');
-    if (it.status === 'publish') btn(t('Pasar a borrador'), async () => {
+      await doStatus('publish', t('Publicada'));
+    } });
+    if (it.status === 'publish') menu.push({ icon: 'edit_note', label: t('Pasar a borrador'), fn: async () => {
       if (!await ask(t('¿Retirar «{x}» de la web y dejarla como borrador?', { x: title }), { danger: true })) return;
-      exported = await window.api.blogSetStatus(it.id, 'draft', it.type); toast(t('Ahora es un borrador')); loadBlog(); renderFeed();
-    });
-    if (it.status === 'trash') btn(t('Restaurar como borrador'), async () => { exported = await window.api.blogSetStatus(it.id, 'draft', it.type); toast(t('Restaurada como borrador')); loadBlog(); renderFeed(); });
-    else btn(t('Papelera'), async () => {
+      await doStatus('draft', t('Ahora es un borrador'));
+    } });
+    menu.push({ sep: true });
+    if (!trashed) menu.push({ icon: 'delete', danger: true, label: t('Papelera'), fn: async () => {
       if (!await ask(t('¿Mover «{x}» a la papelera? Podrás recuperarla durante 30 días.', { x: title }), { danger: true })) return;
       exported = await window.api.blogTrash(it.id, it.type); toast(t('Movida a la papelera')); loadBlog(); renderFeed();
-    }, 'danger');
+    } });
     // Borrar para siempre (también sin pasar por la papelera); pide confirmación dos veces si está publicada
-    btn(t('Borrar definitivamente'), async () => {
+    menu.push({ icon: 'delete_forever', danger: true, label: t('Borrar definitivamente'), fn: async () => {
       if (!await ask(t('¿Borrar «{x}» definitivamente? Desaparecerá de tu web y de la papelera, y no se podrá recuperar. (Las fotos se quedan en la biblioteca de medios.)', { x: title }), { danger: true, ok: t('Borrar definitivamente') })) return;
       if (it.status === 'publish' && !await ask(t('«{x}» está publicada y visible en la web. ¿Seguro que quieres borrarla para siempre?', { x: title }), { danger: true, ok: t('Sí, borrarla') })) return;
       exported = await window.api.blogDelete(it.id, it.type); toast(t('Borrada definitivamente')); loadBlog(); renderFeed();
-    }, 'danger');
+    } });
+    const more = document.createElement('button');
+    more.className = 'btn text icon-only b-more'; more.setAttribute('aria-haspopup', 'menu'); more.setAttribute('aria-expanded', 'false');
+    more.setAttribute('aria-label', t('Más acciones')); more.title = t('Más acciones');
+    more.innerHTML = '<span class="ms">more_horiz</span>';
+    more.onclick = (e) => { e.stopPropagation(); openPop(more, menu.map((m) => (m.sep ? m : { ...m, fn: () => runPopItem(more, m.fn) }))); };
+    actions.appendChild(more);
     list.appendChild(row);
   }
 }
@@ -215,7 +277,7 @@ $$('#b-type button').forEach((b) => b.onclick = async () => {
   if (b.dataset.type !== 'post') blog.problem = null;
   const st = b.dataset.type === 'structure', cal = b.dataset.type === 'calendar', med = b.dataset.type === 'media';
   // Estructura y Calendario: en lugar de la lista
-  $$('#b-status, #tab-blog .field.search, #b-refresh, #b-new-wrap, #b-list, #b-health, #b-bulk, #b-range, #tab-blog .pager').forEach((x) => x.classList.toggle('hidden', st || cal || med));
+  $$('#tab-blog .b-filters, #b-status, #tab-blog .field.search, #b-refresh, #b-new-wrap, #b-list, #b-health, #b-health-btn, #b-bulk, #b-listhead, #b-range, #tab-blog .pager').forEach((x) => x.classList.toggle('hidden', st || cal || med));
   $('#b-structure').classList.toggle('hidden', !st);
   $('#b-calendar').classList.toggle('hidden', !cal);
   $('#b-media').classList.toggle('hidden', !med);
@@ -259,7 +321,7 @@ async function duplicateItems(items) {
   const done = [], errors = [];
   for (const it of items) {
     try { done.push(await window.api.blogDuplicate(it.id, it.type === 'page' ? 'page' : 'post')); }
-    catch (e) { errors.push(`«${decodeEntities(it.title)}»: ${e.message}`); }
+    catch (e) { errors.push(`«${decodeEntities(it.title)}»: ${friendlyError(e).text}`); }
   }
   loadBlog();
   if (errors.length) toast(t('{e} con error: {m}', { e: errors.length, m: errors.slice(0, 2).join(' · ') }), true);
@@ -275,7 +337,8 @@ let bItems = [], bLast = -1;
 function renderBulk() {
   const n = bsel.size, bar = $('#b-bulk');
   const listView = blog.type === 'post' || blog.type === 'page'; // la selección solo tiene sentido en la lista de entradas o páginas
-  bar.classList.toggle('hidden', !listView || (!bItems.length && !n));
+  bar.classList.toggle('hidden', !listView || !n); // la barra flotante solo sale con algo seleccionado
+  $('#b-listhead').classList.toggle('hidden', !listView || !bItems.length);
   bar.classList.toggle('on', n > 0);
   $$('#b-list .b-row').forEach((r) => { const on = bsel.has(Number(r.dataset.id)); r.classList.toggle('sel', on); const c = r.querySelector('.b-check input'); if (c) c.checked = on; });
   const here = bItems.filter((x) => bsel.has(x.id)).length;
@@ -366,6 +429,9 @@ async function runBulk(kind) {
   const errors = [];
   let done = 0;
   const label = $('#b-count');
+  // Estado de cada entrada antes de tocarla (para poder deshacer)
+  const before = new Map(items.map((i) => [i.id, { id: i.id, type: i.type, status: i.status, cats: [...(i.categories || [])], title: i.title }]));
+  const okIds = [];
   if (kind === 'normalize') {
     label.textContent = t('Normalizando {n}…', { n: items.length });
     const r = await window.api.backupNormalize(items.map((i) => i.id));
@@ -379,14 +445,36 @@ async function runBulk(kind) {
         else if (kind === 'trash') exported = await window.api.blogTrash(it.id, it.type);
         else if (kind === 'delete') exported = await window.api.blogDelete(it.id, it.type);
         else if (kind === 'cat-add' || kind === 'cat-del') await window.api.blogCategory(it.id, cat, kind === 'cat-add');
-        done++;
-      } catch (e) { errors.push(`«${decodeEntities(it.title)}»: ${e.message}`); }
+        done++; okIds.push(it.id);
+      } catch (e) { errors.push(`«${decodeEntities(it.title)}»: ${friendlyError(e).text}`); }
     }
   }
-  toast(t('Hecho en {n} entradas.', { n: done }) + (errors.length ? ' ' + t('{e} con error: {m}', { e: errors.length, m: errors.slice(0, 2).join(' · ') }) : ''), errors.length > 0);
+  const msg = t('Hecho en {n} entradas.', { n: done }) + (errors.length ? ' ' + t('{e} con error: {m}', { e: errors.length, m: errors.slice(0, 2).join(' · ') }) : '')
+    + (kind === 'normalize' && done ? ' ' + t('Si no te convence, puedes volver atrás con el Historial de cada entrada.') : '');
+  const undo = bulkUndoFor(kind, cat, okIds.map((id) => before.get(id)));
+  toast(msg, errors.length > 0, undo ? { action: { label: t('Deshacer'), onClick: undo }, duration: 8000 } : undefined);
   bsel.clear();
   loadBlog(); renderFeed();
   if (['cat-add', 'cat-del', 'trash', 'delete', 'restore'].includes(kind)) bhRefresh(true);
+}
+// Deshacer una acción en lote: devuelve la función que revierte, o null si esa acción no se puede deshacer así
+// (borrar definitivamente y normalizar no). snap = estado anterior de cada entrada que se cambió.
+function bulkUndoFor(kind, cat, snap) {
+  if (!snap.length || !['trash', 'draft', 'publish', 'restore', 'cat-add', 'cat-del'].includes(kind)) return null;
+  return async () => {
+    const errs = []; let n = 0;
+    for (const s of snap) {
+      try {
+        if (kind === 'cat-add') { if (!s.cats.includes(cat)) await window.api.blogCategory(s.id, cat, false); }
+        else if (kind === 'cat-del') { if (s.cats.includes(cat)) await window.api.blogCategory(s.id, cat, true); }
+        else if (kind === 'restore' || s.status === 'trash') exported = await window.api.blogTrash(s.id, s.type);
+        else exported = await window.api.blogSetStatus(s.id, s.status, s.type);
+        n++;
+      } catch (e) { errs.push(`«${decodeEntities(s.title)}»: ${friendlyError(e).text}`); }
+    }
+    toast(t('Deshecho en {n} entradas.', { n }) + (errs.length ? ' ' + t('{e} con error: {m}', { e: errs.length, m: errs.slice(0, 2).join(' · ') }) : ''), errs.length > 0);
+    loadBlog(); renderFeed(); bhRefresh(true);
+  };
 }
 
 // ---------------------------------------------------------------- Buscar y reemplazar en todo el blog (WordPress propio)
@@ -465,12 +553,13 @@ function applyPreset(v) {
   else if (v === 'year') { from = isoDay(new Date(y, 0, 1)); to = isoDay(now); }
   else if (/^y\d{4}$/.test(v)) { const k = Number(v.slice(1)); from = `${k}-01-01`; to = `${k}-12-31`; }
   if (v !== 'custom') { $('#b-from').value = from; $('#b-to').value = to; }
-  else if (!$('#b-from').value) $('#b-from').focus();
+  else { $('#b-dates').classList.remove('hidden'); if (!$('#b-from').value) $('#b-from').focus(); }
 }
 function syncRange() {
   const on = !!($('#b-from').value || $('#b-to').value);
   $('#b-range').classList.toggle('active', on);
   $('#b-range-clear').classList.toggle('hidden', !on);
+  $('#b-dates').classList.toggle('hidden', $('#b-preset').value !== 'custom'); // las dos fechas solo con «De una fecha a otra…»
   $('#b-selrange-l').textContent = blog.found ? t(on ? 'Seleccionar las {n} de estas fechas' : 'Seleccionar las {n}', { n: blog.found }) : t('Seleccionar todas');
   $('#b-selrange').disabled = !blog.found;
 }
@@ -515,7 +604,7 @@ $('#b-per').onchange = (e) => {
 // con «Ver» (filtra la lista), «Seleccionar todas» y arreglos rápidos (categoría, sugerencia con IA, primera foto).
 const bh = { data: null, loading: false, err: '' };
 const bhOn = () => blog.type === 'post' && CFG.wpMode === 'selfhosted';
-const bhPref = () => { try { const v = localStorage.getItem('ecos.bh.open'); return v === null ? null : v === '1'; } catch { return null; } };
+const bhPref = () => { try { const v = localStorage.getItem('ecos.bh.open'); return v === null ? null : v === '1'; } catch { return bh.openMem ?? null; } };
 const bhTitle = (x) => decodeEntities(x.title || '');
 // Chips de aviso de cada fila de la lista
 function bhChips(it) {
@@ -526,8 +615,8 @@ function bhChips(it) {
   return h;
 }
 function bhSync() {
-  $('#b-health').classList.toggle('hidden', !bhOn());
-  if (!bhOn()) return;
+  $('#b-health-btn').classList.toggle('hidden', !bhOn());
+  if (!bhOn()) { $('#b-health').classList.add('hidden'); return; }
   if (!bh.data && !bh.loading) return bhRefresh(false);
   bhRender();
 }
@@ -535,7 +624,7 @@ const bhIds = (kind) => (bh.data ? (kind === 'nocat' ? bh.data.noCat : bh.data.n
 async function bhRefresh(force) {
   if (!bhOn() || bh.loading) return;
   bh.loading = true; bh.err = ''; bhRender();
-  try { const r = await window.api.blogHealth(!!force); bh.data = { total: 0, at: Date.now(), ...(r || {}), noCat: r?.noCat || [], noImg: r?.noImg || [] }; } catch (e) { bh.err = e.message; }
+  try { const r = await window.api.blogHealth(!!force); bh.data = { total: 0, at: Date.now(), ...(r || {}), noCat: r?.noCat || [], noImg: r?.noImg || [] }; } catch (e) { bh.err = friendlyError(e).text; }
   bh.loading = false; bhRender();
   // si la lista está filtrada por un aviso, se pone al día
   if (blog.problem && bh.data) {
@@ -550,8 +639,13 @@ function bhRender() {
   const nc = d ? d.noCat.length : 0, ni = d ? d.noImg.length : 0, np = d ? d.noImg.filter((x) => x.photo).length : 0;
   const ok = !!d && !nc && !ni;
   const pref = bhPref();
-  const open = pref === null ? !!d && !ok : pref;
+  const open = !!pref; // el panel se despliega con el botón «Revisión» de la cabecera
   box.classList.toggle('ok', ok); box.classList.toggle('open', open); box.classList.toggle('busy', bh.loading);
+  box.classList.toggle('hidden', !open);
+  const hb = $('#b-health-btn'), badge = $('#b-health-badge'), nw = nc + ni;
+  hb.setAttribute('aria-expanded', open ? 'true' : 'false'); hb.classList.toggle('open', open); hb.classList.toggle('has-warn', !!d && !ok); hb.classList.toggle('busy', bh.loading);
+  badge.classList.toggle('hidden', !d || ok); badge.textContent = nw > 99 ? '99+' : String(nw);
+  hb.title = !d ? t('Comprobando todas las entradas…') : ok ? t('Todo en orden · {n} entradas revisadas', { n: d.total }) : t('{n} avisos en la revisión', { n: nw });
   const sum = bh.loading && !d ? t('Comprobando todas las entradas…')
     : bh.err ? t('No se ha podido comprobar: {m}', { m: bh.err })
     : ok ? t('Todo en orden · {n} entradas revisadas', { n: d.total })
@@ -574,11 +668,19 @@ function bhRender() {
       <button class="btn text icon-only" data-bh="reload" title="${escHtml(t('Volver a comprobar') + (when ? ' · ' + when : ''))}"><span class="ms">refresh</span></button>
       <span class="ms bh-chev">expand_more</span></div>${filt}${body ? `<div class="bh-body">${body}</div>` : ''}`;
 }
+function bhToggle() {
+  const open = !bhPref();
+  bh.openMem = open;
+  try { localStorage.setItem('ecos.bh.open', open ? '1' : '0'); } catch { /* sin almacenamiento */ }
+  bhRender();
+  if (open) $('#b-health').scrollIntoView?.({ block: 'nearest' });
+}
+$('#b-health-btn').onclick = bhToggle;
 $('#b-health').addEventListener('click', (e) => {
   const b = e.target.closest('[data-bh]');
   if (!b) return;
   const k = b.dataset.bh;
-  if (k === 'toggle') { if (e.target.closest('button')) return; const open = !$('#b-health').classList.contains('open'); try { localStorage.setItem('ecos.bh.open', open ? '1' : '0'); } catch { /* sin almacenamiento */ } return bhRender(); }
+  if (k === 'toggle') { if (e.target.closest('button')) return; return bhToggle(); }
   if (k === 'reload') return busy(b, () => bhRefresh(true));
   if (k === 'view') { blog.problem = { kind: b.dataset.k, ids: bhIds(b.dataset.k) }; blog.page = 1; bsel.clear(); return loadBlog(); }
   if (k === 'unfilter') { blog.problem = null; blog.page = 1; return loadBlog(); }
@@ -624,7 +726,7 @@ async function bhApplyCats(jobs, btn) {
   let k = 0, done = 0; const errors = [];
   for (const j of jobs) for (const name of j.names) {
     if (btn) btn.textContent = t('{a} de {b}…', { a: ++k, b: total });
-    try { await window.api.blogCategory(j.id, name, true); done++; } catch (e) { errors.push(`${j.id}: ${e.message}`); }
+    try { await window.api.blogCategory(j.id, name, true); done++; } catch (e) { errors.push(`${j.id}: ${friendlyError(e).text}`); }
   }
   return { done, errors };
 }
@@ -721,7 +823,7 @@ async function bhRecommend() {
       const ex = cats.find((c) => c.name.toLowerCase() === name.toLowerCase());
       if (ex) name = ex.name;
       else {
-        try { await window.api.siteCreateCategory({ name }); cats.push({ name }); created++; } catch (e) { errors.push(`«${name}»: ${e.message}`); continue; }
+        try { await window.api.siteCreateCategory({ name }); cats.push({ name }); created++; } catch (e) { errors.push(`«${name}»: ${friendlyError(e).text}`); continue; }
       }
       const r2 = await bhApplyCats([...p.sel].map((id) => ({ id, names: [name] })), ok);
       assigned += r2.done; errors.push(...r2.errors);

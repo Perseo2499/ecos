@@ -160,7 +160,7 @@ window.Cropper = (() => {
         else if (e.key === 'Enter' && !e.target.closest?.('button')) { e.preventDefault(); e.stopPropagation(); accept(); }
       };
       $('[data-r="x"]', d).onclick = () => close(null);
-      $('[data-r="ok"]', d).onclick = () => accept().catch((e) => toast(e.message, true));
+      $('[data-r="ok"]', d).onclick = () => accept().catch((e) => toastError(e));
       d.addEventListener('mousedown', (e) => { if (e.target === d) close(null); });
       document.addEventListener('keydown', key, true);
       window.addEventListener('resize', layout);

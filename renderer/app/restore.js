@@ -56,7 +56,7 @@ async function rsAnalyze(paths) {
   } catch (e) {
     rs.analyzing = false;
     if (gen !== rs.gen || /Cancelado/.test(e.message)) return;
-    rsShow('#rs-pick'); toast(e.message, true);
+    rsShow('#rs-pick'); toastError(e);
   }
 }
 
@@ -132,7 +132,7 @@ function rsRenderRow(key) {
   };
   row.onclick = (e) => {
     if (e.target.dataset.open !== undefined) { e.preventDefault(); if (e.target.dataset.open) window.api.open(e.target.dataset.open); return; }
-    if (e.target.dataset.ecos) { e.preventDefault(); const id = Number(e.target.dataset.ecos); closeRestore().then(() => openFromWp(id).catch((err) => toast(err.message, true))); return; }
+    if (e.target.dataset.ecos) { e.preventDefault(); const id = Number(e.target.dataset.ecos); closeRestore().then(() => openFromWp(id).catch((err) => toastError(err))); return; }
     rs.sel.has(key) ? rs.sel.delete(key) : rs.sel.add(key);
     rsRenderRow(key); rsUpdateGo();
   };

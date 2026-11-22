@@ -62,19 +62,83 @@ function ask(message, { ok = t('Continuar'), cancel = t('Cancelar'), danger = fa
 }
 window.ask = ask;
 
-function toast(msg, isError) {
-  const el = $('#toast');
-  el.textContent = msg; el.className = 'show' + (isError ? ' error' : '');
-  // Los errores largos se quedan más tiempo (se cierran también al pulsarlos)
-  clearTimeout(el._h); el._h = setTimeout(() => (el.className = ''), isError ? Math.min(30000, 6000 + msg.length * 60) : 4500);
-  el.onclick = () => (el.className = '');
+// Errores técnicos → español claro (la lógica pura está en errors.js). Aquí además se traduce al idioma de la app.
+// Devuelve { text, detail, translated }; el detalle original va al registro y a los <details> de las pantallas con error.
+function friendlyError(e) {
+  const f = window.FriendlyError.friendlyError(e);
+  if (f.translated) { try { console.warn('[Ecos] ' + f.detail); } catch { /* sin consola */ } }
+  return f.translated ? { ...f, text: t(f.text) } : f;
 }
+// Bloque «hubo un error» para una pantalla o lista, con el detalle plegado y un botón «Reintentar»
+function errBox(host, e, retry) {
+  const f = friendlyError(e);
+  host.innerHTML = `<div class="empty err-box" role="alert"><span class="ms">cloud_off</span><span class="err-msg"></span>
+    ${f.detail ? `<details class="err-detail"><summary>${escHtml(t('Detalle técnico'))}</summary><code></code></details>` : ''}
+    ${retry ? `<button class="btn tonal err-retry"><span class="ms">refresh</span>${escHtml(t('Reintentar'))}</button>` : ''}</div>`;
+  $('.err-msg', host).textContent = f.text;
+  const c = $('.err-detail code', host); if (c) c.textContent = f.detail;
+  const b = $('.err-retry', host); if (b) b.onclick = () => retry();
+  return f;
+}
+
+// Avisos (toasts): abajo a la derecha, hasta 3 apilados, con botón de cerrar y duración según la longitud.
+// toast(msg, isError, { action: { label, onClick }, duration, detail })
+const TOAST_MAX = 3;
+function toast(msg, isError, opts = {}) {
+  const box = $('#toast');
+  box.setAttribute('role', 'region'); box.setAttribute('aria-label', t('Avisos')); box.setAttribute('aria-live', 'polite');
+  msg = String(msg ?? '');
+  // Si llega un error técnico suelto (sin traducir), se traduce aquí
+  let detail = opts.detail || '';
+  if (isError && !detail && window.FriendlyError.looksTechnical(msg)) { const f = friendlyError(msg); msg = f.text; detail = f.detail; }
+  const el = document.createElement('div');
+  el.className = 'toast-item' + (isError ? ' error' : '');
+  el.setAttribute('role', isError ? 'alert' : 'status');
+  el.innerHTML = `<span class="ms toast-ic">${isError ? 'error' : 'check_circle'}</span><div class="toast-body"><span class="toast-msg"></span></div>`;
+  $('.toast-msg', el).textContent = msg;
+  if (detail) { const d = document.createElement('details'); d.className = 'err-detail'; d.innerHTML = `<summary>${escHtml(t('Detalle técnico'))}</summary><code></code>`; $('code', d).textContent = detail; $('.toast-body', el).appendChild(d); }
+  if (opts.action) {
+    const a = document.createElement('button'); a.className = 'toast-act'; a.textContent = opts.action.label;
+    a.onclick = () => { close(); try { opts.action.onClick?.(); } catch (e) { toastError(e); } };
+    el.appendChild(a);
+  }
+  const x = document.createElement('button'); x.className = 'toast-x'; x.setAttribute('aria-label', t('Cerrar')); x.title = t('Cerrar');
+  x.innerHTML = '<span class="ms">close</span>'; x.onclick = () => close(); el.appendChild(x);
+  let timer, left = opts.duration || toastDuration(msg, isError), t0 = 0;
+  function close() { clearTimeout(timer); if (!el.isConnected || el.classList.contains('out')) return; el.classList.add('out'); setTimeout(() => el.remove(), 220); }
+  const start = () => { t0 = Date.now(); clearTimeout(timer); timer = setTimeout(close, left); };
+  el.onmouseenter = () => { clearTimeout(timer); left -= Date.now() - t0; if (left < 1500) left = 1500; };
+  el.onmouseleave = start;
+  placeToasts(); box.appendChild(el);
+  const live = () => [...box.children].filter((c) => !c.classList.contains('out'));
+  while (live().length > TOAST_MAX) live()[0].querySelector('.toast-x').click();
+  start();
+  return el;
+}
+// Los avisos se colocan por encima de las barras flotantes (acciones del Blog, selección de Redes) que haya a la vista
+function placeToasts() {
+  let b = 20;
+  for (const bar of $$('.b-bulk.on, .selbar.show')) {
+    if (!bar.getClientRects().length) continue;
+    const r = bar.getBoundingClientRect();
+    if (r.height && r.top < innerHeight) b = Math.max(b, Math.round(innerHeight - r.top) + 12);
+  }
+  $('#toast').style.bottom = b + 'px';
+}
+try {
+  const watcher = new MutationObserver(placeToasts);
+  for (const bar of $$('.b-bulk, .selbar')) watcher.observe(bar, { attributes: true, attributeFilter: ['class'] });
+  addEventListener('resize', placeToasts);
+} catch { /* sin observador */ }
+// 2,5–6 s según la longitud del texto (los errores se quedan algo más)
+function toastDuration(msg, isError) { const base = Math.min(6000, Math.max(2500, 1800 + String(msg).length * 45)); return isError ? Math.min(9000, base + 2000) : base; }
+function toastError(e, opts) { const f = friendlyError(e); return toast(f.text, true, { detail: f.detail, ...opts }); }
 async function busy(btn, fn) {
   const label = btn.innerHTML; btn.disabled = true; btn.textContent = t('Trabajando…');
   // en tareas largas (IA), los segundos que lleva: así se ve que sigue trabajando
   const t0 = Date.now();
   const tick = setInterval(() => { const s = Math.round((Date.now() - t0) / 1000); if (s >= 3) btn.textContent = t('Trabajando… {s} s', { s }); }, 1000);
-  try { return await fn(); } catch (e) { toast(e.message, true); } finally { clearInterval(tick); btn.disabled = false; btn.innerHTML = label; }
+  try { return await fn(); } catch (e) { toastError(e); } finally { clearInterval(tick); btn.disabled = false; btn.innerHTML = label; }
 }
 const fileUrl = (p) => p && 'file:///' + encodeURI(p.replace(/\\/g, '/')).replace(/#/g, '%23');
 const fmtDate = (d) => new Date(d).toLocaleString(prefs().lang === 'en' ? 'en-GB' : 'es-ES', { dateStyle: 'medium', timeStyle: 'short' });
@@ -100,7 +164,7 @@ $$('header nav button').forEach((b) => b.onclick = () => showTab(b.dataset.tab))
 function renderStatus() {
   $('#st-meta').textContent = 'Meta: ' + (CFG.metaConnected ? t('conectado') : t('no conectado'));
   $('#st-meta').classList.toggle('ok', !!CFG.metaConnected);
-  $('#st-wp').textContent = 'WordPress: ' + (CFG.wpConnected ? CFG.wpSiteLabel || CFG.wpSite : t('no conectado'));
+  $('#st-wp').textContent = 'WordPress: ' + (CFG.wpConnected ? CFG.wpSiteLabel || CFG.wpSite || t('conectado') : t('no conectado'));
   $('#st-wp').classList.toggle('ok', !!CFG.wpConnected);
   const exp = CFG.metaTokenExpires && new Date(CFG.metaTokenExpires);
   $('#meta-expiry').textContent = CFG.metaConnected && exp ? t('La conexión con Meta caduca el {d}.', { d: fmtDay(exp) }) : '';
