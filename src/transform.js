@@ -737,24 +737,93 @@ function summaryTitle(from, to) {
 // --- Duplicados: la misma publicación en Instagram y Facebook --------------------
 const norm = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[^\p{L}\p{N}]/gu, '').slice(0, 160);
 
-// Junta publicaciones de redes distintas con el mismo texto y publicadas con menos de 3 días de diferencia.
-// Se queda con la que tiene más fotos (o la de Instagram) y anota la otra en alsoOn.
-function mergeDuplicates(posts) {
+// Junta la misma publicación hecha en Instagram y en Facebook. Al compartir de una red a otra el texto
+// suele cambiar algo (menciones «@cuenta» que pasan a nombres, hashtags quitados, texto recortado, saltos
+// de línea, enlaces), así que no se exige el texto idéntico: se puntúa cada pareja Instagram–Facebook por
+// parecido del texto, cercanía en el tiempo y (si se conocen) huellas de la primera foto, y se emparejan
+// de una en una, de la más segura a la menos.
+const DUP_WINDOW = 3 * 864e5;
+function dupWords(t) {
+  return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/https?:\/\/\S+/g, ' ').replace(/[#@][\p{L}\p{N}_.]+/gu, ' ')
+    .split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 2);
+}
+// Parecido de dos textos: palabras comunes / palabras del más corto (aguanta que uno esté recortado)
+const wordCache = new Map();
+const wordSet = (t) => { const k = String(t || ''); let v = wordCache.get(k); if (!v) { if (wordCache.size > 5000) wordCache.clear(); v = new Set(dupWords(k)); wordCache.set(k, v); } return v; };
+function textOverlap(a, b) {
+  const A = wordSet(a), B = wordSet(b);
+  if (!A.size || !B.size) return { sim: 0, n: Math.min(A.size, B.size) };
+  let common = 0;
+  for (const w of A) if (B.has(w)) common++;
+  return { sim: common / Math.min(A.size, B.size), n: Math.min(A.size, B.size) };
+}
+// hashes: Map(url → huella dHash) de la primera foto (opcional)
+function dupScore(p, q, hashes) {
+  const dt = Math.abs(new Date(p.date) - new Date(q.date));
+  if (!(dt <= DUP_WINDOW)) return 0;
+  const ka = norm(p.text), kb = norm(q.text); // eslint-disable-line
+  if (ka.length >= 20 && ka === kb) return 1;
+  const close = dt < 2 * 3600e3, near = dt < 12 * 3600e3;
+  let score = 0;
+  const { sim, n } = textOverlap(p.text, q.text);
+  if (n >= 4) {
+    if (sim >= 0.6) score = sim;
+    else if (sim >= 0.4 && near) score = sim + 0.25;
+  } else if (n > 0) {
+    if (sim >= 0.99 && near) score = 0.8; // textos muy cortos: solo si coinciden del todo y son del mismo día
+  } else if (!dupWords(p.text).length && !dupWords(q.text).length && close && p.media.length === q.media.length) score = 0.65; // solo fotos
+  const ha = hashes?.get(firstImageUrl(p)), hb = hashes?.get(firstImageUrl(q));
+  if (ha && hb) {
+    const d = require('./dupes').hamming(ha, hb);
+    if (d <= 8) score = Math.max(score, near ? 0.95 : 0.85);
+    else if (d > 20 && score < 0.9) score -= 0.3; // fotos claramente distintas: se desconfía del parecido del texto
+  }
+  return score >= 0.6 ? Math.min(score, 1) : 0;
+}
+const firstImageUrl = (p) => (p.media || []).find((m) => m.url)?.url || '';
+// Parejas Instagram–Facebook candidatas a ser la misma publicación (para pedir sus huellas de foto)
+function dupCandidates(posts, max = 120) {
+  const ig = posts.filter((p) => p.source === 'instagram'), fb = posts.filter((p) => p.source === 'facebook');
   const out = [];
-  for (const p of posts) {
-    const key = norm(p.text);
-    const twin = key.length >= 20 && out.find((q) => q.source !== p.source && !(q.alsoOn || []).some((a) => a.source === p.source)
-      && norm(q.text) === key && Math.abs(new Date(q.date) - new Date(p.date)) < 3 * 864e5);
-    if (!twin) { out.push({ ...p }); continue; }
-    const pBetter = p.media.length > twin.media.length || (p.media.length === twin.media.length && p.source === 'instagram');
-    const [main, other] = pBetter ? [p, twin] : [twin, p];
-    const merged = { ...main, alsoOn: [...(main.alsoOn || []), { source: other.source, permalink: other.permalink, id: other.id }] };
-    out[out.indexOf(twin)] = merged;
+  for (const a of ig) for (const b of fb) {
+    if (Math.abs(new Date(a.date) - new Date(b.date)) <= DUP_WINDOW && firstImageUrl(a) && firstImageUrl(b)) out.push([a, b]);
+    if (out.length >= max) return out;
   }
   return out;
+}
+function mergeDuplicates(posts, { hashes } = {}) {
+  const list = posts.map((p) => ({ ...p }));
+  const idx = list.map((_, i) => i).filter((i) => !(list[i].alsoOn || []).length);
+  // solo se comparan las que están a menos de 3 días (ordenadas por fecha)
+  const t = (i) => new Date(list[i].date).getTime() || 0;
+  idx.sort((x, y) => t(x) - t(y));
+  const pairs = [];
+  for (let x = 0; x < idx.length; x++) {
+    for (let y = x + 1; y < idx.length && t(idx[y]) - t(idx[x]) <= DUP_WINDOW; y++) {
+      const i = Math.min(idx[x], idx[y]), j = Math.max(idx[x], idx[y]);
+      if (list[i].source === list[j].source) continue;
+      const s = dupScore(list[i], list[j], hashes);
+      if (s) pairs.push([s, i, j]);
+    }
+  }
+  pairs.sort((a, b) => b[0] - a[0] || Math.abs(new Date(list[a[1]].date) - new Date(list[a[2]].date)) - Math.abs(new Date(list[b[1]].date) - new Date(list[b[2]].date)));
+  const used = new Set(), drop = new Set();
+  for (const [, i, j] of pairs) {
+    if (used.has(i) || used.has(j)) continue;
+    used.add(i); used.add(j);
+    const p = list[i], q = list[j];
+    const pBetter = p.media.length > q.media.length || (p.media.length === q.media.length && p.source === 'instagram');
+    const [main, other] = pBetter ? [p, q] : [q, p];
+    const merged = { ...main, alsoOn: [...(main.alsoOn || []), { source: other.source, permalink: other.permalink, id: other.id }] };
+    // el texto más completo de los dos (Facebook a veces lo recorta y viceversa)
+    if ((other.text || '').length > (main.text || '').length * 1.3) merged.text = other.text;
+    list[i] = merged; drop.add(j);
+  }
+  return list.filter((_, k) => !drop.has(k));
 }
 
 // Claves de todas las versiones de una publicación (para marcarla como exportada)
 const postKeys = (p) => [p.source + ':' + p.id, ...(p.alsoOn || []).map((a) => a.source + ':' + a.id)];
 
-module.exports = { PEEK_CSS, FONTS, FX_MARK, COL_PRESETS, GROUP_PAD, flatBlocks, VIDEO_PROVIDERS, composeBlocks, sectionsToBlocks, blockImages, buildDraft, composeContent, sanitizeParagraphs, summaryTitle, extractTags, mediaKey, makeTitle, tidyTitle, mergeDuplicates, postKeys, DEFAULT_FOOTER };
+module.exports = { PEEK_CSS, FONTS, FX_MARK, COL_PRESETS, GROUP_PAD, flatBlocks, VIDEO_PROVIDERS, composeBlocks, sectionsToBlocks, blockImages, buildDraft, composeContent, sanitizeParagraphs, summaryTitle, extractTags, mediaKey, makeTitle, tidyTitle, mergeDuplicates, dupCandidates, dupScore, firstImageUrl, postKeys, DEFAULT_FOOTER };

@@ -266,6 +266,7 @@
     'Modelo (opcional: si lo dejas vacío, usa el de la CLI)': 'Model (optional: leave empty to use the CLI default)',
     'Los botones de IA usarán {c}. Pulsa «Probar» para comprobarlo.': 'The AI buttons will use {c}. Click "Try it" to check.',
     // 1.2 (editor completo)
+    'Pantalla de consentimiento (Google Auth Platform): tipo «Externo». Después, en «Público» (Audience) → «Usuarios de prueba», pulsa «Añadir usuarios» y escribe tu correo de Google. Si no lo haces, Google muestra «Acceso bloqueado: Ecos no ha completado el proceso de verificación» (error 403 access_denied).': 'Consent screen (Google Auth Platform): type “External”. Then in “Audience” → “Test users”, click “Add users” and enter your Google email. Otherwise Google shows “Access blocked: Ecos has not completed the Google verification process” (error 403 access_denied).',
     'Agenda': 'Agenda',
     'Navegar por la agenda': 'Browse the agenda',
     'Volver a hoy': 'Back to today',
@@ -312,7 +313,6 @@
     "Fotos para entradas y páginas": "Photos for posts and pages",
     "Entra en console.cloud.google.com con tu cuenta de Google y crea un proyecto nuevo (por ejemplo «Ecos»).": "Go to console.cloud.google.com with your Google account and create a new project (for example \"Ecos\").",
     "Menú «APIs y servicios» → Biblioteca → busca «Google Photos Picker API» y pulsa «Habilitar».": "Menu \"APIs & Services\" → Library → search \"Google Photos Picker API\" and press \"Enable\".",
-    "Pantalla de consentimiento de OAuth: tipo de usuario «Externo». Añade tu correo como «usuario de prueba» y, en los ámbitos, photospicker.mediaitems.readonly.": "OAuth consent screen: user type \"External\". Add your email as a \"test user\" and, in scopes, photospicker.mediaitems.readonly.",
     "Credenciales → Crear credenciales → ID de cliente de OAuth → tipo de aplicación «Aplicación de escritorio». Copia el ID de cliente y el secreto y pégalos aquí.": "Credentials → Create credentials → OAuth client ID → application type \"Desktop app\". Copy the client ID and secret and paste them here.",
     "Pulsa «Conectar con Google», elige tu cuenta y acepta el permiso.": "Press \"Connect with Google\", choose your account and accept the permission.",
     "Aviso: mientras la app de Google esté en modo «Prueba», Google caduca el permiso a los 7 días y habrá que volver a pulsar «Conectar con Google». Para evitarlo, en la pantalla de consentimiento pulsa «Publicar aplicación» (no hace falta verificarla si solo la usas tú).": "Note: while the Google app is in \"Testing\" mode, Google expires the permission after 7 days and you will have to press \"Connect with Google\" again. To avoid it, press \"Publish app\" on the consent screen (no verification needed if only you use it).",

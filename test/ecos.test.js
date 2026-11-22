@@ -735,3 +735,36 @@ test('agenda de Inicio: rangos de día, semana, mes y año, pasos y recuento por
   assert.ok(!HL.agIsNow('day', new Date(2026, 10, 21), d));
   assert.deepEqual(HL.agCount([{ status: 'publish' }, { status: 'private' }, { status: 'future' }, { status: 'draft' }, { status: 'pending' }]), { publish: 2, future: 1, draft: 2 });
 });
+
+test('duplicados Instagram–Facebook: aguanta menciones, hashtags quitados, recortes y fotos', () => {
+  const Tr = require('../src/transform');
+  const P = (source, id, text, date, n = 1, url) => ({ source, id, text, date, media: Array.from({ length: n }, (_, i) => ({ type: 'image', url: url || `${source}${id}-${i}.jpg` })) });
+  const ig = [
+    P('instagram', 'i1', 'Hoy hemos participado en el Encuentro de Fronteras junto a @cearong y @apdha en Ceuta. ¡Gracias a todas! #fronteras #ceuta #derechoshumanos', '2026-11-10T18:00:00Z', 3),
+    P('instagram', 'i2', 'Último Círculo de Silencio del año en la plaza de los Reyes. Os esperamos el próximo mes con más fuerza que nunca para seguir denunciando.', '2026-11-12T10:00:00Z', 2),
+    P('instagram', 'i3', '', '2026-11-14T09:00:00Z', 1),
+    P('instagram', 'i4', 'Taller de cocina intercultural este sábado en el local de la asociación', '2026-11-15T09:00:00Z', 1),
+  ];
+  const fb = [
+    P('facebook', 'f1', 'Hoy hemos participado en el Encuentro de Fronteras junto a CEAR y APDHA en Ceuta. ¡Gracias a todas!', '2026-11-10T18:02:00Z', 3),
+    P('facebook', 'f2', 'Último Círculo de Silencio del año en la plaza de los Reyes. Os esperamos el próximo mes…', '2026-11-12T10:05:00Z', 2),
+    P('facebook', 'f3', '', '2026-11-14T09:01:00Z', 1),
+    P('facebook', 'f4', 'Recogida de alimentos el domingo en el barrio del Príncipe, traed lo que podáis', '2026-11-15T10:00:00Z', 1),
+  ];
+  const out = Tr.mergeDuplicates([...ig, ...fb]);
+  const pairs = out.filter((p) => p.alsoOn?.length).map((p) => p.id + '+' + p.alsoOn[0].id).sort();
+  assert.deepEqual(pairs, ['i1+f1', 'i2+f2', 'i3+f3']);
+  assert.equal(out.length, 5, 'i4 y f4 son distintas');
+  // el texto más completo se conserva
+  assert.match(out.find((p) => p.id === 'i2').text, /denunciando/);
+  // con huellas: textos distintos pero misma foto el mismo día → misma publicación
+  const a = P('instagram', 'x', 'Texto escrito para Instagram con emojis y otra redacción distinta', '2026-11-20T10:00:00Z', 1, 'a.jpg');
+  const b = P('facebook', 'y', 'Publicación de Facebook explicando la actividad de otra manera', '2026-11-20T11:00:00Z', 1, 'b.jpg');
+  assert.equal(Tr.mergeDuplicates([a, b]).length, 2);
+  const hashes = new Map([['a.jpg', '0f0f0f0f0f0f0f0f'], ['b.jpg', '0f0f0f0f0f0f0f0e']]);
+  assert.equal(Tr.mergeDuplicates([a, b], { hashes }).length, 1);
+  assert.deepEqual(Tr.dupCandidates([a, b]).map((x) => x.map((p) => p.id)), [['x', 'y']]);
+  // nunca se juntan dos de la misma red ni con más de 3 días
+  assert.equal(Tr.mergeDuplicates([P('instagram', '1', 'mismo texto largo de prueba aqui', '2026-11-01T00:00:00Z'), P('instagram', '2', 'mismo texto largo de prueba aqui', '2026-11-01T00:00:00Z')]).length, 2);
+  assert.equal(Tr.mergeDuplicates([P('instagram', '1', 'mismo texto largo de prueba aqui', '2026-11-01T00:00:00Z'), P('facebook', '2', 'mismo texto largo de prueba aqui', '2026-11-09T00:00:00Z')]).length, 2);
+});

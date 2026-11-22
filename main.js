@@ -679,7 +679,39 @@ handle('config:import', async () => {
   return publicCfg();
 });
 
-handle('posts:merge', (list) => mergeDuplicates(list));
+// Huellas (dHash) de fotos remotas, en memoria mientras Ecos está abierto
+const postHashCache = new Map();
+async function remoteHash(url) {
+  if (postHashCache.has(url)) return postHashCache.get(url);
+  const job = (async () => {
+    try {
+      const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 6000);
+      const res = await fetch(url, { signal: ctl.signal }); clearTimeout(tm);
+      if (!res.ok) return null;
+      const img = require('electron').nativeImage.createFromBuffer(Buffer.from(await res.arrayBuffer()));
+      if (img.isEmpty()) return null;
+      const D = require('./src/dupes');
+      return D.dhash(D.grayFromBGRA(img.resize({ width: 9, height: 8, quality: 'good' }).toBitmap()));
+    } catch { return null; }
+  })();
+  postHashCache.set(url, job);
+  return job;
+}
+handle('posts:merge', async (list) => {
+  const T = require('./src/transform');
+  // primero por texto y fecha; las parejas que quedan sueltas se comparan también por la foto
+  const first = mergeDuplicates(list);
+  const loose = first.filter((p) => !(p.alsoOn || []).length);
+  const cands = T.dupCandidates(loose);
+  if (!cands.length) return first;
+  const urls = [...new Set(cands.flat().map(T.firstImageUrl))];
+  const hashes = new Map();
+  for (let k = 0; k < urls.length; k += 8) {
+    const got = await Promise.all(urls.slice(k, k + 8).map(remoteHash));
+    got.forEach((h, n) => { if (h) hashes.set(urls[k + n], h); });
+  }
+  return hashes.size ? mergeDuplicates(list, { hashes }) : first;
+});
 handle('exported:forget', (keys) => { for (const k of keys) delete cfg.exported?.[k]; store.save(cfg); return cfg.exported || {}; });
 
 // --- Pestaña «Blog»: gestión de entradas y páginas ---
