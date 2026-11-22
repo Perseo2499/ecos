@@ -2633,3 +2633,10 @@ body:has(.tab.active .b-bulk.on) #toast { bottom: 120px; }
 .ed-side .field { margin: 0; }
 .ed-side .field > label { display: block; margin-bottom: 6px; }
 .ed-side .section-label { margin-top: 10px; }
+
+.mt-imgbar .lv.show-lbl .lbl { display: inline; }
+/* Barra flotante compacta: arriba los desplegables, debajo los botones (en dos filas como mucho) */
+.fmt-bar.float { width: 452px; max-width: calc(100vw - 24px); padding: 6px; row-gap: 4px; }
+.fmt-bar.float > select { flex: 1 1 calc(25% - 4px); min-width: 0; max-width: none; font-size: 12px; padding-left: 8px; padding-right: 18px; text-overflow: ellipsis; }
+.fmt-bar.float > .sep:first-of-type { flex-basis: 100%; height: 0; width: 0; margin: 0; border: 0; background: none; }
+.fmt-bar.float > button { width: 32px; height: 32px; min-width: 0; }

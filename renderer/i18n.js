@@ -300,6 +300,8 @@
     'Ocultas': 'Hidden',
     'Ocultos': 'Hidden',
     // 1.2 (editor completo)
+    'Texto alrededor': 'Text around',
+    'El texto rodea la foto y sigue por debajo de ella (la foto queda a un lado, dentro del texto)': 'Text wraps around the photo and continues below it (the photo sits to one side, inside the text)',
     'Barra de formato fija arriba del editor (si no, aparece al seleccionar texto, como en Word)': 'Formatting bar fixed at the top of the editor (otherwise it appears when you select text, like in Word)',
     'Fondo de la página': 'Page background',
     'El contenido va sobre un panel blanco y el fondo se ve a los lados.': 'The content sits on a white panel and the background shows at the sides.',

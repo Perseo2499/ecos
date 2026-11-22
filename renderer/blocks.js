@@ -742,7 +742,7 @@
             $$('[data-mw]', ib).forEach((x) => (x.onclick = (e) => { e.stopPropagation(); this.change(() => this.setMtWidth(b, Number(x.dataset.mw))); }));
             $('[data-fill]', ib).onclick = (e) => { e.stopPropagation(); this.change(() => { if (b.fill) delete b.fill; else b.fill = true; }); };
             this.styleBtn(ib, b);
-            ib.insertAdjacentHTML('beforeend', `<button class="lv" data-drop="1" title="${t('Saca la foto del bloque y deja el texto rodeándola: la foto queda a un lado, dentro del texto')}"><span class="ms">wrap_text</span></button>`);
+            ib.insertAdjacentHTML('beforeend', `<span class="lv-sep"></span><button class="lv show-lbl" data-drop="1" title="${t('El texto rodea la foto y sigue por debajo de ella (la foto queda a un lado, dentro del texto)')}"><span class="ms">wrap_text</span><span class="lbl">${t('Texto alrededor')}</span></button>`);
             $('[data-drop]', ib).onclick = (e) => { e.stopPropagation(); this.dropIntoText(b); };
             ib.addEventListener('mousedown', (e) => e.stopPropagation());
             (side.querySelector(".mt-phwrap") || side).appendChild(ib);
