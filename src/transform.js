@@ -277,6 +277,11 @@ CAR_RATIOS.forEach((r) => { const c = r.replace('/', '-'); FX_CSS['cr-' + c] = `
 Object.assign(FX_CSS, {
   'cz-cr': `${CA}[class*="ecos-cz-"][class*="ecos-cr-"] img{height:auto;width:auto;max-width:100%;margin-inline:auto;display:block}`,
   'cc-round': `${CA}.ecos-cc-round img{border-radius:18px}`,
+  // Esquinas redondeadas de verdad en Spectra: se recorta el marco de la foto (no solo la foto). Si no, al ampliar la
+  // foto al pasar el ratón las esquinas se rellenan y, sin el ratón, asoma el fondo gris del marco en las esquinas
+  'car-clip': `${CA}:is(.ecos-peek,.ecos-cc-round):not(.ecos-cc-sq) .spectra-image-gallery__media{border-radius:18px;overflow:hidden;background:transparent!important;isolation:isolate}`
+    + `${CA}:is(.ecos-peek,.ecos-cc-round):not(.ecos-cc-sq) .spectra-image-gallery__media *{border-radius:inherit}`
+    + `${CA}:is(.ecos-peek,.ecos-cc-round):not(.ecos-cc-sq) .spectra-image-gallery__media img{border-radius:18px}`,
   'cc-sq': `${CA}.ecos-cc-sq img{border-radius:0}`,
   'cs-on': `${CA}.ecos-cs-on img{box-shadow:${CAR_SHADOW}}`,
   'cs-off': `${CA}.ecos-cs-off img{box-shadow:none}`,
@@ -342,6 +347,7 @@ const PEEK_CSS = `/* Ecos: carrusel con las fotos vecinas asomando */
 .ecos-peek .slick-slide{transition:transform .5s cubic-bezier(.2,0,0,1),opacity .5s,filter .5s;transform:scale(.88);opacity:.5;filter:saturate(.6)}
 .ecos-peek .slick-slide.slick-active{transform:none;opacity:1;filter:none}
 .ecos-peek .slick-slide img{border-radius:18px}
+.ecos-peek .spectra-image-gallery__media{border-radius:18px;overflow:hidden;background:transparent!important;isolation:isolate}
 @media (max-width:600px){.ecos-peek .slick-list{padding:0 8% !important}}`;
 // Opciones del carrusel (b.size, b.ratio o b.squares, b.corners, b.shadow, b.gap, b.arrows, b.dots), validadas
 function carOpts(b) {
@@ -366,6 +372,7 @@ function spectraCarouselBlock(b, fx = null) {
   if (o.shadow) keys.push(o.shadow === 'on' ? 'cs-on' : 'cs-off');
   if (o.gap) keys.push('cg-' + o.gap);
   keys.forEach((k) => fx?.add(k));
+  if (b.view === 'peek' || o.corners === 'round') fx?.add('car-clip');
   const hex = require('crypto').createHash('md5').update(String(b.id)).digest('hex').slice(0, 8);
   const media = b.images.map((i) => ({ id: Number(i.id) || 0, url: i.url, alt: i.alt || '', caption: b.captions ? (i.alt || '') : '' }));
   const a = {

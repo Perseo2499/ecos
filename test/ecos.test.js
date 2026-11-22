@@ -922,3 +922,11 @@ test('imagen y texto: el texto no queda metido hacia dentro (sin el 8 % de marge
   const b = parseBlocks(html).find((x) => x.type === 'mediatext');
   assert.ok(b && !b.frame && !b.ratio, 'vuelve como imagen y texto normal');
 });
+
+test('carrusel de Spectra con esquinas redondeadas: se recorta el marco (sin esquinas grises ni cuadradas al pasar el ratón)', () => {
+  const imgs = [{ id: 1, url: 'a.jpg' }, { id: 2, url: 'b.jpg' }];
+  const peek = T.composeBlocks([{ id: 'c', type: 'carousel', view: 'peek', images: imgs }], { spectra: true });
+  assert.match(peek, /\.spectra-image-gallery__media\{border-radius:18px;overflow:hidden/);
+  const sq = T.composeBlocks([{ id: 'c', type: 'carousel', corners: 'square', images: imgs }], { spectra: true });
+  assert.doesNotMatch(sq, /spectra-image-gallery__media\{border-radius/);
+});
