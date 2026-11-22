@@ -600,7 +600,7 @@
           this.imgLook(ph, b);
           ph.appendChild(this.resizeHandle(b, body));
           fig.appendChild(ph);
-          fig.appendChild(this.editable('figcaption', b.caption, t('Pie de foto (opcional)'), (h) => (b.caption = h)));
+          fig.appendChild(this.editable('figcaption', b.caption, t('Pie de foto (opcional)'), (h) => (b.caption = h), { block: b }));
           body.appendChild(fig);
           // soltar otra foto sobre esta imagen las junta en una galería
           this.acceptPhoto(body, (img) => { b.type = 'gallery'; b.images = [b.img, img]; b.columns = 2; delete b.img; delete b.caption; },
@@ -697,7 +697,7 @@
             side.appendChild(ph);
           } else side.appendChild(this.dropZone(t('Arrastra una foto'), (m) => this.change(() => (b.img = { ...m }))));
           this.acceptPhoto(side, (img) => (b.img = img), { sameOk: (d) => !(d.kind === 'photo' && d.block === b.id) });
-          const text = this.editable('div', b.html, t('Texto junto a la imagen…'), (h) => (b.html = h), { cls: 'mt-text' });
+          const text = this.editable('div', b.html, t('Texto junto a la imagen…'), (h) => (b.html = h), { cls: 'mt-text', block: b });
           row.append(side, text);
           if (b.img) row.appendChild(this.mtSplit(b, row));
           body.appendChild(row);
@@ -734,7 +734,7 @@
           const v = document.createElement('video');
           v.src = b.video.url; v.controls = true; v.preload = 'metadata'; if (b.video.poster) v.poster = b.video.poster;
           body.appendChild(v);
-          body.appendChild(this.editable('figcaption', b.caption, t('Pie del vídeo (opcional)'), (h) => (b.caption = h)));
+          body.appendChild(this.editable('figcaption', b.caption, t('Pie del vídeo (opcional)'), (h) => (b.caption = h), { block: b }));
           break;
         }
 
@@ -776,7 +776,7 @@
             tb.appendChild(tr);
           });
           body.appendChild(tb);
-          body.appendChild(this.editable('figcaption', b.caption, t('Pie de tabla (opcional)'), (h) => (b.caption = h)));
+          body.appendChild(this.editable('figcaption', b.caption, t('Pie de tabla (opcional)'), (h) => (b.caption = h), { block: b }));
           const cols = b.rows[0]?.length || 0;
           extra.innerHTML = `<button class="lv" data-t="r+" title="${t('Añadir fila')}"><span class="ms">add_row_below</span></button>
             <button class="lv" data-t="r-" title="${t('Quitar la última fila')}" ${b.rows.length < 2 ? 'disabled' : ''}><span class="ms">remove</span><span class="ms">table_rows</span></button>
