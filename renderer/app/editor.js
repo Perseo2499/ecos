@@ -68,6 +68,14 @@ function startDraft({ type = 'post', title = '', categories: preCats = [], paren
 }
 
 // Fotos y vídeos disponibles para la entrada (subidos a WordPress): alimentan la bandeja del editor
+// Al escribir en el título, el extracto u otro campo que no es un bloque, la barra de formato deja de
+// apuntar al último bloque (si no, centrar «el título» centraba el párrafo de debajo)
+document.addEventListener('focusin', (e) => {
+  const E = window.BlockEditor;
+  if (!E?.active || !e.target.closest('#editor') || e.target.closest('.blk') || e.target.closest('.fmt-bar, #fmt-bar, .format-bar')) return;
+  if (!/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  E.active = null; window.FormatBar?.update();
+});
 function mediaPool() {
   const seen = new Set(), out = [];
   const add = (m) => { if (m && m.id && !seen.has(m.id)) { seen.add(m.id); out.push(m); } };

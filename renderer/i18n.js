@@ -266,6 +266,7 @@
     'Modelo (opcional: si lo dejas vacío, usa el de la CLI)': 'Model (optional: leave empty to use the CLI default)',
     'Los botones de IA usarán {c}. Pulsa «Probar» para comprobarlo.': 'The AI buttons will use {c}. Click "Try it" to check.',
     // 1.2 (editor completo)
+    'Pulsa primero dentro del texto que quieres cambiar. (El título de la página no es un bloque: su alineación la pone el tema de tu web.)': 'First click inside the text you want to change. (The page title is not a block: its alignment is set by your site theme.)',
     'He puesto la foto antes del texto para que el texto la rodee. El texto que quieras a su lado tiene que ir justo debajo de la foto.': 'I moved the photo before the text so the text wraps around it. The text you want beside it has to go right below the photo.',
     'Sección': 'Section',
     'Portada': 'Cover',

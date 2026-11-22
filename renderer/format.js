@@ -35,7 +35,7 @@
   // --- Formato del bloque (alineación, tamaño, fuente, colores, letra capital)
   function setBlock(prop, val) {
     const a = E().active;
-    if (!a || !isText(a.b)) return;
+    if (!a || !isText(a.b)) { window.toast?.(t('Pulsa primero dentro del texto que quieres cambiar. (El título de la página no es un bloque: su alineación la pone el tema de tu web.)'), true); return; }
     E().snapshot();
     if (val) a.b[prop] = val; else delete a.b[prop];
     E().applyStyle(a.styleEl, a.b);
