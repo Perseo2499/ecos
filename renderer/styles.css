@@ -2514,3 +2514,47 @@ body:has(.tab.active .b-bulk.on) #toast { bottom: 120px; }
 .bg-range input { grid-column: 1 / -1; grid-row: 2; width: 100%; accent-color: var(--primary); }
 .bg-range b { text-align: right; font-weight: 600; color: var(--on-surface); }
 .bg-body.hidden, .bg-prev.hidden { display: none; }
+/* ===== Imagen y texto: tamaño de la foto, alineación, rellenar y estilo ===== */
+.mt { position: relative; grid-template-columns: var(--mtw, 50%) minmax(0, 1fr); }
+.mt.right { grid-template-columns: minmax(0, 1fr) var(--mtw, 50%); }
+.mt.va-top { align-items: start; }
+.mt.va-bottom { align-items: end; }
+.mt-media { min-width: 0; }
+.mt-media .ph { overflow: hidden; border-radius: var(--r-l); }
+.mt-media .ph img { transition: transform .5s var(--ease), border-radius .2s, filter .2s; }
+.mt-media .ph.ecos-zoom:hover img { transform: scale(1.08); }
+.mt-media .ph.ecos-bn img { filter: grayscale(1); }
+.mt.fill .mt-media { align-self: stretch; min-height: 180px; }
+.mt.fill .mt-media .ph { height: 100%; }
+.mt.fill .mt-media .ph img { height: 100%; aspect-ratio: auto; object-fit: cover; max-height: none; }
+.mt-split { position: absolute; top: 0; bottom: 0; left: calc(var(--mtw, 50%) + 3px); width: 14px; z-index: 4; display: grid; place-items: center; cursor: col-resize; color: var(--on-primary); opacity: 0; transition: opacity .2s; }
+.mt.right .mt-split { left: auto; right: calc(var(--mtw, 50%) + 3px); }
+.mt-split::before { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 3px; margin-left: -1.5px; border-radius: 3px; background: var(--primary); }
+.mt-split .ms { position: relative; font-size: 16px; width: 22px; height: 26px; display: grid; place-items: center; border-radius: var(--r-s); background: var(--primary); }
+.blk-mediatext:hover .mt-split, .blk-mediatext:focus-within .mt-split { opacity: .9; }
+.mt-split:hover { opacity: 1 !important; }
+.blk-mediatext .rs-tip { right: auto; left: 50%; bottom: 10px; transform: translateX(-50%); }
+/* Barras de imagen y texto y de carrusel: si no caben en una fila, pasan a la siguiente (nada se corta ni se monta) */
+.blk-mediatext .blk-extra, .blk-carousel .blk-extra { display: contents; }
+.blk-mediatext > .blk-tools, .blk-carousel > .blk-tools { top: auto; bottom: calc(100% - 16px); row-gap: 2px; border-radius: 22px; }
+.blk-mediatext .blk-type, .blk-carousel .blk-type { margin-right: 4px; }
+#ed-canvas .blk-mediatext.tools-on > .blk-tools, #ed-canvas .blk-carousel.tools-on > .blk-tools { max-width: max(100%, 380px); }
+.blk-carousel .blk-extra .lv.dd .dd-l { display: inline; }
+.lv.dd .dd-ch { font-size: 16px; margin-left: -2px; opacity: .7; }
+.dd-pop { width: auto; min-width: 220px; max-width: min(380px, calc(100vw - 16px)); z-index: 97; }
+
+/* ===== Carrusel: tamaño, proporción y estilo en el editor ===== */
+.g-car { gap: var(--car-gap, 10px); }
+.g-car.has-h .ph { height: var(--car-h); }
+.g-car.has-h .ph img { height: 100%; aspect-ratio: auto; }
+.g-car.has-r:not(.has-h) .ph img { aspect-ratio: var(--car-r); }
+.g-car.has-h.has-r .ph { flex: 0 0 auto; width: auto; aspect-ratio: var(--car-r); max-width: 100%; }
+.g-car.has-h.has-r .ph img { width: 100%; }
+.g-car.cc-round .ph img { border-radius: 18px; }
+.g-car.cc-square .ph img { border-radius: 0; }
+.g-car.cs-on .ph img { box-shadow: 0 10px 30px rgba(0, 0, 0, .18); }
+.g-car.cs-off .ph img { box-shadow: none; }
+
+/* Foto a un lado o centrada: su barra (ahora con «Juntar con el texto») pasa a dos filas en vez de salirse del lienzo */
+#ed-canvas .blk.blk-image.img-left.tools-on > .blk-tools, #ed-canvas .blk.blk-image.img-right.tools-on > .blk-tools, #ed-canvas .blk.blk-image.img-center.tools-on > .blk-tools { max-width: min(600px, calc(100vw - 460px)); flex-wrap: wrap; top: auto; bottom: calc(100% - 16px); border-radius: 22px; row-gap: 2px; }
+.blk.blk-image.img-left > .blk-tools .blk-extra, .blk.blk-image.img-right > .blk-tools .blk-extra, .blk.blk-image.img-center > .blk-tools .blk-extra { display: contents; }

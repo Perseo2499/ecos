@@ -61,6 +61,22 @@ function styleFrom(a) {
   return o;
 }
 
+// Opciones del carrusel que Ecos escribe como clases ecos-* en la galería de Spectra
+function carouselOptsFrom(cn) {
+  const o = {};
+  for (const c of cn) {
+    let m;
+    if ((m = c.match(/^cz-(s|m|l|xl)$/))) o.size = m[1];
+    else if ((m = c.match(/^cr-(1|4-3|3-2|16-9|3-4)$/))) o.ratio = m[1].replace('-', '/');
+    else if (c === 'cc-round') o.corners = 'round';
+    else if (c === 'cc-sq') o.corners = 'square';
+    else if (c === 'cs-on') o.shadow = 'on';
+    else if (c === 'cs-off') o.shadow = 'off';
+    else if ((m = c.match(/^cg-(0|s|l)$/))) o.gap = m[1];
+  }
+  return o;
+}
+
 function toBlock(t) {
   const n = t.name.replace(/^core\//, '');
   const a = t.attrs, h = t.inner;
@@ -138,7 +154,10 @@ function toBlock(t) {
       const images = (a.mediaGallery || []).filter((m) => m && m.url).map((m) => ({ id: Number(m.id) || m.url, url: m.url, alt: m.alt || '' }));
       if (!images.length) return raw();
       const view = /\becos-peek\b/.test(a.className || '') ? 'peek' : (a.columnsDesk || 1) > 1 ? 'multi' : 'single';
-      return a.feedLayout === 'carousel' ? { id: bid(), type: 'carousel', images, view, ...(a.carouselSquares ? { squares: true } : {}), ...(a.carouselAutoplay === false ? { autoplay: false } : {}), ...(a.imageDisplayCaption ? { captions: true } : {}) }
+      const co = carouselOptsFrom(String(a.className || '').split(/\s+/).map((c) => c.replace(/^ecos-/, '')));
+      if (a.paginateUseArrows === false) co.arrows = false;
+      if (a.paginateUseDots === false) co.dots = false;
+      return a.feedLayout === 'carousel' ? { id: bid(), type: 'carousel', images, view, ...co, ...(a.carouselSquares && !co.ratio ? { squares: true } : {}), ...(a.carouselAutoplay === false ? { autoplay: false } : {}), ...(a.imageDisplayCaption ? { captions: true } : {}) }
         : { id: bid(), type: 'gallery', images, columns: a.columnsDesk || 3 };
     }
     case 'html': {
@@ -163,12 +182,53 @@ function toBlock(t) {
           return url ? { type: 'video', id: Number(attr(m[0], 'data-id')) || url, url, ...(attr(m[0], 'poster') ? { poster: attr(m[0], 'poster') } : {}) } : null;
         }).filter(Boolean);
         if (images.length) {
-          if (/ecos-carrusel/.test(h)) return { id: bid(), type: 'carousel', images };
+          if (/ecos-carrusel/.test(h)) {
+            const root = (h.match(/<div class="ecos-carrusel"[^>]*>/) || [''])[0], d = (k) => attr(root, 'data-' + k);
+            const co = {};
+            if (['s', 'm', 'l', 'xl'].includes(d('size'))) co.size = d('size');
+            if (['1', '4/3', '3/2', '16/9', '3/4'].includes(d('ratio'))) co.ratio = d('ratio');
+            if (['round', 'square'].includes(d('corners'))) co.corners = d('corners');
+            if (['on', 'off'].includes(d('shadow'))) co.shadow = d('shadow');
+            if (['0', 's', 'l'].includes(d('gap'))) co.gap = d('gap');
+            if (d('arrows') === '0') co.arrows = false;
+            if (d('dots') === '0') co.dots = false;
+            return { id: bid(), type: 'carousel', images, ...co };
+          }
           if (/ecos-galeria/.test(h)) return { id: bid(), type: 'gallery', images, columns: Number((h.match(/data-cols="(\d)"/) || [])[1]) || 3 };
           return { id: bid(), type: 'gallery', layout: 'mosaic', images, columns: 3 };
         }
       }
       return raw();
+    }
+    case 'media-text': {
+      // «Imagen y texto» de Ecos: foto + párrafos, con tamaño, alineación vertical, relleno y estilo de la foto; lo demás se conserva tal cual
+      if (!onlyKeys(a, ['mediaPosition', 'mediaId', 'mediaLink', 'mediaType', 'mediaWidth', 'verticalAlignment', 'imageFill', 'className']) || (a.mediaType && a.mediaType !== 'image')) return raw();
+      if (a.mediaPosition && a.mediaPosition !== 'right') return raw();
+      const img = imgOf((h.match(/<figure\b[^>]*wp-block-media-text__media[\s\S]*?<\/figure>/i) || [''])[0]);
+      const content = (h.match(/<div class="wp-block-media-text__content">([\s\S]*)<\/div>\s*<\/div>\s*$/i) || [])[1];
+      if (!img || content === undefined) return raw();
+      const kids = tokenize(content).filter((x) => x.name !== 'freeform' || x.inner.replace(/<[^>]+>|\s|&nbsp;/g, ''));
+      if (kids.some((x) => x.name !== 'paragraph' || Object.keys(x.attrs).length)) return raw();
+      const cn = String(a.className || '').split(/\s+/).filter(Boolean);
+      const known = (c) => /^ecos-mt-(r-(1|4-3|3-2|16-9|9-16)|rounded|circle|shadow|border|zoom|bn)$/.test(c);
+      if (!cn.every(known)) return raw();
+      const mw = a.mediaWidth === undefined ? 50 : a.mediaWidth;
+      if (!Number.isInteger(mw) || mw < 10 || mw > 90) return raw();
+      if (a.verticalAlignment !== undefined && !['top', 'center', 'bottom'].includes(a.verticalAlignment)) return raw();
+      if (a.imageFill !== undefined && a.imageFill !== true) return raw();
+      const b = { id: bid(), type: 'mediatext', img, html: kids.map((x) => inner(x.inner, 'p')).join('<br><br>'), right: a.mediaPosition === 'right' };
+      if (mw !== 50) b.mediaWidth = mw;
+      if (a.verticalAlignment) b.valign = a.verticalAlignment;
+      if (a.imageFill) b.fill = true;
+      for (const c of cn) {
+        const r = c.match(/^ecos-mt-r-(.+)$/);
+        if (r) b.ratio = r[1].replace('-', '/');
+        else if (c === 'ecos-mt-zoom') b.fx = 'zoom';
+        else if (c === 'ecos-mt-bn') b.fx = 'bw';
+        else b.frame = c.slice(8);
+      }
+      if (b.frame === 'border') b.frameColor = (h.match(/wp-block-media-text__media"[^>]*border:2px solid (#[0-9a-f]{3,8}|rgba?\([\d.,\s%]+\))/i) || [])[1] || '#333333';
+      return b;
     }
     case 'group': {
       if (!groupKnown(a)) return raw();
