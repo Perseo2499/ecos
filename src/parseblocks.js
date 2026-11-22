@@ -409,4 +409,4 @@ function classicBlocks(html) {
 
 function parseBlocks(content) { return parseList(content, false); }
 
-module.exports = { parseBlocks, tokenize, classicBlocks };
+module.exports = { parseBlocks, tokenize, classicBlocks, toBlock };

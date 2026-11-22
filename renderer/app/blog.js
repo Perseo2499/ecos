@@ -183,6 +183,7 @@ function renderBlog(items) {
     };
     // cualquier entrada se puede editar en Ecos (el HTML antiguo se convierte en bloques)
     if (it.status !== 'trash') btn(t('Editar en Ecos'), () => openFromWp(it.id, null, it.type === 'page' ? 'page' : 'post'), 'primary');
+    if (it.status !== 'trash') btn(it.type === 'page' ? t('Convertir en página de Ecos') : t('Convertir en entrada de Ecos'), () => openFromWp(it.id, null, it.type === 'page' ? 'page' : 'post', { convert: true }));
     if (it.status !== 'trash') btn(t('Editar en WordPress'), async () => window.api.open(await window.api.blogEditUrl(it.id, it.type)));
     if (it.status !== 'trash' && CFG.wpMode === 'selfhosted') btn(t('Duplicar'), () => duplicateItems([it]));
     if (it.status === 'publish') btn(t('Ver'), async () => window.api.open(it.url));

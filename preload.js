@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('api', {
   previewDraft: (d) => call('draft:preview', d),
   composeDraft: (blocks) => call('draft:compose', blocks),
   peekCss: () => call('draft:peekCss'),
+  convertSpectra: (blocks) => call('spectra:convert', blocks),
   pullPost: (id, type) => call('post:pull', id, type),
   postRevisions: (id, type) => call('post:revisions', id, type),
   sitePages: () => call('site:pages'),

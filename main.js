@@ -351,6 +351,8 @@ handle('draft:preview', async (d) => {
 });
 handle('draft:compose', (blocks) => composeBlocks(blocks));
 handle('draft:peekCss', () => require('./src/transform').PEEK_CSS);
+// Convierte los bloques de Spectra de una página en bloques editables de Ecos (lógica pura, sin tocar WordPress)
+handle('spectra:convert', (blocks) => require('./src/spectra').convertSpectra(blocks));
 // Autoguardado del borrador en curso (para recuperarlo si se cierra el editor o la app)
 const autosaveFile = () => path.join(app.getPath('userData'), 'borrador-autoguardado.json');
 handle('draft:autosave', (data) => { fs.writeFileSync(autosaveFile(), store.seal(cfg, { ...data, savedAt: new Date().toISOString() })); return true; });

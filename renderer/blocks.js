@@ -150,6 +150,7 @@
       const s = JSON.parse(from.pop());
       this.draft.blocks = s.blocks; this.draft.featuredImageId = s.f;
       this.render();
+      this.onChange?.();
     },
     doUndo() { this.restore(this.undo, this.redo); },
     doRedo() { this.restore(this.redo, this.undo); },

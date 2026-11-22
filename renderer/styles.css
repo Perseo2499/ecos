@@ -2032,3 +2032,12 @@ span.pv-pill[data-pill]:hover { background: var(--primary); color: var(--on-prim
 .crop-bar .sp-chip.on { background: var(--secondary-container); color: var(--on-primary-container); border-color: transparent; font-weight: 600; }
 /* las barras de los bloques que no están activos no ocupan sitio (así no ensanchan el lienzo con una barra de desplazamiento) */
 #ed-canvas .blk:not(.tools-on) > .blk-tools { display: none !important; }
+
+/* === Convertir páginas de Spectra en páginas de Ecos === */
+.spx-note { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; padding: 12px 14px; border-radius: var(--r-m); background: var(--secondary-container); color: var(--on-surface); border: 1px solid var(--outline-var); }
+.spx-note.hidden { display: none; }
+.spx-note > .ms { flex: none; color: var(--primary); }
+.spx-note .spx-txt { flex: 1; min-width: 0; font-size: 13px; line-height: 1.45; color: var(--on-surface-var); }
+.spx-note .spx-txt b { color: var(--on-surface); display: block; margin-bottom: 2px; }
+.spx-note .btn.spx-btn { width: auto; margin: 0; flex: none; }
+@media (max-width: 720px) { .spx-note { flex-wrap: wrap; } .spx-note .btn.spx-btn { width: 100%; justify-content: center; } }
