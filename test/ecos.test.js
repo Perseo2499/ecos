@@ -845,3 +845,71 @@ test('buildDraft sin unify (o con una sola publicación) no cambia', () => {
   assert.equal(one.title, 'Campamento 2026 en la sierra');
   assert.ok(!one.blocks.some((x) => x.type === 'heading'));
 });
+
+// --- Imagen y texto y carrusel: opciones nuevas ---------------------------------------------------------
+const mtImg = (n) => ({ id: n, url: `https://x/${n}.jpg`, alt: '' });
+test('imagen y texto: tamaño, alineación, rellenar y estilo hacen ida y vuelta y salen como media-text de WordPress', () => {
+  const b = { id: 'm', type: 'mediatext', img: mtImg(5), html: 'Hola<br><br>Dos', right: true, mediaWidth: 33, valign: 'bottom', fill: true, ratio: '4/3', frame: 'border', frameColor: '#cc0000', fx: 'zoom' };
+  const html = T.composeBlocks([b]);
+  assert.match(html, /<!-- wp:media-text \{[^}]*"mediaPosition":"right"[^}]*"mediaWidth":33[^}]*"verticalAlignment":"bottom"[^}]*"imageFill":true/);
+  assert.match(html, /is-vertically-aligned-bottom is-image-fill" style="grid-template-columns:auto 33%"/);
+  assert.match(html, /<style class="ecos-fx">.*ecos-mt-zoom/);
+  const back = P.parseBlocks(html);
+  assert.equal(back.length, 1);
+  const { id: _a, ...got } = back[0], { id: _b, ...want } = b;
+  assert.deepEqual(got, want);
+  assert.equal(T.composeBlocks(back), html);
+});
+test('imagen y texto: cada marco, recorte y efecto sobrevive y los valores por defecto no añaden nada', () => {
+  for (const o of [{ frame: 'rounded' }, { frame: 'circle', ratio: '1' }, { frame: 'shadow' }, { fx: 'bw' }, { ratio: '16/9' }, { valign: 'top' }, { valign: 'center' }, { mediaWidth: 66 }, { mediaWidth: 25 }]) {
+    const b = { id: 'm', type: 'mediatext', img: mtImg(7), html: 'Texto', right: false, ...o };
+    const back = P.parseBlocks(T.composeBlocks([b]));
+    assert.equal(back.length, 1, JSON.stringify(o));
+    const { id: _a, ...got } = back[0], { id: _b, ...want } = b;
+    assert.deepEqual(got, want, JSON.stringify(o));
+  }
+  const plain = T.composeBlocks([{ id: 'm', type: 'mediatext', img: mtImg(7), html: 'T', right: false }]);
+  assert.doesNotMatch(plain, /mediaWidth|verticalAlignment|imageFill|grid-template|ecos-fx/);
+  // un media-text de WordPress con cosas que Ecos no sabe escribir igual se conserva intacto
+  const wp = '<!-- wp:media-text {"mediaId":3,"mediaType":"image","mediaSizeSlug":"large"} -->\n<div class="wp-block-media-text is-stacked-on-mobile"><figure class="wp-block-media-text__media"><img src="https://x/3.jpg" alt="" class="wp-image-3 size-large"/></figure><div class="wp-block-media-text__content"><!-- wp:paragraph -->\n<p>t</p>\n<!-- /wp:paragraph --></div></div>\n<!-- /wp:media-text -->';
+  assert.equal(P.parseBlocks(wp)[0].type, 'raw');
+});
+test('carrusel: tamaño, proporción y estilo hacen ida y vuelta (HTML propio y Spectra) y squares equivale a 1:1', () => {
+  const imgs = [mtImg(1), mtImg(2)];
+  const opts = { size: 'xl', ratio: '3/4', corners: 'square', shadow: 'on', gap: '0', arrows: false, dots: false };
+  const nid = (h) => norm(h).replace(/"block_id":"\w+"/, '');
+  for (const o of [{}, { spectra: true }]) {
+    const html = T.composeBlocks([{ id: 'c', type: 'carousel', images: imgs, ...opts }], o);
+    const back = P.parseBlocks(html);
+    assert.equal(back.length, 1);
+    assert.equal(back[0].type, 'carousel');
+    for (const [k, v] of Object.entries(opts)) assert.equal(back[0][k], v, k);
+    assert.equal(nid(T.composeBlocks(back, o)), nid(html));
+  }
+  const html = T.composeBlocks([{ id: 'c', type: 'carousel', images: imgs, ...opts }]);
+  assert.match(html, /height:70vh;aspect-ratio:3\/4/);
+  assert.match(html, /\.ec-btn,#ecos-c-c \.ec-sbtn\{display:none/);
+  assert.doesNotMatch(html, /class="ec-nav"/);
+  const sp = T.composeBlocks([{ id: 'c', type: 'carousel', images: imgs, size: 'm', ratio: '16/9', gap: 's' }], { spectra: true });
+  assert.match(sp, /"className":"ecos-carrusel ecos-cz-m ecos-cr-16-9 ecos-cg-s"/);
+  assert.match(sp, /"paginateUseArrows":true/);
+  assert.match(sp, /<style class="ecos-fx">.*\.ecos-carrusel\.ecos-cz-m img\{height:360px/);
+  // compatibilidad: squares:true es 1:1
+  const old = T.composeBlocks([{ id: 'c', type: 'carousel', images: imgs, squares: true }], { spectra: true });
+  assert.match(old, /"carouselSquares":true/);
+  assert.equal(P.parseBlocks(old)[0].squares, true);
+  const sq = P.parseBlocks(T.composeBlocks([{ id: 'c', type: 'carousel', images: imgs, ratio: '1' }], { spectra: true }))[0];
+  assert.equal(sq.ratio, '1');
+});
+test('foto flotante + párrafo ↔ imagen y texto: ambos resultados son bloques de WordPress que se leen de vuelta', () => {
+  // lo que hace «Soltar en el texto»: imagen flotante (align + width) seguida del párrafo
+  const floating = [{ id: 'i', type: 'image', img: mtImg(5), caption: '', align: 'right', width: 33, ratio: '1', frame: 'rounded' }, { id: 'p', type: 'paragraph', html: 'El texto' }];
+  const back = P.parseBlocks(T.composeBlocks(floating));
+  assert.deepEqual(back.map((x) => x.type), ['image', 'paragraph']);
+  assert.equal(back[0].align, 'right'); assert.equal(back[0].width, 33); assert.equal(back[0].ratio, '1'); assert.equal(back[0].frame, 'rounded');
+  // y lo que hace «Juntar con el texto»
+  const joined = [{ id: 'm', type: 'mediatext', img: mtImg(5), html: 'El texto', right: true, mediaWidth: 33, ratio: '1', frame: 'rounded' }];
+  const j = P.parseBlocks(T.composeBlocks(joined));
+  assert.deepEqual(j.map((x) => x.type), ['mediatext']);
+  assert.equal(j[0].html, 'El texto'); assert.equal(j[0].right, true); assert.equal(j[0].mediaWidth, 33);
+});

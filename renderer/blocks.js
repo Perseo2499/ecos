@@ -23,6 +23,8 @@
     raw: { icon: 'code_blocks', name: t('De WordPress') },
   });
   const TEXT_TYPES = ['paragraph', 'heading', 'quote', 'list'];
+  const MT_SIZES = [25, 33, 50, 66]; // tamaños de la foto en «Imagen y texto» (% del ancho)
+  const CAR_H = { s: '240px', m: '360px', l: '480px', xl: '70vh' }; // altura de las fotos del carrusel
 
   // Enlaces de vídeo y otras webs → bloque «embed» (WordPress los inserta con oEmbed)
   const EMBEDS = [
@@ -244,6 +246,7 @@
 
     // --- Dibujo ----------------------------------------------------------------------
     render() {
+      $('#dd-pop')?.classList.add('hidden');
       this.renderCover();
       const wrap = $('#d-blocks');
       wrap.innerHTML = '';
@@ -624,13 +627,20 @@
             if (moved) toast(t('He puesto la foto antes del texto para que el texto la rodee. El texto que quieras a su lado tiene que ir justo debajo de la foto.'));
           }));
           $$('[data-w]', extra).forEach((x) => (x.onclick = () => this.change(() => { b.width = Number(x.dataset.w); delete b.w; })));
+          // foto a un lado con un párrafo justo debajo: se puede juntar con él en un bloque «Imagen y texto»
+          const nx = (b.align === 'left' || b.align === 'right') ? this.locate(b.id) : null;
+          if (nx && nx.arr[nx.i + 1]?.type === 'paragraph') {
+            extra.insertAdjacentHTML('beforeend', `<span class="lv-sep"></span><button class="lv" data-join="1" title="${t('Junta la foto y el párrafo de debajo en un bloque «Imagen y texto»')}"><span class="ms">vertical_split</span><span class="lbl">${t('Juntar con el texto')}</span></button>`);
+            $('[data-join]', extra).onclick = () => this.joinWithText(b);
+          }
           this.styleBtn(extra, b);
           break;
         }
 
         case 'gallery': case 'carousel': {
           const grid = document.createElement('div');
-          grid.className = b.type === 'gallery' ? 'g-grid' + (b.layout === 'mosaic' ? ' mosaic' : '') : `g-car v-${b.view || 'single'}${b.squares ? ' squares' : ''}`;
+          grid.className = b.type === 'gallery' ? 'g-grid' + (b.layout === 'mosaic' ? ' mosaic' : '') : `g-car v-${b.view || 'single'}`;
+          if (b.type === 'carousel') this.carLook(grid, b);
           if (b.type === 'gallery') grid.style.setProperty('--cols', b.columns);
           const vids = b.type === 'gallery'; // los vídeos van en galerías y mosaicos (el carrusel de la web solo muestra fotos)
           const cells = b.layout === 'mosaic' && b.type === 'gallery' ? window.Mosaic.mosaicLayout(b.images.length).cells : null;
@@ -652,11 +662,10 @@
             // estilo del carrusel
             + (lay === 'carousel' ? '<span class="lv-sep"></span>' + [['single', 'crop_landscape', t('Una a una')], ['multi', 'view_week', t('Varias a la vez')], ['peek', 'view_carousel', t('Vecinas asomando')]]
               .map(([k, ic, n]) => `<button class="lv ${(b.view || 'single') === k ? 'on' : ''}" data-view="${k}" title="${n}"><span class="ms">${ic}</span><span class="lbl">${n}</span></button>`).join('')
-              + `<button class="lv ${b.squares ? 'on' : ''}" data-sq="1" title="${t('Recorta todas las fotos en cuadrado')}"><span class="ms">crop_square</span><span class="lbl">${t('Cuadradas')}</span></button>`
               + (b.view === 'peek' ? `<button class="lv" data-peekcss="1" title="${t('Copia el estilo que hay que pegar una vez en tu web')}"><span class="ms">palette</span><span class="lbl">${t('Estilo para la web')}</span></button>` : '') : '');
           $$('[data-c]', extra).forEach((x) => (x.onclick = () => this.change(() => (b.columns = Number(x.dataset.c)))));
           $$('[data-view]', extra).forEach((x) => (x.onclick = () => this.change(() => (b.view = x.dataset.view))));
-          $$('[data-sq]', extra).forEach((x) => (x.onclick = () => this.change(() => (b.squares = !b.squares))));
+          if (lay === 'carousel') this.carMenus(extra, b);
           $$('[data-peekcss]', extra).forEach((x) => (x.onclick = () => this.onPeekCss?.()));
           $$('[data-lay]', extra).forEach((x) => (x.onclick = () => this.change(() => {
             const k = x.dataset.lay;
@@ -676,18 +685,40 @@
         }
 
         case 'mediatext': {
+          const mw = this.mtWidth(b);
           const row = document.createElement('div');
-          row.className = 'mt' + (b.right ? ' right' : '');
+          row.className = 'mt' + (b.right ? ' right' : '') + (b.fill ? ' fill' : '') + (b.valign === 'top' || b.valign === 'bottom' ? ' va-' + b.valign : '');
+          row.style.setProperty('--mtw', mw + '%');
           const side = document.createElement('div');
           side.className = 'mt-media';
-          if (b.img) side.appendChild(this.photo(b.img, () => this.change(() => (b.img = null)), b));
-          else side.appendChild(this.dropZone(t('Arrastra una foto'), (m) => this.change(() => (b.img = { ...m }))));
+          if (b.img) {
+            const ph = this.photo(b.img, () => this.change(() => (b.img = null)), b);
+            this.imgLook(ph, b.fill ? { ...b, ratio: null } : b);
+            side.appendChild(ph);
+          } else side.appendChild(this.dropZone(t('Arrastra una foto'), (m) => this.change(() => (b.img = { ...m }))));
           this.acceptPhoto(side, (img) => (b.img = img), { sameOk: (d) => !(d.kind === 'photo' && d.block === b.id) });
           const text = this.editable('div', b.html, t('Texto junto a la imagen…'), (h) => (b.html = h), { cls: 'mt-text' });
           row.append(side, text);
+          if (b.img) row.appendChild(this.mtSplit(b, row));
           body.appendChild(row);
-          extra.innerHTML = `<button class="lv" data-flip="1" title="${t('Cambiar de lado')}"><span class="ms">swap_horiz</span></button>`;
-          $('[data-flip]', extra).onclick = () => this.change(() => (b.right = !b.right));
+          const on = (c) => (c ? 'on' : '');
+          extra.innerHTML = [[false, 'format_image_left', t('Imagen a la izquierda')], [true, 'format_image_right', t('Imagen a la derecha')]]
+            .map(([r, ic, n]) => `<button class="lv ${on(!!b.right === r)}" data-side="${r ? 1 : 0}" title="${n}"><span class="ms">${ic}</span></button>`).join('')
+            + '<span class="lv-sep"></span>'
+            + MT_SIZES.map((w) => `<button class="lv ${on(mw === w)}" data-mw="${w}" title="${t('La imagen ocupa el {n} % del ancho', { n: w })}">${w}%</button>`).join('')
+            + '<span class="lv-sep"></span>'
+            + [['top', 'vertical_align_top', t('Texto arriba')], ['center', 'vertical_align_center', t('Texto en el centro')], ['bottom', 'vertical_align_bottom', t('Texto abajo')]]
+              .map(([k, ic, n]) => `<button class="lv ${on((b.valign || 'center') === k)}" data-va="${k}" title="${n}"><span class="ms">${ic}</span></button>`).join('')
+            + `<button class="lv ${on(b.fill)}" data-fill="1" title="${t('Rellenar: la imagen ocupa todo el alto de su lado, recortándose')}"><span class="ms">fit_screen</span><span class="lbl">${t('Rellenar')}</span></button>`;
+          $$('[data-side]', extra).forEach((x) => (x.onclick = () => this.change(() => (b.right = x.dataset.side === '1'))));
+          $$('[data-mw]', extra).forEach((x) => (x.onclick = () => this.change(() => this.setMtWidth(b, Number(x.dataset.mw)))));
+          $$('[data-va]', extra).forEach((x) => (x.onclick = () => this.change(() => { if (x.dataset.va === 'center') delete b.valign; else b.valign = x.dataset.va; })));
+          $('[data-fill]', extra).onclick = () => this.change(() => { if (b.fill) delete b.fill; else b.fill = true; });
+          if (b.img) {
+            this.styleBtn(extra, b);
+            extra.insertAdjacentHTML('beforeend', `<span class="lv-sep"></span><button class="lv" data-drop="1" title="${t('Saca la foto del bloque y deja el texto rodeándola: la foto queda a un lado, dentro del texto')}"><span class="ms">wrap_text</span><span class="lbl">${t('Soltar en el texto')}</span></button>`);
+            $('[data-drop]', extra).onclick = () => this.dropIntoText(b);
+          }
           break;
         }
 
@@ -957,6 +988,125 @@
       } catch (e) { window.toastError?.(e); }
     },
 
+    // --- Imagen y texto: tamaño de la foto, divisor que se arrastra, soltar en el texto y juntar de nuevo ---------------------
+    mtWidth(b) { const w = Number(b.mediaWidth); return Number.isInteger(w) && w >= 10 && w <= 90 ? w : 50; },
+    setMtWidth(b, w) { if (w === 50) delete b.mediaWidth; else b.mediaWidth = w; },
+    // Tirador entre la foto y el texto: salta a 25/33/50/66 % y admite cualquier entero entre 20 y 80
+    mtSplit(b, row) {
+      const h = document.createElement('span');
+      h.className = 'mt-split'; h.title = t('Arrastra para cambiar el tamaño de la imagen');
+      h.innerHTML = '<span class="ms">drag_indicator</span>';
+      h.onmousedown = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const r = row.getBoundingClientRect(), blk = row.closest('.blk');
+        const tip = document.createElement('span');
+        tip.className = 'rs-tip'; blk?.appendChild(tip);
+        let w = this.mtWidth(b);
+        const move = (ev) => {
+          const x = b.right ? r.right - ev.clientX : ev.clientX - r.left;
+          let v = Math.round(((x - 10) / r.width) * 100);
+          v = Math.max(20, Math.min(80, v));
+          const near = MT_SIZES.find((n) => Math.abs(n - v) <= 2);
+          w = near || v;
+          row.style.setProperty('--mtw', w + '%'); tip.textContent = w + '%';
+        };
+        const up = () => {
+          document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up);
+          tip.remove();
+          if (w !== this.mtWidth(b)) this.change(() => this.setMtWidth(b, w));
+        };
+        document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+      };
+      return h;
+    },
+    // «Imagen y texto» → foto flotante (a un lado, con el texto alrededor) + párrafo
+    dropIntoText(b) {
+      const loc = this.locate(b.id);
+      if (!loc || !b.img) return;
+      this.change(() => {
+        const w = this.mtWidth(b), width = [33, 50, 75].reduce((a, c) => (Math.abs(c - w) < Math.abs(a - w) ? c : a));
+        const img = this.create('image', { img: b.img, align: b.right ? 'right' : 'left', width });
+        for (const k of ['ratio', 'frame', 'frameColor', 'fx']) if (b[k]) img[k] = b[k];
+        loc.arr.splice(loc.i, 1, img, this.create('paragraph', { html: b.html || '' }));
+      });
+      info(t('La foto ya no está dentro del bloque: queda a un lado y el texto de debajo la rodea. Puedes arrastrarla a otro punto del texto; para volver a unirlas, pulsa «Juntar con el texto».'));
+    },
+    // Foto flotante + párrafo siguiente → «Imagen y texto»
+    joinWithText(b) {
+      const loc = this.locate(b.id), next = loc?.arr[loc.i + 1];
+      if (!loc || next?.type !== 'paragraph') return;
+      this.change(() => {
+        let pct = b.w ? (/px$/.test(b.w) ? (parseFloat(b.w) / 760) * 100 : parseFloat(b.w)) : ({ 33: 33, 50: 50, 75: 66 }[b.width] || 50);
+        if (!(pct > 0)) pct = 50;
+        const mw = MT_SIZES.reduce((a, c) => (Math.abs(c - pct) < Math.abs(a - pct) ? c : a));
+        const mt = this.create('mediatext', { img: b.img, html: next.html || '', right: b.align === 'right' });
+        this.setMtWidth(mt, mw);
+        for (const k of ['ratio', 'frame', 'frameColor', 'fx']) if (b[k]) mt[k] = b[k];
+        loc.arr.splice(loc.i, 2, mt);
+      });
+      info(t('Foto y texto juntos en un bloque «Imagen y texto». Si quieres que el texto rodee la foto, usa «Soltar en el texto».'));
+    },
+
+    // --- Carrusel: tamaño, proporción y estilo (se ven igual en el editor y en la web) --------------------------------------------
+    carLook(grid, b) {
+      const ratio = b.ratio ?? (b.squares ? '1' : '');
+      if (CAR_H[b.size]) { grid.classList.add('has-h'); grid.style.setProperty('--car-h', CAR_H[b.size]); }
+      if (ratio) { grid.classList.add('has-r'); grid.style.setProperty('--car-r', ratio.replace('/', ' / ')); }
+      if (b.corners) grid.classList.add('cc-' + b.corners);
+      if (b.shadow) grid.classList.add('cs-' + b.shadow);
+      if (b.gap !== undefined) grid.style.setProperty('--car-gap', { 0: '0px', s: '4px', l: '14px' }[b.gap] || '10px');
+    },
+    // Botones desplegables de la barra del carrusel: icono + nombre corto; abren un menú pequeño con las opciones
+    carMenus(extra, b) {
+      const ratio = b.ratio ?? (b.squares ? '1' : '');
+      const set = (k, v) => () => { if (v === '' || v === undefined) delete b[k]; else b[k] = v; if (k === 'ratio') { delete b.squares; if (v === '') b.ratio = ''; } };
+      const sw = (k, vals) => vals.map(([v, n]) => [v, n, (b[k] ?? '') === v, set(k, v)]);
+      const menus = {
+        size: { icon: 'photo_size_select_large', label: t('Tamaño'), title: t('Tamaño de las fotos (altura)'), groups: [{ label: t('Altura de las fotos'), opts: sw('size', [['', t('Original')], ['s', t('Pequeño')], ['m', t('Mediano')], ['l', t('Grande')], ['xl', t('Pantalla completa')]]) }] },
+        ratio: { icon: 'aspect_ratio', label: t('Proporción'), title: t('Recorte de las fotos por proporción'), groups: [{ label: t('Recorte'), opts: [['', t('Original')], ['1', '1:1'], ['4/3', '4:3'], ['3/2', '3:2'], ['16/9', '16:9'], ['3/4', '3:4']].map(([v, n]) => [v, n, ratio === v, set('ratio', v)]) }] },
+        style: {
+          icon: 'rounded_corner', label: t('Estilo'), title: t('Esquinas, sombra, separación, flechas y puntos'),
+          groups: [
+            { label: t('Esquinas'), opts: sw('corners', [['', t('Predeterminadas')], ['square', t('Rectas')], ['round', t('Redondeadas')]]) },
+            { label: t('Sombra'), opts: sw('shadow', [['', t('Predeterminada')], ['off', t('Sin sombra')], ['on', t('Con sombra')]]) },
+            { label: t('Separación entre fotos'), opts: sw('gap', [['', t('Predeterminada')], ['0', t('Sin')], ['s', t('Poca')], ['l', t('Mucha')]]) },
+            { label: t('Flechas'), opts: [[true, t('Visibles'), b.arrows !== false, () => { delete b.arrows; }], [false, t('Ocultas'), b.arrows === false, () => { b.arrows = false; }]] },
+            { label: t('Puntos'), opts: [[true, t('Visibles'), b.dots !== false, () => { delete b.dots; }], [false, t('Ocultos'), b.dots === false, () => { b.dots = false; }]] },
+          ],
+        },
+      };
+      extra.insertAdjacentHTML('beforeend', '<span class="lv-sep"></span>' + Object.entries(menus).map(([k, m]) => `<button class="lv dd ${this.dd?.id === b.id && this.dd.key === k ? 'on' : ''}" data-dd="${k}" title="${esc(m.title)}"><span class="ms">${m.icon}</span><span class="dd-l">${m.label}</span><span class="ms dd-ch">expand_more</span></button>`).join(''));
+      $$('[data-dd]', extra).forEach((x) => {
+        const m = menus[x.dataset.dd];
+        x.onclick = () => {
+          if (this.dd?.id === b.id && this.dd.key === x.dataset.dd && !$('#dd-pop')?.classList.contains('hidden')) { this.closeDrop(); return; }
+          const r = x.getBoundingClientRect();
+          this.dd = { id: b.id, key: x.dataset.dd, x: r.left, y: r.bottom + 8 };
+          this.openDrop(x, m, b);
+        };
+        if (this.dd?.id === b.id && this.dd.key === x.dataset.dd) requestAnimationFrame(() => { const nb = $(`.blk[data-id="${b.id}"] [data-dd="${x.dataset.dd}"]`); if (nb) this.openDrop(nb, m, b); });
+      });
+    },
+    dd: null,
+    closeDrop() { $('#dd-pop')?.classList.add('hidden'); this.dd = null; $$('.lv.dd.on').forEach((x) => x.classList.remove('on')); },
+    openDrop(btn, m, b) {
+      let el = $('#dd-pop');
+      if (!el) {
+        el = document.createElement('div'); el.id = 'dd-pop'; el.className = 'sty-pop dd-pop hidden';
+        document.body.appendChild(el);
+        document.addEventListener('mousedown', (e) => { if (this.dd && !e.target.closest('#dd-pop, [data-dd]')) this.closeDrop(); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && this.dd) this.closeDrop(); });
+      }
+      el.innerHTML = m.groups.map((g, gi) => `<div class="sp-row"><div class="sp-lbl">${esc(g.label)}</div><div class="sp-chips">${g.opts.map(([, n, on], oi) => `<button class="sp-chip ${on ? 'on' : ''}" data-g="${gi}" data-o="${oi}">${esc(n)}</button>`).join('')}</div></div>`).join('');
+      el.classList.remove('hidden');
+      btn.classList.add('on');
+      // la posición se fija al abrir (la barra puede ocultarse al llevar el ratón al menú)
+      el.style.left = Math.max(8, Math.min(innerWidth - el.offsetWidth - 8, this.dd.x)) + 'px';
+      el.style.top = Math.max(8, Math.min(innerHeight - el.offsetHeight - 8, this.dd.y)) + 'px';
+      $$('.sp-chip', el).forEach((x) => (x.onclick = () => { const o = m.groups[Number(x.dataset.g)].opts[Number(x.dataset.o)]; this.change(o[3]); }));
+      void b;
+    },
+
     // --- Imagen: recorte, marco, efecto y tamaño libre (se ven igual en el editor y en la web) ------------------------------
     imgLook(ph, b) {
       const im = $('img', ph);
@@ -1068,12 +1218,12 @@
         };
       };
       const rows = [];
-      if (b.type === 'image') {
+      if (b.type === 'image' || b.type === 'mediatext') {
         const px = /px$/.test(b.w || '');
         rows.push({ label: t('Recortar la foto'), chips: [{ t: t('Recortar…'), ic: 'crop', on: false, raw: () => this.cropImage(b) }] });
         rows.push({ label: t('Recorte'), chips: [['', t('Original')], ['1', '1:1'], ['4/3', '4:3'], ['3/2', '3:2'], ['16/9', '16:9'], ['9/16', '9:16']]
           .map(([v, n]) => chip(n, (b.ratio || '') === v, () => { set('ratio', v)(); if (v !== '1' && b.frame === 'circle') delete b.frame; })) });
-        rows.push({
+        if (b.type === 'image') rows.push({
           label: t('Ancho'),
           html: `<input type="number" class="sp-num" min="5" max="2000" value="${parseFloat(b.w) || ''}" placeholder="${t('auto')}"><button class="sp-chip ${!px ? 'on' : ''}" data-u="%">%</button><button class="sp-chip ${px ? 'on' : ''}" data-u="px">px</button><button class="sp-chip" data-u="">${t('Auto')}</button>`,
           wire: (root) => {
@@ -1096,7 +1246,7 @@
         ] });
         if (b.frame === 'border') rows.push({ label: t('Color del borde'), color: { get: () => b.frameColor || '#333333', set: (v) => { b.frameColor = v; } } });
         rows.push({ label: t('Efecto'), chips: [chip(t('Ninguno'), !b.fx, () => { delete b.fx; }), chip(t('Zoom al pasar el ratón'), b.fx === 'zoom', () => { b.fx = 'zoom'; }), chip(t('Blanco y negro'), b.fx === 'bw', () => { b.fx = 'bw'; })] });
-        rows.push({ label: t('Convertir en'), chips: [['grid', 'grid_view', t('Galería')], ['mosaic', 'dashboard', t('Mosaico')], ['carousel', 'view_carousel', t('Carrusel')]].map(([k, ic, n]) => ({ t: n, ic, on: false, raw: () => this.convertImage(b, k) })) });
+        if (b.type === 'image') rows.push({ label: t('Convertir en'), chips: [['grid', 'grid_view', t('Galería')], ['mosaic', 'dashboard', t('Mosaico')], ['carousel', 'view_carousel', t('Carrusel')]].map(([k, ic, n]) => ({ t: n, ic, on: false, raw: () => this.convertImage(b, k) })) });
       } else if (b.type === 'group') {
         rows.push({ label: t('Color de fondo'), color: { get: () => b.bg || '', set: (v) => { set('bg', v)(); if (v) delete b.gradient; }, none: true } });
         rows.push(gradRow());
@@ -1379,6 +1529,7 @@
   }
   document.addEventListener('dragend', endDrag);
   const toast = (m) => window.toast ? window.toast(m, true) : alert(m);
+  const info = (m) => window.toast ? window.toast(m) : alert(m); // aviso que no es un error
   Object.assign(E, { detectEmbed, applyStyle, TEXT_TYPES, FONTS });
   window.BlockEditor = E;
 })();

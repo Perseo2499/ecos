@@ -243,6 +243,7 @@ const caption = (c) => (c && inline(c) ? `<figcaption class="wp-element-caption"
 const IMG_W = { 33: 250, 50: 380, 75: 570 };
 // Recortes por proporción (aspectRatio + scale:'cover' de core/image, WordPress 6.3+)
 const IMG_RATIOS = ['1', '4/3', '3/2', '16/9', '9/16'];
+const MT_RATIOS = IMG_RATIOS;
 const IMG_SHADOW = '6px 6px 9px rgba(0, 0, 0, 0.2)';
 const IMG_FX = { zoom: 'ecos-zoom', bw: 'ecos-bn' };
 // Estilos mínimos de los efectos propios (clases ecos-*): van en un bloque HTML con <style> al final del contenido
@@ -252,6 +253,34 @@ const FX_CSS = {
   bw: '.wp-block-image.ecos-bn img{filter:grayscale(1)}',
   iconos: '.wp-block-list.ecos-iconos{list-style:none;padding-left:0}.wp-block-list.ecos-iconos li{margin:.4em 0}.ecos-iconos .ecos-ico{display:inline-block;min-width:1.6em;color:#fd9800;font-weight:700}',
 };
+// Imagen y texto (clases ecos-mt-*) y carrusel (clases ecos-c*): un trozo de CSS por clase usada
+const MT = '.wp-block-media-text';
+Object.assign(FX_CSS, {
+  'mt-rounded': `${MT}.ecos-mt-rounded .wp-block-media-text__media{border-radius:16px;overflow:hidden}`,
+  'mt-circle': `${MT}.ecos-mt-circle .wp-block-media-text__media{border-radius:9999px;overflow:hidden}`,
+  'mt-shadow': `${MT}.ecos-mt-shadow .wp-block-media-text__media{box-shadow:6px 6px 9px rgba(0,0,0,.2)}`,
+  'mt-border': `${MT}.ecos-mt-border .wp-block-media-text__media{box-sizing:border-box}`,
+  'mt-zoom': `${MT}.ecos-mt-zoom .wp-block-media-text__media{overflow:hidden}${MT}.ecos-mt-zoom img{transition:transform .5s cubic-bezier(.2,0,0,1)}${MT}.ecos-mt-zoom:hover img{transform:scale(1.08)}`,
+  'mt-bw': `${MT}.ecos-mt-bn .wp-block-media-text__media{filter:grayscale(1)}`,
+});
+for (const r of ['1', '4/3', '3/2', '16/9', '9/16']) { const c = r.replace('/', '-'); FX_CSS['mt-r-' + c] = `${MT}.ecos-mt-r-${c}:not(.is-image-fill) img{aspect-ratio:${r};object-fit:cover;height:auto}`; }
+const CAR_H = { s: '240px', m: '360px', l: '480px', xl: '70vh' };
+const CAR_RATIOS = ['1', '4/3', '3/2', '16/9', '3/4'];
+const CAR_GAP = { 0: 0, s: 4, l: 14 };
+const CAR_SHADOW = '0 10px 30px rgba(0,0,0,.18)';
+const CA = '.ecos-carrusel';
+Object.entries(CAR_H).forEach(([k, v]) => { FX_CSS['cz-' + k] = `${CA}.ecos-cz-${k} img{height:${v};object-fit:cover}`; });
+CAR_RATIOS.forEach((r) => { const c = r.replace('/', '-'); FX_CSS['cr-' + c] = `${CA}.ecos-cr-${c} img{aspect-ratio:${r};object-fit:cover}`; });
+Object.assign(FX_CSS, {
+  'cz-cr': `${CA}[class*="ecos-cz-"][class*="ecos-cr-"] img{height:auto;width:auto;max-width:100%;margin-inline:auto;display:block}`,
+  'cc-round': `${CA}.ecos-cc-round img{border-radius:18px}`,
+  'cc-sq': `${CA}.ecos-cc-sq img{border-radius:0}`,
+  'cs-on': `${CA}.ecos-cs-on img{box-shadow:${CAR_SHADOW}}`,
+  'cs-off': `${CA}.ecos-cs-off img{box-shadow:none}`,
+  'cg-0': `${CA}.ecos-cg-0 .slick-slide{padding:0}`,
+  'cg-s': `${CA}.ecos-cg-s .slick-slide{padding:0 4px}`,
+  'cg-l': `${CA}.ecos-cg-l .slick-slide{padding:0 14px}`,
+});
 const FX_MARK = 'ecos-fx';
 function fxBlock(set) {
   const css = Object.keys(FX_CSS).filter((k) => set.has(k)).map((k) => FX_CSS[k]).join('');
@@ -311,26 +340,89 @@ const PEEK_CSS = `/* Ecos: carrusel con las fotos vecinas asomando */
 .ecos-peek .slick-slide.slick-active{transform:none;opacity:1;filter:none}
 .ecos-peek .slick-slide img{border-radius:18px}
 @media (max-width:600px){.ecos-peek .slick-list{padding:0 8% !important}}`;
-function spectraCarouselBlock(b) {
+// Opciones del carrusel (b.size, b.ratio o b.squares, b.corners, b.shadow, b.gap, b.arrows, b.dots), validadas
+function carOpts(b) {
+  const o = {};
+  if (CAR_H[b.size]) o.size = b.size;
+  const ratio = b.ratio ?? (b.squares ? '1' : '');
+  if (CAR_RATIOS.includes(ratio)) o.ratio = ratio;
+  if (b.corners === 'round' || b.corners === 'square') o.corners = b.corners;
+  if (b.shadow === 'on' || b.shadow === 'off') o.shadow = b.shadow;
+  if (['0', 's', 'l'].includes(String(b.gap))) o.gap = String(b.gap);
+  if (b.arrows === false) o.arrows = false;
+  if (b.dots === false) o.dots = false;
+  return o;
+}
+function spectraCarouselBlock(b, fx = null) {
+  const o = carOpts(b);
+  const keys = [];
+  if (o.size) keys.push('cz-' + o.size);
+  if (CAR_RATIOS.includes(b.ratio)) keys.push('cr-' + b.ratio.replace('/', '-')); // «squares» (antiguo) lo hace el propio Spectra
+  if (o.size && o.ratio) keys.push('cz-cr');
+  if (o.corners) keys.push(o.corners === 'round' ? 'cc-round' : 'cc-sq');
+  if (o.shadow) keys.push(o.shadow === 'on' ? 'cs-on' : 'cs-off');
+  if (o.gap) keys.push('cg-' + o.gap);
+  keys.forEach((k) => fx?.add(k));
   const hex = require('crypto').createHash('md5').update(String(b.id)).digest('hex').slice(0, 8);
   const media = b.images.map((i) => ({ id: Number(i.id) || 0, url: i.url, alt: i.alt || '', caption: b.captions ? (i.alt || '') : '' }));
   const a = {
     block_id: hex, readyToRender: true, mediaGallery: media, mediaIDs: media.map((m) => m.id).filter(Boolean), feedLayout: 'carousel',
-    columnsDesk: b.view === 'multi' ? 3 : 1, columnsTab: b.view === 'multi' ? 2 : 1, columnsMob: 1, carouselSquares: !!b.squares, carouselLoop: true, carouselAutoplay: b.autoplay !== false, carouselAutoplaySpeed: 5000,
-    carouselPauseOnHover: true, imageClickEvent: 'lightbox', paginateUseArrows: true, paginateUseDots: true, imageDisplayCaption: !!b.captions, galleryImageSize: 'large', className: 'ecos-carrusel' + (b.view === 'peek' ? ' ecos-peek' : ''),
+    columnsDesk: b.view === 'multi' ? 3 : 1, columnsTab: b.view === 'multi' ? 2 : 1, columnsMob: 1, carouselSquares: o.ratio === '1', carouselLoop: true, carouselAutoplay: b.autoplay !== false, carouselAutoplaySpeed: 5000,
+    carouselPauseOnHover: true, imageClickEvent: 'lightbox', paginateUseArrows: o.arrows !== false, paginateUseDots: o.dots !== false, imageDisplayCaption: !!b.captions, galleryImageSize: 'large', className: ['ecos-carrusel', b.view === 'peek' ? 'ecos-peek' : '', ...keys.filter((k) => k !== 'cz-cr').map((k) => 'ecos-' + k)].filter(Boolean).join(' '),
   };
   return `<!-- wp:uagb/image-gallery ${JSON.stringify(a).replace(/--/g, '\\u002d\\u002d')} /-->`;
 }
 
+// Imagen y texto: bloque media-text de WordPress. Tamaño (mediaWidth), alineación vertical e «imageFill» son atributos
+// estándar; el marco, el recorte y el efecto de la foto van en clases ecos-mt-* (con su CSS en el bloque ecos-fx)
+const MT_FRAMES = ['rounded', 'circle', 'border', 'shadow'];
+function mediaTextBlock(b, fx = null) {
+  const img = b.img, right = !!b.right;
+  const mw = Number.isInteger(Number(b.mediaWidth)) && b.mediaWidth >= 10 && b.mediaWidth <= 90 ? Number(b.mediaWidth) : 50;
+  const va = ['top', 'center', 'bottom'].includes(b.valign) ? b.valign : '';
+  const fill = !!b.fill;
+  const cn = [];
+  const ratio = MT_RATIOS.includes(b.ratio) ? b.ratio : '';
+  if (ratio) cn.push('ecos-mt-r-' + ratio.replace('/', '-'));
+  const frame = MT_FRAMES.includes(b.frame) ? b.frame : '';
+  if (frame) cn.push('ecos-mt-' + frame);
+  if (b.fx === 'zoom') cn.push('ecos-mt-zoom'); else if (b.fx === 'bw') cn.push('ecos-mt-bn');
+  cn.forEach((c) => fx?.add(c === 'ecos-mt-bn' ? 'mt-bw' : c.replace('ecos-', '')));
+  const attrs = {};
+  if (right) attrs.mediaPosition = 'right';
+  if (imgId(img)) attrs.mediaId = imgId(img);
+  attrs.mediaLink = img.url; attrs.mediaType = 'image';
+  if (mw !== 50) attrs.mediaWidth = mw;
+  if (va) attrs.verticalAlignment = va;
+  if (fill) attrs.imageFill = true;
+  if (cn.length) attrs.className = cn.join(' ');
+  const cls = ['wp-block-media-text', ...(cn), ...(right ? ['has-media-on-the-right'] : []), 'is-stacked-on-mobile', ...(va ? ['is-vertically-aligned-' + va] : []), ...(fill ? ['is-image-fill'] : [])];
+  const grid = mw !== 50 ? ` style="grid-template-columns:${right ? `auto ${mw}%` : `${mw}% auto`}"` : '';
+  const fig = [];
+  if (fill) fig.push(`background-image:url(${esc(img.url)})`, 'background-position:50% 50%');
+  if (frame === 'border') fig.push(`border:2px solid ${SAFE_COLOR.test(b.frameColor || '') ? b.frameColor : '#333333'}`);
+  const text = sanitizeParagraphs(b.html).map(para).join('\n');
+  return `<!-- wp:media-text ${JSON.stringify(attrs).replace(/--/g, '\\u002d\\u002d')} -->\n<div class="${cls.join(' ')}"${grid}><figure class="wp-block-media-text__media"${fig.length ? ` style="${fig.join(';')}"` : ''}><img src="${esc(img.url)}" alt="${esc(img.alt || '')}" class="${imgId(img) ? `wp-image-${imgId(img)} ` : ''}size-full"/></figure><div class="wp-block-media-text__content">${text}</div></div>\n<!-- /wp:media-text -->`;
+}
+
 function carouselBlock(b) {
+  const o = carOpts(b);
+  const H = CAR_H[o.size] || '', R = o.ratio || '';
+  const radius = o.corners === 'square' ? 0 : 18;
+  const shadow = o.shadow === 'off' ? 'none' : CAR_SHADOW;
+  const gap = o.gap !== undefined ? CAR_GAP[o.gap] : 14;
+  // tamaño de cada diapositiva: con altura y proporción, el ancho sale de las dos; solo con altura, ocupa casi todo el ancho
+  const slideSize = H && R ? `flex:0 0 auto;height:${H};aspect-ratio:${R};max-width:90%` : H ? `flex:0 0 84%;height:${H}` : `flex:0 0 84%;aspect-ratio:${R || '4/3'}`;
+  const dataOpts = Object.entries({ size: o.size, ratio: o.ratio, corners: o.corners, shadow: o.shadow, gap: o.gap }).filter(([, v]) => v !== undefined).map(([k, v]) => ` data-${k}="${v}"`).join('')
+    + (o.arrows === false ? ' data-arrows="0"' : '') + (o.dots === false ? ' data-dots="0"' : '');
   const id = 'ecos-c-' + b.id.replace(/[^a-z0-9]/gi, '');
   const S = `#${id}`;
-  const css = `${S}{position:relative;margin:2em 0;outline:none;--ec-r:18px}`
-    + `${S} .ec-track{position:relative;display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;padding:4px 8%;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-top:14px;padding-bottom:28px}`
+  const css = `${S}{position:relative;margin:2em 0;outline:none;--ec-r:${radius}px}`
+    + `${S} .ec-track{position:relative;display:flex;gap:${gap}px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;padding:4px 8%;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-top:14px;padding-bottom:28px}`
     + `${S} .ec-track::-webkit-scrollbar{display:none}`
     + `${S}.ec-js .ec-track{cursor:grab}${S} .ec-track.ec-dragging{cursor:grabbing;scroll-snap-type:none;scroll-behavior:auto;user-select:none}`
     + `${S} .ec-slide img{-webkit-user-drag:none;user-select:none}`
-    + `${S} .ec-slide{position:relative;flex:0 0 84%;margin:0;aspect-ratio:4/3;border-radius:var(--ec-r);overflow:hidden;scroll-snap-align:center;background:#111;box-shadow:0 10px 30px rgba(0,0,0,.18);transition:transform .5s cubic-bezier(.2,0,0,1),opacity .5s,filter .5s}`
+    + `${S} .ec-slide{position:relative;${slideSize};margin:0;border-radius:var(--ec-r);overflow:hidden;scroll-snap-align:center;background:#111;box-shadow:${shadow};transition:transform .5s cubic-bezier(.2,0,0,1),opacity .5s,filter .5s}`
     + `${S} .ec-bg{transform:scale(1.25)}${S} .ec-sbtn:hover{background-color:#fff}`
     + `${S} .ec-slide figcaption{position:absolute;left:0;right:0;bottom:0;padding:28px 18px 14px;color:#fff;font-size:.85em;background:linear-gradient(transparent,rgba(0,0,0,.65))}`
     + `${S}.ec-js .ec-slide:not(.ec-on){transform:scale(.9);opacity:.5;filter:saturate(.6)}`
@@ -343,7 +435,9 @@ function carouselBlock(b) {
     + `${S} .ec-dots{display:flex;justify-content:center;gap:7px;margin-top:12px}`
     + `${S} .ec-dot{width:8px;height:8px;padding:0;border:0;border-radius:8px;background:currentColor;opacity:.25;cursor:pointer;transition:width .3s,opacity .3s}`
     + `${S} .ec-dot.ec-on{width:26px;opacity:.85}`
-    + `@media (max-width:600px){${S} .ec-slide{flex-basis:90%}${S} .ec-btn{display:none}}`;
+    + (o.arrows === false ? `${S} .ec-btn,${S} .ec-sbtn{display:none !important}` : '')
+    + (o.dots === false ? `${S} .ec-dots{display:none !important}` : '')
+    + `@media (max-width:600px){${S} .ec-slide{${H || R ? 'max-width:94%' : 'flex-basis:90%'}}${S} .ec-btn{display:none}}`;
   // Flechas y contador escritos en cada foto, con estilos en línea: funcionan aunque WordPress quite el
   // <script> o el <style> (las flechas son enlaces a la foto anterior y siguiente)
   const n = b.images.length;
@@ -352,10 +446,10 @@ function carouselBlock(b) {
   const figs = b.images.map((i, k) => {
     const alt = esc(i.alt || '');
     const prev = `${id}-${((k - 1 + n) % n) + 1}`, next = `${id}-${((k + 1) % n) + 1}`;
-    return `<figure class="ec-slide" id="${id}-${k + 1}" style="position:relative;flex:0 0 84%;margin:0;aspect-ratio:4/3;border-radius:18px;overflow:hidden;background-color:#111">`
+    return `<figure class="ec-slide" id="${id}-${k + 1}" style="position:relative;${slideSize};margin:0;border-radius:${radius}px;overflow:hidden;background-color:#111${o.shadow === 'on' ? ';box-shadow:' + CAR_SHADOW : ''}">`
       + `<img class="ec-bg" src="${esc(i.url)}" alt="" aria-hidden="true" loading="lazy" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;filter:blur(24px) brightness(.7);margin:0"/>`
       + `<img src="${esc(i.url)}" alt="${alt}" loading="lazy"${Number(i.id) ? ` class="wp-image-${i.id}"` : ''} style="position:relative;display:block;width:100%;height:100%;object-fit:contain;margin:0;border-radius:0"/>`
-      + (n > 1 ? `<span class="ec-nav"><a class="ec-sbtn" href="#${prev}" aria-label="Anterior" style="${btn};left:12px">&#8249;</a>`
+      + (n > 1 && o.arrows !== false ? `<span class="ec-nav"><a class="ec-sbtn" href="#${prev}" aria-label="Anterior" style="${btn};left:12px">&#8249;</a>`
         + `<a class="ec-sbtn" href="#${next}" aria-label="Siguiente" style="${btn};right:12px">&#8250;</a>`
         + `<span class="ec-scount" style="position:absolute;top:12px;right:12px;z-index:2;padding:3px 11px;border-radius:999px;background-color:rgba(0,0,0,.6);color:#fff;font-size:12px;font-weight:600;line-height:1.5">${k + 1} / ${n}</span></span>` : '')
       + (b.captions && i.alt ? `<figcaption>${alt}</figcaption>` : '')
@@ -363,7 +457,7 @@ function carouselBlock(b) {
   }).join('');
   const auto = b.autoplay === false ? 0 : 5000;
   const script = CAROUSEL_JS ? `<script>${CAROUSEL_JS}</script>` : '';
-  return `<!-- wp:html -->\n<div class="ecos-carrusel" id="${id}" data-ecos-carousel data-autoplay="${auto}" style="position:relative;margin:2em 0"><style>${css}</style><div class="ec-track" style="display:flex;gap:14px;overflow-x:auto;padding:14px 8% 28px">${figs}</div></div>${script}\n<!-- /wp:html -->`;
+  return `<!-- wp:html -->\n<div class="ecos-carrusel" id="${id}" data-ecos-carousel data-autoplay="${auto}"${dataOpts} style="position:relative;margin:2em 0"><style>${css}</style><div class="ec-track" style="display:flex;gap:${gap}px;overflow-x:auto;padding:14px 8% 28px">${figs}</div></div>${script}\n<!-- /wp:html -->`;
 }
 
 // Estilos de bloque (alineación, tamaño, fuente, colores) con los atributos estándar de WordPress
@@ -745,14 +839,8 @@ function composeList(blocks, opts, ctx) {
         out.push(`<!-- wp:gallery {"columns":${cols},"linkTo":"none"} -->\n<figure class="wp-block-gallery has-nested-images columns-${cols} is-cropped">\n${b.images.map((i) => imageBlockFull(i)).join('\n')}\n</figure>\n<!-- /wp:gallery -->`);
         break;
       }
-      case 'carousel': { const c = { ...b, images: (b.images || []).filter((i) => i.type !== 'video') }; if (c.images.length) out.push(opts.spectra ? spectraCarouselBlock(c) : carouselBlock(c)); break; }
-      case 'mediatext': {
-        if (!b.img) break;
-        const right = b.right ? ' has-media-on-the-right' : '';
-        const text = sanitizeParagraphs(b.html).map(para).join('\n');
-        out.push(`<!-- wp:media-text {${b.right ? '"mediaPosition":"right",' : ''}"mediaId":${b.img.id},"mediaLink":"${esc(b.img.url)}","mediaType":"image"} -->\n<div class="wp-block-media-text${right} is-stacked-on-mobile"><figure class="wp-block-media-text__media"><img src="${esc(b.img.url)}" alt="${esc(b.img.alt || '')}" class="wp-image-${b.img.id} size-full"/></figure><div class="wp-block-media-text__content">${text}</div></div>\n<!-- /wp:media-text -->`);
-        break;
-      }
+      case 'carousel': { const c = { ...b, images: (b.images || []).filter((i) => i.type !== 'video') }; if (c.images.length) out.push(opts.spectra ? spectraCarouselBlock(c, ctx.fx) : carouselBlock(c)); break; }
+      case 'mediatext': { if (b.img) out.push(mediaTextBlock(b, ctx.fx)); break; }
       case 'video': if (b.video) out.push(videoBlock(b.video, b.caption)); break;
       case 'embed': if (b.url) out.push(b.provider === 'instagram' || b.provider === 'facebook' || !b.provider ? embedBlock(b.url, b.provider || 'instagram') : embedFull(b)); break;
       case 'raw': if (b.markup) out.push(b.markup); break; // bloque de WordPress que Ecos conserva sin tocar
