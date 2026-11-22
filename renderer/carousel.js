@@ -88,13 +88,26 @@
       void bar.offsetWidth;
       if (!paused) { bar.style.transition = 'transform ' + ms + 'ms linear'; bar.style.transform = 'scaleX(1)'; }
     }
-    function tick() { if (!paused && !doc.hidden) go(cur + 1); }
+    function tick() { if (!paused && !doc.hidden && !playing) go(cur + 1); }
     function start() { clearInterval(timer); if (ms && !still) timer = setInterval(tick, ms); }
     function hold() { start(); restartBar(); }
     root.addEventListener('mouseenter', function () { paused = true; restartBar(); });
     root.addEventListener('mouseleave', function () { paused = false; hold(); });
     track.addEventListener('touchstart', function () { paused = true; }, { passive: true });
     track.addEventListener('touchend', function () { paused = false; hold(); }, { passive: true });
+    // Vídeos: no pasa a la siguiente diapositiva mientras uno suena, y se pausan al salir de la vista o al cambiar de diapositiva
+    var playing = false;
+    var vids = Array.prototype.slice.call(root.querySelectorAll('video'));
+    function pauseOthers() { vids.forEach(function (v) { var s = v.closest ? v.closest('.ec-slide') : null; if (s !== slides[cur] && !v.paused) v.pause(); }); }
+    vids.forEach(function (v) {
+      v.addEventListener('play', function () { playing = true; pauseOthers(); });
+      v.addEventListener('pause', function () { playing = vids.some(function (x) { return !x.paused && !x.ended; }); });
+      v.addEventListener('ended', function () { playing = vids.some(function (x) { return !x.paused && !x.ended; }); });
+    });
+    track.addEventListener('scroll', function () { setTimeout(pauseOthers, 250); }, { passive: true });
+    if (vids.length && window.IntersectionObserver) {
+      new IntersectionObserver(function (es) { es.forEach(function (e) { if (!e.isIntersecting) vids.forEach(function (v) { if (!v.paused) v.pause(); }); }); }, { threshold: 0.1 }).observe(root);
+    }
     if (!ms || still) root.classList.add('ec-static');
     update(); start();
   }

@@ -300,6 +300,7 @@
     'Ocultas': 'Hidden',
     'Ocultos': 'Hidden',
     // 1.2 (editor completo)
+    'Colocación': 'Placement', 'Izquierda': 'Left', 'Derecha': 'Right',
     'Categoría': 'Category',
     'Todas las fotos ya tienen descripción. ¿Volver a describirlas todas?': 'All photos already have a description. Describe them all again?',
     'Describir de nuevo': 'Describe again',

@@ -54,9 +54,23 @@ const mediaKey = (m) => (m.type === 'video' ? m.videoUrl || m.path || m.url : m.
 
 const para = (html) => `<!-- wp:paragraph -->\n<p>${html}</p>\n<!-- /wp:paragraph -->`;
 
-function videoBlock(v, cap = '') {
+const VID_FRAMES = ['rounded', 'border', 'shadow'];
+// Vídeo suelto. Estilo opcional (place): colocación y ancho, recorte por proporción, marco y efecto, todo con clases ecos-v-*
+// (su CSS va en el bloque ecos-fx); el contenedor lleva el redondeo y recorta, así el zoom no saca picos
+function videoBlock(v, cap = '', place = {}, fx = null) {
   const c = cap && sanitizeParagraphs(cap).join('<br>');
-  return `<!-- wp:video${v.id ? ` {"id":${v.id}}` : ''} -->\n<figure class="wp-block-video"><video controls preload="metadata" src="${esc(v.url)}"></video>${c ? `<figcaption class="wp-element-caption">${c}</figcaption>` : ''}</figure>\n<!-- /wp:video -->`;
+  const cn = [];
+  const align = ['left', 'center', 'right'].includes(place.align) ? place.align : '';
+  if (align) { cn.push('ecos-v-a-' + align); cn.push('ecos-v-w-' + (IMG_W[place.width] ? place.width : 50)); }
+  if (IMG_RATIOS.includes(place.ratio)) cn.push('ecos-v-r-' + place.ratio.replace('/', '-'));
+  if (VID_FRAMES.includes(place.frame)) cn.push('ecos-v-' + place.frame);
+  if (place.fx === 'zoom') cn.push('ecos-v-zoom'); else if (place.fx === 'bw') cn.push('ecos-v-bw');
+  cn.forEach((k) => fx?.add(k.replace('ecos-', '')));
+  const attrs = {};
+  if (v.id) attrs.id = Number(v.id) || v.id;
+  if (cn.length) attrs.className = cn.join(' ');
+  const json = Object.keys(attrs).length ? ' ' + JSON.stringify(attrs) : '';
+  return `<!-- wp:video${json} -->\n<figure class="${['wp-block-video', ...cn].join(' ')}"><video controls preload="metadata" src="${esc(v.url)}"></video>${c ? `<figcaption class="wp-element-caption">${c}</figcaption>` : ''}</figure>\n<!-- /wp:video -->`;
 }
 
 function embedBlock(url, provider) {
@@ -270,6 +284,19 @@ Object.assign(FX_CSS, {
   mt: `${MT}.ecos-mt>.wp-block-media-text__content{padding:0 0 0 2em}${MT}.ecos-mt.has-media-on-the-right>.wp-block-media-text__content{padding:0 2em 0 0}@media (max-width:600px){${MT}.ecos-mt.is-stacked-on-mobile>.wp-block-media-text__content{padding:1em 0 0}}`,
 });
 for (const r of ['1', '4/3', '3/2', '16/9', '9/16']) { const c = r.replace('/', '-'); FX_CSS['mt-r-' + c] = `${MT}.ecos-mt-r-${c}:not(.is-image-fill) img{aspect-ratio:${r};object-fit:cover;height:auto}`; }
+const VC = '.wp-block-video.ecos-v-';
+Object.assign(FX_CSS, {
+  'v-rounded': `${VC}rounded{border-radius:16px;overflow:hidden}`,
+  'v-border': `${VC}border{border:2px solid #333;box-sizing:border-box}`,
+  'v-shadow': `${VC}shadow{box-shadow:${IMG_SHADOW}}`,
+  'v-zoom': `${VC}zoom{overflow:hidden}${VC}zoom video{transition:transform .5s cubic-bezier(.2,0,0,1)}${VC}zoom:hover video{transform:scale(1.08)}`,
+  'v-bw': `${VC}bw video{filter:grayscale(1)}`,
+  'v-a-left': `${VC}a-left{margin-left:0;margin-right:auto}`,
+  'v-a-center': `${VC}a-center{margin-left:auto;margin-right:auto}`,
+  'v-a-right': `${VC}a-right{margin-left:auto;margin-right:0}`,
+});
+for (const [k, w] of Object.entries(IMG_W)) FX_CSS['v-w-' + k] = `${VC}w-${k}{width:${w}px;max-width:100%}`;
+for (const r of IMG_RATIOS) { const c = r.replace('/', '-'); FX_CSS['v-r-' + c] = `${VC}r-${c} video{aspect-ratio:${r};object-fit:cover;width:100%;height:auto}`; }
 const CAR_H = { s: '240px', m: '360px', l: '480px', xl: '70vh' };
 const CAR_RATIOS = ['1', '4/3', '3/2', '16/9', '3/4'];
 const CAR_GAP = { 0: 0, s: 4, l: 14 };
@@ -461,9 +488,13 @@ function carouselBlock(b) {
   const figs = b.images.map((i, k) => {
     const alt = esc(i.alt || '');
     const prev = `${id}-${((k - 1 + n) % n) + 1}`, next = `${id}-${((k + 1) % n) + 1}`;
-    return `<figure class="ec-slide" id="${id}-${k + 1}" style="position:relative;${slideSize};margin:0;border-radius:${radius}px;overflow:hidden;background-color:#111${o.shadow === 'on' ? ';box-shadow:' + CAR_SHADOW : ''}">`
-      + `<img class="ec-bg" src="${esc(i.url)}" alt="" aria-hidden="true" loading="lazy" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;filter:blur(24px) brightness(.7);margin:0"/>`
-      + `<img src="${esc(i.url)}" alt="${alt}" loading="lazy"${Number(i.id) ? ` class="wp-image-${i.id}"` : ''} style="position:relative;display:block;width:100%;height:100%;object-fit:contain;margin:0;border-radius:0"/>`
+    const vid = i.type === 'video';
+    const bgUrl = vid ? i.poster : i.url;
+    return `<figure class="ec-slide${vid ? ' ec-vslide' : ''}" id="${id}-${k + 1}" style="position:relative;${slideSize};margin:0;border-radius:${radius}px;overflow:hidden;background-color:#111${o.shadow === 'on' ? ';box-shadow:' + CAR_SHADOW : ''}">`
+      + (bgUrl ? `<img class="ec-bg" src="${esc(bgUrl)}" alt="" aria-hidden="true" loading="lazy" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;filter:blur(24px) brightness(.7);margin:0"/>` : '')
+      + (vid
+        ? `<video class="ec-vid" controls preload="metadata" playsinline src="${esc(i.url)}"${i.poster ? ` poster="${esc(i.poster)}"` : ''}${Number(i.id) ? ` data-id="${i.id}"` : ''} style="position:relative;display:block;width:100%;height:100%;object-fit:${R ? 'cover' : 'contain'};margin:0;border-radius:0;background-color:#000"></video>`
+        : `<img src="${esc(i.url)}" alt="${alt}" loading="lazy"${Number(i.id) ? ` class="wp-image-${i.id}"` : ''} style="position:relative;display:block;width:100%;height:100%;object-fit:contain;margin:0;border-radius:0"/>`)
       + (n > 1 && o.arrows !== false ? `<span class="ec-nav"><a class="ec-sbtn" href="#${prev}" aria-label="Anterior" style="${btn};left:12px">&#8249;</a>`
         + `<a class="ec-sbtn" href="#${next}" aria-label="Siguiente" style="${btn};right:12px">&#8250;</a>`
         + `<span class="ec-scount" style="position:absolute;top:12px;right:12px;z-index:2;padding:3px 11px;border-radius:999px;background-color:rgba(0,0,0,.6);color:#fff;font-size:12px;font-weight:600;line-height:1.5">${k + 1} / ${n}</span></span>` : '')
@@ -857,9 +888,14 @@ function composeList(blocks, opts, ctx) {
         out.push(`<!-- wp:gallery {"columns":${cols},"linkTo":"none"} -->\n<figure class="wp-block-gallery has-nested-images columns-${cols} is-cropped">\n${b.images.map((i) => imageBlockFull(i)).join('\n')}\n</figure>\n<!-- /wp:gallery -->`);
         break;
       }
-      case 'carousel': { const c = { ...b, images: (b.images || []).filter((i) => i.type !== 'video') }; if (c.images.length) out.push(opts.spectra ? spectraCarouselBlock(c, ctx.fx) : carouselBlock(c)); break; }
+      case 'carousel': {
+        const c = { ...b, images: (b.images || []).filter((i) => i && i.url) };
+        // Spectra solo muestra fotos: con algún vídeo, el carrusel HTML propio (que admite los dos)
+        if (c.images.length) out.push(opts.spectra && !c.images.some((i) => i.type === 'video') ? spectraCarouselBlock(c, ctx.fx) : carouselBlock(c));
+        break;
+      }
       case 'mediatext': { if (b.img) out.push(mediaTextBlock(b, ctx.fx)); break; }
-      case 'video': if (b.video) out.push(videoBlock(b.video, b.caption)); break;
+      case 'video': if (b.video) out.push(videoBlock(b.video, b.caption, { align: b.align, width: b.width, ratio: b.ratio, frame: b.frame, fx: b.fx }, ctx.fx)); break;
       case 'embed': if (b.url) out.push(b.provider === 'instagram' || b.provider === 'facebook' || !b.provider ? embedBlock(b.url, b.provider || 'instagram') : embedFull(b)); break;
       case 'raw': if (b.markup) out.push(b.markup); break; // bloque de WordPress que Ecos conserva sin tocar
       case 'separator': out.push('<!-- wp:separator -->\n<hr class="wp-block-separator has-alpha-channel-opacity"/>\n<!-- /wp:separator -->'); break;

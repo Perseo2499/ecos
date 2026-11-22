@@ -807,7 +807,7 @@
           grid.className = b.type === 'gallery' ? 'g-grid' + (b.layout === 'mosaic' ? ' mosaic' : '') : `g-car v-${b.view || 'single'}`;
           if (b.type === 'carousel') this.carLook(grid, b);
           if (b.type === 'gallery') grid.style.setProperty('--cols', b.columns);
-          const vids = b.type === 'gallery'; // los vídeos van en galerías y mosaicos (el carrusel de la web solo muestra fotos)
+          const vids = true; // galerías, mosaicos y carruseles admiten fotos y vídeos
           const cells = b.layout === 'mosaic' && b.type === 'gallery' ? window.Mosaic.mosaicLayout(b.images.length).cells : null;
           b.images.forEach((img, k) => {
             const ph = this.photo(img, () => this.change(() => b.images.splice(k, 1)), b, k);
@@ -835,14 +835,6 @@
           $$('[data-lay]', extra).forEach((x) => (x.onclick = () => this.change(() => {
             const k = x.dataset.lay;
             if (k === 'carousel') {
-              // los vídeos no caben en el carrusel: salen como bloques de vídeo justo después
-              const vs = b.images.filter((i) => i.type === 'video');
-              if (vs.length) {
-                b.images = b.images.filter((i) => i.type !== 'video');
-                const loc = this.locate(b.id);
-                loc.arr.splice(loc.i + 1, 0, ...vs.map(({ type, ...video }) => this.create('video', { video })));
-                toast(t('Los vídeos no van en el carrusel: se han puesto debajo como bloques de vídeo.'));
-              }
               b.type = 'carousel';
             } else { b.type = 'gallery'; b.layout = k; b.columns = b.columns || 3; }
           })));
@@ -916,8 +908,13 @@
           }
           const v = document.createElement('video');
           v.src = b.video.url; v.controls = true; v.preload = 'metadata'; if (b.video.poster) v.poster = b.video.poster;
-          body.appendChild(v);
+          const vw = document.createElement('div');
+          vw.className = 'vid-wrap';
+          vw.appendChild(v);
+          this.vidLook(vw, b);
+          body.appendChild(vw);
           body.appendChild(this.editable('figcaption', b.caption, t('Pie del vídeo (opcional)'), (h) => (b.caption = h), { block: b }));
+          this.styleBtn(extra, b, false);
           break;
         }
 
@@ -1306,6 +1303,21 @@
       ph.classList.toggle('ecos-zoom', b.fx === 'zoom');
       ph.classList.toggle('ecos-bn', b.fx === 'bw');
     },
+    // Vídeo suelto: recorte, marco, efecto y colocación (igual en el editor y en la web)
+    vidLook(wrap, b) {
+      const v = $('video', wrap);
+      if (!v) return;
+      if (b.ratio) { v.style.aspectRatio = b.ratio; v.style.objectFit = 'cover'; }
+      if (b.frame === 'rounded') wrap.style.borderRadius = '16px';
+      if (b.frame === 'border') wrap.style.border = '2px solid #333333';
+      if (b.frame === 'shadow') wrap.style.boxShadow = '6px 6px 9px rgba(0, 0, 0, 0.2)';
+      wrap.classList.toggle('ecos-zoom', b.fx === 'zoom');
+      wrap.classList.toggle('ecos-bn', b.fx === 'bw');
+      if (['left', 'right', 'center'].includes(b.align)) {
+        wrap.classList.add('vid-' + b.align);
+        wrap.style.width = ({ 33: 250, 50: 380, 75: 570 }[b.width] || 380) + 'px';
+      }
+    },
     // Tirador de la esquina: arrastrándolo se cambia el ancho (en % del ancho disponible o en px, según lo que ya tenga)
     resizeHandle(b, body) {
       const h = document.createElement('span');
@@ -1434,6 +1446,18 @@
         if (b.frame === 'border') rows.push({ label: t('Color del borde'), color: { get: () => b.frameColor || '#333333', set: (v) => { b.frameColor = v; } } });
         rows.push({ label: t('Efecto'), chips: [chip(t('Ninguno'), !b.fx, () => { delete b.fx; }), chip(t('Zoom al pasar el ratón'), b.fx === 'zoom', () => { b.fx = 'zoom'; }), chip(t('Blanco y negro'), b.fx === 'bw', () => { b.fx = 'bw'; })] });
         if (b.type === 'image') rows.push({ label: t('Convertir en'), chips: [['grid', 'grid_view', t('Galería')], ['mosaic', 'dashboard', t('Mosaico')], ['carousel', 'view_carousel', t('Carrusel')]].map(([k, ic, n]) => ({ t: n, ic, on: false, raw: () => this.convertImage(b, k) })) });
+      } else if (b.type === 'video') {
+        rows.push({ label: t('Colocación'), chips: [['', t('A todo el ancho')], ['left', t('Izquierda')], ['center', t('Centro')], ['right', t('Derecha')]]
+          .map(([v, n]) => chip(n, (b.align || '') === v, () => { if (v) { b.align = v; if (!b.width) b.width = 50; } else { delete b.align; delete b.width; } })) });
+        if (b.align) rows.push({ label: t('Tamaño'), chips: [[33, t('Pequeña')], [50, t('Mediana')], [75, t('Grande')]].map(([v, n]) => chip(n, (b.width || 50) === v, () => { b.width = v; })) });
+        rows.push({ label: t('Recorte'), chips: [['', t('Original')], ['1', '1:1'], ['4/3', '4:3'], ['3/2', '3:2'], ['16/9', '16:9'], ['9/16', '9:16']].map(([v, n]) => chip(n, (b.ratio || '') === v, set('ratio', v))) });
+        rows.push({ label: t('Marco'), chips: [
+          chip(t('Sin marco'), !b.frame, () => { delete b.frame; }),
+          chip(t('Redondeado'), b.frame === 'rounded', () => { b.frame = 'rounded'; }),
+          chip(t('Borde'), b.frame === 'border', () => { b.frame = 'border'; }),
+          chip(t('Sombra'), b.frame === 'shadow', () => { b.frame = 'shadow'; }),
+        ] });
+        rows.push({ label: t('Efecto'), chips: [chip(t('Ninguno'), !b.fx, () => { delete b.fx; }), chip(t('Zoom al pasar el ratón'), b.fx === 'zoom', () => { b.fx = 'zoom'; }), chip(t('Blanco y negro'), b.fx === 'bw', () => { b.fx = 'bw'; })] });
       } else if (b.type === 'group') {
         rows.push({ label: t('Color de fondo'), color: { get: () => b.bg || '', set: (v) => { set('bg', v)(); if (v) delete b.gradient; }, none: true } });
         rows.push(gradRow());
@@ -1566,7 +1590,7 @@
           let at = index;
           if (d.kind === 'photo' && d.block === block.id && d.index < index) at -= 1; // ya se sacó de antes
           b.images.splice(at + (d.kind === 'photo' && d.block === block.id && d.index < index ? 1 : 0), 0, got);
-        }, { video: block.type === 'gallery' });
+        }, { video: true });
       }
       return fig;
     },
