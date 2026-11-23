@@ -74,8 +74,8 @@
     draft: null, media: [], onChange: () => {}, onOpenMedia: () => {},
     undo: [], redo: [],
 
-    mount(draft, { media, onChange, onOpenMedia, onPeekCss }) {
-      this.draft = draft; this.media = media; this.onChange = onChange || (() => {}); this.onOpenMedia = onOpenMedia || (() => {}); this.onPeekCss = onPeekCss;
+    mount(draft, { media, onChange, onOpenMedia, onPeekCss, onReplaceVideo }) {
+      this.draft = draft; this.media = media; this.onChange = onChange || (() => {}); this.onOpenMedia = onOpenMedia || (() => {}); this.onPeekCss = onPeekCss; this.onReplaceVideo = onReplaceVideo;
       this.undo = []; this.redo = [];
       this.autoFeatured();
       this.liftFeatured(); // la destacada va arriba y sale del cuerpo
@@ -913,9 +913,12 @@
           vw.className = 'vid-wrap';
           vw.appendChild(v);
           this.vidLook(vw, b);
+          this.vqBadge(vw, v, b.video);
           body.appendChild(vw);
           body.appendChild(this.editable('figcaption', b.caption, t('Pie del vídeo (opcional)'), (h) => (b.caption = h), { block: b }));
-          this.styleBtn(extra, b, false);
+          extra.innerHTML = `<button class="lv" data-vrep="1" title="${t('Cambia este vídeo por el original (más nitidez) sin perder su sitio, estilo ni pie')}"><span class="ms">high_quality</span><span class="lbl">${t('Sustituir por el original')}</span></button>`;
+          $('[data-vrep]', extra).onclick = (e) => this.vqMenu(e.currentTarget, b.id, (bb) => bb.video);
+          this.styleBtn(extra, b);
           break;
         }
 
@@ -1573,7 +1576,13 @@
       $('.star', fig).onclick = () => this.change(() => { this.draft.featuredImageId = img.id; this.draft.keepFeaturedInBody = false; this.liftFeatured(); });
       $('.del', fig).onclick = remove;
       $(isVid ? 'video' : 'img', fig).onclick = () => this.onOpenMedia(img);
-      if (isVid) { $('.star', fig).remove(); $('.alt', fig).remove(); }
+      if (isVid) {
+        $('.alt', fig).remove();
+        const rep = $('.star', fig); // en los vídeos, el sitio de la estrella lo ocupa «Sustituir por el original»
+        rep.className = 'rep'; rep.title = t('Sustituir por el original'); rep.innerHTML = '<span class="ms">high_quality</span>';
+        rep.onclick = (e) => { e.stopPropagation(); this.vqMenu(rep, block.id, (bb) => (index !== null ? bb.images[index] : bb.img)); };
+        this.vqBadge(fig, $('video', fig), img);
+      }
       fig.ondragstart = (e) => {
         if (e.target.tagName === 'INPUT') { e.preventDefault(); return; }
         e.stopPropagation();
@@ -1594,6 +1603,54 @@
         }, { video: true });
       }
       return fig;
+    },
+
+    // --- Calidad del vídeo: etiqueta «Baja resolución» y «Sustituir por el original» -----------------------
+    // Pone la etiqueta sobre el vídeo si su lado corto es < 720. Si aún no se conocen las medidas, se leen al cargar el vídeo
+    // y se guardan en el propio vídeo (sin repintar ni deshacer: no cambia nada visible salvo la etiqueta).
+    vqBadge(host, video, obj) {
+      if (!video || !obj) return;
+      const tag = document.createElement('span');
+      tag.className = 'vq-low hidden';
+      tag.title = t('Este vídeo viene así de Instagram o Facebook, con poca resolución. Si tienes el original, usa «Sustituir por el original».');
+      tag.innerHTML = `<span class="ms fill">warning</span>${esc(t('Baja resolución'))}`;
+      host.appendChild(tag);
+      const show = () => tag.classList.toggle('hidden', !window.VidQ.lowRes(obj));
+      show();
+      if (!(Number(obj.width) > 0 && Number(obj.height) > 0)) {
+        video.addEventListener('loadedmetadata', () => {
+          if (!video.videoWidth || !video.videoHeight || (obj.width && obj.height)) return;
+          obj.width = video.videoWidth; obj.height = video.videoHeight;
+          show(); this.onChange?.();
+        }, { once: true });
+      }
+    },
+    // Menú pequeño con las dos procedencias del original; el resultado sustituye url, id, portada y medidas
+    vqMenu(anchor, blockId, resolve) {
+      $$('.vq-menu').forEach((x) => x.remove());
+      const r = anchor.getBoundingClientRect();
+      const m = document.createElement('div');
+      m.className = 'vq-menu';
+      m.innerHTML = `<button data-s="gp"><span class="ms">photo_library</span>${esc(t('Desde Google Fotos'))}</button><button data-s="pc"><span class="ms">computer</span>${esc(t('Desde el ordenador'))}</button>`;
+      m.style.left = Math.max(8, Math.min(r.left, innerWidth - 220)) + 'px';
+      m.style.top = Math.min(r.bottom + 6, innerHeight - 110) + 'px';
+      document.body.appendChild(m);
+      const close = () => { m.remove(); document.removeEventListener('mousedown', away, true); };
+      const away = (e) => { if (!m.contains(e.target)) close(); };
+      setTimeout(() => document.addEventListener('mousedown', away, true), 0);
+      $$('button', m).forEach((b) => (b.onclick = async () => {
+        close();
+        let nv = null;
+        try { nv = await this.onReplaceVideo?.(b.dataset.s); } catch (e) { toast(e.message || String(e)); return; }
+        if (!nv?.url) return;
+        this.changeBlock(blockId, () => {
+          const bb = this.locate(blockId)?.b, tgt = bb && resolve(bb);
+          if (!tgt) return;
+          for (const k of ['id', 'url', 'poster', 'width', 'height', 'size']) delete tgt[k];
+          Object.assign(tgt, { id: nv.id, url: nv.url, ...(nv.poster ? { poster: nv.poster } : {}), ...(nv.width && nv.height ? { width: nv.width, height: nv.height } : {}) });
+        });
+        info(t('Vídeo sustituido por el original'));
+      }));
     },
 
     urlField(label, onOk, focus = false) {

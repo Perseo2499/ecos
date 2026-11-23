@@ -51,7 +51,8 @@
     ],
     "copyright": "Copyright © 2026 Asociación Elín. Todos los derechos reservados.",
     "asarUnpack": [
-      "**/node_modules/@lydell/node-pty*/**"
+      "**/node_modules/@lydell/node-pty*/**",
+      "**/node_modules/ffmpeg-static/**"
     ],
     "extraResources": [
       {
@@ -71,6 +72,7 @@
     "@xterm/xterm": "^6.0.0",
     "adm-zip": "^0.5.18",
     "electron-updater": "^6.8.11",
+    "ffmpeg-static": "^5.2.0",
     "qrcode": "^1.5.4",
     "yauzl": "^3.4.0",
     "zod": "^4.6.7"

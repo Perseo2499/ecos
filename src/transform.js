@@ -102,7 +102,7 @@ function postToSection(post, uploaded, opts) {
   return {
     html: paragraphs.map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`).join(''),
     images: post.media.filter((m) => m.type === 'image').map((m) => uploaded.get(mediaKey(m))).filter(Boolean).map((i) => ({ ...i, alt: '' })),
-    videos: vids.map((m) => uploaded.get(mediaKey(m)) && { ...uploaded.get(mediaKey(m)), poster: m.url && !m.path ? m.url : undefined }).filter(Boolean),
+    videos: vids.map((m) => uploaded.get(mediaKey(m)) && { poster: m.url && !m.path ? m.url : undefined, ...uploaded.get(mediaKey(m)) }).filter(Boolean),
     embed: hasRemoteVideo && post.permalink ? { url: post.permalink, provider: post.source } : null,
     footer: foot ? foot.replace(/<!-- \/?wp:paragraph -->\n?/g, '').trim().replace(/^<p>|<\/p>$/g, '') : null,
   };
@@ -1017,7 +1017,7 @@ function mergeDuplicates(posts, { hashes } = {}) {
     const p = list[i], q = list[j];
     const pBetter = p.media.length > q.media.length || (p.media.length === q.media.length && p.source === 'instagram');
     const [main, other] = pBetter ? [p, q] : [q, p];
-    const merged = { ...main, alsoOn: [...(main.alsoOn || []), { source: other.source, permalink: other.permalink, id: other.id }] };
+    const merged = { ...main, alsoOn: [...(main.alsoOn || []), { source: other.source, permalink: other.permalink, id: other.id, media: other.media }] };
     // el texto más completo de los dos (Facebook a veces lo recorta y viceversa)
     if ((other.text || '').length > (main.text || '').length * 1.3) merged.text = other.text;
     list[i] = merged; drop.add(j);
