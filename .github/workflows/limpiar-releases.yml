@@ -1,0 +1,52 @@
+# Limpieza manual de versiones antiguas: borra todas las releases (y sus etiquetas) salvo la que se indique.
+# Se lanza a mano desde GitHub → Actions → «Limpiar releases antiguas» → Run workflow.
+# Para evitar sustos, hay que escribir BORRAR en la confirmación.
+name: Limpiar releases antiguas
+
+on:
+  workflow_dispatch:
+    inputs:
+      conservar:
+        description: 'Etiqueta de la versión que se conserva (p. ej. v3.0.0)'
+        required: true
+        default: 'v3.0.0'
+      confirmar:
+        description: 'Escribe BORRAR para confirmar'
+        required: true
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  limpiar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comprobar confirmación
+        if: ${{ github.event.inputs.confirmar != 'BORRAR' }}
+        run: |
+          echo "No se ha escrito BORRAR: no se borra nada."
+          exit 1
+      - name: Borrar releases y etiquetas anteriores
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          KEEP: ${{ github.event.inputs.conservar }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$KEEP" -R "$REPO" >/dev/null 2>&1; then
+            echo "La versión $KEEP no existe: no se borra nada."; exit 1
+          fi
+          borradas=0
+          for tag in $(gh release list -R "$REPO" --limit 1000 --json tagName -q '.[].tagName'); do
+            [ "$tag" = "$KEEP" ] && continue
+            gh release delete "$tag" -R "$REPO" --cleanup-tag --yes
+            borradas=$((borradas+1))
+          done
+          # etiquetas sueltas que no tenían release
+          git init -q tmp && cd tmp
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
+          for t in $(git ls-remote --tags origin | sed 's#.*refs/tags/##' | grep -v '\^{}' | grep -vx "$KEEP"); do
+            git push -q origin ":refs/tags/$t" && borradas=$((borradas+1))
+          done
+          echo "Hecho: $borradas releases/etiquetas borradas. Se conserva $KEEP."
