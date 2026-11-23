@@ -64,7 +64,7 @@ jobs:
           Start-Sleep -Seconds 25
           $vivo = -not $p.HasExited
           Write-Host "¿Sigue abierta tras 20 s?: $vivo"
-          $log = Join-Path $env:APPDATA "Ecos\ecos.log"
+          $log = Join-Path $env:APPDATA "Ecos\logs\ecos.log"
           if (Test-Path $log) { Write-Host "--- ecos.log ---"; Get-Content $log }
           else { Write-Host "No se ha creado ecos.log" }
           if ((Test-Path $log) -and (Select-String -Path $log -Pattern "Autocomprobaci.n terminal: (FALLO|ERROR)" -Quiet)) { Write-Error "La terminal integrada no funciona en Windows"; exit 1 }

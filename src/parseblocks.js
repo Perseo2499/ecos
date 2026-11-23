@@ -58,6 +58,7 @@ function styleFrom(a) {
   if (st.typography?.fontFamily && FONT_KEY[st.typography.fontFamily]) o.font = FONT_KEY[st.typography.fontFamily];
   if (st.typography?.letterSpacing && /^\d{1,2}(\.\d)?px$/.test(st.typography.letterSpacing)) o.spacing = st.typography.letterSpacing;
   if (/(^|\s)ecos-sombra(\s|$)/.test(a.className || '')) o.shadow = true;
+  if (/(^|\s)ecos-justify(\s|$)/.test(a.className || '')) o.align = 'justify';
   return o;
 }
 
@@ -219,15 +220,17 @@ function toBlock(t) {
       // «Imagen y texto» de Ecos: foto + párrafos, con tamaño, alineación vertical, relleno y estilo de la foto; lo demás se conserva tal cual
       if (!onlyKeys(a, ['mediaPosition', 'mediaId', 'mediaLink', 'mediaType', 'mediaWidth', 'verticalAlignment', 'imageFill', 'className']) || (a.mediaType && a.mediaType !== 'image')) return raw();
       if (a.mediaPosition && a.mediaPosition !== 'right') return raw();
-      const img = imgOf((h.match(/<figure\b[^>]*wp-block-media-text__media[\s\S]*?<\/figure>/i) || [''])[0]);
-      const content = (h.match(/<div class="wp-block-media-text__content">([\s\S]*)<\/div>\s*<\/div>\s*$/i) || [])[1];
+      // la foto va antes del texto (izquierda) o después (derecha, como escribe WordPress); se lee quitando la foto
+      const fig = (h.match(/<figure\b[^>]*wp-block-media-text__media[\s\S]*?<\/figure>/i) || [''])[0];
+      const img = imgOf(fig);
+      const content = (h.replace(fig, '').match(/<div class="wp-block-media-text__content">([\s\S]*)<\/div>\s*<\/div>\s*$/i) || [])[1];
       if (!img || content === undefined) return raw();
       const kids = tokenize(content).filter((x) => x.name !== 'freeform' || x.inner.replace(/<[^>]+>|\s|&nbsp;/g, ''));
       // párrafos con el mismo formato todos (el que pone Ecos): se lee ese formato; si no, se conserva tal cual
       const fmt0 = JSON.stringify(kids[0]?.attrs || {});
       if (kids.some((x) => x.name !== 'paragraph' || JSON.stringify(x.attrs) !== fmt0)) return raw();
       const cn = String(a.className || '').split(/\s+/).filter(Boolean);
-      const known = (c) => c === 'ecos-mt' || /^ecos-mt-(r-(1|4-3|3-2|16-9|9-16)|rounded|circle|shadow|border|zoom|bn)$/.test(c);
+      const known = (c) => c === 'ecos-mt' || /^ecos-mt-(r-(1|4-3|3-2|16-9|9-16)|rounded|circle|shadow|border|zoom|bn|bc-[0-9a-f]{3,8})$/.test(c);
       if (!cn.every(known)) return raw();
       const mw = a.mediaWidth === undefined ? 50 : a.mediaWidth;
       if (!Number.isInteger(mw) || mw < 10 || mw > 90) return raw();
@@ -243,9 +246,10 @@ function toBlock(t) {
         if (r) b.ratio = r[1].replace('-', '/');
         else if (c === 'ecos-mt-zoom') b.fx = 'zoom';
         else if (c === 'ecos-mt-bn') b.fx = 'bw';
+        else if (c.startsWith('ecos-mt-bc-')) continue; // color del borde: se lee más abajo
         else b.frame = c.slice(8);
       }
-      if (b.frame === 'border') b.frameColor = (h.match(/wp-block-media-text__media"[^>]*border:2px solid (#[0-9a-f]{3,8}|rgba?\([\d.,\s%]+\))/i) || [])[1] || '#333333';
+      if (b.frame === 'border') b.frameColor = (cn.find((c) => c.startsWith('ecos-mt-bc-')) || '').replace(/^ecos-mt-bc-/, '#') || (h.match(/wp-block-media-text__media"[^>]*border:2px solid (#[0-9a-f]{3,8}|rgba?\([\d.,\s%]+\))/i) || [])[1] || '#333333';
       return b;
     }
     case 'group': {

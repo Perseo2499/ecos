@@ -70,7 +70,7 @@ test('portada (core/cover): imagen, capa de color con opacidad, altura e hijos',
   const html = T.composeBlocks([cv]);
   assert.match(html, /^<!-- wp:cover \{"url":"https:\/\/x\/a\.jpg","id":7,"dimRatio":60,"customOverlayColor":"#1a237e","minHeight":480,"minHeightUnit":"px","align":"full"/);
   assert.match(html, /wp-block-cover__background has-background-dim has-background-dim-60" style="background-color:#1a237e"/);
-  assert.match(html, /<img class="wp-block-cover__image-background wp-image-7" alt="Una foto" src="https:\/\/x\/a\.jpg" data-object-fit="cover"\/>/);
+  assert.match(html, /<img class="wp-block-cover__image-background wp-image-7" alt="Una foto" src="https:\/\/x\/a\.jpg"\/>/);
   assert.match(html, /<div class="wp-block-cover__inner-container">/);
   const back = rt([cv]);
   assert.equal(back[0].type, 'cover');

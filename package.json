@@ -10,8 +10,11 @@
     "dist": "node scripts/build-wp-plugin.js && electron-builder --win"
   },
   "devDependencies": {
+    "@wordpress/block-library": "^12.2.0",
+    "@wordpress/blocks": "^17.2.0",
     "electron": "^33.2.0",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "jsdom": "^31.0.1"
   },
   "build": {
     "appId": "com.asociacionelin.redesablog",

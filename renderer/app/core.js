@@ -4,6 +4,15 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const t = (s, v) => window.I18N.t(s, v);
 const escHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// ---------------------------------------------------------------- registro de errores de la ventana
+// Los errores no capturados y las promesas rechazadas se reenvían al proceso principal, que los escribe (sin datos
+// sensibles) en el registro de errores (Ajustes → Avanzado)
+function reportToLog(kind, message, extra = {}) {
+  try { window.api?.logRenderer?.({ kind, message: String(message || ''), ...extra }); } catch { /* sin registro */ }
+}
+window.addEventListener('error', (e) => reportToLog('error', e.message || (e.error && e.error.message), { source: e.filename, line: e.lineno, col: e.colno, stack: e.error && e.error.stack }));
+window.addEventListener('unhandledrejection', (e) => { const r = e.reason; reportToLog('promesa rechazada', (r && r.message) || r, { stack: r && r.stack }); });
+
 // ---------------------------------------------------------------- estado
 let CFG = {};          // configuración pública (sin claves)
 let rawPosts = [];     // todo lo cargado/importado

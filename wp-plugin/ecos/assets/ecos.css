@@ -2,21 +2,21 @@
 .ecos-sombra{text-shadow:1px 2px 4px rgba(0,0,0,.35)}
 .wp-block-image.ecos-zoom:has(img[style*="border-radius:16px"]){border-radius:16px;width:fit-content;max-width:100%}.wp-block-image.ecos-zoom.is-style-rounded{border-radius:9999px;width:fit-content;max-width:100%}.wp-block-image.ecos-zoom{overflow:hidden}.wp-block-image.ecos-zoom img{transition:transform .5s cubic-bezier(.2,0,0,1)}.wp-block-image.ecos-zoom:hover img{transform:scale(1.08)}
 .wp-block-image.ecos-bn img{filter:grayscale(1)}
-.has-text-align-justify{text-align:justify}
+.ecos-justify,.has-text-align-justify{text-align:justify}
 .wp-block-video.ecos-vp{position:relative}.wp-block-video.ecos-vp video{display:block;width:100%}
 .wp-block-list.ecos-iconos{list-style:none;padding-left:0}.wp-block-list.ecos-iconos li{margin:.4em 0}.ecos-iconos .ecos-ico{display:inline-block;min-width:1.6em;color:#fd9800;font-weight:700}
 .wp-block-media-text.ecos-mt-rounded .wp-block-media-text__media{border-radius:16px;overflow:hidden}
 .wp-block-media-text.ecos-mt-circle .wp-block-media-text__media{border-radius:9999px;overflow:hidden}
 .wp-block-media-text.ecos-mt-shadow .wp-block-media-text__media{box-shadow:6px 6px 9px rgba(0,0,0,.2)}
-.wp-block-media-text.ecos-mt-border .wp-block-media-text__media{box-sizing:border-box}
+.wp-block-media-text.ecos-mt-border .wp-block-media-text__media{border:2px solid #333333;box-sizing:border-box}
 .wp-block-media-text.ecos-mt-zoom .wp-block-media-text__media{overflow:hidden}.wp-block-media-text.ecos-mt-zoom img{transition:transform .5s cubic-bezier(.2,0,0,1)}.wp-block-media-text.ecos-mt-zoom:hover img{transform:scale(1.08)}
 .wp-block-media-text.ecos-mt-bn .wp-block-media-text__media{filter:grayscale(1)}
 .wp-block-media-text.ecos-mt>.wp-block-media-text__content{padding:0 0 0 2em}.wp-block-media-text.ecos-mt.has-media-on-the-right>.wp-block-media-text__content{padding:0 2em 0 0}@media (max-width:600px){.wp-block-media-text.ecos-mt.is-stacked-on-mobile>.wp-block-media-text__content{padding:1em 0 0}}
-.wp-block-media-text.ecos-mt-r-1:not(.is-image-fill) img{aspect-ratio:1;object-fit:cover;height:auto}
-.wp-block-media-text.ecos-mt-r-4-3:not(.is-image-fill) img{aspect-ratio:4/3;object-fit:cover;height:auto}
-.wp-block-media-text.ecos-mt-r-3-2:not(.is-image-fill) img{aspect-ratio:3/2;object-fit:cover;height:auto}
-.wp-block-media-text.ecos-mt-r-16-9:not(.is-image-fill) img{aspect-ratio:16/9;object-fit:cover;height:auto}
-.wp-block-media-text.ecos-mt-r-9-16:not(.is-image-fill) img{aspect-ratio:9/16;object-fit:cover;height:auto}
+.wp-block-media-text.ecos-mt-r-1:not(.is-image-fill):not(.is-image-fill-element) img{aspect-ratio:1;object-fit:cover;height:auto}
+.wp-block-media-text.ecos-mt-r-4-3:not(.is-image-fill):not(.is-image-fill-element) img{aspect-ratio:4/3;object-fit:cover;height:auto}
+.wp-block-media-text.ecos-mt-r-3-2:not(.is-image-fill):not(.is-image-fill-element) img{aspect-ratio:3/2;object-fit:cover;height:auto}
+.wp-block-media-text.ecos-mt-r-16-9:not(.is-image-fill):not(.is-image-fill-element) img{aspect-ratio:16/9;object-fit:cover;height:auto}
+.wp-block-media-text.ecos-mt-r-9-16:not(.is-image-fill):not(.is-image-fill-element) img{aspect-ratio:9/16;object-fit:cover;height:auto}
 .wp-block-video.ecos-v-rounded{border-radius:16px;overflow:hidden}
 .wp-block-video.ecos-v-border{border:2px solid #333;box-sizing:border-box}
 .wp-block-video.ecos-v-shadow{box-shadow:6px 6px 9px rgba(0, 0, 0, 0.2)}

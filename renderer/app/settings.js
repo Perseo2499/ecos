@@ -169,6 +169,34 @@ function renderMode(m) {
 }
 $('#mode-normal').onclick = () => { toast(t('Reiniciando Ecos…')); window.api.tryNormalMode(); };
 $('#open-logs').onclick = () => window.api.openData();
+// Registro de errores (últimas 200 líneas; el texto ya viene sin claves ni contraseñas)
+async function loadLog() {
+  const box = $('#log-view');
+  try {
+    const r = await window.api.logTail(200);
+    box.value = r.text || '';
+    box.placeholder = t('El registro está vacío: no hay errores ni avisos.');
+    box.scrollTop = box.scrollHeight;
+  } catch (e) { box.value = ''; toastError(e); }
+}
+$('#log-refresh').onclick = loadLog;
+$('#log-copy').onclick = async () => {
+  const text = $('#log-view').value;
+  if (!text) return toast(t('El registro está vacío.'));
+  try { await navigator.clipboard.writeText(text); toast(t('Copiado')); } catch { $('#log-view').select(); document.execCommand('copy'); toast(t('Copiado')); }
+};
+$('#log-folder').onclick = () => window.api.logOpenFolder().catch(toastError);
+$('#log-clear').onclick = async () => {
+  if (!await ask(t('Se borrará el registro de errores de este ordenador. ¿Continuar?'), { danger: true, ok: t('Vaciar') })) return;
+  try { await window.api.logClear(); await loadLog(); toast(t('Registro vaciado')); } catch (e) { toastError(e); }
+};
+// se carga al llegar a la sección Avanzado (y con «Actualizar»)
+(() => {
+  const card = $('#set-advanced');
+  if (!card || !('IntersectionObserver' in window)) return loadLog();
+  const io = new IntersectionObserver((es) => { if (es.some((x) => x.isIntersecting)) { io.disconnect(); loadLog(); } });
+  io.observe(card);
+})();
 $('#wizard-again').onclick = () => openWizard();
 $('#forget-exported').onclick = async () => {
   if (!await ask(t('Ecos dejará de marcar publicaciones como «En el blog». Las entradas de tu web no se tocan. ¿Continuar?'))) return;

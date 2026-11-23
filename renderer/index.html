@@ -667,6 +667,17 @@
           <label class="switch"><input type="checkbox" id="s-devmode"><span data-i18n>Modo desarrollador (terminal y Claude Code en «Conexiones»)</span></label>
           <div class="set-row"><span data-i18n>Modo de arranque</span><b id="mode-name">–</b></div>
           <p class="hint" id="mode-hint"></p>
+          <div class="log-box" id="log-box">
+            <h3><span class="ms">bug_report</span><span data-i18n>Registro de errores</span></h3>
+            <p class="hint" data-i18n>Aquí quedan los errores y avisos de Ecos, sin contraseñas ni claves. Si algo falla, copia este texto y envíalo para que lo revisen. Se muestran las últimas 200 líneas.</p>
+            <textarea id="log-view" class="log-view" readonly spellcheck="false" rows="10" aria-label="Registro de errores"></textarea>
+            <div class="card-actions wrap">
+              <button id="log-refresh" class="btn outlined"><span class="ms">refresh</span><span data-i18n>Actualizar</span></button>
+              <button id="log-copy" class="btn outlined"><span class="ms">content_copy</span><span data-i18n>Copiar</span></button>
+              <button id="log-folder" class="btn outlined"><span class="ms">folder_open</span><span data-i18n>Abrir la carpeta</span></button>
+              <button id="log-clear" class="btn outlined danger"><span class="ms">delete_sweep</span><span data-i18n>Vaciar</span></button>
+            </div>
+          </div>
           <div class="card-actions wrap">
             <button id="mode-normal" class="btn outlined hidden" data-i18n>Probar el modo normal</button>
             <button id="open-logs" class="btn outlined"><span class="ms">folder_open</span><span data-i18n>Datos y registros</span></button>

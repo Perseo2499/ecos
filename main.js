@@ -19,14 +19,15 @@ if (IS_DEV) {
   app.setPath('userData', devData);
 }
 
-// Registro de errores en %APPDATA%\Ecos\ecos.log y aviso visible si algo falla al arrancar
-const logFile = () => path.join(app.getPath('userData'), 'ecos.log');
-function log(...args) {
-  const line = `[${new Date().toISOString()}] ${args.map((a) => (a instanceof Error ? a.stack : String(a))).join(' ')}\n`;
-  try { fs.mkdirSync(path.dirname(logFile()), { recursive: true }); fs.appendFileSync(logFile(), line); } catch { /* sin registro */ }
-}
+// Registro de errores y avisos en userData/logs/ecos.log (rotación a 1 MB con copia .1; sin tokens ni contraseñas: src/logger.js)
+// y aviso visible si algo falla al arrancar
+const logFile = () => path.join(app.getPath('userData'), 'logs', 'ecos.log');
+let _logger = null;
+const logger = () => _logger || (_logger = require('./src/logger').createLogger({ file: logFile() }));
+function log(...args) { try { logger().warn(...args); } catch { /* sin registro */ } }
+function logError(...args) { try { logger().error(...args); } catch { /* sin registro */ } }
 function fatal(err) {
-  log('ERROR FATAL', err);
+  logError('ERROR FATAL', err);
   try {
     dialog.showErrorBox('Ecos no ha podido arrancar',
       `${err && err.message ? err.message : err}\n\nDetalles en: ${logFile()}\nEnvía ese archivo para que lo revisen.`);
@@ -34,7 +35,18 @@ function fatal(err) {
   app.exit(1);
 }
 process.on('uncaughtException', fatal);
-process.on('unhandledRejection', (e) => log('Promesa rechazada sin gestionar', e));
+process.on('unhandledRejection', (e) => logError('Promesa rechazada sin gestionar', e));
+// Errores de la ventana (window.onerror / unhandledrejection del renderer), reenviados por IPC
+let rendererLogs = { at: 0, n: 0 };
+ipcMain.on('log:renderer', (_e, info) => {
+  try {
+    const nowMs = Date.now(); // como mucho 100 por minuto (un bucle de errores no llena el disco)
+    if (nowMs - rendererLogs.at > 60000) rendererLogs = { at: nowMs, n: 0 };
+    if (++rendererLogs.n > 100) return;
+    const i = info && typeof info === 'object' ? info : {};
+    logError(`[ventana] ${String(i.kind || 'error').slice(0, 40)}:`, String(i.message || '').slice(0, 2000), i.source ? `(${String(i.source).slice(0, 200)}:${Number(i.line) || 0}:${Number(i.col) || 0})` : '', i.stack ? '\n' + String(i.stack).slice(0, 4000) : '');
+  } catch { /* nada */ }
+});
 
 // Una sola copia abierta: si ya hay una, se trae al frente
 const gotLock = app.requestSingleInstanceLock();
@@ -230,6 +242,17 @@ handle('helper:save', async () => {
 
 // Envuelve llamadas a WordPress: si rechaza el permiso, se desconecta y se avisa
 const wpCall = async (fn) => { try { return await fn(); } catch (e) { throw e instanceof wp.AuthError ? wpAuthFailed(e) : e; } };
+
+// Copia local antes de cada envío (src/sendbackup.js): lo que hay ahora en WordPress y lo que se va a enviar.
+// Nunca impide el envío: si algo falla, se anota en el registro y se sigue.
+async function backupBeforeSend(d, fields) {
+  if (!d.postId) return;
+  const type = d.type === 'page' ? 'page' : 'post';
+  let current = null, error = '';
+  try { current = await WP().getPost(cfg, d.postId, type); } catch (e) { error = e.message; log('Copia antes de enviar: no se pudo leer la entrada', d.postId, e.message); }
+  const name = require('./src/sendbackup').save(app.getPath('userData'), type, d.postId, { current, sending: fields, error });
+  if (!name) log('Copia antes de enviar: no se pudo guardar', d.postId);
+}
 
 // Envuelve los manejadores para devolver errores legibles al renderer
 // Con la app bloqueada solo responden estas peticiones (entrar y lo imprescindible para la pantalla de acceso)
@@ -520,6 +543,7 @@ function postFields(d, status) {
 handle('draft:preview', async (d) => {
   await refreshHelper();
   const fields = postFields(d, 'draft');
+  await backupBeforeSend(d, fields);
   const post = await wpCall(() => (d.postId ? WP().updatePost(cfg, d.postId, fields) : WP().createPost(cfg, fields)));
   const base = WP().publicBase(cfg) || `https://${cfg.wpSite}`;
   return { postId: post.ID, previewUrl: `${base}/?p=${post.ID}&preview=true` };
@@ -534,6 +558,13 @@ handle('draft:autosave', (data) => { fs.writeFileSync(autosaveFile(), store.seal
 handle('draft:autosaved', () => { try { return store.unseal(cfg, fs.readFileSync(autosaveFile(), 'utf8')); } catch { return null; } });
 handle('draft:autosaveClear', () => { try { fs.unlinkSync(autosaveFile()); } catch { /* no había */ } return true; });
 // Historial de versiones de una entrada (revisiones de WordPress), ya en bloques de Ecos
+// Copias de Ecos antes de enviar (userData/send-backups): lista y carga en el editor (ya en bloques; no envía nada)
+handle('sendbackup:list', (postId, type) => require('./src/sendbackup').list(app.getPath('userData'), type, postId));
+handle('sendbackup:get', (postId, type, file) => {
+  const rec = require('./src/sendbackup').read(app.getPath('userData'), type, postId, file);
+  if (!rec.current) throw new Error('Esta copia no guardó lo que había en WordPress.');
+  return { ...rec, current: { ...rec.current, blocks: require('./src/parseblocks').parseBlocks(rec.current.content) } };
+});
 handle('post:revisions', async (postId, type) => {
   if (!isSelf()) throw new Error('El historial de versiones solo está disponible con WordPress propio.');
   const { parseBlocks } = require('./src/parseblocks');
@@ -763,6 +794,7 @@ handle('draft:publish', async (d) => { require('./src/pagelinks').forget();
   d.featuredImageId = await resolveFeatured(d);
   await refreshHelper();
   const fields = postFields(d, d.status || 'draft');
+  await backupBeforeSend(d, fields);
   // WordPress pone como «fecha de modificación» la de la entrada solo cuando se crea; cada vez que se
   // actualiza pasa a ser la de ese momento (y muchos temas muestran esa). Por eso el borrador que se guardó
   // para la vista previa se borra y la entrada se crea de nuevo, de una sola vez.
@@ -1646,6 +1678,10 @@ handle('app:info', () => ({
   platform: `${process.platform} ${process.arch}`, userData: app.getPath('userData'),
 }));
 handle('app:openData', () => shell.openPath(app.getPath('userData')));
+// Registro de errores (Ajustes → Avanzado): últimas líneas, vaciar y abrir su carpeta
+handle('log:tail', (n) => ({ text: logger().tail(Math.max(1, Math.min(2000, Number(n) || 200))), file: logFile() }));
+handle('log:clear', () => { logger().clear(); log('Registro vaciado por el usuario'); return true; });
+handle('log:openFolder', async () => { fs.mkdirSync(path.dirname(logFile()), { recursive: true }); return shell.openPath(path.dirname(logFile())); });
 handle('app:resetAll', () => {
   log('El usuario borra todos los datos de Ecos');
   for (const f of ['config.json', 'modo-arranque.json', 'arranque-pendiente']) { try { fs.unlinkSync(path.join(app.getPath('userData'), f)); } catch { /* nada */ } }

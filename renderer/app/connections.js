@@ -178,7 +178,7 @@ function renderAi() {
     row.querySelector('input').onchange = async () => { CFG.ai = await window.api.aiSetActive(id); renderAi(); };
     $('#ai-providers').appendChild(row);
   }
-  const p = A.providers[aiSel];
+  const p = A.providers[aiSel] || {}; // proveedor desconocido (configuración incompleta): sin datos, pero sin romper la pantalla
   // CLI local: se elige la herramienta en lugar de URL y clave
   $('#ai-cli').classList.toggle('hidden', !p.cli);
   $$('#ai-url, #ai-key, .ai-key-actions').forEach((x) => x.classList.toggle('hidden', !!p.cli));
