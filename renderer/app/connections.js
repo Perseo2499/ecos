@@ -109,10 +109,10 @@ function renderHelper() {
   if (ok && orgLoadedFor !== h.version) { orgLoadedFor = h.version; loadOrg(); }
   renderConnStates();
 }
-// Datos de la asociación para Google (se guardan en WordPress, en el complemento). Si aún no hay nada guardado, se ofrecen los de Asociación Elín.
+// Datos de tu organización para Google (se guardan en WordPress, en el complemento). Si aún no hay nada guardado, empieza vacío.
 let orgLoadedFor = null;
 const ORG_KEYS = ['name', 'street', 'postal', 'city', 'email', 'phone', 'instagram', 'facebook'];
-const ORG_DEFAULTS = { name: 'Asociación Elín', street: 'Carretera Red Permanente nº 60', postal: '51004', city: 'Ceuta', email: 'asociacionelin@gmail.com', phone: '606 12 91 24', instagram: 'https://www.instagram.com/asociacionelin/', facebook: 'https://www.facebook.com/asociacionelin/' };
+const ORG_DEFAULTS = { name: '', street: '', postal: '', city: '', email: '', phone: '', instagram: '', facebook: '' };
 const fillOrg = (s) => ORG_KEYS.forEach((k) => { $('#ho-' + k).value = s[k] || ''; });
 async function loadOrg() {
   try { const r = await window.api.helperSettings(); fillOrg(r.saved ? r.settings : { ...ORG_DEFAULTS, ...Object.fromEntries(Object.entries(r.settings).filter(([, v]) => v)) }); }

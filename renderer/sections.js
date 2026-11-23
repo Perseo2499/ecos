@@ -80,7 +80,7 @@
     {
       id: 'testimonio', icon: 'format_quote', name: 'Testimonio', desc: 'Sección con una cita grande y el nombre de quien la dice.',
       thumb: [['quote']],
-      blocks: [GROUP([{ type: 'quote', pull: true, html: '', cite: '', ph: 'Lo que dice una persona de la asociación, con sus palabras.' }], { bg: BRAND.cream, pad: 'l', width: 'full', radius: 0 })],
+      blocks: [GROUP([{ type: 'quote', pull: true, html: '', cite: '', ph: 'Lo que dice una persona del equipo, con sus palabras.' }], { bg: BRAND.cream, pad: 'l', width: 'full', radius: 0 })],
     },
     {
       id: 'cifras', icon: 'pin', name: 'Cifras', desc: 'Cuatro columnas con un número grande y su etiqueta.',

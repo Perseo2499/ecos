@@ -2017,9 +2017,17 @@ handle('update:install', () => updater.install());
 app.whenReady().then(() => {
   if (!gotLock || !updater) return; // otra copia abierta, o fallo al cargar módulos (ya avisado)
   log(`Arrancando Ecos ${app.getVersion()} (${process.platform} ${process.arch}, Electron ${process.versions.electron}, modo ${mode}: ${MODES[mode].name})`);
-  cfg = { wpSite: 'asociacionelin.com', wpPublicUrl: 'https://www.asociacionelin.com/', graphVersion: 'v23.0', ...store.load() };
-  if (!cfg.wpPublicUrl) cfg.wpPublicUrl = 'https://www.asociacionelin.com/';
-  if (!cfg.wpUrl) cfg.wpUrl = 'https://www.asociacionelin.com';
+  const stored = store.load();
+  cfg = { graphVersion: 'v23.0', ...stored };
+  // Hasta la 2.x la app traía una web preconfigurada por defecto; quien la usaba sin haber escrito la suya la conserva
+  // (se guarda una vez). Las instalaciones nuevas empiezan sin ninguna web.
+  const LEGACY = 'https://www.asociacionelin.com'; // valor por defecto de las versiones 1.x y 2.x (solo para esta migración)
+  if (!cfg.legacyWebMigrated && (cfg.wpUser || cfg.wpToken || cfg.wpConnected || cfg.wpSelfOk)) {
+    if (!cfg.wpUrl) cfg.wpUrl = LEGACY;
+    if (!cfg.wpPublicUrl) cfg.wpPublicUrl = LEGACY + '/';
+    if (!cfg.wpSite) cfg.wpSite = LEGACY.replace(/^https?:\/\/(www\.)?/, '');
+  }
+  if (!cfg.legacyWebMigrated) { cfg.legacyWebMigrated = true; try { store.save(cfg); } catch { /* se intentará otra vez */ } }
   // Migración: la clave de Claude de versiones anteriores pasa al nuevo selector de IA
   if (!cfg.ai) {
     cfg.ai = { active: 'anthropic', providers: cfg.anthropicKey ? { anthropic: { key: cfg.anthropicKey, model: 'claude-opus-5-5' } } : {} };

@@ -258,10 +258,10 @@ function improveSegments(aiCfg, { title, segments, layout, extra = '', opts = {}
     'Escribe en el mismo idioma que el original.',
     o.searchNow ? 'Antes de escribir, haz como mucho 3 búsquedas web rápidas sobre el tema. Incorpora solo datos relevantes y verificables, atribúyelos en el texto («según…») y pon cada fuente en «sources».' : '',
     o.research ? 'Usa la información de internet de abajo para ampliar y contextualizar, atribuyendo los datos en el texto («según…»).' : '',
-    extra ? `Indicaciones generales de la asociación: ${extra}` : '',
+    extra ? `Indicaciones generales: ${extra}` : '',
   ].filter(Boolean).map((r) => '- ' + r).join('\n');
   const notes = String(o.notes || '').trim();
-  const prompt = `Eres editor del blog de una asociación. Mejora el texto de esta entrada${notes ? ' siguiendo, ante todo, lo que te pide la persona' : ''}.
+  const prompt = `Eres editor de un blog. Mejora el texto de esta entrada${notes ? ' siguiendo, ante todo, lo que te pide la persona' : ''}.
 ${notes ? `
 INSTRUCCIONES DE LA PERSONA (prioridad máxima: cúmplelas al pie de la letra, aunque contradigan otras reglas; si piden no cambiar algo, no lo cambies):
 «${notes}»
@@ -297,9 +297,9 @@ function improveArticle(aiCfg, { title, text, extra = '', opts = {}, segments, l
     'Escribe en el mismo idioma que el original.',
     o.searchNow ? 'Antes de escribir, haz como mucho 3 búsquedas web rápidas sobre el tema (contexto, datos oficiales, informes de ONG o prensa reconocida). No abras páginas: usa los resultados. Incorpora solo datos relevantes y verificables, atribúyelos en el texto («según…») y pon cada fuente usada en «sources» (título y URL). Si no encuentras nada fiable, escribe sin ellos.' : '',
     o.research ? 'Usa la información de internet de abajo para ampliar y contextualizar el artículo: incorpora solo los datos relevantes y verificables, atribúyelos en el texto («según…») y no copies frases literales. Si algo no encaja con el original, no lo uses.' : '',
-    extra ? `Indicaciones generales de la asociación: ${extra}` : '',
+    extra ? `Indicaciones generales: ${extra}` : '',
   ].filter(Boolean).map((r) => '- ' + r).join('\n');
-  const prompt = `Eres editor del blog de una asociación. Convierte esta publicación de redes sociales en una entrada de blog de calidad.
+  const prompt = `Eres editor de un blog. Convierte esta publicación de redes sociales en una entrada de blog de calidad.
 ${o.notes ? `
 INSTRUCCIONES DE LA PERSONA (prioridad máxima: cúmplelas al pie de la letra, aunque contradigan otras reglas):
 «${o.notes}»
@@ -324,7 +324,7 @@ ${o.research}
 
 // --- Buscar en internet para ampliar un artículo ------------------------------------
 // Devuelve { notes, sources: [{ title, url }] }. Cada proveedor usa su propia búsqueda web.
-const RESEARCH_PROMPT = (title, text) => `Busca en internet información fiable y actual que sirva para ampliar y contextualizar esta publicación de una asociación (contexto, datos oficiales, antecedentes, informes de ONG o prensa reconocida).
+const RESEARCH_PROMPT = (title, text) => `Busca en internet información fiable y actual que sirva para ampliar y contextualizar esta publicación (contexto, datos oficiales, antecedentes, informes de ONG o prensa reconocida).
 Haz como mucho 3 búsquedas y no abras páginas: usa los resultados. Devuelve entre 4 y 6 puntos breves con hechos verificables, cada uno con su fuente. No inventes nada; si no encuentras información fiable, dilo.
 Al final, añade una línea «FUENTES:» y debajo una fuente por línea con el formato «Título — URL».
 
@@ -458,8 +458,8 @@ const SeoSuggest = z.object({
   description: z.string().describe('Descripción para Google, entre 120 y 155 caracteres, que invite a leer, sin inventar datos'),
 });
 async function seoSuggest(aiCfg, { title = '', text = '', keyword = '', extra = '' }) {
-  const prompt = `Eres editor web de una asociación. Propón el título SEO y la descripción (meta description) de esta entrada, en el mismo idioma que el texto.
-Reglas: título de 60 caracteres como máximo; descripción de 155 como máximo; no inventes hechos, cifras ni nombres; sin emojis${keyword ? `; incluye la palabra clave «${keyword}» de forma natural` : ''}.${extra ? `\nIndicaciones de la asociación: ${extra}` : ''}
+  const prompt = `Eres editor web. Propón el título SEO y la descripción (meta description) de esta entrada, en el mismo idioma que el texto.
+Reglas: título de 60 caracteres como máximo; descripción de 155 como máximo; no inventes hechos, cifras ni nombres; sin emojis${keyword ? `; incluye la palabra clave «${keyword}» de forma natural` : ''}.${extra ? `\nIndicaciones generales: ${extra}` : ''}
 Título actual: ${title}
 
 Texto:
@@ -487,7 +487,7 @@ async function suggestCategories(aiCfg, posts, cats, { batch = 10, conc = 3 } = 
   const work = async () => {
     while (next < chunks.length) {
       const ch = chunks[next++];
-      const prompt = `Elige para cada entrada de un blog de una asociación las categorías que mejor le encajan, SOLO entre estas categorías existentes (cópialas exactamente, no inventes ninguna; entre 1 y 3 por entrada, y ninguna si no encaja):\n${cats.map((c) => '- ' + c).join('\n')}\n\nEntradas:\n`
+      const prompt = `Elige para cada entrada de un blog las categorías que mejor le encajan, SOLO entre estas categorías existentes (cópialas exactamente, no inventes ninguna; entre 1 y 3 por entrada, y ninguna si no encaja):\n${cats.map((c) => '- ' + c).join('\n')}\n\nEntradas:\n`
         + ch.map((p) => `[id ${p.id}] ${p.title}\n${(p.excerpt || '').slice(0, 200)}\n${(p.text || '').slice(0, 600)}`).join('\n---\n');
       const r = await askStructured(aiCfg, [{ type: 'text', text: prompt }], CatSuggest);
       for (const s of r.suggestions || []) {
@@ -510,7 +510,7 @@ const TopicRefine = z.object({
 async function refineTopics(aiCfg, proposals, posts, cats) {
   const titles = new Map(posts.map((p) => [p.id, p]));
   const ids = new Set(proposals.flatMap((g) => g.posts.map((p) => p.id)));
-  const prompt = `Una asociación de Ceuta tiene un blog. Un algoritmo ha propuesto estas categorías para agrupar sus entradas. Mejora los nombres, fusiona grupos parecidos, descarta los que no tengan sentido y reasigna entradas si hace falta. Máximo 10 grupos, cada uno con 3 entradas o más. Si una categoría ya existe, usa su nombre exacto y marca existing = true. Usa solo IDs de entradas de la lista.\n\nCategorías existentes: ${cats.join(', ') || '(ninguna)'}\n\nPropuestas:\n`
+  const prompt = `Un blog tiene estas entradas. Un algoritmo ha propuesto estas categorías para agrupar sus entradas. Mejora los nombres, fusiona grupos parecidos, descarta los que no tengan sentido y reasigna entradas si hace falta. Máximo 10 grupos, cada uno con 3 entradas o más. Si una categoría ya existe, usa su nombre exacto y marca existing = true. Usa solo IDs de entradas de la lista.\n\nCategorías existentes: ${cats.join(', ') || '(ninguna)'}\n\nPropuestas:\n`
     + proposals.map((g) => `* ${g.name} (${g.isNew ? 'nueva' : 'existente'}; palabras: ${g.keywords.join(', ')}) → ${g.posts.map((p) => p.id).join(', ')}`).join('\n')
     + '\n\nEntradas:\n' + [...ids].map((id) => { const p = titles.get(id); return p ? `[${id}] ${p.title} — ${(p.excerpt || '').slice(0, 120)}` : null; }).filter(Boolean).join('\n');
   const r = await askStructured(aiCfg, [{ type: 'text', text: prompt }], TopicRefine);
@@ -536,13 +536,13 @@ const REWRITE = {
 };
 function rewrite(aiCfg, { html, action, title = '', kind = 'paragraph', extra = '' }) {
   const how = REWRITE[action] || REWRITE.improve;
-  const prompt = `Eres editor del blog de una asociación. ${how}
+  const prompt = `Eres editor de un blog. ${how}
 
 Reglas:
 - Escribe en el mismo idioma que el texto.
 - Mantén los enlaces (<a href>) y las negritas/cursivas importantes.
 - ${kind === 'list' ? 'Es una lista: separa cada elemento con <br> y no añadas viñetas ni números.' : 'Separa los párrafos con <br><br> si hay varios.'}
-${extra ? `- Indicaciones de la asociación: ${extra}
+${extra ? `- Indicaciones generales: ${extra}
 ` : ''}
 Título de la entrada: ${title}
 

@@ -24,12 +24,12 @@
         H2('Quiénes participaron'),
         P('', 'Quiénes estuvieron y qué aportaron.'),
         QUOTE('Palabras de una persona participante (con su permiso).'),
-        BTN('Colabora con Elín', { align: 'center' }),
+        BTN('Colabora con nosotros', { align: 'center' }),
       ],
     },
     {
       id: 'comunicado', icon: 'campaign', name: 'Comunicado', types: ['post'], category: 'Comunicados',
-      desc: 'Posición pública de la asociación, con contexto y reivindicaciones.',
+      desc: 'Posición pública, con contexto y reivindicaciones.',
       blocks: [
         P('<strong>Entradilla en negrita: la noticia en una o dos frases.</strong>'),
         H2('Contexto'),
@@ -74,7 +74,7 @@
       blocks: [
         H2('Contacto'),
         COLUMNS([
-          [P('', 'Cuenta cómo y cuándo pueden contactar con la asociación.'), BTN('Escríbenos', { align: 'left' })],
+          [P('', 'Cuenta cómo y cuándo pueden contactar contigo.'), BTN('Escríbenos', { align: 'left' })],
           [SECTION([LIST(['', '', ''], 'Dirección, teléfono, correo u horario')], { bg: '#f5f1ea', pad: 's', radius: 12 })],
         ]),
       ],

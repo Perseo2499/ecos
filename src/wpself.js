@@ -691,7 +691,7 @@ async function helperStats(cfg, days = 30) {
   if (!r) throw new Error('El complemento no devolvió estadísticas. Actualízalo desde Conexiones.');
   return r;
 }
-// Datos de la asociación para Google (JSON-LD): GET/POST /ecos/v1/settings → { saved, settings }
+// Datos de tu organización para Google (JSON-LD): GET/POST /ecos/v1/settings → { saved, settings }
 const SETTINGS_KEYS = ['name', 'street', 'postal', 'city', 'email', 'phone', 'instagram', 'facebook'];
 function parseHelperSettings(d) {
   const s = d?.settings || {};
