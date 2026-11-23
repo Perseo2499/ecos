@@ -47,15 +47,33 @@ jobs:
           elseif ($o -match 'vkCreateInstance|invalid gpu') { Write-Host "Motor de IA OK: arranca; aquí no hay tarjeta gráfica (esperado)" }
           else { Write-Error "El motor de IA no arranca"; exit 1 }
           exit 0
-      - name: Compilar (y firmar si hay certificado)
+      - name: Compilar (firma con Azure Trusted Signing, con certificado o sin firmar)
         shell: bash
         env:
+          # Azure Trusted Signing (opcional): secretos y variables del repositorio (ver docs/firma-windows.md)
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZ_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          AZ_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          AZ_PROFILE: ${{ vars.AZURE_SIGNING_PROFILE }}
+          AZ_PUBLISHER: ${{ vars.AZURE_SIGNING_PUBLISHER }}
+          # Alternativa: certificado tradicional (.pfx en base64)
           CERT: ${{ secrets.WIN_CSC_LINK }}
           CERT_PASS: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
         run: |
-          if [ -n "$CERT" ]; then export WIN_CSC_LINK="$CERT" WIN_CSC_KEY_PASSWORD="$CERT_PASS"; echo "Firmando con certificado"; else echo "Sin certificado: se compila sin firmar"; fi
           node scripts/build-wp-plugin.js
-          npx electron-builder --win --x64 --publish never
+          EXTRA=()
+          if [ -n "$AZURE_TENANT_ID" ] && [ -n "$AZURE_CLIENT_ID" ] && [ -n "$AZURE_CLIENT_SECRET" ] && [ -n "$AZ_ENDPOINT" ] && [ -n "$AZ_ACCOUNT" ] && [ -n "$AZ_PROFILE" ] && [ -n "$AZ_PUBLISHER" ]; then
+            echo "Firmando con Azure Trusted Signing"
+            unset WIN_CSC_LINK WIN_CSC_KEY_PASSWORD
+            EXTRA=("-c.win.azureSignOptions.publisherName=$AZ_PUBLISHER" "-c.win.azureSignOptions.endpoint=$AZ_ENDPOINT" "-c.win.azureSignOptions.codeSigningAccountName=$AZ_ACCOUNT" "-c.win.azureSignOptions.certificateProfileName=$AZ_PROFILE")
+          else
+            # sin Azure completo: no se pasan sus credenciales a electron-builder
+            unset AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET
+            if [ -n "$CERT" ]; then export WIN_CSC_LINK="$CERT" WIN_CSC_KEY_PASSWORD="$CERT_PASS"; echo "Firmando con certificado"; else echo "Sin firma: se compila sin firmar"; fi
+          fi
+          npx electron-builder --win --x64 --publish never "${EXTRA[@]}"
       - name: Prueba de arranque en Windows
         shell: pwsh
         run: |
@@ -86,7 +104,7 @@ jobs:
           body: |
             **Recomendado: `Ecos-Setup-${{ steps.v.outputs.version }}.exe`** (instalador, se actualiza solo).
             Alternativa sin instalar: `Ecos-${{ steps.v.outputs.version }}-portable.exe` (no se actualiza sola).
-            Windows SmartScreen avisará porque no está firmado: *Más información → Ejecutar de todas formas*.
+            Si Windows SmartScreen avisa (versiones sin firmar): *Más información → Ejecutar de todas formas*.
           files: |
             dist/Ecos-Setup-*.exe
             dist/Ecos-Setup-*.exe.blockmap

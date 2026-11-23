@@ -299,6 +299,18 @@
     'Visibles': 'Visible',
     'Ocultas': 'Hidden',
     'Ocultos': 'Hidden',
+    // Firma, canal de pruebas y cola de envíos
+    'Sin conexión: el envío queda en cola y se hará solo': 'No connection: the upload is queued and will be sent automatically',
+    'Envíos pendientes': 'Pending uploads', 'Reintentar todo': 'Retry all', 'Reintentar ya': 'Retry now',
+    '1 envío pendiente': '1 pending upload', '{n} envíos pendientes': '{n} pending uploads', '(sin título)': '(untitled)',
+    'Próximo intento: {d}': 'Next attempt: {d}', 'Reintentando…': 'Retrying…', '{n} intentos': '{n} attempts',
+    'Se descartará este envío y no se hará. ¿Continuar?': 'This upload will be discarded and will not be sent. Continue?',
+    'Recibir las versiones nuevas antes (canal de pruebas)': 'Get new versions earlier (test channel)',
+    'Normalmente Ecos espera 24 horas desde que se publica una versión antes de instalarla, por si se detecta algún fallo. Con el canal de pruebas se instala en cuanto sale.': 'Normally Ecos waits 24 hours after a version is released before installing it, in case a problem is found. With the test channel it is installed as soon as it is out.',
+    'Canal': 'Channel', 'Estable': 'Stable', 'De pruebas': 'Test', 'Próxima comprobación: {d}': 'Next check: {d}',
+    'La versión {v} se instalará dentro de unas {h} h: el canal estable espera 24 h tras publicarse una versión.': 'Version {v} will be installed in about {h} h: the stable channel waits 24 h after a version is released.',
+    'Canal de pruebas activado: Ecos instalará las versiones nuevas en cuanto salgan.': 'Test channel on: Ecos will install new versions as soon as they are out.',
+    'Canal estable: Ecos esperará 24 horas antes de instalar una versión nueva.': 'Stable channel: Ecos will wait 24 hours before installing a new version.',
     // 1.2 (editor completo)
     'Complemento de Ecos': 'Ecos Add-on', 'Opcional · Mi web (wp-admin)': 'Optional · My site (wp-admin)',
     'Instalado': 'Installed', 'No instalado': 'Not installed', 'Desactualizado': 'Out of date',

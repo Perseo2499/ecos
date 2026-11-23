@@ -26,12 +26,39 @@ let _logger = null;
 const logger = () => _logger || (_logger = require('./src/logger').createLogger({ file: logFile() }));
 function log(...args) { try { logger().warn(...args); } catch { /* sin registro */ } }
 function logError(...args) { try { logger().error(...args); } catch { /* sin registro */ } }
-function fatal(err) {
-  logError('ERROR FATAL', err);
+// Modo seguro: userData/startup.json {pending, failures, version} (src/startup.js)
+const startupFile = () => path.join(app.getPath('userData'), 'startup.json');
+let startupState = null;
+const readStartup = () => { try { return JSON.parse(fs.readFileSync(startupFile(), 'utf8')); } catch { return null; } };
+const saveStartup = (s) => { startupState = s; try { fs.mkdirSync(path.dirname(startupFile()), { recursive: true }); fs.writeFileSync(startupFile(), JSON.stringify(s)); } catch { /* nada */ } };
+// Descarga el instalador publicado más reciente y lo ejecuta; si falla, abre la página de descargas
+async function installPublished() {
+  const RELEASES = 'https://github.com/Perseo2499/ecos/releases/latest';
   try {
-    dialog.showErrorBox('Ecos no ha podido arrancar',
-      `${err && err.message ? err.message : err}\n\nDetalles en: ${logFile()}\nEnvía ese archivo para que lo revisen.`);
-  } catch { /* nada */ }
+    const file = await require('./src/startup').downloadInstaller(app.getPath('temp'));
+    if (process.platform === 'win32') require('child_process').spawn(file, [], { detached: true, stdio: 'ignore' }).unref();
+    else await shell.openPath(file);
+    log('Reparación: instalador lanzado', file);
+    return true;
+  } catch (e) {
+    logError('Reparación: no se pudo descargar el instalador', e);
+    try { await shell.openExternal(RELEASES); } catch { /* nada */ }
+    return false;
+  }
+}
+let fataling = false;
+function fatal(err) {
+  if (fataling) return;
+  fataling = true;
+  logError('ERROR FATAL', err);
+  try { const su = require('./src/startup'); saveStartup(su.fail(startupState || readStartup())); } catch { /* nada */ }
+  const text = `${err && err.message ? err.message : err}\n\nDetalles en: ${logFile()}\nEnvía ese archivo para que lo revisen.`;
+  try {
+    const r = dialog.showMessageBoxSync({ type: 'error', title: 'Ecos no ha podido arrancar', message: 'Ecos no ha podido arrancar', detail: text, buttons: ['Cerrar', 'Descargar la versión buena'], defaultId: 0, cancelId: 0, noLink: true });
+    if (r === 1) { installPublished().finally(() => app.exit(1)); return; }
+  } catch {
+    try { dialog.showErrorBox('Ecos no ha podido arrancar', text); } catch { /* nada */ }
+  }
   app.exit(1);
 }
 process.on('uncaughtException', fatal);
@@ -56,6 +83,15 @@ if (!gotLock) {
   app.on('second-instance', () => {
     if (mainWin) { if (mainWin.isMinimized()) mainWin.restore(); mainWin.show(); mainWin.focus(); }
   });
+}
+
+if (gotLock) {
+  try {
+    const su = require('./src/startup');
+    saveStartup(su.begin(readStartup(), app.getVersion()));
+    // si en 60 s no llega la ventana principal, este arranque cuenta como fallido
+    setTimeout(() => { if (startupState && startupState.pending) saveStartup(su.fail(startupState)); }, su.READY_TIMEOUT_MS).unref?.();
+  } catch { /* nada */ }
 }
 
 // --- Arranque a prueba de fallos ------------------------------------------------
@@ -127,6 +163,7 @@ function createWindow() {
   });
   win.removeMenu(); // sin la barra File/Edit/View de Windows (los atajos de copiar y pegar siguen funcionando)
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  win.once('ready-to-show', () => { try { saveStartup(require('./src/startup').ready(startupState || readStartup())); } catch { /* nada */ } });
   if (IS_DEV) win.on('page-title-updated', (e) => e.preventDefault()); // que se note que es la versión de desarrollo
   win.webContents.setWindowOpenHandler(({ url }) => { openSafe(url); return { action: 'deny' }; });
   // la ventana de la app nunca navega a otra página (un enlace malicioso no puede sustituir la interfaz)
@@ -277,6 +314,7 @@ handle('config:set', (changes) => {
     cfg[k] = typeof v === 'string' ? v.trim() : v; // sin espacios sobrantes al pegar claves
   }
   store.save(cfg);
+  if ('prefs' in changes) updater?.setBeta(!!cfg.prefs?.betaChannel);
   return publicCfg();
 });
 
@@ -784,7 +822,7 @@ async function resolveFeatured(d) {
     return null;
   }
 }
-handle('draft:publish', async (d) => { require('./src/pagelinks').forget();
+async function doPublish(d) { require('./src/pagelinks').forget();
   // Texto alternativo: se guarda también en la biblioteca de medios
   for (const img of d.blocks ? blockImages(d.blocks) : d.sections.flatMap((x) => x.images)) {
     if (img.alt && Number(img.id) > 0) await wpCall(() => WP().updateMedia(cfg, img.id, { alt: img.alt })).catch((e) => log('No se pudo guardar el alt', img.id, e.message));
@@ -816,6 +854,15 @@ handle('draft:publish', async (d) => { require('./src/pagelinks').forget();
   store.save(cfg);
   const cacheNote = await purgeAfterSend(post);
   return { postId: post.ID, url, editUrl, status: post.status, date: post.date, exported: cfg.exported, cacheNote };
+}
+// Si falla por red o servidor (5xx), el envío queda en cola (userData/send-queue.json) y se reintenta solo
+handle('draft:publish', async (d) => {
+  try { return await doPublish(d); } catch (e) {
+    if (!require('./src/sendqueue').isNetworkError(e)) throw e;
+    log('Envío en cola por falta de conexión:', e.message);
+    queueAdd(d, e.message);
+    return { queued: true, pending: sendQueue.length, exported: cfg.exported };
+  }
 });
 
 // --- IA ---
@@ -1810,6 +1857,48 @@ handle('totp:confirm', (code) => {
 });
 handle('totp:disable', ({ current } = {}) => { needPassword(current); cfg.__totp = null; cfg.__recovery = []; store.save(cfg); log('Acceso: doble factor quitado'); return publicCfg(); });
 
+// ---------------------------------------------------------------- Cola de envíos sin conexión (src/sendqueue.js)
+const SQ = require('./src/sendqueue');
+const queueFile = () => path.join(app.getPath('userData'), 'send-queue.json');
+let sendQueue = [];
+let queueTimer = null, queueRunning = false;
+try { const j = JSON.parse(fs.readFileSync(queueFile(), 'utf8')); if (Array.isArray(j)) sendQueue = j; } catch { /* sin cola */ }
+function queueSave() {
+  try { fs.writeFileSync(queueFile(), JSON.stringify(sendQueue)); } catch (e) { log('No se pudo guardar la cola de envíos', e.message); }
+  try { if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('queue:update', SQ.view(sendQueue)); } catch { /* ventana cerrada */ }
+  clearTimeout(queueTimer);
+  const wake = SQ.nextWake(sendQueue);
+  if (wake) queueTimer = setTimeout(queueRun, Math.max(1000, wake - Date.now()));
+}
+function queueAdd(d, errMsg) { sendQueue = SQ.enqueue(sendQueue, d, Date.now(), errMsg); queueSave(); }
+function queueNotify(title, body) { try { const { Notification } = require('electron'); if (Notification.isSupported()) new Notification({ title, body }).show(); } catch { /* sin notificaciones */ } }
+async function queueRun() {
+  if (queueRunning || !cfg || isLocked()) return;
+  queueRunning = true;
+  try {
+    for (const it of SQ.due(sendQueue, Date.now())) {
+      if (!sendQueue.some((x) => x.id === it.id)) continue; // descartado o sustituido mientras tanto
+      try {
+        const r = await doPublish(it.payload);
+        sendQueue = SQ.remove(sendQueue, it.id);
+        log('Envío en cola completado', it.title);
+        sendToast(`El envío en cola «${it.title}» se ha hecho.`);
+        queueNotify('Ecos', `«${it.title}» se ha enviado a WordPress.`);
+        try { mainWin?.webContents.send('queue:done', { title: it.title, url: r.url, exported: r.exported }); } catch { /* nada */ }
+      } catch (e) {
+        if (SQ.isNetworkError(e)) sendQueue = SQ.failed(sendQueue, it.id, Date.now(), e.message);
+        else { sendQueue = SQ.remove(sendQueue, it.id); log('Envío en cola descartado', it.title, e.message); sendToast(`No se pudo completar el envío en cola «${it.title}»: ${e.message}`, true); }
+      }
+      queueSave();
+    }
+  } finally { queueRunning = false; queueSave(); }
+}
+handle('queue:list', () => SQ.view(sendQueue));
+handle('queue:retry', (id) => { sendQueue = SQ.retryNow(sendQueue, id || null, Date.now()); queueSave(); queueRun(); return SQ.view(sendQueue); });
+handle('queue:discard', (id) => { sendQueue = SQ.remove(sendQueue, id); queueSave(); return SQ.view(sendQueue); });
+handle('queue:online', () => { if (sendQueue.length) { sendQueue = SQ.retryNow(sendQueue, null, Date.now()); queueSave(); queueRun(); } return SQ.view(sendQueue); });
+handle('app:repair', async () => installPublished());
+
 handle('update:check', () => { updater.check(); return updater.current(); });
 handle('update:install', () => updater.install());
 
@@ -1825,6 +1914,15 @@ app.whenReady().then(() => {
     delete cfg.anthropicKey; store.save(cfg);
   }
   createWindow();
+  // Modo seguro: si los dos últimos arranques no llegaron a mostrar la ventana, se ofrece reinstalar la versión publicada
+  try {
+    const su = require('./src/startup');
+    if (su.shouldOffer(startupState)) {
+      saveStartup(su.offered(startupState));
+      dialog.showMessageBox({ type: 'warning', title: 'Ecos', message: 'La última versión no arrancó bien.', detail: '¿Descargar e instalar de nuevo la versión publicada?', buttons: ['Descargar e instalar', 'Ahora no'], defaultId: 0, cancelId: 1, noLink: true })
+        .then((r) => { if (r.response === 0) installPublished().then((ok) => { if (ok && process.platform === 'win32') app.quit(); }); }).catch(() => {});
+    }
+  } catch { /* nada */ }
   try { const { powerMonitor } = require('electron'); powerMonitor.on('lock-screen', () => lockApp('pantalla bloqueada')); powerMonitor.on('suspend', () => lockApp('suspensión')); } catch { /* sin powerMonitor */ }
   mainWin.webContents.on('render-process-gone', (_e, d) => { if (d.reason !== 'clean-exit') escalate(`la ventana se ha cerrado (${d.reason}, código ${d.exitCode})`); });
   // Si la ventana no termina de cargar en 20 s (pantalla en blanco), también se pasa al modo compatible
@@ -1850,6 +1948,8 @@ app.whenReady().then(() => {
       const victim = app.getAppMetrics().find((m) => m.type === process.env.ECOS_PRUEBA_FALLO);
       if (victim) process.kill(victim.pid);
     }
+    updater.setBeta(!!cfg.prefs?.betaChannel);
+    queueSave(); // programa los envíos pendientes
     updater.init((st) => {
       if (st.state === 'error') log('Actualizador:', st.message);
       if (!mainWin.isDestroyed()) mainWin.webContents.send('update:status', { version: app.getVersion(), ...st });

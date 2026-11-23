@@ -18,7 +18,14 @@
     <button data-tab="settings"><span class="ms">settings</span><span data-i18n>Ajustes</span></button>
   </nav>
   <button id="gs-open" class="btn text icon-only gs-open" data-i18n-title title="Buscar en todo (Ctrl+K)"><span class="ms">search</span></button>
-  <div class="status"><span id="st-meta" class="pill"></span><span id="st-wp" class="pill"></span></div>
+  <div class="status">
+    <span class="q-wrap"><button id="q-ind" class="pill q-ind hidden" type="button" aria-haspopup="true" aria-expanded="false"><span class="ms">cloud_off</span><span id="q-count">0</span></button>
+      <div id="q-panel" class="q-panel hidden" role="dialog" aria-label="Envíos pendientes">
+        <div class="q-head"><b data-i18n>Envíos pendientes</b><button id="q-retry-all" class="btn text small" data-i18n>Reintentar todo</button></div>
+        <div id="q-list" class="q-list"></div>
+      </div></span>
+    <span id="st-meta" class="pill"></span><span id="st-wp" class="pill"></span>
+  </div>
 </header>
 
 <div id="update-bar" class="update-bar hidden"><span class="ms">system_update</span><span id="update-text"></span><button id="update-install" class="btn filled hidden" data-i18n>Reiniciar y actualizar</button></div>
@@ -653,6 +660,8 @@
         <div class="card" id="set-updates">
           <div class="card-head"><span class="ms fill ic">system_update</span><h2 data-i18n>Actualizaciones</h2></div>
           <div class="version-row"><span class="version" id="app-version">–</span><span id="update-detail" class="hint"></span></div>
+          <div class="set-row"><span data-i18n>Canal</span><b id="update-channel">–</b></div>
+          <p class="hint" id="update-next"></p>
           <div class="card-actions">
             <button id="open-releases" class="btn text" data-i18n>Novedades</button>
             <button id="update-check" class="btn tonal"><span class="ms">refresh</span><span data-i18n>Buscar actualizaciones</span></button>
@@ -664,6 +673,8 @@
           <label class="switch"><input type="checkbox" id="s-fmt-fixed"><span data-i18n>Barra de formato fija arriba del editor (si no, aparece al seleccionar texto, como en Word)</span></label>
           <label class="switch"><input type="checkbox" id="s-share-fb"><span data-i18n>Compartir en Facebook al publicar</span></label>
           <p class="hint" data-i18n>Añade el botón «Compartir en Facebook» al publicar una entrada. Necesita el permiso pages_manage_posts en tu app de Meta. Apagado, Ecos no publica nada en tus redes.</p>
+          <label class="switch"><input type="checkbox" id="s-beta"><span data-i18n>Recibir las versiones nuevas antes (canal de pruebas)</span></label>
+          <p class="hint" data-i18n>Normalmente Ecos espera 24 horas desde que se publica una versión antes de instalarla, por si se detecta algún fallo. Con el canal de pruebas se instala en cuanto sale.</p>
           <label class="switch"><input type="checkbox" id="s-devmode"><span data-i18n>Modo desarrollador (terminal y Claude Code en «Conexiones»)</span></label>
           <div class="set-row"><span data-i18n>Modo de arranque</span><b id="mode-name">–</b></div>
           <p class="hint" id="mode-hint"></p>
@@ -981,6 +992,7 @@
 <script src="app/home.js"></script>
 <script src="app/search.js"></script>
 <script src="app/devcli.js"></script>
+<script src="app/sendqueue-ui.js"></script>
 <script src="app/boot.js"></script>
 </body>
 </html>

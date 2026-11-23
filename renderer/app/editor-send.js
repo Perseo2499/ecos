@@ -68,6 +68,7 @@ $('#send').onclick = (e) => busy(e.target, async () => {
   if (!$('#d-title').value.trim()) throw new Error(t('Escribe un título'));
   if (when === 'publish' && !await ask(t('Se publicará ahora y será visible en la web. ¿Continuar?'))) return;
   const res = await window.api.publish(draftPayload(when));
+  if (res.queued) { exported = res.exported || exported; toast(t('Sin conexión: el envío queda en cola y se hará solo')); return; }
   exported = res.exported; lastSent = res; draft.postId = res.postId || draft.postId; draft.previewOnly = false; window.api.autosaveClear().catch(() => {}); draftDirty = false; renderWpState(res.status, res.url);
   const pg = isPageDraft();
   $('#sent-text').textContent = res.status === 'publish' ? (pg ? t('¡Página publicada!') : t('¡Entrada publicada!'))

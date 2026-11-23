@@ -17,6 +17,7 @@ async function afterConfigLoaded() {
   $('#f-merge').checked = CFG.format?.mergeDuplicates !== false;
   fillConnections(); fillFormat(); renderTemplates(); renderAi(); renderStatus();
   renderDevCard();
+  renderBeta();
   renderSecurity();
   if (CFG.startMode) renderMode(CFG.startMode);
   applyPrefs();

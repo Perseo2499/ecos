@@ -186,6 +186,13 @@ contextBridge.exposeInMainWorld('api', {
   checkUpdate: () => call('update:check'),
   installUpdate: () => call('update:install'),
   onUpdate: on('update:status'),
+  queueList: () => call('queue:list'),
+  queueRetry: (id) => call('queue:retry', id),
+  queueDiscard: (id) => call('queue:discard', id),
+  queueOnline: () => call('queue:online'),
+  onQueue: on('queue:update'),
+  onQueueDone: on('queue:done'),
+  repairInstall: () => call('app:repair'),
   onToast: on('toast'),
   onConfigChanged: on('config:changed'),
 });

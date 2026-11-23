@@ -148,10 +148,13 @@ function renderUpdate(st) {
     error: t('No se pudo comprobar si hay actualizaciones: {e}', { e: friendlyError(st.message).text }),
     unsupported: st.reason === 'portable' ? t('La versión portable no se actualiza sola. Usa el instalador para recibir actualizaciones automáticas.') : t('Las actualizaciones solo funcionan en la versión instalada.'),
   };
+  texts.waiting = t('La versión {v} se instalará dentro de unas {h} h: el canal estable espera 24 h tras publicarse una versión.', { v: st.version, h: Math.max(1, Math.ceil(((st.until || 0) - Date.now()) / 3600000)) });
   $('#update-detail').textContent = texts[st.state] || '';
   $('#update-bar').classList.toggle('hidden', !['downloading', 'ready'].includes(st.state));
   $('#update-text').textContent = texts[st.state] || '';
   $('#update-install').classList.toggle('hidden', st.state !== 'ready');
+  if (st.channel) $('#update-channel').textContent = st.channel === 'beta' ? t('De pruebas') : t('Estable');
+  $('#update-next').textContent = st.nextCheckAt && st.state !== 'unsupported' ? t('Próxima comprobación: {d}', { d: new Date(st.nextCheckAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }) : '';
 }
 window.api.onUpdate(renderUpdate);
 $('#update-install').onclick = () => window.api.installUpdate();
