@@ -1008,3 +1008,16 @@ test('vídeo suelto con estilo: ida y vuelta de colocación, recorte, marco y ef
   // sin estilo no cambia
   assert.doesNotMatch(T.composeBlocks([{ id: 'v3', type: 'video', video: v }]), /ecos-v-|ecos-fx/);
 });
+
+test('importar: lee una exportación de WordPress (.xml) con entradas y páginas y descarta adjuntos', () => {
+  const { parseImport } = require('../src/wpimport');
+  const xml = `<?xml version="1.0"?><rss version="2.0" xmlns:wp="http://wordpress.org/export/1.2/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:excerpt="http://wordpress.org/export/1.2/excerpt/"><channel>
+<item><title>Aviso legal</title><content:encoded><![CDATA[<!-- wp:paragraph --><p>Hola &amp; adiós</p><!-- /wp:paragraph -->]]></content:encoded><excerpt:encoded><![CDATA[]]></excerpt:encoded><wp:post_name>aviso-legal</wp:post_name><wp:status>draft</wp:status><wp:post_type>page</wp:post_type></item>
+<item><title>foto.jpg</title><content:encoded><![CDATA[]]></content:encoded><wp:post_type>attachment</wp:post_type></item>
+<item><title>Una &amp; entrada</title><content:encoded><![CDATA[<p>Texto</p>]]></content:encoded><wp:post_type>post</wp:post_type></item>
+</channel></rss>`;
+  const r = parseImport(xml, 'export.xml');
+  assert.deepEqual(r.map((x) => [x.title, x.type, x.slug]), [['Aviso legal', 'page', 'aviso-legal'], ['Una & entrada', 'post', '']]);
+  assert.match(r[0].content, /<p>Hola &amp; adiós<\/p>/);
+  assert.equal(parseImport('<html><head><title>Hola</title></head><body><p>x</p></body></html>', 'a.html')[0].title, 'Hola');
+});

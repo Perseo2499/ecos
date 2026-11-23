@@ -673,6 +673,18 @@ handle('ai:article', async (input) => {
   const all = [...sources, ...(art.sources || [])].filter((x) => /^https?:\/\//.test(x.url || '') && !seen.has(x.url) && seen.add(x.url));
   return { ...art, sources: opts.web ? all.slice(0, 12) : [] };
 });
+// Importar en el editor una entrada/página exportada de WordPress (.xml) o un .html con bloques
+handle('draft:importFile', async () => {
+  const r = await dialog.showOpenDialog(mainWin, { title: 'Importar una entrada o página exportada de WordPress', properties: ['openFile'],
+    filters: [{ name: 'Exportación de WordPress o HTML', extensions: ['xml', 'html', 'htm', 'txt'] }] });
+  if (r.canceled || !r.filePaths[0]) return null;
+  const file = r.filePaths[0];
+  const text = require('fs').readFileSync(file, 'utf8');
+  const list = require('./src/wpimport').parseImport(text, file);
+  if (!list.length) throw new Error('El archivo no tiene ninguna entrada ni página que se pueda importar.');
+  const { parseBlocks } = require('./src/parseblocks');
+  return list.map((x) => ({ ...x, blocks: parseBlocks(x.content), pageBg: require('./renderer/pagebg').parse(x.content) }));
+});
 handle('ai:alts', (urls, context) => ai.altTexts(cfg.ai, urls, context));
 handle('ai:alt', (url, context) => ai.altText(cfg.ai, url, context));
 handle('ai:seo', (input) => ai.seoSuggest(cfg.ai, { ...input, extra: cfg.aiInstructions || '' }));

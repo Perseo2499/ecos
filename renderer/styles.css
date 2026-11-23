@@ -2691,3 +2691,10 @@ body:has(.tab.active .b-bulk.on) #toast { bottom: 120px; }
 .vid-wrap.vid-left { margin-right: auto; }
 .vid-wrap.vid-right { margin-left: auto; }
 .vid-wrap.vid-center { margin-left: auto; margin-right: auto; }
+
+/* Importar: elegir una de las entradas/páginas del archivo */
+.imp-dlg { width: min(520px, calc(100vw - 32px)); }
+.imp-list { display: flex; flex-direction: column; gap: 6px; width: 100%; max-height: 50vh; overflow: auto; }
+.imp-it { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 0; border-radius: var(--r-m); background: var(--surface-c-high); color: var(--on-surface); font: inherit; text-align: left; cursor: pointer; }
+.imp-it:hover, .imp-it:focus-visible { box-shadow: inset 0 0 0 1px var(--primary); outline: none; }
+.imp-it b { flex: 1; } .imp-it .ms { color: var(--primary); }

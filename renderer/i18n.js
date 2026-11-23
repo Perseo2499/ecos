@@ -300,6 +300,13 @@
     'Ocultas': 'Hidden',
     'Ocultos': 'Hidden',
     // 1.2 (editor completo)
+    'Importar una entrada o página exportada de WordPress (.xml) o un archivo .html': 'Import a post or page exported from WordPress (.xml) or an .html file',
+    'El archivo tiene {n} entradas o páginas. ¿Cuál quieres cargar en el editor?': 'The file has {n} posts or pages. Which one do you want to load into the editor?',
+    'Se sustituirá el contenido del editor por «{x}». ¿Continuar? (Puedes deshacerlo con Ctrl+Z)': 'The editor content will be replaced by “{x}”. Continue? (You can undo it with Ctrl+Z)',
+    '¿Usar también su título, «{x}»?': 'Also use its title, “{x}”?',
+    'Usar el título': 'Use the title',
+    'Dejar el actual': 'Keep the current one',
+    'Importado. Revísalo y pulsa «Enviar a WordPress» cuando quieras publicarlo.': 'Imported. Review it and click “Send to WordPress” when you want to publish it.',
     'Listo. {n} tramo(s) se han dejado como estaban porque la IA no los devolvió. Revisa el texto antes de enviarlo.': 'Done. {n} section(s) were left as they were because the AI did not return them. Review the text before sending it.',
     'Listo: el texto está reescrito y las fotos siguen en su sitio. Revísalo antes de enviarlo (Ctrl+Z para deshacer).': 'Done: the text is rewritten and the photos stay in place. Review it before sending (Ctrl+Z to undo).',
     'Colocación': 'Placement', 'Izquierda': 'Left', 'Derecha': 'Right',

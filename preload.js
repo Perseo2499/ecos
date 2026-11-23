@@ -80,6 +80,7 @@ contextBridge.exposeInMainWorld('api', {
   aiRewrite: (input) => call('ai:rewrite', input),
   aiAlts: (urls, context) => call('ai:alts', urls, context),
   aiAlt: (url, context) => call('ai:alt', url, context),
+  draftImportFile: () => call('draft:importFile'),
   aiSetActive: (id) => call('ai:setActive', id),
   aiSave: (id, data) => call('ai:save', id, data),
   aiRemove: (id) => call('ai:remove', id),
