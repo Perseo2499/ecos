@@ -636,4 +636,32 @@ async function helperPurge(cfg, id) {
   return Array.isArray(r?.purged) ? r.purged.map(String) : [];
 }
 
-module.exports = { helperStatus, helperPurge, parseHelperStatus, helperBundledVersion, detectSeo, seoInfo, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText };
+// Visitas (complemento ≥ 1.1.0): GET /ecos/v1/stats?days=N → { days, total, daily:[{day,views}], top:[{id,title,link,views}] }
+function parseHelperStats(d) {
+  const n = (x) => Math.max(0, Math.floor(Number(x) || 0));
+  if (!d || !Array.isArray(d.daily)) return null;
+  return {
+    days: n(d.days), total: n(d.total),
+    daily: d.daily.map((x) => ({ day: String(x.day || ''), views: n(x.views) })),
+    top: (Array.isArray(d.top) ? d.top : []).map((x) => ({ id: n(x.id), title: String(x.title || ''), link: String(x.link || ''), views: n(x.views) })),
+  };
+}
+async function helperStats(cfg, days = 30) {
+  const d = Math.max(1, Math.min(365, Math.floor(Number(days)) || 30));
+  const r = parseHelperStats(await req(cfg, `/ecos/v1/stats?days=${d}&limit=5`));
+  if (!r) throw new Error('El complemento no devolvió estadísticas. Actualízalo desde Conexiones.');
+  return r;
+}
+// Datos de la asociación para Google (JSON-LD): GET/POST /ecos/v1/settings → { saved, settings }
+const SETTINGS_KEYS = ['name', 'street', 'postal', 'city', 'email', 'phone', 'instagram', 'facebook'];
+function parseHelperSettings(d) {
+  const s = d?.settings || {};
+  return { saved: !!d?.saved, settings: Object.fromEntries(SETTINGS_KEYS.map((k) => [k, String(s[k] ?? '')])) };
+}
+async function helperSettings(cfg) { return parseHelperSettings(await req(cfg, '/ecos/v1/settings')); }
+async function helperSaveSettings(cfg, settings) {
+  const body = Object.fromEntries(SETTINGS_KEYS.map((k) => [k, String(settings?.[k] ?? '').trim()]));
+  return parseHelperSettings(await req(cfg, '/ecos/v1/settings', { method: 'POST', json: body }));
+}
+
+module.exports = { helperStats, parseHelperStats, helperSettings, helperSaveSettings, parseHelperSettings, helperStatus, helperPurge, parseHelperStatus, helperBundledVersion, detectSeo, seoInfo, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText };

@@ -21,6 +21,9 @@ contextBridge.exposeInMainWorld('api', {
   wpLogin: () => call('wp:login'),
   helperCheck: () => call('helper:check'),
   helperSave: () => call('helper:save'),
+  helperStats: (days) => call('helper:stats', days),
+  helperSettings: () => call('helper:settings'),
+  helperSettingsSave: (s) => call('helper:settingsSave', s),
   wpCategories: () => call('wp:categories'),
 
   // Publicaciones → entrada

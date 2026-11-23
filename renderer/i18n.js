@@ -300,6 +300,18 @@
     'Ocultas': 'Hidden',
     'Ocultos': 'Hidden',
     // 1.2 (editor completo)
+    // Complemento 1.1
+    'Datos de la asociación para Google': 'Organisation details for Google',
+    'Ecos los publica en tu portada como datos estructurados (schema.org) para que Google muestre bien tu asociación. Se guardan en tu WordPress.': 'Ecos publishes them on your home page as structured data (schema.org) so Google shows your organisation properly. They are saved in your WordPress.',
+    'Dirección': 'Address', 'Código postal': 'Postal code', 'Ciudad': 'City', 'Correo electrónico': 'Email',
+    'Guardar en mi web': 'Save to my site', 'Datos guardados en tu web': 'Details saved to your site',
+    'Visitas': 'Visits', 'visita': 'visit', 'visitas': 'visits', 'Más leídas': 'Most read', 'Periodo': 'Period', '{n} días': '{n} days',
+    'Visitas por día, del {a} al {b}: {n} en total': 'Visits per day, from {a} to {b}: {n} in total',
+    'Aún no hay visitas en este periodo.': 'No visits yet in this period.',
+    'Sin cookies ni datos personales: solo cuentas agregadas por día.': 'No cookies or personal data: only totals per day.',
+    'Las visitas solo están disponibles con «Mi web (wp-admin)» y el complemento de Ecos.': 'Visits are only available with “My site (wp-admin)” and the Ecos add-on.',
+    'Actualiza el complemento de Ecos para ver las visitas.': 'Update the Ecos add-on to see visits.',
+    'Instala el complemento de Ecos para contar las visitas, sin cookies.': 'Install the Ecos add-on to count visits, without cookies.',
     'Complemento de Ecos': 'Ecos Add-on', 'Opcional · Mi web (wp-admin)': 'Optional · My site (wp-admin)',
     'Instalado': 'Installed', 'No instalado': 'Not installed', 'Desactualizado': 'Out of date',
     'No instalado: Ecos pondrá el carrusel y los vídeos dentro de cada entrada.': 'Not installed: Ecos will put the carousel and videos inside each post.',
