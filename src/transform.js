@@ -364,6 +364,9 @@ function imageBlockFull(img, cap = '', place = {}, fx = null) {
 const fs = require('fs');
 const path = require('path');
 let CAROUSEL_JS = '';
+// El script del carrusel, en base64 y solo con caracteres ASCII: WordPress no puede alterarlo al guardar la entrada
+let carB64 = '';
+const CAROUSEL_B64 = () => carB64 || (carB64 = Buffer.from(CAROUSEL_JS.replace(/[^\x00-\x7f]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')), 'utf8').toString('base64'));
 try {
   CAROUSEL_JS = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'carousel.js'), 'utf8')
     .split('\n').filter((l) => !/^\s*\/\//.test(l)).map((l) => l.trim()).join(' ');
@@ -493,7 +496,7 @@ function carouselBlock(b) {
     return `<figure class="ec-slide${vid ? ' ec-vslide' : ''}" id="${id}-${k + 1}" style="position:relative;${slideSize};margin:0;border-radius:${radius}px;overflow:hidden;background-color:#111${o.shadow === 'on' ? ';box-shadow:' + CAR_SHADOW : ''}">`
       + (bgUrl ? `<img class="ec-bg" src="${esc(bgUrl)}" alt="" aria-hidden="true" loading="lazy" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;filter:blur(24px) brightness(.7);margin:0"/>` : '')
       + (vid
-        ? `<video class="ec-vid" controls preload="metadata" playsinline src="${esc(i.url)}"${i.poster ? ` poster="${esc(i.poster)}"` : ''}${Number(i.id) ? ` data-id="${i.id}"` : ''} style="position:relative;display:block;width:100%;height:100%;object-fit:${R ? 'cover' : 'contain'};margin:0;border-radius:0;background-color:#000"></video>`
+        ? `<video class="ec-vid" controls preload="metadata" playsinline muted src="${esc(i.url)}"${i.poster ? ` poster="${esc(i.poster)}"` : ''}${Number(i.id) ? ` data-id="${i.id}"` : ''} style="position:relative;display:block;width:100%;height:100%;object-fit:${R ? 'cover' : 'contain'};margin:0;border-radius:0;background-color:#000"></video>`
         : `<img src="${esc(i.url)}" alt="${alt}" loading="lazy"${Number(i.id) ? ` class="wp-image-${i.id}"` : ''} style="position:relative;display:block;width:100%;height:100%;object-fit:contain;margin:0;border-radius:0"/>`)
       + (n > 1 && o.arrows !== false ? `<span class="ec-nav"><a class="ec-sbtn" href="#${prev}" aria-label="Anterior" style="${btn};left:12px">&#8249;</a>`
         + `<a class="ec-sbtn" href="#${next}" aria-label="Siguiente" style="${btn};right:12px">&#8250;</a>`
@@ -502,7 +505,7 @@ function carouselBlock(b) {
       + '</figure>';
   }).join('');
   const auto = b.autoplay === false ? 0 : 5000;
-  const script = CAROUSEL_JS ? `<script>${CAROUSEL_JS}</script>` : '';
+  const script = CAROUSEL_JS ? `<script>new Function(atob("${CAROUSEL_B64()}"))()</script>` : '';
   return `<!-- wp:html -->\n<div class="ecos-carrusel" id="${id}" data-ecos-carousel data-autoplay="${auto}"${dataOpts} style="position:relative;margin:2em 0"><style>${css}</style><div class="ec-track" style="display:flex;gap:${gap}px;overflow-x:auto;padding:14px 8% 28px">${figs}</div></div>${script}\n<!-- /wp:html -->`;
 }
 

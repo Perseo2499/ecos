@@ -976,7 +976,7 @@ test('carrusel con vídeos: HTML propio aunque haya Spectra, con <video> y las o
   const html = T.composeBlocks([{ id: 'c', type: 'carousel', images: imgs, ...opts }], { spectra: true });
   assert.doesNotMatch(html, /uagb\/image-gallery/);
   assert.match(html, /<!-- wp:html -->/);
-  assert.match(html, /<video class="ec-vid" controls preload="metadata" playsinline src="v\.mp4" poster="p\.jpg" data-id="7" style="[^"]*object-fit:cover/);
+  assert.match(html, /<video class="ec-vid" controls preload="metadata" playsinline muted src="v\.mp4" poster="p\.jpg" data-id="7" style="[^"]*object-fit:cover/);
   assert.match(html, /height:360px;aspect-ratio:16\/9/);
   assert.match(html, /border-radius:0px/);
   const back = P.parseBlocks(html);
@@ -988,7 +988,7 @@ test('carrusel con vídeos: HTML propio aunque haya Spectra, con <video> y las o
   // sin vídeo sigue siendo Spectra
   assert.match(T.composeBlocks([{ id: 'c', type: 'carousel', images: [imgs[0], imgs[2]] }], { spectra: true }), /uagb\/image-gallery/);
   // el script pausa los vídeos fuera de vista
-  assert.match(html, /IntersectionObserver/);
+  const js = Buffer.from((html.match(/atob\("([A-Za-z0-9+/=]+)"\)/) || [])[1] || "", "base64").toString(); assert.match(js, /IntersectionObserver/); assert.doesNotMatch(html.match(/<script>[^<]*<\/script>/)[0], /&/, "sin & que WordPress pueda cambiar");
 });
 
 test('vídeo suelto con estilo: ida y vuelta de colocación, recorte, marco y efecto', () => {

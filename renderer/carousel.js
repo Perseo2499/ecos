@@ -8,7 +8,12 @@
     var doc = root.ownerDocument;
     var track = root.querySelector('.ec-track');
     var slides = Array.prototype.slice.call(root.querySelectorAll('.ec-slide'));
-    if (!track || slides.length < 2) return;
+    if (!track) return;
+    if (slides.length < 2) {
+      var solo = root.querySelector('video');
+      if (solo) { solo.muted = true; if (window.IntersectionObserver) new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { var p = solo.play(); if (p) p.catch(function () {}); } else solo.pause(); }); }, { threshold: 0.4 }).observe(root); }
+      return;
+    }
     root.classList.add('ec-js');
     Array.prototype.forEach.call(root.querySelectorAll('.ec-nav'), function (x) { x.style.display = 'none'; });
     function mk(tag, cls, text) { var e = doc.createElement(tag); e.className = cls; if (text) e.textContent = text; return e; }
@@ -37,6 +42,7 @@
       Array.prototype.forEach.call(dots.children, function (d, i) { d.classList.toggle('ec-on', i === cur); });
       count.textContent = (cur + 1) + ' / ' + slides.length;
       restartBar();
+      if (typeof autoVid === 'function') autoVid();
     }
     var raf = 0;
     track.addEventListener('scroll', function () { cancelAnimationFrame(raf); raf = requestAnimationFrame(update); }, { passive: true });
@@ -105,8 +111,21 @@
       v.addEventListener('ended', function () { playing = vids.some(function (x) { return !x.paused && !x.ended; }); });
     });
     track.addEventListener('scroll', function () { setTimeout(pauseOthers, 250); }, { passive: true });
+    // Reproducción automática: el vídeo de la diapositiva actual empieza solo (en silencio; se puede activar el sonido)
+    // cuando el carrusel está a la vista, y al terminar se pasa a la siguiente diapositiva
+    var inView = false;
+    function autoVid() {
+      pauseOthers();
+      var v = slides[cur] ? slides[cur].querySelector('video') : null;
+      if (!v || !inView) return;
+      if (v.paused) { v.muted = v.muted || !v.dataset.ecSound; var p = v.play(); if (p) p.catch(function () {}); }
+    }
+    vids.forEach(function (v) {
+      v.addEventListener('volumechange', function () { if (!v.muted) v.dataset.ecSound = '1'; });
+      v.addEventListener('ended', function () { if (slides.length > 1) { go(cur + 1); hold(); } });
+    });
     if (vids.length && window.IntersectionObserver) {
-      new IntersectionObserver(function (es) { es.forEach(function (e) { if (!e.isIntersecting) vids.forEach(function (v) { if (!v.paused) v.pause(); }); }); }, { threshold: 0.1 }).observe(root);
+      new IntersectionObserver(function (es) { es.forEach(function (e) { inView = e.isIntersecting; if (!inView) vids.forEach(function (v) { if (!v.paused) v.pause(); }); else autoVid(); }); }, { threshold: 0.4 }).observe(root);
     }
     if (!ms || still) root.classList.add('ec-static');
     update(); start();
