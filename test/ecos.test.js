@@ -996,7 +996,9 @@ test('vídeo suelto con estilo: ida y vuelta de colocación, recorte, marco y ef
   const v = { id: 3, url: 'v.mp4' };
   const b = { id: 'v1', type: 'video', video: v, caption: '', align: 'right', width: 33, ratio: '16/9', frame: 'rounded', fx: 'zoom' };
   const html = T.composeBlocks([b]);
-  assert.match(html, /<!-- wp:video \{"id":3,"className":"ecos-v-a-right ecos-v-w-33 ecos-v-r-16-9 ecos-v-rounded ecos-v-zoom"\} -->/);
+  assert.match(html, /<!-- wp:video \{"autoplay":true,"controls":false,"loop":true,"muted":true,"playsInline":true,"id":3,"className":"ecos-v-a-right ecos-v-w-33 ecos-v-r-16-9 ecos-v-rounded ecos-v-zoom ecos-vp"\} -->/);
+  assert.match(html, /<video autoplay loop muted preload="metadata" src="v\.mp4" playsinline><\/video>/);
+  assert.match(html, /<script class="ecos-vjs">new Function\(atob\("[A-Za-z0-9+\/=]+"\)\)\(\)<\/script>/);
   assert.match(html, /<figure class="wp-block-video ecos-v-a-right/);
   assert.match(html, /<style class="ecos-fx">.*\.wp-block-video\.ecos-v-rounded\{border-radius:16px;overflow:hidden\}/);
   assert.match(html, /ecos-v-zoom:hover video\{transform:scale/);
@@ -1007,7 +1009,7 @@ test('vídeo suelto con estilo: ida y vuelta de colocación, recorte, marco y ef
   const bw = P.parseBlocks(T.composeBlocks([{ id: 'v2', type: 'video', video: v, frame: 'shadow', fx: 'bw' }]))[0];
   assert.equal(bw.frame, 'shadow'); assert.equal(bw.fx, 'bw');
   // sin estilo no cambia
-  assert.doesNotMatch(T.composeBlocks([{ id: 'v3', type: 'video', video: v }]), /ecos-v-|ecos-fx/);
+  assert.doesNotMatch(T.composeBlocks([{ id: 'v3', type: 'video', video: v }]), /ecos-v-/);
 });
 
 test('importar: lee una exportación de WordPress (.xml) con entradas y páginas y descarta adjuntos', () => {

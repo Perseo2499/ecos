@@ -66,11 +66,12 @@ function videoBlock(v, cap = '', place = {}, fx = null) {
   if (VID_FRAMES.includes(place.frame)) cn.push('ecos-v-' + place.frame);
   if (place.fx === 'zoom') cn.push('ecos-v-zoom'); else if (place.fx === 'bw') cn.push('ecos-v-bw');
   cn.forEach((k) => fx?.add(k.replace('ecos-', '')));
-  const attrs = {};
+  cn.push('ecos-vp'); fx?.add('vplay');
+  const attrs = { autoplay: true, controls: false, loop: true, muted: true, playsInline: true };
   if (v.id) attrs.id = Number(v.id) || v.id;
-  if (cn.length) attrs.className = cn.join(' ');
-  const json = Object.keys(attrs).length ? ' ' + JSON.stringify(attrs) : '';
-  return `<!-- wp:video${json} -->\n<figure class="${['wp-block-video', ...cn].join(' ')}"><video controls preload="metadata" src="${esc(v.url)}"></video>${c ? `<figcaption class="wp-element-caption">${c}</figcaption>` : ''}</figure>\n<!-- /wp:video -->`;
+  attrs.className = cn.join(' ');
+  const json = ' ' + JSON.stringify(attrs);
+  return `<!-- wp:video${json} -->\n<figure class="${['wp-block-video', ...cn].join(' ')}"><video autoplay loop muted preload="metadata" src="${esc(v.url)}" playsinline></video>${c ? `<figcaption class="wp-element-caption">${c}</figcaption>` : ''}</figure>\n<!-- /wp:video -->`;
 }
 
 function embedBlock(url, provider) {
@@ -268,6 +269,7 @@ const FX_CSS = {
   bw: '.wp-block-image.ecos-bn img{filter:grayscale(1)}',
   // el tema puede no traer la clase de WordPress para «justificado»: se asegura aquí (sin tocar el bloque, que sigue siendo válido en WordPress)
   justify: '.has-text-align-justify{text-align:justify}',
+  vplay: '.wp-block-video.ecos-vp{position:relative}.wp-block-video.ecos-vp video{display:block;width:100%}',
   iconos: '.wp-block-list.ecos-iconos{list-style:none;padding-left:0}.wp-block-list.ecos-iconos li{margin:.4em 0}.ecos-iconos .ecos-ico{display:inline-block;min-width:1.6em;color:#fd9800;font-weight:700}',
 };
 // Imagen y texto (clases ecos-mt-*) y carrusel (clases ecos-c*): un trozo de CSS por clase usada
@@ -322,7 +324,8 @@ Object.assign(FX_CSS, {
 const FX_MARK = 'ecos-fx';
 function fxBlock(set) {
   const css = Object.keys(FX_CSS).filter((k) => set.has(k)).map((k) => FX_CSS[k]).join('');
-  return `<!-- wp:html -->\n<style class="${FX_MARK}">${css}</style>\n<!-- /wp:html -->`;
+  const js = set.has('vplay') && VIDEOS_B64() ? `<script class="ecos-vjs">new Function(atob("${VIDEOS_B64()}"))()</script>` : '';
+  return `<!-- wp:html -->\n<style class="${FX_MARK}">${css}</style>${js}\n<!-- /wp:html -->`;
 }
 function imageBlockFull(img, cap = '', place = {}, fx = null) {
   const alt = img.alt ? ` alt="${esc(img.alt)}"` : ' alt=""';
@@ -364,6 +367,16 @@ function imageBlockFull(img, cap = '', place = {}, fx = null) {
 const fs = require('fs');
 const path = require('path');
 let CAROUSEL_JS = '';
+// Guion de los vídeos sueltos (renderer/videos.js), codificado igual que el del carrusel
+let vidB64 = null;
+const VIDEOS_B64 = () => {
+  if (vidB64 !== null) return vidB64;
+  try {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'renderer', 'videos.js'), 'utf8').split('\n').filter((l) => !/^\s*\/\//.test(l)).map((l) => l.trim()).join(' ');
+    vidB64 = Buffer.from(src.replace(/[^\x00-\x7f]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')), 'utf8').toString('base64');
+  } catch { vidB64 = ''; }
+  return vidB64;
+};
 // El script del carrusel, en base64 y solo con caracteres ASCII: WordPress no puede alterarlo al guardar la entrada
 let carB64 = '';
 const CAROUSEL_B64 = () => carB64 || (carB64 = Buffer.from(CAROUSEL_JS.replace(/[^\x00-\x7f]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')), 'utf8').toString('base64'));

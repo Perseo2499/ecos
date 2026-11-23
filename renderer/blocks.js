@@ -907,7 +907,8 @@
             break;
           }
           const v = document.createElement('video');
-          v.src = b.video.url; v.controls = true; v.preload = 'metadata'; if (b.video.poster) v.poster = b.video.poster;
+          v.src = b.video.url; v.controls = false; v.muted = true; v.autoplay = true; v.loop = true; v.playsInline = true; v.preload = 'metadata'; if (b.video.poster) v.poster = b.video.poster;
+          v.title = t('Toca para pausar o seguir'); v.style.cursor = 'pointer'; v.onclick = () => { if (v.paused) v.play().catch(() => {}); else v.pause(); };
           const vw = document.createElement('div');
           vw.className = 'vid-wrap';
           vw.appendChild(v);
