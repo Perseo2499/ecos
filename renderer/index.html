@@ -625,6 +625,13 @@
           <div class="card-head"><span class="ms fill ic">notifications</span><h2 data-i18n>Avisos</h2></div>
           <label class="switch"><input type="checkbox" id="s-check-new"><span data-i18n>Publicaciones nuevas sin pasar al blog</span></label>
           <label class="switch"><input type="checkbox" id="s-check-token"><span data-i18n>La conexión con Meta va a caducar</span></label>
+          <label class="switch"><input type="checkbox" id="s-auto-drafts"><span data-i18n>Crear borradores automáticamente con las publicaciones nuevas</span></label>
+          <div id="s-auto-sub" class="hidden">
+            <p class="hint" data-i18n>Ecos prepara un borrador en WordPress por cada publicación nueva de tus redes (hasta 5 cada vez). Nunca publica nada.</p>
+            <label class="switch"><input type="checkbox" id="s-auto-ai"><span data-i18n>Convertirlos en artículo con la IA</span></label>
+            <p class="hint hidden" id="s-auto-ai-hint" data-i18n>Configura una IA en «Conexiones» para usar esta opción.</p>
+            <div class="field"><label for="s-auto-cat" data-i18n>Categoría por defecto</label><select id="s-auto-cat"></select></div>
+          </div>
         </div>
 
         <div class="card" id="set-backup">
@@ -662,6 +669,8 @@
         <div class="card" id="set-advanced">
           <div class="card-head"><span class="ms fill ic">build</span><h2 data-i18n>Avanzado</h2></div>
           <label class="switch"><input type="checkbox" id="s-fmt-fixed"><span data-i18n>Barra de formato fija arriba del editor (si no, aparece al seleccionar texto, como en Word)</span></label>
+          <label class="switch"><input type="checkbox" id="s-webp"><span data-i18n>Convertir las fotos a WebP al subirlas</span></label>
+          <p class="hint" data-i18n>Las fotos JPEG y PNG (sin transparencia) se suben como WebP de calidad alta cuando así pesan menos. Si WordPress no lo acepta, se sube la original.</p>
           <label class="switch"><input type="checkbox" id="s-share-fb"><span data-i18n>Compartir en Facebook al publicar</span></label>
           <p class="hint" data-i18n>Añade el botón «Compartir en Facebook» al publicar una entrada. Necesita el permiso pages_manage_posts en tu app de Meta. Apagado, Ecos no publica nada en tus redes.</p>
           <label class="switch"><input type="checkbox" id="s-devmode"><span data-i18n>Modo desarrollador (terminal y Claude Code en «Conexiones»)</span></label>
@@ -923,6 +932,7 @@
 <script src="normalize.js"></script>
 <script src="blogcheck.js"></script>
 <script src="newposts.js"></script>
+<script src="autodrafts.js"></script>
 <script src="unify.js"></script>
 <script src="homelogic.js"></script>
 <script src="pagebg.js"></script>
@@ -979,6 +989,7 @@
 <script src="app/restore.js"></script>
 <script src="app/webbackup.js"></script>
 <script src="app/home.js"></script>
+<script src="app/autodrafts.js"></script>
 <script src="app/search.js"></script>
 <script src="app/devcli.js"></script>
 <script src="app/boot.js"></script>

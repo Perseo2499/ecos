@@ -8,6 +8,8 @@ function applyPrefs() {
   document.documentElement.dataset.theme = dark || p.vinyl ? 'dark' : 'light';
   window.Vinyl?.apply({ vinyl: !!p.vinyl, silk: p.silk !== false });
   $('#s-optphotos').checked = p.optimizePhotos !== false;
+  $('#s-webp').checked = p.webpPhotos !== false;
+  window.renderAutoDraftOpts?.();
   $('#s-vinyl').checked = !!p.vinyl; $('#s-silk').checked = p.silk !== false;
   $('#s-silk-row').classList.toggle('hidden', !p.vinyl);
   $$('#s-theme button, #s-accent button, #s-accent-custom').forEach((b) => (b.disabled = !!p.vinyl));
@@ -31,6 +33,7 @@ matchMedia('(prefers-color-scheme: dark)').onchange = applyPrefs;
 $$('#s-theme button').forEach((b) => b.onclick = () => savePrefs({ theme: b.dataset.v }));
 $('#s-vinyl').onchange = () => savePrefs({ vinyl: $('#s-vinyl').checked });
 $('#s-optphotos').onchange = () => savePrefs({ optimizePhotos: $('#s-optphotos').checked });
+$('#s-webp').onchange = () => savePrefs({ webpPhotos: $('#s-webp').checked });
 $('#s-silk').onchange = () => savePrefs({ silk: $('#s-silk').checked });
 $$('#s-zoom button').forEach((b) => b.onclick = () => savePrefs({ zoom: Number(b.dataset.v) }));
 $$('#s-cards button').forEach((b) => b.onclick = () => savePrefs({ cards: Number(b.dataset.v) }));

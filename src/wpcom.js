@@ -93,23 +93,32 @@ async function uploadFromUrls(cfg, urls) {
 }
 
 // Sube un archivo del disco (ZIP de Meta, capturas recortadas, fotos manuales)
-async function uploadFile(cfg, filePath) {
+async function uploadFile(cfg, filePath, { keep = false } = {}) {
   const fs = require('fs');
   const path = require('path');
-  const form = new FormData();
-  const o = require('./imgopt').optimize(fs.readFileSync(filePath), '', path.basename(filePath)); // fotos más ligeras
-  form.append('media[]', new Blob([o.buf]), o.name);
-  const res = await fetch(`${API}/sites/${siteRef(cfg)}/media/new`, {
-    method: 'POST', headers: { Authorization: `Bearer ${cfg.wpToken}` }, body: form,
-  });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok || json.error) {
-    const msg = 'WordPress.com: ' + (json.message || json.error || `HTTP ${res.status}`);
-    if (res.status === 401 || res.status === 403 || AUTH_CODES.has(json.error)) throw new AuthError(msg);
-    throw new Error(msg);
+  const raw = fs.readFileSync(filePath);
+  const o = keep ? { buf: raw, name: path.basename(filePath) } : await require('./imgopt').prepare(raw, '', path.basename(filePath)); // fotos más ligeras (WebP si compensa)
+  const send = async (b, name) => {
+    const form = new FormData();
+    form.append('media[]', new Blob([b]), name);
+    const res = await fetch(`${API}/sites/${siteRef(cfg)}/media/new`, {
+      method: 'POST', headers: { Authorization: `Bearer ${cfg.wpToken}` }, body: form,
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || json.error) {
+      const msg = 'WordPress.com: ' + (json.message || json.error || `HTTP ${res.status}`);
+      if (res.status === 401 || res.status === 403 || AUTH_CODES.has(json.error)) throw new AuthError(msg);
+      throw new Error(msg);
+    }
+    if (!json.media?.length) throw new Error('WordPress.com: ' + (json.errors?.[0]?.message || 'no se pudo subir ' + path.basename(filePath)));
+    return { id: json.media[0].ID, url: json.media[0].URL };
+  };
+  try { return await send(o.buf, o.name); }
+  catch (e) {
+    if (!o.webp || e instanceof AuthError) throw e;
+    const f = o.fallback();
+    return send(f.buf, f.name);
   }
-  if (!json.media?.length) throw new Error('WordPress.com: ' + (json.errors?.[0]?.message || 'no se pudo subir ' + path.basename(filePath)));
-  return { id: json.media[0].ID, url: json.media[0].URL };
 }
 
 const createPost = (cfg, post) => call(cfg, '/posts/new', post); // admite type: 'page'
@@ -120,12 +129,12 @@ async function findExisting(cfg, type, slug) {
   catch (e) { if (e instanceof AuthError) throw e; return null; }
 }
 // Subir un archivo que está en memoria (se escribe un momento en la carpeta temporal)
-async function uploadNamed(cfg, buf, name) {
+async function uploadNamed(cfg, buf, name, opts = {}) {
   const os = require('os'); const fs = require('fs'); const path = require('path');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ecos-'));
   const file = path.join(dir, path.basename(name));
   fs.writeFileSync(file, buf);
-  try { return await uploadFile(cfg, file); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  try { return await uploadFile(cfg, file, opts); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
 const updatePost = (cfg, id, post) => call(cfg, `/posts/${id}`, post);
 const updateContent = (cfg, id, content) => call(cfg, `/posts/${id}`, { content });
