@@ -28,7 +28,9 @@ function init(sendToRenderer) {
   autoUpdater.on('checking-for-update', () => status({ state: 'checking' }));
   autoUpdater.on('update-not-available', () => status({ state: 'latest' }));
   autoUpdater.on('update-available', (i) => {
-    const until = holdUntil(i.releaseDate, beta);
+    // al pulsar «Buscar actualizaciones» a mano se descarga ya, sin esperar las 24 h del canal estable
+    const until = manualNext ? 0 : holdUntil(i.releaseDate, beta);
+    manualNext = false;
     if (until) {
       status({ state: 'waiting', version: i.version, until });
       clearTimeout(holdTimer);
@@ -49,8 +51,10 @@ function init(sendToRenderer) {
   setInterval(check, EVERY_MS); // y cada 4 horas
 }
 
-function check() {
+let manualNext = false;
+function check(manual = false) {
   if (!canUpdate()) return current();
+  if (manual === true) manualNext = true;
   nextCheckAt = Date.now() + EVERY_MS;
   autoUpdater.allowPrerelease = beta;
   autoUpdater.checkForUpdates().catch(() => {}); // el error llega por el evento 'error'

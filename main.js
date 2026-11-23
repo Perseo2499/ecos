@@ -1899,7 +1899,7 @@ handle('queue:discard', (id) => { sendQueue = SQ.remove(sendQueue, id); queueSav
 handle('queue:online', () => { if (sendQueue.length) { sendQueue = SQ.retryNow(sendQueue, null, Date.now()); queueSave(); queueRun(); } return SQ.view(sendQueue); });
 handle('app:repair', async () => installPublished());
 
-handle('update:check', () => { updater.check(); return updater.current(); });
+handle('update:check', () => { updater.check(true); return updater.current(); });
 handle('update:install', () => updater.install());
 
 app.whenReady().then(() => {
