@@ -161,11 +161,11 @@ test('mosaico: se adapta al número de piezas sin huecos y admite vídeos', () =
   const grid = parseBlocks(T.composeBlocks([{ id: 'g1', type: 'gallery', columns: 2, images: items }]))[0];
   assert.equal(grid.columns, 2);
   assert.equal(grid.images[1].url, 'v.mp4');
-  // el carrusel solo lleva fotos; el estilo se conserva
+  // el carrusel también lleva vídeos (con ellos va en HTML propio, que no tiene vistas; «squares» pasa a proporción 1:1)
   const car = parseBlocks(T.composeBlocks([{ id: 'c2', type: 'carousel', view: 'peek', squares: true, images: items }], { spectra: true }))[0];
-  assert.equal(car.images.length, 2);
-  assert.equal(car.view, 'peek');
-  assert.equal(car.squares, true);
+  assert.equal(car.images.length, 3);
+  assert.equal(car.images[1].type, 'video');
+  assert.equal(car.ratio, '1');
 });
 
 test('biblioteca de medios: detección de fotos usadas', () => {
@@ -968,4 +968,43 @@ test('descripción de una foto: se limpia lo que añade la IA (prefijos, comilla
   assert.equal(cleanAlt('Texto alternativo: «Un grupo de jóvenes pinta un mural»'), 'Un grupo de jóvenes pinta un mural');
   assert.equal(cleanAlt('"Velas encendidas junto a un cartel que dice Dignidad"\n'), 'Velas encendidas junto a un cartel que dice Dignidad');
   assert.ok(cleanAlt('x'.repeat(400)).length <= 220);
+});
+
+test('carrusel con vídeos: HTML propio aunque haya Spectra, con <video> y las opciones aplicadas', () => {
+  const imgs = [{ id: 1, url: 'a.jpg' }, { type: 'video', id: 7, url: 'v.mp4', poster: 'p.jpg' }, { id: 2, url: 'b.jpg' }];
+  const opts = { size: 'm', ratio: '16/9', corners: 'square', shadow: 'on', gap: 's', arrows: false, dots: false };
+  const html = T.composeBlocks([{ id: 'c', type: 'carousel', images: imgs, ...opts }], { spectra: true });
+  assert.doesNotMatch(html, /uagb\/image-gallery/);
+  assert.match(html, /<!-- wp:html -->/);
+  assert.match(html, /<video class="ec-vid" controls preload="metadata" playsinline src="v\.mp4" poster="p\.jpg" data-id="7" style="[^"]*object-fit:cover/);
+  assert.match(html, /height:360px;aspect-ratio:16\/9/);
+  assert.match(html, /border-radius:0px/);
+  const back = P.parseBlocks(html);
+  assert.equal(back.length, 1);
+  assert.equal(back[0].type, 'carousel');
+  assert.equal(back[0].images.length, 3);
+  assert.deepEqual(back[0].images[1], { type: 'video', id: 7, url: 'v.mp4', poster: 'p.jpg' });
+  for (const [k, v] of Object.entries(opts)) assert.equal(back[0][k], v, k);
+  // sin vídeo sigue siendo Spectra
+  assert.match(T.composeBlocks([{ id: 'c', type: 'carousel', images: [imgs[0], imgs[2]] }], { spectra: true }), /uagb\/image-gallery/);
+  // el script pausa los vídeos fuera de vista
+  assert.match(html, /IntersectionObserver/);
+});
+
+test('vídeo suelto con estilo: ida y vuelta de colocación, recorte, marco y efecto', () => {
+  const v = { id: 3, url: 'v.mp4' };
+  const b = { id: 'v1', type: 'video', video: v, caption: '', align: 'right', width: 33, ratio: '16/9', frame: 'rounded', fx: 'zoom' };
+  const html = T.composeBlocks([b]);
+  assert.match(html, /<!-- wp:video \{"id":3,"className":"ecos-v-a-right ecos-v-w-33 ecos-v-r-16-9 ecos-v-rounded ecos-v-zoom"\} -->/);
+  assert.match(html, /<figure class="wp-block-video ecos-v-a-right/);
+  assert.match(html, /<style class="ecos-fx">.*\.wp-block-video\.ecos-v-rounded\{border-radius:16px;overflow:hidden\}/);
+  assert.match(html, /ecos-v-zoom:hover video\{transform:scale/);
+  const back = P.parseBlocks(html)[0];
+  assert.equal(back.type, 'video');
+  for (const k of ['align', 'width', 'ratio', 'frame', 'fx']) assert.equal(back[k], b[k], k);
+  assert.equal(back.video.url, 'v.mp4');
+  const bw = P.parseBlocks(T.composeBlocks([{ id: 'v2', type: 'video', video: v, frame: 'shadow', fx: 'bw' }]))[0];
+  assert.equal(bw.frame, 'shadow'); assert.equal(bw.fx, 'bw');
+  // sin estilo no cambia
+  assert.doesNotMatch(T.composeBlocks([{ id: 'v3', type: 'video', video: v }]), /ecos-v-|ecos-fx/);
 });

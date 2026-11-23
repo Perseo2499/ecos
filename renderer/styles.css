@@ -2674,3 +2674,20 @@ body:has(.tab.active .b-bulk.on) #toast { bottom: 120px; }
 .st-col[data-col="menu"] .st-col-h select { order: 5; flex: 1 1 100%; margin-left: 0; height: auto; min-height: 38px; padding: 8px 34px 8px 12px; line-height: 1.3;
   border-radius: var(--r-m); text-overflow: ellipsis; }
 .st-col[data-col="menu"] .st-col-h .btn.st-add { margin-left: auto; }
+
+/* Carrusel con vídeos y vídeo suelto con estilo (marco, recorte, efectos) */
+.g-car .ph video { aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--r-l); }
+.g-car.has-h .ph video { height: 100%; aspect-ratio: auto; }
+.g-car.has-r:not(.has-h) .ph video { aspect-ratio: var(--car-r); }
+.g-car.has-h.has-r .ph video { width: 100%; }
+.g-car.cc-round .ph video { border-radius: 18px; }
+.g-car.cc-square .ph video { border-radius: 0; }
+.g-car.cs-on .ph video { box-shadow: 0 10px 30px rgba(0, 0, 0, .18); }
+.g-car.cs-off .ph video { box-shadow: none; }
+.vid-wrap { overflow: hidden; border-radius: var(--r-l); max-width: 100%; }
+.vid-wrap video { border-radius: 0; transition: transform .5s var(--ease), filter .2s; }
+.vid-wrap.ecos-zoom:hover video { transform: scale(1.08); }
+.vid-wrap.ecos-bn video { filter: grayscale(1); }
+.vid-wrap.vid-left { margin-right: auto; }
+.vid-wrap.vid-right { margin-left: auto; }
+.vid-wrap.vid-center { margin-left: auto; margin-right: auto; }

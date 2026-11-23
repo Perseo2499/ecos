@@ -124,7 +124,22 @@ function toBlock(t) {
       const images = tokenize(h).filter((x) => /(^|\/)image$/.test(x.name)).map((x) => imgOf(x.inner)).filter(Boolean);
       return images.length ? { id: bid(), type: 'gallery', images, columns: a.columns || 3 } : raw();
     }
-    case 'video': { const src = attr((h.match(/<video\b[^>]*>/i) || [''])[0], 'src'); return src ? { id: bid(), type: 'video', video: { id: a.id, url: src }, caption: inner(h, 'figcaption') } : raw(); }
+    case 'video': {
+      const src = attr((h.match(/<video\b[^>]*>/i) || [''])[0], 'src');
+      if (!src) return raw();
+      const b = { id: bid(), type: 'video', video: { id: a.id, url: src }, caption: inner(h, 'figcaption') };
+      // colocación, recorte, marco y efecto (clases ecos-v-*)
+      for (const c of String(a.className || '').split(/\s+/)) {
+        let m;
+        if ((m = c.match(/^ecos-v-a-(left|center|right)$/))) b.align = m[1];
+        else if ((m = c.match(/^ecos-v-w-(33|50|75)$/))) b.width = Number(m[1]);
+        else if ((m = c.match(/^ecos-v-r-(1|4-3|3-2|16-9|9-16)$/))) b.ratio = m[1].replace('-', '/');
+        else if ((m = c.match(/^ecos-v-(rounded|border|shadow)$/))) b.frame = m[1];
+        else if (c === 'ecos-v-zoom') b.fx = 'zoom';
+        else if (c === 'ecos-v-bw') b.fx = 'bw';
+      }
+      return b;
+    }
     case 'embed': return a.url ? { id: bid(), type: 'embed', url: a.url, provider: a.providerNameSlug || '', caption: inner(h, 'figcaption') } : raw();
     case 'separator': return { id: bid(), type: 'separator' };
     case 'spacer': return { id: bid(), type: 'spacer', height: parseInt(a.height, 10) || 40 };
