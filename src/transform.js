@@ -322,9 +322,9 @@ Object.assign(FX_CSS, {
   'cg-l': `${CA}.ecos-cg-l .slick-slide{padding:0 14px}`,
 });
 const FX_MARK = 'ecos-fx';
-function fxBlock(set) {
+function fxBlock(set, helper = false) {
   const css = Object.keys(FX_CSS).filter((k) => set.has(k)).map((k) => FX_CSS[k]).join('');
-  const js = set.has('vplay') && VIDEOS_B64() ? `<script class="ecos-vjs">new Function(atob("${VIDEOS_B64()}"))()</script>` : '';
+  const js = !helper && set.has('vplay') && VIDEOS_B64() ? `<script class="ecos-vjs">new Function(atob("${VIDEOS_B64()}"))()</script>` : '';
   return `<!-- wp:html -->\n<style class="${FX_MARK}">${css}</style>${js}\n<!-- /wp:html -->`;
 }
 function imageBlockFull(img, cap = '', place = {}, fx = null) {
@@ -463,7 +463,7 @@ function mediaTextBlock(b, fx = null) {
   return `<!-- wp:media-text ${JSON.stringify(attrs).replace(/--/g, '\\u002d\\u002d')} -->\n<div class="${cls.join(' ')}"${grid}><figure class="wp-block-media-text__media"${fig.length ? ` style="${fig.join(';')}"` : ''}><img src="${esc(img.url)}" alt="${esc(img.alt || '')}" class="${imgId(img) ? `wp-image-${imgId(img)} ` : ''}size-full"/></figure><div class="wp-block-media-text__content">${text}</div></div>\n<!-- /wp:media-text -->`;
 }
 
-function carouselBlock(b) {
+function carouselBlock(b, helper = false) {
   const o = carOpts(b);
   const H = CAR_H[o.size] || '', R = o.ratio || '';
   const radius = o.corners === 'square' ? 0 : 18;
@@ -518,7 +518,7 @@ function carouselBlock(b) {
       + '</figure>';
   }).join('');
   const auto = b.autoplay === false ? 0 : 5000;
-  const script = CAROUSEL_JS ? `<script>new Function(atob("${CAROUSEL_B64()}"))()</script>` : '';
+  const script = CAROUSEL_JS && !helper ? `<script>new Function(atob("${CAROUSEL_B64()}"))()</script>` : '';
   return `<!-- wp:html -->\n<div class="ecos-carrusel" id="${id}" data-ecos-carousel data-autoplay="${auto}"${dataOpts} style="position:relative;margin:2em 0"><style>${css}</style><div class="ec-track" style="display:flex;gap:${gap}px;overflow-x:auto;padding:14px 8% 28px">${figs}</div></div>${script}\n<!-- /wp:html -->`;
 }
 
@@ -818,7 +818,7 @@ function composeBlocks(blocks, opts = {}) {
   const ctx = { anchors: headingAnchors(all), all, fx: new Set() };
   const html = composeList(blocks, opts, ctx);
   // efectos propios (sombra de texto, zoom, blanco y negro): su CSS mínimo va en un bloque HTML al final
-  const withFx = ctx.fx.size ? (html ? html + '\n\n' : '') + fxBlock(ctx.fx) : html;
+  const withFx = ctx.fx.size ? (html ? html + '\n\n' : '') + fxBlock(ctx.fx, !!opts.helper) : html;
   // «Fondo de la página» (opts.pageBg): su bloque con el CSS va al final; sin pageBg no cambia nada
   const bg = opts.pageBg ? require('../renderer/pagebg').block(opts.pageBg) : '';
   return bg ? (withFx ? withFx + '\n\n' : '') + bg : withFx;
@@ -907,7 +907,7 @@ function composeList(blocks, opts, ctx) {
       case 'carousel': {
         const c = { ...b, images: (b.images || []).filter((i) => i && i.url) };
         // Spectra solo muestra fotos: con algún vídeo, el carrusel HTML propio (que admite los dos)
-        if (c.images.length) out.push(opts.spectra && !c.images.some((i) => i.type === 'video') ? spectraCarouselBlock(c, ctx.fx) : carouselBlock(c));
+        if (c.images.length) out.push(opts.spectra && !c.images.some((i) => i.type === 'video') ? spectraCarouselBlock(c, ctx.fx) : carouselBlock(c, !!opts.helper));
         break;
       }
       case 'mediatext': { if (b.img) out.push(mediaTextBlock(b, ctx.fx)); break; }
@@ -1028,4 +1028,4 @@ function mergeDuplicates(posts, { hashes } = {}) {
 // Claves de todas las versiones de una publicación (para marcarla como exportada)
 const postKeys = (p) => [p.source + ':' + p.id, ...(p.alsoOn || []).map((a) => a.source + ':' + a.id)];
 
-module.exports = { PEEK_CSS, FONTS, FX_MARK, COL_PRESETS, GROUP_PAD, flatBlocks, VIDEO_PROVIDERS, composeBlocks, sectionsToBlocks, blockImages, buildDraft, unifyTitle, composeContent, sanitizeParagraphs, summaryTitle, extractTags, mediaKey, makeTitle, tidyTitle, mergeDuplicates, dupCandidates, dupScore, firstImageUrl, postKeys, DEFAULT_FOOTER };
+module.exports = { FX_CSS, PEEK_CSS, FONTS, FX_MARK, COL_PRESETS, GROUP_PAD, flatBlocks, VIDEO_PROVIDERS, composeBlocks, sectionsToBlocks, blockImages, buildDraft, unifyTitle, composeContent, sanitizeParagraphs, summaryTitle, extractTags, mediaKey, makeTitle, tidyTitle, mergeDuplicates, dupCandidates, dupScore, firstImageUrl, postKeys, DEFAULT_FOOTER };

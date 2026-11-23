@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld('api', {
   aiSeo: (input) => call('ai:seo', input),
   metaPosts: (pageId, sources, cursors) => call('meta:posts', pageId, sources, cursors),
   wpLogin: () => call('wp:login'),
+  helperCheck: () => call('helper:check'),
+  helperSave: () => call('helper:save'),
   wpCategories: () => call('wp:categories'),
 
   // Publicaciones → entrada

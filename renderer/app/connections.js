@@ -4,7 +4,7 @@
 // ---------------------------------------------------------------- Conexiones en desplegables
 // Lista de conexiones, una encima de otra y a todo el ancho. Empiezan cerradas; cada una se abre o se cierra
 // pulsando su nombre o su flecha. Se recuerda lo que dejó abierto cada persona.
-const CONN = { 'f-meta': () => CFG.metaConnected, 'f-wp': () => CFG.wpConnected, 'f-gp': () => CFG.gpConnected, 'ai-card': () => CFG.aiConfigured, 'dev-card': null };
+const CONN = { 'f-meta': () => CFG.metaConnected, 'f-wp': () => CFG.wpConnected, 'helper-card': () => !!CFG.ecosHelper?.installed && !CFG.ecosHelper.outdated, 'f-gp': () => CFG.gpConnected, 'ai-card': () => CFG.aiConfigured, 'dev-card': null };
 let connOpen = null;
 try { connOpen = JSON.parse(localStorage.getItem('ecos-conn-open') || 'null'); } catch { /* sin almacenamiento */ }
 function renderConnStates() {
@@ -49,7 +49,8 @@ function renderConnStates() {
     if (!ok) { st.textContent = ''; continue; }
     const done = !!ok();
     st.className = 'conn-state ' + (done ? 'ok' : 'off');
-    st.textContent = done ? (id === 'ai-card' ? t('Lista') : t('Conectado')) : (id === 'ai-card' ? t('Sin configurar') : t('No conectado'));
+    st.textContent = id === 'helper-card' ? (done ? t('Instalado') : CFG.ecosHelper?.installed ? t('Desactualizado') : t('No instalado'))
+      : done ? (id === 'ai-card' ? t('Lista') : t('Conectado')) : (id === 'ai-card' ? t('Sin configurar') : t('No conectado'));
   }
 }
 
@@ -95,10 +96,23 @@ async function checkPending() {
 }
 
 // ---------------------------------------------------------------- Conexiones: Meta y WordPress
+// Complemento de Ecos para WordPress (solo con «Mi web (wp-admin)»)
+function renderHelper() {
+  const card = $('#helper-card'); if (!card) return;
+  card.classList.toggle('hidden', (CFG.wpMode || 'selfhosted') !== 'selfhosted');
+  const h = CFG.ecosHelper;
+  $('#helper-state').textContent = !h?.installed ? t('No instalado: Ecos pondrá el carrusel y los vídeos dentro de cada entrada.')
+    : h.outdated ? t('Desactualizado (tienes la v{v}; esta versión de Ecos trae la v{n}). Instala el .zip de nuevo para actualizarlo.', { v: h.version, n: h.bundled })
+    : t('Instalado v{v}{c}', { v: h.version, c: h.caches?.length ? ' · ' + t('Caché detectada: {c}', { c: h.caches.join(', ') }) : '' });
+  renderConnStates();
+}
+$('#helper-recheck').onclick = (e) => busy(e.target, async () => { CFG = await window.api.helperCheck(); renderHelper(); toast(CFG.ecosHelper?.installed ? t('Complemento encontrado') : t('No se encuentra el complemento en tu web')); });
+$('#helper-save').onclick = (e) => busy(e.target, async () => { const f = await window.api.helperSave(); if (f) toast(t('Complemento guardado. Ahora súbelo desde WordPress → Plugins → Añadir nuevo.')); });
 function fillConnections() {
   $('#meta-redirect').value = CFG.metaRedirectUri; $('#wp-redirect').value = CFG.wpRedirectUri;
   for (const f of ['#f-meta', '#f-wp']) for (const el of $(f).elements) if (el.name) el.value = CFG[el.name] || '';
   setWpMode(CFG.wpMode || 'selfhosted');
+  renderHelper();
   if (typeof fillGPhotos === 'function') fillGPhotos();
 }
 // Modo de WordPress: web propia (wp-admin) o WordPress.com
@@ -106,6 +120,7 @@ function setWpMode(m) {
   $('#f-wp').wpMode.value = m;
   $$('#wp-mode button').forEach((b) => b.classList.toggle('active', b.dataset.v === m));
   $$('.wp-mode-panel').forEach((p) => p.classList.toggle('hidden', p.dataset.mode !== m));
+  $('#helper-card')?.classList.toggle('hidden', m !== 'selfhosted');
 }
 $$('#wp-mode button').forEach((b) => b.onclick = () => setWpMode(b.dataset.v));
 for (const f of ['#f-meta', '#f-wp']) $(f).onsubmit = async (e) => {
@@ -126,7 +141,7 @@ async function doWpLogin() {
   CFG = await window.api.setConfig(Object.fromEntries(new FormData($('#f-wp'))));
   toast(t('Termina el inicio de sesión en tu navegador…'));
   const name = await window.api.wpLogin();
-  CFG = await window.api.getConfig(); renderStatus(); toast(t('Conectado a {s}', { s: name })); loadCategories();
+  CFG = await window.api.getConfig(); renderStatus(); renderHelper(); toast(t('Conectado a {s}', { s: name })); loadCategories();
 }
 $('#meta-login').onclick = (e) => busy(e.target, doMetaLogin);
 $('#wp-login').onclick = (e) => busy(e.target, doWpLogin);

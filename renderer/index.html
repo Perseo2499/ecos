@@ -430,6 +430,24 @@
         </div>
       </form>
 
+      <div class="card" id="helper-card">
+        <div class="card-head"><span class="ms fill ic wp">extension</span><h2 data-i18n>Complemento de Ecos</h2><span class="hint" data-i18n>Opcional · Mi web (wp-admin)</span></div>
+        <p class="hint" id="helper-state"></p>
+        <p class="hint" data-i18n>Carga una sola vez el carrusel y los vídeos de Ecos en tu web (así no se repite en cada entrada ni se pierde si alguien edita la entrada en WordPress) y vacía la caché de la página cada vez que envías desde Ecos.</p>
+        <details class="help"><summary><span class="ms">info</span><span data-i18n>¿Cómo se instala?</span></summary>
+          <ol class="wz-list">
+            <li data-i18n>Pulsa «Guardar el complemento (.zip)» y elige dónde guardarlo.</li>
+            <li data-i18n>En WordPress: Plugins → Añadir nuevo → Subir plugin.</li>
+            <li data-i18n>Elige el archivo .zip → Instalar ahora → Activar.</li>
+            <li data-i18n>Vuelve aquí y pulsa «Comprobar de nuevo».</li>
+          </ol>
+        </details>
+        <div class="card-actions wrap">
+          <button type="button" id="helper-recheck" class="btn text"><span class="ms">refresh</span><span data-i18n>Comprobar de nuevo</span></button>
+          <button type="button" id="helper-save" class="btn filled"><span class="ms">download</span><span data-i18n>Guardar el complemento (.zip)</span></button>
+        </div>
+      </div>
+
       <form class="card" id="f-gp">
         <div class="card-head"><span class="ms fill ic gp">photo_library</span><h2>Google Fotos</h2><span class="hint" data-i18n>Fotos para entradas y páginas</span></div>
         <div class="field"><label>Client ID</label><input name="gpClientId" autocomplete="off"></div>

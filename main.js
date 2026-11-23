@@ -196,6 +196,37 @@ const isSelf = () => cfg.wpMode === 'selfhosted';
 const WP = () => (isSelf() ? wpself : wp);
 const wpIsConnected = () => (isSelf() ? !!cfg.wpAppPassword && !!cfg.wpSelfOk : !!cfg.wpToken);
 const wpLabel = () => (isSelf() ? (cfg.wpUrl || '').replace(/^https?:\/\//, '').replace(/\/$/, '') : cfg.wpSite);
+// Complemento de Ecos para WordPress: solo con «Mi web (wp-admin)». El estado se guarda en cfg.ecosHelper
+const helperOn = () => isSelf() && !!cfg.ecosHelper?.installed;
+async function refreshHelper(force = false) {
+  if (!isSelf() || !cfg.wpUrl || !cfg.wpSelfOk) { if (cfg.ecosHelper) { cfg.ecosHelper = null; store.save(cfg); } return null; }
+  try {
+    const st = await wpself.helperStatus(cfg, { force });
+    const prev = cfg.ecosHelper;
+    cfg.ecosHelper = { installed: st.installed, version: st.version, outdated: st.outdated, caches: st.caches, bundled: st.bundled };
+    if (!prev || JSON.stringify(prev) !== JSON.stringify(cfg.ecosHelper)) store.save(cfg);
+  } catch { /* sin datos: se deja como estaba */ }
+  return cfg.ecosHelper || null;
+}
+// Vacía la caché de la entrada con el complemento. Nunca falla: devuelve el aviso para el toast
+async function purgeAfterSend(post) {
+  if (!isSelf() || post.status !== 'publish') return '';
+  if (!helperOn()) return 'Si no ves los cambios, vacía la caché de la página en tu web (o instala el Complemento de Ecos para que se haga solo).';
+  try {
+    const done = await wpself.helperPurge(cfg, post.ID);
+    const named = done.filter((n) => n !== 'WordPress');
+    return named.length ? 'Caché de la página vaciada (' + named.join(', ') + ')' : 'Caché de la página vaciada';
+  } catch (e) { log('No se pudo vaciar la caché', e.message); return ''; }
+}
+handle('helper:check', async () => { await refreshHelper(true); return publicCfg(); });
+handle('helper:save', async () => {
+  const r = await dialog.showSaveDialog(mainWin, { title: 'Guardar el Complemento de Ecos', defaultPath: path.join(app.getPath('downloads'), 'ecos-wordpress.zip'), filters: [{ name: 'ZIP', extensions: ['zip'] }] });
+  if (r.canceled || !r.filePath) return null;
+  let src = app.isPackaged ? path.join(process.resourcesPath, 'ecos-wordpress.zip') : null;
+  if (!src || !fs.existsSync(src)) src = require('./scripts/build-wp-plugin').build(path.join(app.getPath('temp'), 'ecos-wordpress.zip')).out;
+  fs.copyFileSync(src, r.filePath);
+  return r.filePath;
+});
 
 // Envuelve llamadas a WordPress: si rechaza el permiso, se desconecta y se avisa
 const wpCall = async (fn) => { try { return await fn(); } catch (e) { throw e instanceof wp.AuthError ? wpAuthFailed(e) : e; } };
@@ -288,6 +319,7 @@ handle('wp:login', async () => {
     const r = await wpself.login(cfg);
     cfg.wpSelfOk = true; store.save(cfg);
     log(`WordPress propio: conectado como ${r.userName} a ${r.siteName}`);
+    await refreshHelper(true);
     return r.siteName;
   }
   let r;
@@ -379,7 +411,7 @@ function postFields(d, status) {
   const scheduled = status === 'future' && d.scheduleAt;
   return {
     ...(d.type === 'page' ? { type: 'page', parent: Number(d.parent) || 0 } : {}),
-    title: d.title, content: d.blocks ? composeBlocks(d.blocks, { spectra: isSelf(), pageBg: d.pageBg || null }) : composeContent(d.sections), status: scheduled ? 'future' : status,
+    title: d.title, content: d.blocks ? composeBlocks(d.blocks, { spectra: isSelf(), helper: helperOn(), pageBg: d.pageBg || null }) : composeContent(d.sections), status: scheduled ? 'future' : status,
     tags: (d.tags || []).join(','), categories: (d.categories || []).join(','),
     excerpt: d.excerpt || '',
     ...(d.seoKey && isSelf() ? { seoKey: d.seoKey, seoDesc: d.seoDesc || '' } : {}),
@@ -391,6 +423,7 @@ function postFields(d, status) {
 
 // Vista previa real: guarda (o actualiza) la entrada como borrador y devuelve su dirección de vista previa
 handle('draft:preview', async (d) => {
+  await refreshHelper();
   const fields = postFields(d, 'draft');
   const post = await wpCall(() => (d.postId ? WP().updatePost(cfg, d.postId, fields) : WP().createPost(cfg, fields)));
   const base = WP().publicBase(cfg) || `https://${cfg.wpSite}`;
@@ -631,6 +664,7 @@ handle('draft:publish', async (d) => { require('./src/pagelinks').forget();
   if (d.status === 'future' && (!d.scheduleAt || new Date(d.scheduleAt) <= new Date())) throw new Error('Elige una fecha y hora futuras para programar la entrada.');
   // Si ya se guardó como borrador para la vista previa, se actualiza esa misma entrada
   d.featuredImageId = await resolveFeatured(d);
+  await refreshHelper();
   const fields = postFields(d, d.status || 'draft');
   // WordPress pone como «fecha de modificación» la de la entrada solo cuando se crea; cada vez que se
   // actualiza pasa a ser la de ese momento (y muchos temas muestran esa). Por eso el borrador que se guardó
@@ -650,7 +684,8 @@ handle('draft:publish', async (d) => { require('./src/pagelinks').forget();
   cfg.exported = cfg.exported || {};
   for (const k of d.keys || []) cfg.exported[k] = { postId: post.ID, url, editUrl, title: d.title, status: post.status, at: new Date().toISOString() };
   store.save(cfg);
-  return { postId: post.ID, url, editUrl, status: post.status, date: post.date, exported: cfg.exported };
+  const cacheNote = await purgeAfterSend(post);
+  return { postId: post.ID, url, editUrl, status: post.status, date: post.date, exported: cfg.exported, cacheNote };
 });
 
 // --- IA ---
@@ -1401,7 +1436,7 @@ function modernize(html) {
   const Nz = require('./renderer/normalize');
   const blocks = require('./src/parseblocks').parseBlocks(html);
   const r = Nz.normalizeBlocks(blocks, (type, extra = {}) => ({ id: 'n' + Date.now().toString(36) + (normSeq++).toString(36), type, ...extra }));
-  return composeBlocks(r.blocks, { spectra: isSelf(), pageBg: require('./renderer/pagebg').parse(html) });
+  return composeBlocks(r.blocks, { spectra: isSelf(), helper: helperOn(), pageBg: require('./renderer/pagebg').parse(html) });
 }
 // Entradas ya restauradas: se lee su contenido en WordPress, se normaliza y se guarda solo el contenido
 handle('backup:normalizeRestored', async (postIds) => {

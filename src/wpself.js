@@ -604,4 +604,36 @@ async function saveStructure(cfg, ch, progress = () => {}) {
   return { errors };
 }
 
-module.exports = { detectSeo, seoInfo, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText };
+// --- Complemento de Ecos para WordPress (wp-plugin/ecos): estado y vaciado de caché ---
+// Versión que trae esta app (cabecera del archivo del complemento)
+function helperBundledVersion() {
+  try { return (/^\s*\*\s*Version:\s*([\d.]+)/m.exec(fs.readFileSync(path.join(__dirname, '..', 'wp-plugin', 'ecos', 'ecos.php'), 'utf8')) || [])[1] || '0'; } catch { return '0'; }
+}
+const versionLess = (a, b) => {
+  const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d < 0; }
+  return false;
+};
+// Respuesta de GET /ecos/v1/status → { installed, version, outdated, caches, bundled }
+function parseHelperStatus(data, bundled = helperBundledVersion()) {
+  if (!data || data.plugin !== 'ecos' || !data.version) return { installed: false, version: '', outdated: false, caches: [], bundled };
+  const version = String(data.version);
+  return { installed: true, version, outdated: versionLess(version, bundled), caches: Array.isArray(data.caches) ? data.caches.map(String) : [], bundled };
+}
+const helperCache = new Map(); // dirección de la web → { at, st }
+async function helperStatus(cfg, { force = false } = {}) {
+  const key = base(cfg);
+  const hit = helperCache.get(key);
+  if (!force && hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.st;
+  let st;
+  try { st = parseHelperStatus(await req(cfg, '/ecos/v1/status')); } catch { st = parseHelperStatus(null); }
+  helperCache.set(key, { at: Date.now(), st });
+  return st;
+}
+// Vacía la caché de una entrada; devuelve los nombres de lo que se purgó
+async function helperPurge(cfg, id) {
+  const r = await req(cfg, '/ecos/v1/purge', { method: 'POST', json: { id: Number(id) } });
+  return Array.isArray(r?.purged) ? r.purged.map(String) : [];
+}
+
+module.exports = { helperStatus, helperPurge, parseHelperStatus, helperBundledVersion, detectSeo, seoInfo, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText };

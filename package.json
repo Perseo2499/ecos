@@ -6,7 +6,8 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.js",
-    "dist": "electron-builder --win"
+    "plugin": "node scripts/build-wp-plugin.js",
+    "dist": "node scripts/build-wp-plugin.js && electron-builder --win"
   },
   "devDependencies": {
     "electron": "^33.2.0",
@@ -28,6 +29,7 @@
       "preload.js",
       "src/**",
       "renderer/**",
+      "wp-plugin/ecos/ecos.php",
       "package.json"
     ],
     "nsis": {
@@ -55,6 +57,10 @@
       {
         "from": "build/winhello.exe",
         "to": "winhello.exe"
+      },
+      {
+        "from": "build/ecos-wordpress.zip",
+        "to": "ecos-wordpress.zip"
       }
     ]
   },

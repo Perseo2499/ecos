@@ -771,6 +771,7 @@ $('#send').onclick = (e) => busy(e.target, async () => {
   $('#sent-text').textContent = res.status === 'publish' ? (pg ? t('¡Página publicada!') : t('¡Entrada publicada!'))
     : res.status === 'future' ? (pg ? t('Página programada para el {d}.', { d: fmtDate(res.date) }) : t('Entrada programada para el {d}.', { d: fmtDate(res.date) })) : (pg ? t('Borrador de página creado en WordPress.') : t('Borrador creado en WordPress.'));
   if (res.status !== 'future' && res.date) $('#sent-text').textContent += ' ' + t('Fecha de la entrada: {d}.', { d: fmtDate(res.date) });
+  if (res.cacheNote) { const [n0, ...n1] = res.cacheNote.split(' ('); $('#sent-text').textContent += ' ' + t(n0) + (n1.length ? ' (' + n1.join(' (') : ''); }
   $('#sent').classList.remove('hidden');
   $('#sent-share').classList.toggle('hidden', !(res.status === 'publish' && CFG.metaConnected && CFG.shareFacebook === true));
   selected.clear(); updateCount(); renderFeed(); blog.loaded = false;
