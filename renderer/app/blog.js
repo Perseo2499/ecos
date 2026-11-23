@@ -128,6 +128,7 @@ function renderCalendar() {
 const blog = { loaded: false, type: 'post', page: 1, per: 20, found: 0, problem: null }; // problem: { kind, ids } = filtro de la «Revisión»
 const STATUS = () => ({ publish: t('Publicada'), draft: t('Borrador'), future: t('Programada'), pending: t('Pendiente'), private: t('Privada'), trash: t('Papelera') });
 async function loadBlog() {
+  syncMine();
   const list = $('#b-list');
   list.innerHTML = `<p class="hint pad">${t('Cargando…')}</p>`;
   try {
@@ -210,7 +211,7 @@ function renderBlog(items) {
       <label class="b-check"><input type="checkbox"${bsel.has(it.id) ? ' checked' : ''}></label>
       ${it.image ? `<img src="${escHtml(it.image)}" loading="lazy" alt="">` : `<div class="noimg"><span class="ms">image</span></div>`}
       <div><div class="b-title"></div>
-        <div class="b-meta"><span class="st ${escHtml(it.status)}">${STATUS()[it.status] || escHtml(it.status)}</span>${fromEcos ? `<span class="st ecos" title="${t('Entrada creada desde Ecos')}"><img src="assets/logo-mark.svg" alt="">${t('Creada con Ecos')}</span>` : ''}${restored ? `<span class="st restored" title="${t('Recuperada de una copia de seguridad con Ecos')}"><span class="ms">settings_backup_restore</span>${t('Restaurada')}</span>` : ''}${bhChips(it)}${when}${it.categories.length ? ' · ' + escHtml(it.categories.join(', ')) : ''}</div>
+        <div class="b-meta"><span class="st ${escHtml(it.status)}">${STATUS()[it.status] || escHtml(it.status)}</span>${fromEcos ? `<span class="st ecos" title="${t('Entrada creada desde Ecos')}"><img src="assets/logo-mark.svg" alt="">${t('Creada con Ecos')}</span>` : ''}${restored ? `<span class="st restored" title="${t('Recuperada de una copia de seguridad con Ecos')}"><span class="ms">settings_backup_restore</span>${t('Restaurada')}</span>` : ''}${bhChips(it)}${authorHtml(it.author)}${when}${it.categories.length ? ' · ' + escHtml(it.categories.join(', ')) : ''}</div>
         <div class="b-ex"></div></div>
       <div class="b-actions"></div>`;
     const title = decodeEntities(it.title);
@@ -290,6 +291,14 @@ $$('#b-type button').forEach((b) => b.onclick = async () => {
   blog.page = 1; loadBlog();
 });
 $('#b-status').onchange = () => { blog.page = 1; loadBlog(); };
+// «Solo las mías»: solo con web propia y sabiendo quién eres; se recuerda en este ordenador
+const mineOn = () => { try { return localStorage.getItem('ecos-only-mine') === '1' && !!CFG.wpMe?.id && CFG.wpMode === 'selfhosted'; } catch { return false; } };
+function syncMine() {
+  const show = CFG.wpMode === 'selfhosted' && !!CFG.wpMe?.id;
+  $('#b-mine-wrap').classList.toggle('hidden', !show || blog.type !== 'post' && blog.type !== 'page');
+  $('#b-mine').checked = mineOn();
+}
+$('#b-mine').onchange = (e) => { try { localStorage.setItem('ecos-only-mine', e.target.checked ? '1' : '0'); } catch { /* sin almacenamiento */ } blog.page = 1; loadBlog(); };
 let bTimer; $('#b-search').oninput = () => { clearTimeout(bTimer); bTimer = setTimeout(() => { blog.page = 1; loadBlog(); }, 400); };
 $('#b-refresh').onclick = loadBlog;
 $('#b-prev').onclick = () => { blog.page--; loadBlog(); };
@@ -531,6 +540,7 @@ $('#bfr-apply').onclick = (e) => busy(e.currentTarget, async () => {
 // Los filtros actuales de la lista (estado, búsqueda y periodo) para pedírselos a WordPress
 function blogFilters() {
   const f = { type: blog.type, status: $('#b-status').value, search: $('#b-search').value.trim() };
+  if (mineOn() && CFG.wpMe?.id) f.author = CFG.wpMe.id; // «Solo las mías»
   if (blog.problem && blog.type === 'post') f.include = blog.problem.ids;
   const from = $('#b-from').value, to = $('#b-to').value;
   if (from) f.after = new Date(from + 'T00:00:00').toISOString();

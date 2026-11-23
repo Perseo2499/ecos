@@ -32,6 +32,7 @@ function renderWpState(st, url) {
 $('#ed-pull').onclick = (e) => busy(e.currentTarget, async () => {
   if (!draft.postId) return toast(isPageDraft() ? t('Esta página todavía no está en WordPress: envíala primero.') : t('Esta entrada todavía no está en WordPress: envíala primero.'), true);
   const r = await window.api.pullPost(draft.postId, draft.type);
+  if (r.modified) draft.wpModified = r.modified; // lo que hay ahora en WordPress es lo que se ha visto
   exported = r.exported || exported;
   renderWpState(r.status, r.url);
   if (r.status === 'trash') return toast(t('Esta entrada está en la papelera de WordPress.'), true);
@@ -67,11 +68,13 @@ $('#send').onclick = (e) => busy(e.target, async () => {
   const when = $('input[name="d-when"]:checked').value;
   if (!$('#d-title').value.trim()) throw new Error(t('Escribe un título'));
   if (when === 'publish' && !await ask(t('Se publicará ahora y será visible en la web. ¿Continuar?'))) return;
-  const res = await window.api.publish(draftPayload(when));
+  if (!await multiPreSend()) return;
+  const res = await window.api.publish(draftPayload(MU.sendStatus(when, currentMe())));
   if (res.queued) { exported = res.exported || exported; toast(t('Sin conexión: el envío queda en cola y se hará solo')); return; }
-  exported = res.exported; lastSent = res; draft.postId = res.postId || draft.postId; draft.previewOnly = false; window.api.autosaveClear().catch(() => {}); draftDirty = false; renderWpState(res.status, res.url);
+  exported = res.exported; lastSent = res; draft.postId = res.postId || draft.postId; draft.wpModified = res.modified || draft.wpModified; draft.previewOnly = false; window.api.autosaveClear().catch(() => {}); draftDirty = false; renderWpState(res.status, res.url);
   const pg = isPageDraft();
   $('#sent-text').textContent = res.status === 'publish' ? (pg ? t('¡Página publicada!') : t('¡Entrada publicada!'))
+    : res.status === 'pending' ? (pg ? t('Página enviada a revisión.') : t('Entrada enviada a revisión: alguien con permiso la publicará.'))
     : res.status === 'future' ? (pg ? t('Página programada para el {d}.', { d: fmtDate(res.date) }) : t('Entrada programada para el {d}.', { d: fmtDate(res.date) })) : (pg ? t('Borrador de página creado en WordPress.') : t('Borrador creado en WordPress.'));
   if (res.status !== 'future' && res.date) $('#sent-text').textContent += ' ' + t('Fecha de la entrada: {d}.', { d: fmtDate(res.date) });
   if (res.cacheNote) { const [n0, ...n1] = res.cacheNote.split(' ('); $('#sent-text').textContent += ' ' + t(n0) + (n1.length ? ' (' + n1.join(' (') : ''); }

@@ -124,11 +124,37 @@ $('#helper-org').onsubmit = (e) => { e.preventDefault(); busy($('#helper-org but
 }); };
 $('#helper-recheck').onclick = (e) => busy(e.target, async () => { CFG = await window.api.helperCheck(); renderHelper(); toast(CFG.ecosHelper?.installed ? t('Complemento encontrado') : t('No se encuentra el complemento en tu web')); });
 $('#helper-save').onclick = (e) => busy(e.target, async () => { const f = await window.api.helperSave(); if (f) toast(t('Complemento guardado. Ahora súbelo desde WordPress → Plugins → Añadir nuevo.')); });
+// «Conectado como <nombre> (<rol>)»: cada persona usa su propio usuario de WordPress (solo con «Mi web (wp-admin)»)
+function renderWpMe() {
+  const box = $('#wp-me'); if (!box) return;
+  const me = CFG.wpMe, show = (CFG.wpMode || 'selfhosted') === 'selfhosted' && CFG.wpConnected && me && me.name;
+  box.classList.toggle('hidden', !show);
+  if (!show) { box.innerHTML = ''; return; }
+  const warn = [];
+  if (!me.canPublish) warn.push(t('Tu rol no puede publicar: lo que envíes quedará «pendiente de revisión» para que alguien con permiso lo publique.'));
+  if (me.canUpload === false) warn.push(t('Tu rol tampoco puede subir fotos a la biblioteca: pide que te cambien el rol (por ejemplo a Autor) si las necesitas.'));
+  box.innerHTML = `<div class="wp-me-row"><span class="wp-me-av"></span><span class="wp-me-t"></span></div>${warn.map(() => '<div class="wp-me-warn"><span class="ms">info</span><span></span></div>').join('')}`;
+  $('.wp-me-av', box).innerHTML = authorHtml({ name: me.name, avatar: me.avatar }, 'au-only').replace(/<span class="au-n">.*?<\/span>/, '');
+  $('.wp-me-t', box).innerHTML = t('Conectado como {n} ({r})', { n: '<b></b>', r: '<i></i>' });
+  $('.wp-me-t b', box).textContent = me.name; $('.wp-me-t i', box).textContent = t(MultiUser.roleName(me.role)) || t('sin rol');
+  $$('.wp-me-warn span:last-child', box).forEach((el, i) => { el.textContent = warn[i]; });
+}
+async function refreshWpMe() {
+  if ((CFG.wpMode || 'selfhosted') !== 'selfhosted' || !CFG.wpConnected) return;
+  try { const me = await window.api.wpMe(); if (me) { CFG.wpMe = me; renderWpMe(); } } catch { /* sin conexión: se queda lo guardado */ }
+}
+$('#wp-profile').onclick = () => {
+  const raw = ($('#f-wp').wpUrl.value || CFG.wpUrl || '').trim();
+  if (!raw) return toast(t('Escribe primero la dirección de tu web.'), true);
+  try { window.api.open(new URL(/^https?:\/\//i.test(raw) ? raw : 'https://' + raw).origin + '/wp-admin/profile.php#application-passwords-section'); }
+  catch { toast(t('La dirección de la web no es válida'), true); }
+};
 function fillConnections() {
   $('#meta-redirect').value = CFG.metaRedirectUri; $('#wp-redirect').value = CFG.wpRedirectUri;
   for (const f of ['#f-meta', '#f-wp']) for (const el of $(f).elements) if (el.name) el.value = CFG[el.name] || '';
   setWpMode(CFG.wpMode || 'selfhosted');
   renderHelper();
+  renderWpMe(); refreshWpMe();
   if (typeof fillGPhotos === 'function') fillGPhotos();
 }
 // Modo de WordPress: web propia (wp-admin) o WordPress.com
@@ -157,7 +183,7 @@ async function doWpLogin() {
   CFG = await window.api.setConfig(Object.fromEntries(new FormData($('#f-wp'))));
   toast(t('Termina el inicio de sesión en tu navegador…'));
   const name = await window.api.wpLogin();
-  CFG = await window.api.getConfig(); renderStatus(); renderHelper(); toast(t('Conectado a {s}', { s: name })); loadCategories();
+  CFG = await window.api.getConfig(); renderStatus(); renderHelper(); renderWpMe(); toast(t('Conectado a {s}', { s: name })); loadCategories();
 }
 $('#meta-login').onclick = (e) => busy(e.target, doMetaLogin);
 $('#wp-login').onclick = (e) => busy(e.target, doWpLogin);

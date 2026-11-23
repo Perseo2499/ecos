@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       Ecos para WordPress
  * Plugin URI:        https://asociacionelin.com
- * Description:       Complemento de Ecos: carga una sola vez el carrusel de fotos, los vídeos y los estilos de Ecos, añade la vista previa al compartir y los datos para Google, cuenta visitas sin cookies y vacía la caché de la entrada cuando la envías desde Ecos.
- * Version:           1.1.0
+ * Description:       Complemento de Ecos: carga una sola vez el carrusel de fotos, los vídeos y los estilos de Ecos, añade la vista previa al compartir y los datos para Google, cuenta visitas sin cookies, vacía la caché de la entrada cuando la envías desde Ecos y avisa si otra persona la está editando.
+ * Version:           1.2.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Asociación Elín
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'ECOS_WP_VERSION', '1.1.0' );
+define( 'ECOS_WP_VERSION', '1.2.0' );
 define( 'ECOS_WP_URL', plugin_dir_url( __FILE__ ) );
 define( 'ECOS_WP_DIR', plugin_dir_path( __FILE__ ) );
 
@@ -162,7 +162,7 @@ function ecos_wp_purge_post( $id ) {
 }
 
 /**
- * API REST: ecos/v1/status y ecos/v1/purge (solo con permiso para editar entradas).
+ * API REST: ecos/v1/status, purge y lock (solo con permiso para editar entradas).
  */
 function ecos_wp_can_edit() {
 	return current_user_can( 'edit_posts' );
@@ -198,6 +198,40 @@ function ecos_wp_register_routes() {
 			),
 		)
 	);
+	register_rest_route(
+		'ecos/v1',
+		'/lock',
+		array(
+			array(
+				'methods'             => 'POST',
+				'callback'            => 'ecos_wp_rest_lock',
+				'permission_callback' => 'ecos_wp_can_edit',
+				'args'                => array(
+					'id'    => array(
+						'required'          => true,
+						'sanitize_callback' => 'absint',
+						'validate_callback' => 'ecos_wp_validate_id',
+					),
+					'force' => array(
+						'required' => false,
+						'default'  => false,
+					),
+				),
+			),
+			array(
+				'methods'             => 'DELETE',
+				'callback'            => 'ecos_wp_rest_unlock',
+				'permission_callback' => 'ecos_wp_can_edit',
+				'args'                => array(
+					'id' => array(
+						'required'          => true,
+						'sanitize_callback' => 'absint',
+						'validate_callback' => 'ecos_wp_validate_id',
+					),
+				),
+			),
+		)
+	);
 }
 add_action( 'rest_api_init', 'ecos_wp_register_routes' );
 
@@ -209,6 +243,7 @@ function ecos_wp_rest_status() {
 			'caches'  => ecos_wp_detect_caches(),
 			'seo'     => ecos_wp_seo_plugin_name(),
 			'stats'   => true,
+			'lock'    => true,
 		)
 	);
 }
@@ -225,6 +260,90 @@ function ecos_wp_rest_purge( WP_REST_Request $request ) {
 		array(
 			'id'     => $id,
 			'purged' => ecos_wp_purge_post( $id ),
+		)
+	);
+}
+
+/**
+ * Bloqueo de edición estándar de WordPress (meta _edit_lock, el mismo del editor de WordPress).
+ * Las funciones wp_check_post_lock() y wp_set_post_lock() viven en wp-admin y en la REST no están cargadas.
+ */
+function ecos_wp_load_post_lock() {
+	if ( ! function_exists( 'wp_check_post_lock' ) || ! function_exists( 'wp_set_post_lock' ) ) {
+		require_once ABSPATH . 'wp-admin/includes/post.php';
+	}
+}
+
+function ecos_wp_lock_user( $user_id ) {
+	$user = get_userdata( (int) $user_id );
+	if ( ! $user ) {
+		return null;
+	}
+	return array(
+		'id'     => (int) $user->ID,
+		'name'   => $user->display_name,
+		'avatar' => get_avatar_url( $user->ID, array( 'size' => 48 ) ),
+	);
+}
+
+/**
+ * POST ecos/v1/lock { id, force? }: pide el bloqueo. Si otra persona la tiene abierta (últimos 150 s),
+ * devuelve quién (locked: true) y no lo toma, salvo con force: true («Editar de todos modos»).
+ */
+function ecos_wp_rest_lock( WP_REST_Request $request ) {
+	$id = absint( $request->get_param( 'id' ) );
+	if ( ! $id || ! get_post( $id ) ) {
+		return new WP_Error( 'ecos_not_found', 'No existe esa entrada.', array( 'status' => 404 ) );
+	}
+	if ( ! current_user_can( 'edit_post', $id ) ) {
+		return new WP_Error( 'ecos_forbidden', 'No tienes permiso para esa entrada.', array( 'status' => 403 ) );
+	}
+	ecos_wp_load_post_lock();
+	$force = rest_sanitize_boolean( $request->get_param( 'force' ) );
+	$other = $force ? false : wp_check_post_lock( $id );
+	if ( $other ) {
+		return rest_ensure_response(
+			array(
+				'id'     => $id,
+				'locked' => true,
+				'user'   => ecos_wp_lock_user( $other ),
+			)
+		);
+	}
+	wp_set_post_lock( $id );
+	return rest_ensure_response(
+		array(
+			'id'     => $id,
+			'locked' => false,
+			'user'   => null,
+		)
+	);
+}
+
+/**
+ * DELETE ecos/v1/lock { id }: suelta el bloqueo, solo si es de quien lo pide.
+ */
+function ecos_wp_rest_unlock( WP_REST_Request $request ) {
+	$id = absint( $request->get_param( 'id' ) );
+	if ( ! $id || ! get_post( $id ) ) {
+		return new WP_Error( 'ecos_not_found', 'No existe esa entrada.', array( 'status' => 404 ) );
+	}
+	if ( ! current_user_can( 'edit_post', $id ) ) {
+		return new WP_Error( 'ecos_forbidden', 'No tienes permiso para esa entrada.', array( 'status' => 403 ) );
+	}
+	$released = false;
+	$lock     = get_post_meta( $id, '_edit_lock', true );
+	if ( $lock ) {
+		$parts = explode( ':', $lock );
+		if ( isset( $parts[1] ) && (int) $parts[1] === get_current_user_id() ) {
+			delete_post_meta( $id, '_edit_lock' );
+			$released = true;
+		}
+	}
+	return rest_ensure_response(
+		array(
+			'id'       => $id,
+			'released' => $released,
 		)
 	);
 }

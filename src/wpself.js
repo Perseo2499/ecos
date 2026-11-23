@@ -56,9 +56,29 @@ async function login(cfg) {
   }
   const caps = me.capabilities || {};
   if (!caps.edit_posts) throw new AuthError('WordPress: tu usuario no puede crear entradas');
-  if (!caps.upload_files) throw new AuthError('WordPress: tu usuario no puede subir archivos');
   const site = await req(cfg, '/').catch(() => ({}));
-  return { siteName: site.name || base(cfg), userName: me.name, canPublish: !!caps.publish_posts };
+  const info = parseMe(me);
+  return { siteName: site.name || base(cfg), userName: me.name, canPublish: info.canPublish, me: info };
+}
+
+// Datos de la persona conectada (GET /wp/v2/users/me?context=edit) → { id, name, role, roles, canPublish, canUpload, avatar }
+// Un colaborador (contributor) puede escribir pero no publicar ni subir fotos: sus entradas van a revisión.
+function parseMe(d) {
+  const caps = d?.capabilities || {};
+  const roles = Array.isArray(d?.roles) ? d.roles.map(String) : [];
+  const av = d?.avatar_urls || {};
+  return {
+    id: Number(d?.id) || 0, name: String(d?.name || d?.slug || ''), slug: String(d?.slug || ''),
+    role: roles[0] || '', roles,
+    canPublish: !!caps.publish_posts, canUpload: !!caps.upload_files,
+    avatar: String(av['48'] || av['96'] || av['24'] || ''),
+  };
+}
+async function me(cfg) { return parseMe(await req(cfg, '/wp/v2/users/me?context=edit')); }
+// Fecha de última modificación de una entrada en WordPress (para avisar si alguien la cambió después de abrirla)
+async function postModified(cfg, id, type) {
+  const p = await req(cfg, `/wp/v2/${type === 'page' ? 'pages' : 'posts'}/${Number(id)}?context=edit&_fields=id,modified_gmt,status`);
+  return { id: p.id, status: p.status, modified: p.modified_gmt ? p.modified_gmt + 'Z' : null };
 }
 
 // «No estás conectado»: WordPress no ha visto ninguna credencial. Se averigua por qué consultando
@@ -294,7 +314,7 @@ async function seoInfo(cfg) {
   seoCache = { site: cfg.wpUrl, at: Date.now(), info };
   return info;
 }
-const fromRest = (p) => ({ ID: p.id, URL: p.link, status: p.status, date: p.date_gmt ? p.date_gmt + 'Z' : p.date });
+const fromRest = (p) => ({ ID: p.id, URL: p.link, status: p.status, date: p.date_gmt ? p.date_gmt + 'Z' : p.date, modified: p.modified_gmt ? p.modified_gmt + 'Z' : null });
 // Guarda la entrada y comprueba que WordPress se ha quedado con la fecha pedida. En los borradores,
 // WordPress puede dejar la fecha «sin fijar» y entonces, al publicarlos desde wp-admin, les pone la de ese
 // momento; si la fecha guardada no coincide, se vuelve a enviar (local y UTC) para dejarla fijada.
@@ -328,11 +348,13 @@ async function setPostDate(cfg, id, iso, status, type) {
 const createPost = (cfg, f) => savePost(cfg, `/wp/v2/${f.type === 'page' ? 'pages' : 'posts'}`, f);
 const updatePost = (cfg, id, f) => savePost(cfg, `/wp/v2/${f.type === 'page' ? 'pages' : 'posts'}/${id}`, f);
 
-async function listPosts(cfg, { type = 'post', status = 'any', search = '', page = 1, number = 20, after, before, orderby = 'date', include } = {}) {
+// author: id de una persona de WordPress (para «Solo las mías»)
+async function listPosts(cfg, { type = 'post', status = 'any', search = '', page = 1, number = 20, after, before, orderby = 'date', include, author } = {}) {
   const coll = type === 'page' ? 'pages' : 'posts';
   const q = new URLSearchParams({
     status: status === 'any' ? 'publish,future,draft,pending,private' : status, per_page: String(number), page: String(page),
-    orderby: orderby === 'modified' ? 'modified' : 'date', order: 'desc', context: 'edit', _embed: 'wp:featuredmedia',
+    orderby: orderby === 'modified' ? 'modified' : 'date', order: 'desc', context: 'edit', _embed: 'wp:featuredmedia,author',
+    ...(Number(author) > 0 ? { author: String(Number(author)) } : {}),
     ...(search ? { search } : {}), ...(after ? { after } : {}), ...(before ? { before } : {}),
     ...(include?.length ? { include: include.join(',') } : {}),
   });
@@ -346,8 +368,15 @@ async function listPosts(cfg, { type = 'post', status = 'any', search = '', page
       image: p._embedded?.['wp:featuredmedia']?.[0]?.source_url || '', featured: p.featured_media || 0,
       categories: (p.categories || []).map((id) => cats.find((c) => c.id === id)?.name).filter(Boolean),
       excerpt: (p.excerpt?.raw || p.excerpt?.rendered || '').replace(/<[^>]+>/g, '').trim().slice(0, 160),
+      author: postAuthor(p),
     })),
   };
+}
+// Autor de una entrada de la lista (con _embed=author): { id, name, avatar }
+function postAuthor(p) {
+  const a = p._embedded?.author?.[0];
+  const av = a?.avatar_urls || {};
+  return { id: Number(p.author) || Number(a?.id) || 0, name: decode(a?.name || ''), avatar: String(av['48'] || av['24'] || av['96'] || '') };
 }
 // Revisión del blog: recorre todas las entradas (menos la papelera) con campos ligeros y dice cuáles no tienen
 // categoría o imagen destacada, y de las que no tienen destacada, cuáles tienen alguna foto en el contenido.
@@ -674,4 +703,20 @@ async function helperSaveSettings(cfg, settings) {
   return parseHelperSettings(await req(cfg, '/ecos/v1/settings', { method: 'POST', json: body }));
 }
 
-module.exports = { helperStats, parseHelperStats, helperSettings, helperSaveSettings, parseHelperSettings, helperStatus, helperPurge, parseHelperStatus, helperBundledVersion, detectSeo, seoInfo, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText };
+// Bloqueo de edición (complemento ≥ 1.2.0): POST/DELETE /ecos/v1/lock { id } → { locked, user:{id,name,avatar} }
+// locked = otra persona la tiene abierta ahora mismo (en Ecos o en el editor de WordPress)
+function parseHelperLock(d) {
+  const u = d?.user;
+  return { supported: !!d && typeof d === 'object' && 'locked' in d, locked: !!d?.locked, user: u && u.name ? { id: Number(u.id) || 0, name: String(u.name), avatar: String(u.avatar || '') } : null };
+}
+// ¿Esta versión del complemento trae el bloqueo? (≥ 1.2.0)
+const helperHasLock = (version) => !!version && !versionLess(version, '1.2.0');
+async function helperLock(cfg, id, { force = false } = {}) {
+  return parseHelperLock(await req(cfg, '/ecos/v1/lock', { method: 'POST', json: { id: Number(id), ...(force ? { force: true } : {}) } }));
+}
+async function helperUnlock(cfg, id) {
+  const r = await req(cfg, '/ecos/v1/lock', { method: 'DELETE', json: { id: Number(id) } });
+  return !!r?.released;
+}
+
+module.exports = { helperHasLock, me, parseMe, postModified, helperLock, helperUnlock, parseHelperLock, helperStats, parseHelperStats, helperSettings, helperSaveSettings, parseHelperSettings, helperStatus, helperPurge, parseHelperStatus, helperBundledVersion, detectSeo, seoInfo, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText };

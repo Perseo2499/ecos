@@ -293,6 +293,23 @@ const handle = (name, fn) => ipcMain.handle(name, async (_e, ...args) => {
 });
 // Complemento de Ecos para WordPress (después de definir handle: antes daba «Cannot access 'handle' before initialization» al arrancar)
 handle('helper:check', async () => { await refreshHelper(true); return publicCfg(); });
+// Varias personas: quién está conectado, bloqueo de edición (el estándar de WordPress) y fecha de modificación
+handle('wp:me', async () => {
+  if (!isSelf() || !wpIsConnected()) return null;
+  const me = await wpCall(() => wpself.me(cfg));
+  if (JSON.stringify(me) !== JSON.stringify(cfg.wpMe)) { cfg.wpMe = me; store.save(cfg); }
+  return me;
+});
+// {supported:false} si no hay complemento (o es anterior a 1.2.0); si falla la red, no se bloquea nada
+handle('postlock:acquire', async (id, force) => {
+  if (!helperOn() || !id || !wpself.helperHasLock(cfg.ecosHelper.version)) return { supported: false };
+  try { return await wpself.helperLock(cfg, id, { force: !!force }); } catch (e) { log('Bloqueo de edición:', e.message); return { supported: true, error: e.message }; }
+});
+handle('postlock:release', async (id) => {
+  if (!helperOn() || !id) return false;
+  try { return await wpself.helperUnlock(cfg, id); } catch { return false; }
+});
+handle('post:modified', (id, type) => (isSelf() ? wpCall(() => wpself.postModified(cfg, id, type)) : null));
 handle('helper:stats', (days) => wpself.helperStats(cfg, days));
 handle('helper:settings', () => wpself.helperSettings(cfg));
 handle('helper:settingsSave', (s) => wpself.helperSaveSettings(cfg, s));
@@ -310,7 +327,7 @@ handle('config:get', () => publicCfg());
 handle('config:set', (changes) => {
   // Si cambian los datos de la web propia, hay que volver a pulsar «Conectar»
   for (const k of ['wpMode', 'wpUrl', 'wpUser', 'wpAppPassword']) {
-    if (k in changes && changes[k] !== '••••••' && String(changes[k] ?? '').trim() !== String(cfg[k] ?? '')) cfg.wpSelfOk = false;
+    if (k in changes && changes[k] !== '••••••' && String(changes[k] ?? '').trim() !== String(cfg[k] ?? '')) { cfg.wpSelfOk = false; delete cfg.wpMe; }
   }
   for (const [k, v] of Object.entries(changes)) {
     if (v === '••••••') continue; // secreto sin cambios
@@ -383,8 +400,8 @@ handle('wp:login', async () => {
   if (isSelf()) {
     // Web propia: se comprueban el usuario y la contraseña de aplicación
     const r = await wpself.login(cfg);
-    cfg.wpSelfOk = true; store.save(cfg);
-    log(`WordPress propio: conectado como ${r.userName} a ${r.siteName}`);
+    cfg.wpSelfOk = true; cfg.wpMe = r.me; store.save(cfg);
+    log(`WordPress propio: conectado como ${r.userName} (${r.me?.role || '?'}) a ${r.siteName}`);
     await refreshHelper(true);
     return r.siteName;
   }
@@ -857,7 +874,7 @@ async function doPublish(d) { require('./src/pagelinks').forget();
   for (const k of d.keys || []) cfg.exported[k] = { postId: post.ID, url, editUrl, title: d.title, status: post.status, at: new Date().toISOString() };
   store.save(cfg);
   const cacheNote = await purgeAfterSend(post);
-  return { postId: post.ID, url, editUrl, status: post.status, date: post.date, exported: cfg.exported, cacheNote };
+  return { postId: post.ID, url, editUrl, status: post.status, date: post.date, modified: post.modified || null, exported: cfg.exported, cacheNote };
 }
 // Si falla por red o servidor (5xx), el envío queda en cola (userData/send-queue.json) y se reintenta solo
 handle('draft:publish', async (d) => {

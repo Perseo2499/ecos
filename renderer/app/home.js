@@ -166,14 +166,16 @@ const Home = (() => {
     } else body = skel(2);
     return card('home-social', 'dynamic_feed', t('Publicaciones de redes sin pasar al blog'), body, '', ['HOME · 01 FEED', '投稿']);
   }
+  const homeMine = () => { try { return localStorage.getItem('ecos-only-mine') === '1'; } catch { return false; } };
   function draftsCard() {
     let body;
     if (!wpOk()) body = needWp();
     else if (!hs.drafts) body = hs.err ? `<p class="hint">${escHtml(hs.err)} <button class="btn text small" data-h="retry"><span class="ms">refresh</span>${t('Reintentar')}</button></p>` : skel(4);
     else if (!hs.drafts.length) body = `<div class="home-empty"><span class="ms">task_alt</span><span>${t('No tienes borradores pendientes.')}</span></div>`;
-    else body = `<ul class="home-list">${hs.drafts.map((d) => `<li><div class="home-li-t"><b>${title(d)}</b><span>${t('Editado el {d}', { d: fmtDay(d.modified || d.date) })}</span></div>
+    else body = `<ul class="home-list">${hs.drafts.map((d) => `<li><div class="home-li-t"><b>${title(d)}</b><span>${authorHtml(d.author)}${t('Editado el {d}', { d: fmtDay(d.modified || d.date) })}</span></div>
       <button class="btn text small" data-h="edit" data-id="${d.id}"><span class="ms">edit</span>${t('Seguir editando')}</button></li>`).join('')}</ul>`;
-    return card('home-drafts', 'edit_note', t('Borradores'), body, '', ['HOME · 02 DRAFTS', '下書']);
+    const mine = CFG.wpMode === 'selfhosted' && CFG.wpMe?.id ? `<label class="chip b-mine" title="${escHtml(t('Solo las entradas de las que eres autor'))}"><input type="checkbox" data-h="mine"${homeMine() ? ' checked' : ''}><span>${t('Solo las mías')}</span></label>` : '';
+    return card('home-drafts', 'edit_note', t('Borradores'), body, mine, ['HOME · 02 DRAFTS', '下書']);
   }
 
   // ---- carruseles (arrastrables, con flechas)
@@ -448,7 +450,7 @@ const Home = (() => {
     hs.loading = true; hs.at = Date.now();
     if (force) ag.cache.clear();
     const jobs = [
-      window.api.blogList({ type: 'post', status: 'draft', number: 5, orderby: 'modified' }).then((r) => { hs.drafts = r.items; hs.err = null; }, (e) => { hs.drafts = hs.drafts || []; hs.err = friendlyError(e).text; }),
+      window.api.blogList({ type: 'post', status: 'draft', number: 5, orderby: 'modified', ...(homeMine() && CFG.wpMe?.id ? { author: CFG.wpMe.id } : {}) }).then((r) => { hs.drafts = r.items; hs.err = null; }, (e) => { hs.drafts = hs.drafts || []; hs.err = friendlyError(e).text; }),
       agLoad(),
       viewsLoad(force),
     ];
@@ -530,6 +532,7 @@ const Home = (() => {
     const b = e.target.closest('#home [data-h]');
     if (!b) return;
     const a = b.dataset.h;
+    if (a === 'mine') { try { localStorage.setItem('ecos-only-mine', b.checked ? '1' : '0'); } catch { /* sin almacenamiento */ } return load(true); }
     if (a === 'retry') { hs.err = null; hs.errHealth = null; hs.freeErr = null; hs.views.err = null; ag.err = null; ag.cache.delete(agKey()); return load(true); }
     if (a === 'conn') return showTab('connections');
     if (a === 'views-days') { hs.views.days = Number(b.dataset.d); draw(); viewsLoad(); return; }

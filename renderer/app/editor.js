@@ -83,7 +83,7 @@ async function openFromWp(postId, keys, type = 'post', opts = {}) {
   const vids = window.BlockEditor.flat(r.blocks).filter((b) => b.type === 'video' && b.video?.id).map((b) => ({ ...b.video, type: 'video' }));
   draft = {
     title: r.title, excerpt: r.excerpt || '', slug: r.slug || '', tags: r.tags || [], categories: r.categories || [], blocks: r.blocks,
-    featuredImageId: r.featured || null, keepFeaturedInBody: true, date: r.date, postId, previewOnly: false, wpStatus: r.status, sections: [], sourceText: '',
+    featuredImageId: r.featured || null, keepFeaturedInBody: true, date: r.date, wpModified: r.modified || null, postId, previewOnly: false, wpStatus: r.status, sections: [], sourceText: '',
     type: type === 'page' ? 'page' : 'post', parent: r.parent || 0, seoDesc: r.seoDesc || '', pageBg: r.pageBg || null,
     extraMedia: [...(r.featuredImg ? [{ ...r.featuredImg, type: 'image' }] : []), ...imgs.map((i) => ({ ...i, type: i.type || 'image' })), ...vids],
   };
@@ -167,6 +167,7 @@ function openEditor() {
   renderCats(draft.categories ? draft.categories.map((c) => c.toLowerCase()) : defCats);
   const when = draft.wpStatus ? (draft.wpStatus === 'publish' ? 'publish' : draft.wpStatus === 'future' ? 'future' : 'draft') : f.status || 'draft';
   $$('input[name="d-when"]').forEach((r) => (r.checked = r.value === when));
+  multiApplyRole();
   $('#d-schedule').value = '';
   // Fecha original: activada por defecto y con la fecha a la vista
   $('#d-keepdate').checked = prefs().keepDate !== false;
@@ -212,6 +213,7 @@ function openEditor() {
   updateCount();
   updateHistoryBtn();
   renderSpectraNote();
+  multiOnOpen();
 }
 // Modo página: sin categorías ni etiquetas, con «Página superior»; la barra dice «Página»
 const isPageDraft = () => draft?.type === 'page';

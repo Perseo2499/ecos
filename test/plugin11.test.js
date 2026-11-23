@@ -51,7 +51,7 @@ test('Inicio: barras de visitas', () => {
 });
 
 test('complemento 1.1: versión, PHP válido y zip con los archivos nuevos', () => {
-  assert.equal(W.helperBundledVersion(), '1.1.0');
+  assert.equal(W.helperBundledVersion(), '1.2.0');
   const dir = path.join(__dirname, '..', 'wp-plugin', 'ecos');
   const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ecos-zip-')), 'p.zip');
   const r = B.build(out);
