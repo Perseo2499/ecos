@@ -144,7 +144,7 @@
     'Se borrarán todas las conexiones, claves, ajustes y plantillas de Ecos en este ordenador. Tu blog y tus redes no se tocan. ¿Continuar?': 'All Ecos connections, keys, settings and templates on this computer will be deleted. Your blog and social accounts are not touched. Continue?',
     '¿Seguro? Esta acción no se puede deshacer. Si quieres, exporta antes una copia de seguridad.': 'Are you sure? This cannot be undone. You may want to export a backup first.',
     'de tus redes a tu blog.': 'from your social media to your blog.', 'Todos los derechos reservados.': 'All rights reserved.',
-    'Página del proyecto': 'Project page', 'Versión': 'Version',
+    'Página del proyecto': 'Project page', 'Software libre bajo licencia GPL-3.0': 'Free software under the GPL-3.0 license', 'Licencia': 'License', 'Código fuente': 'Source code', 'Avisos de terceros': 'Third-party notices', 'Versión': 'Version',
     // Asistente
     'Bienvenida': 'Welcome', 'Listo': 'Done', '¡Hola! Vamos a dejar Ecos listo': "Hi! Let's get Ecos ready",
     'Ecos lee tus publicaciones de Instagram y Facebook y las convierte en entradas de tu blog de WordPress.com. Necesita permiso para leer tus redes y para escribir en tu blog. Te guiamos en dos pasos; cada uno lleva unos 5 minutos.': 'Ecos reads your Instagram and Facebook posts and turns them into posts on your WordPress.com blog. It needs permission to read your social accounts and to write on your blog. We will guide you in two steps; each takes about 5 minutes.',

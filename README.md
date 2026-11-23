@@ -1,7 +1,7 @@
 # Ecos — de tus redes a tu blog
 
-Aplicación de escritorio (Electron) que lee las publicaciones de Instagram y Facebook de la
-Asociación ELIN y las convierte en entradas del blog de **asociacionelin.com** (WordPress.com).
+Aplicación de escritorio (Electron) para pasar publicaciones de Instagram y Facebook a un blog de WordPress
+y gestionar la web. Es software libre (GPL-3.0).
 
 ## Descargar
 Última versión para Windows: **[Releases](https://github.com/Perseo2499/ecos/releases/latest)** → `Ecos-Setup-x.y.z.exe` (instalador; se actualiza solo). También hay una versión portable, que no se actualiza.
@@ -33,7 +33,7 @@ Las apps creadas con el caso de uso «Inicio de sesión con Facebook» (consumid
 
 ## 4. Crear la app de WordPress.com (una sola vez)
 1. Entra en https://developer.wordpress.com/apps/ → **Create New Application**.
-2. *Website URL*: `https://www.asociacionelin.com/`. *Redirect URLs*: `http://localhost:53682/wordpress`.
+2. *Website URL*: la dirección de tu web (por ejemplo `https://www.tuweb.com/`). *Redirect URLs*: `http://localhost:53682/wordpress`.
 3. Tipo: **Web**. Copia el **Client ID** y el **Client Secret**.
 
 ## 5. Cuatro formas de traer publicaciones
@@ -128,5 +128,10 @@ Con las capturas, la IA (Claude) lee el texto y recorta las fotos de la captura.
 - El token de Meta dura unos 60 días; cuando caduque, pulsa otra vez **Conectar con Facebook**.
 - Si Meta deja obsoleta la versión de la API, cámbiala en *Configuración → Versión de Graph API*.
 
-## Licencia
-© 2026 Asociación Elín. **Todos los derechos reservados.** El código es visible, pero no se puede copiar, modificar ni redistribuir sin permiso. Ver [LICENSE](LICENSE).
+## Licencia y firma del código
+Ecos es **software libre**: © 2026 Perseo2499, bajo la licencia [GNU GPL v3.0 o posterior](LICENSE) (ver también [NOTICE](NOTICE)). Puedes usarlo, estudiarlo, modificarlo y redistribuirlo según sus términos. Los componentes de terceros (FFmpeg, Electron…) mantienen sus licencias: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+- Política de firma de código y privacidad: [English](docs/CODE_SIGNING_POLICY.md) · [Español](docs/politica-firma.md)
+- Cómo solicitar la firma gratuita de SignPath Foundation: [docs/signpath-solicitud.md](docs/signpath-solicitud.md)
+
+Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org) (cuando el programa esté aprobado y activo).
