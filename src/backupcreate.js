@@ -102,14 +102,17 @@ class ZipWriter {
     if (!this.out.write(buf)) await new Promise((res) => this.out.once('drain', res));
     if (this.err) throw this.err;
   }
-  async add(name, data, when = new Date()) {
+  // deflate: comprime el archivo (para texto: HTML, CSS, JSON); sin él se guarda tal cual
+  async add(name, data, when = new Date(), { deflate = false } = {}) {
     const nm = Buffer.from(name.replace(/\\/g, '/'), 'utf8'), crc = crc32(data);
+    const packed = deflate && data.length > 64 ? zlib.deflateRawSync(data) : null;
+    const body = packed && packed.length < data.length ? packed : data, method = body === data ? 0 : 8;
     const { time, date } = dosTime(isNaN(+when) || when.getFullYear() < 1980 ? new Date() : when);
     const h = Buffer.alloc(30);
-    h.writeUInt32LE(0x04034b50, 0); h.writeUInt16LE(20, 4); h.writeUInt16LE(0x0800, 6); h.writeUInt16LE(0, 8); h.writeUInt16LE(time, 10); h.writeUInt16LE(date, 12);
-    h.writeUInt32LE(crc, 14); h.writeUInt32LE(data.length, 18); h.writeUInt32LE(data.length, 22); h.writeUInt16LE(nm.length, 26); h.writeUInt16LE(0, 28);
-    this.entries.push({ nm, crc, size: data.length, offset: this.pos, time, date });
-    await this.write(h); await this.write(nm); if (data.length) await this.write(data);
+    h.writeUInt32LE(0x04034b50, 0); h.writeUInt16LE(20, 4); h.writeUInt16LE(0x0800, 6); h.writeUInt16LE(method, 8); h.writeUInt16LE(time, 10); h.writeUInt16LE(date, 12);
+    h.writeUInt32LE(crc, 14); h.writeUInt32LE(body.length, 18); h.writeUInt32LE(data.length, 22); h.writeUInt16LE(nm.length, 26); h.writeUInt16LE(0, 28);
+    this.entries.push({ nm, crc, size: data.length, csize: body.length, method, offset: this.pos, time, date });
+    await this.write(h); await this.write(nm); if (body.length) await this.write(body);
   }
   async finish() {
     const start = this.pos;
@@ -118,8 +121,8 @@ class ZipWriter {
       const extra = big ? Buffer.alloc(12) : Buffer.alloc(0);
       if (big) { extra.writeUInt16LE(1, 0); extra.writeUInt16LE(8, 2); extra.writeBigUInt64LE(BigInt(e.offset), 4); }
       const c = Buffer.alloc(46);
-      c.writeUInt32LE(0x02014b50, 0); c.writeUInt16LE(big ? 45 : 20, 4); c.writeUInt16LE(big ? 45 : 20, 6); c.writeUInt16LE(0x0800, 8); c.writeUInt16LE(0, 10);
-      c.writeUInt16LE(e.time, 12); c.writeUInt16LE(e.date, 14); c.writeUInt32LE(e.crc, 16); c.writeUInt32LE(e.size, 20); c.writeUInt32LE(e.size, 24);
+      c.writeUInt32LE(0x02014b50, 0); c.writeUInt16LE(big ? 45 : 20, 4); c.writeUInt16LE(big ? 45 : 20, 6); c.writeUInt16LE(0x0800, 8); c.writeUInt16LE(e.method, 10);
+      c.writeUInt16LE(e.time, 12); c.writeUInt16LE(e.date, 14); c.writeUInt32LE(e.crc, 16); c.writeUInt32LE(e.csize, 20); c.writeUInt32LE(e.size, 24);
       c.writeUInt16LE(e.nm.length, 28); c.writeUInt16LE(extra.length, 30); c.writeUInt32LE(big ? 0xffffffff : e.offset, 42);
       await this.write(c); await this.write(e.nm); if (extra.length) await this.write(extra);
     }
@@ -147,7 +150,8 @@ const POST_FIELDS = 'id,title,content,excerpt,date,date_gmt,status,slug,categori
 const STATUSES = 'publish,future,draft,pending,private';
 // deps = { listAll(ruta) → [] (todas las páginas de la API), media: [] (biblioteca), download(url) → Buffer|null, siteName, siteUrl }
 // opts = { file, photos, onProgress(p), cancelled() → bool }
-async function createBackup(deps, { file, photos = true, onProgress = () => {}, cancelled = () => false } = {}) {
+// zip/prefix: para escribir dentro de un ZIP ya abierto (la copia de emergencia) en la carpeta «prefix»; entonces no lo cierra
+async function createBackup(deps, { file, photos = true, onProgress = () => {}, cancelled = () => false, zip: extZip = null, prefix = '' } = {}) {
   const stop = () => { if (cancelled()) throw new Error('Cancelado'); };
   onProgress({ step: 'entradas' });
   const [posts, pages, cats, tags] = [
@@ -171,9 +175,9 @@ async function createBackup(deps, { file, photos = true, onProgress = () => {}, 
     result.bytes = Buffer.byteLength(xml);
     return result;
   }
-  const zip = new ZipWriter(file);
+  const zip = extZip || new ZipWriter(file);
   try {
-    await zip.add('ecos-copia-de-seguridad.xml', Buffer.from(xml, 'utf8'));
+    await zip.add(prefix + 'ecos-copia-de-seguridad.xml', Buffer.from(xml, 'utf8'));
     const files = [...new Map(attachments.filter((a) => a.rel && a.url).map((a) => [a.rel, a])).values()];
     const total = files.length;
     let done = 0;
@@ -184,14 +188,13 @@ async function createBackup(deps, { file, photos = true, onProgress = () => {}, 
       const bufs = await Promise.all(batch.map((a) => Promise.resolve(deps.download(a.url)).catch(() => null)));
       stop();
       for (let k = 0; k < batch.length; k++) {
-        if (bufs[k]) { await zip.add('uploads/' + batch[k].rel, bufs[k], new Date(batch[k].date || Date.now())); result.files++; result.bytes += bufs[k].length; } else result.missing++;
+        if (bufs[k]) { await zip.add(prefix + 'uploads/' + batch[k].rel, bufs[k], new Date(batch[k].date || Date.now())); result.files++; result.bytes += bufs[k].length; } else result.missing++;
         onProgress({ step: 'fotos', done: ++done, total, file: batch[k].rel });
       }
     }
-    onProgress({ step: 'guardar' });
-    await zip.finish();
+    if (!extZip) { onProgress({ step: 'guardar' }); await zip.finish(); }
   } catch (e) {
-    try { zip.out.destroy(); fs.unlinkSync(file); } catch { /* ya no está */ }
+    if (!extZip) { try { zip.out.destroy(); fs.unlinkSync(file); } catch { /* ya no está */ } }
     throw e;
   }
   return result;

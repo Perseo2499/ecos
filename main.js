@@ -1486,6 +1486,97 @@ handle('backup:create', async (opts = {}) => {
   } finally { webBackupJob = null; }
 });
 
+// --- Copia de emergencia: contenido + copia visual navegable + configuración + guía, en un ZIP (src/emergency.js) ---
+const EM = () => require('./src/emergency');
+const emDefaultDir = () => path.join(app.getPath('documents'), 'Ecos', 'Copias de emergencia');
+const emCfg = () => ({ dir: '', auto: 'weekly', keep: 4, lastAttempt: 0, lastFailed: false, lastError: '', ...(cfg.emergency || {}) });
+const emDir = () => emCfg().dir || emDefaultDir();
+const emSaveCfg = (patch) => { cfg.emergency = { ...emCfg(), ...patch }; store.save(cfg); };
+const emSend = (ch, p) => { if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send(ch, p); };
+let emJob = null;
+function emState() {
+  const c = emCfg();
+  return {
+    dir: emDir(), defaultDir: emDefaultDir(), custom: !!c.dir, auto: c.auto, keep: c.keep, lastError: c.lastError || '',
+    copies: EM().listCopies(emDir()).map((x) => ({ name: x.name, at: x.at, bytes: x.bytes })),
+    running: emJob ? { auto: emJob.auto, startedAt: emJob.startedAt, last: emJob.last || null } : null,
+    canRun: isSelf() && wpIsConnected(),
+  };
+}
+async function emRun({ auto = false } = {}) {
+  if (!isSelf() || !wpIsConnected()) throw new Error('La copia de emergencia solo está disponible con «Mi web (wp-admin)» conectada en Conexiones → WordPress.');
+  if (emJob) throw new Error('Ya se está haciendo una copia de emergencia');
+  const job = emJob = { stop: false, ctrl: new AbortController(), auto, startedAt: Date.now(), last: null };
+  const c = emCfg();
+  emSaveCfg({ lastAttempt: Date.now() });
+  try {
+    await refreshHelper(false).catch(() => {});
+    const helper = cfg.ecosHelper;
+    const me = cfg.wpMe || await wpCall(() => wpself.me(cfg)).catch(() => null);
+    const media = await mediaAll(false).catch(() => []);
+    const r = await EM().runEmergency({
+      siteName: wpLabel(), siteUrl: wpself.publicBase(cfg), media, me: me || {}, ecosVersion: app.getVersion(),
+      listAll: (route) => wpCall(() => wpself.allParallel(cfg, route, { conc: 3 })),
+      getJson: (route) => wpCall(() => wpself.getJson(cfg, route)),
+      exportData: helper?.installed && wpself.helperHasExport(helper.version) ? () => wpCall(() => wpself.helperExport(cfg)) : null,
+      download: async (url) => { const res = await fetch(url, { signal: job.ctrl.signal }); return res.ok ? Buffer.from(await res.arrayBuffer()) : null; },
+    }, { dir: emDir(), keep: c.keep, delayMs: 250, signal: job.ctrl.signal, cancelled: () => job.stop, onProgress: (p) => { job.last = p; emSend('emergency:progress', { ...p, auto }); } });
+    emSaveCfg({ lastFailed: false, lastError: '' });
+    log(`Copia de emergencia${auto ? ' (automática)' : ''}: ${r.posts} entradas, ${r.pages} páginas, ${r.photos} fotos, ${r.visualPages} páginas visuales, ${r.visualAssets} recursos → ${r.file}`);
+    emSend('emergency:done', { ok: true, auto, name: r.name, bytes: r.bytes, notes: r.notes.length });
+    return { name: r.name, bytes: r.bytes, posts: r.posts, pages: r.pages, photos: r.photos, visualPages: r.visualPages, visualAssets: r.visualAssets, notes: r.notes };
+  } catch (e) {
+    const cancelled = /Cancelado/.test(e.message);
+    if (!cancelled) emSaveCfg({ lastFailed: true, lastError: e.message });
+    log('Copia de emergencia: ' + (cancelled ? 'cancelada' : 'error ' + e.message));
+    emSend('emergency:done', { ok: false, auto, cancelled, error: e.message });
+    throw e;
+  } finally { emJob = null; }
+}
+handle('emergency:state', () => emState());
+handle('emergency:settings', (p = {}) => {
+  const patch = {};
+  if ('auto' in p) { if (!['never', 'weekly', 'monthly'].includes(p.auto)) throw new Error('Frecuencia no válida'); patch.auto = p.auto; }
+  if ('keep' in p) patch.keep = Math.max(1, Math.min(50, Math.floor(Number(p.keep)) || 4));
+  if ('dir' in p) patch.dir = String(p.dir || '').trim();
+  emSaveCfg(patch);
+  return emState();
+});
+handle('emergency:pickDir', async () => {
+  const r = await dialog.showOpenDialog(mainWin, { title: 'Carpeta para las copias de emergencia', defaultPath: emDir(), properties: ['openDirectory', 'createDirectory'] });
+  return r.canceled || !r.filePaths[0] ? null : r.filePaths[0];
+});
+handle('emergency:run', () => emRun({ auto: false }));
+handle('emergency:cancel', () => { if (emJob) { emJob.stop = true; emJob.ctrl.abort(); } return true; });
+handle('emergency:open', async (kind, name) => {
+  const dir = emDir();
+  if (kind === 'folder') { fs.mkdirSync(dir, { recursive: true }); const e = await shell.openPath(dir); if (e) throw new Error(e); return true; }
+  const file = path.join(dir, path.basename(String(name || '')));
+  if (!EM().listCopies(dir).some((x) => x.file === file)) throw new Error('Esa copia ya no está en la carpeta');
+  if (kind === 'file') { shell.showItemInFolder(file); return true; }
+  if (kind === 'visual') {
+    // la copia visual vive dentro del ZIP: se descomprime en una carpeta de trabajo de Ecos y se abre en el navegador
+    const root = path.join(app.getPath('userData'), 'visual-open');
+    fs.rmSync(root, { recursive: true, force: true });
+    const index = await EM().extractVisual(file, path.join(root, path.basename(file, '.zip')));
+    const e = await shell.openPath(index); if (e) throw new Error(e);
+    return true;
+  }
+  throw new Error('Acción no válida');
+});
+// Copia automática al abrir Ecos si toca (sin molestar: un par de minutos después de arrancar y con pausas entre peticiones)
+async function emAutoCheck() {
+  try {
+    if (isLocked() || emJob || !isSelf() || !wpIsConnected()) return;
+    const c = emCfg(), dir = emDir();
+    const interrupted = EM().cleanPartials(dir) > 0; // se cerró Ecos a medias: se vuelve a empezar
+    const last = EM().listCopies(dir)[0];
+    if (!EM().shouldAutoRun({ auto: c.auto, lastCopyAt: last?.at || 0, lastAttempt: c.lastAttempt, lastFailed: c.lastFailed && !interrupted })) return;
+    log('Copia de emergencia automática: toca hacerla' + (interrupted ? ' (la anterior se quedó a medias)' : ''));
+    await emRun({ auto: true });
+  } catch (e) { if (!/Cancelado/.test(e.message)) log('Copia de emergencia automática: ' + e.message); }
+}
+
 // --- Restaurar entradas desde una copia de seguridad (src/backup.js) ---
 let backupAn = null;
 const backupMod = () => require('./src/backup');
@@ -1971,6 +2062,7 @@ app.whenReady().then(() => {
     }
     updater.setBeta(!!cfg.prefs?.betaChannel);
     queueSave(); // programa los envíos pendientes
+    setTimeout(emAutoCheck, 120000).unref?.(); // copia de emergencia automática, si toca
     updater.init((st) => {
       if (st.state === 'error') log('Actualizador:', st.message);
       if (!mainWin.isDestroyed()) mainWin.webContents.send('update:status', { version: app.getVersion(), ...st });

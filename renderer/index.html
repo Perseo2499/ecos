@@ -680,6 +680,29 @@
             <div class="bw-prog hidden" id="bw-prog"><div class="bw-bar"><i></i></div><span id="bw-txt"></span><button id="bw-cancel" class="btn text small" data-i18n>Cancelar</button></div>
             <div class="card-actions"><button id="bw-create" class="btn filled"><span class="ms">cloud_download</span><span data-i18n>Crear copia de la web</span></button></div>
           </div>
+
+          <div class="bw" id="em">
+            <h3><span class="ms">emergency_home</span><span data-i18n>Copia de emergencia</span></h3>
+            <p class="hint" data-i18n>Un solo ZIP con todo lo necesario para volver a levantar la web si se pierde: el contenido y las fotos, una copia navegable de cómo se ve ahora (se abre sin internet), la configuración (menús, ajustes y personalizador de Astra, CSS adicional, plugins y temas con su versión) y una guía de recuperación paso a paso.</p>
+            <p class="hint" id="em-note"></p>
+            <div class="em-dir"><span class="ms">folder</span><code id="em-dir"></code><button id="em-pick" class="btn text small" data-i18n>Cambiar carpeta</button><button id="em-reset" class="btn text small hidden" data-i18n>Usar la predeterminada</button></div>
+            <p class="hint" data-i18n>Puede ser una carpeta de Google Drive (o de otro servicio en la nube) para que la copia quede también fuera de este ordenador.</p>
+            <div class="em-sets">
+              <label class="em-set"><span data-i18n>Copias automáticas</span>
+                <select id="em-auto"><option value="never" data-i18n>Nunca</option><option value="weekly" data-i18n>Semanal</option><option value="monthly" data-i18n>Mensual</option></select></label>
+              <label class="em-set"><span data-i18n>Conservar las últimas</span><input id="em-keep" type="number" min="1" max="50" inputmode="numeric"></label>
+            </div>
+            <p class="hint" data-i18n>Las copias automáticas se hacen al abrir Ecos, si toca, en segundo plano y con pausas para no cargar tu web.</p>
+            <div class="em-prog hidden" id="em-prog">
+              <ol class="em-phases" id="em-phases"></ol>
+              <div class="bw-prog"><div class="bw-bar"><i></i></div><span id="em-txt"></span><button id="em-cancel" class="btn text small" data-i18n>Cancelar</button></div>
+            </div>
+            <div class="card-actions"><button id="em-run" class="btn filled"><span class="ms">emergency_home</span><span data-i18n>Hacer copia de emergencia ahora</span></button></div>
+            <div class="em-done hidden" id="em-done"><span id="em-done-txt"></span>
+              <button id="em-open-folder" class="btn tonal small"><span class="ms">folder_open</span><span data-i18n>Abrir la carpeta</span></button>
+              <button id="em-open-visual" class="btn tonal small"><span class="ms">web</span><span data-i18n>Abrir la copia visual</span></button></div>
+            <div class="em-list" id="em-list"></div>
+          </div>
         </div>
 
         <div class="card restore-card" id="set-restore">
@@ -1025,6 +1048,7 @@
 <script src="app/settings.js"></script>
 <script src="app/restore.js"></script>
 <script src="app/webbackup.js"></script>
+<script src="app/emergency.js"></script>
 <script src="app/home.js"></script>
 <script src="app/autodrafts.js"></script>
 <script src="app/search.js"></script>

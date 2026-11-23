@@ -2205,6 +2205,32 @@ span.pv-pill[data-pill]:hover { background: var(--primary); color: var(--on-prim
 @keyframes bw-slide { 0% { left: -35%; } 100% { left: 100%; } }
 .bw-prog .btn { width: auto; margin: 0; }
 
+/* Copia de emergencia (Ajustes) */
+.em-dir { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; border-radius: var(--r-m, 12px); background: var(--surface-c-high); }
+.em-dir .ms { color: var(--primary); }
+.em-dir code { flex: 1 1 200px; min-width: 0; font-size: 12.5px; word-break: break-all; color: var(--on-surface); background: none; }
+.em-dir .btn { width: auto; margin: 0; }
+.em-sets { display: flex; flex-wrap: wrap; gap: 12px 24px; }
+.em-set { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--on-surface); }
+.em-set select, .em-set input { width: auto; min-width: 0; }
+.em-set input { width: 72px; }
+.em-prog { display: flex; flex-direction: column; gap: 10px; }
+.em-prog.hidden, .em-done.hidden { display: none; }
+.em-phases { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 8px; }
+.em-phases li { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 3px 12px 3px 8px; border-radius: var(--r-full); background: var(--surface-c-high); color: var(--on-surface-var); }
+.em-phases li .ms { font-size: 16px; }
+.em-phases li.on { background: var(--secondary-container); color: var(--on-primary-container); font-weight: 600; }
+.em-phases li.done { color: var(--primary); }
+.em-done { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border-radius: var(--r-m, 12px); background: var(--secondary-container); color: var(--on-primary-container); font-size: 13.5px; }
+.em-done .btn { width: auto; margin: 0; }
+.em-list { display: flex; flex-direction: column; }
+.em-list .em-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 0; font-size: 13.5px; }
+.em-list .em-row + .em-row { border-top: 1px solid var(--outline-var); }
+.em-list .em-row b { font-weight: 600; }
+.em-list .em-row .sz { color: var(--on-surface-var); }
+.em-list .em-row .sp { flex: 1; }
+.em-list .em-row .btn { width: auto; margin: 0; }
+
 /* Editor: cómo se verá (Google y redes), avisos de SEO y compartir en Facebook */
 .seo-tabs { display: flex; gap: 4px; margin: 0 0 8px; padding: 3px; border-radius: var(--r-full); background: var(--surface-c-high); width: fit-content; }
 .seo-tabs button { border: 0; background: none; color: var(--on-surface-var); font: inherit; font-size: 12.5px; padding: 5px 14px; border-radius: var(--r-full); cursor: pointer; }

@@ -163,6 +163,14 @@ contextBridge.exposeInMainWorld('api', {
   backupCreate: (opts) => call('backup:create', opts),
   backupCancelCreate: () => call('backup:cancelCreate'),
   onBackupCreateProgress: on('backup:createProgress'),
+  emergencyState: () => call('emergency:state'),
+  emergencySettings: (p) => call('emergency:settings', p),
+  emergencyPickDir: () => call('emergency:pickDir'),
+  emergencyRun: () => call('emergency:run'),
+  emergencyCancel: () => call('emergency:cancel'),
+  emergencyOpen: (kind, name) => call('emergency:open', kind, name),
+  onEmergencyProgress: on('emergency:progress'),
+  onEmergencyDone: on('emergency:done'),
 
   // Modo desarrollador: terminal integrada
   devTools: () => call('dev:tools'),

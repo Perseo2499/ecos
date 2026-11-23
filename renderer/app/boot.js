@@ -201,6 +201,7 @@ window.api.onConfigChanged((c) => { CFG = { ...CFG, ...c }; renderStatus(); });
   Home.show(); // Inicio es lo primero que se ve (se pinta enseguida y se rellena al llegar los datos)
   if (CFG.wpConnected) { loadCategories(); refreshExported(true); }
   checkTokenExpiry();
+  if (typeof checkEmergency === "function") checkEmergency(); // aviso si la última copia de emergencia es antigua
   if (CFG.metaConnected) {
     try { renderPages(await window.api.metaAccounts()); checkNewSocial(); } catch (e) { toastError(e); }
   }
