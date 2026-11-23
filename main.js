@@ -230,15 +230,6 @@ async function purgeAfterSend(post) {
     return named.length ? 'Caché de la página vaciada (' + named.join(', ') + ')' : 'Caché de la página vaciada';
   } catch (e) { log('No se pudo vaciar la caché', e.message); return ''; }
 }
-handle('helper:check', async () => { await refreshHelper(true); return publicCfg(); });
-handle('helper:save', async () => {
-  const r = await dialog.showSaveDialog(mainWin, { title: 'Guardar el Complemento de Ecos', defaultPath: path.join(app.getPath('downloads'), 'ecos-wordpress.zip'), filters: [{ name: 'ZIP', extensions: ['zip'] }] });
-  if (r.canceled || !r.filePath) return null;
-  let src = app.isPackaged ? path.join(process.resourcesPath, 'ecos-wordpress.zip') : null;
-  if (!src || !fs.existsSync(src)) src = require('./scripts/build-wp-plugin').build(path.join(app.getPath('temp'), 'ecos-wordpress.zip')).out;
-  fs.copyFileSync(src, r.filePath);
-  return r.filePath;
-});
 
 // Envuelve llamadas a WordPress: si rechaza el permiso, se desconecta y se avisa
 const wpCall = async (fn) => { try { return await fn(); } catch (e) { throw e instanceof wp.AuthError ? wpAuthFailed(e) : e; } };
@@ -261,6 +252,16 @@ const isLocked = () => !!cfg && store.isLocked(cfg);
 const handle = (name, fn) => ipcMain.handle(name, async (_e, ...args) => {
   if (isLocked() && !LOCK_OK.has(name)) return { ok: false, error: 'Ecos está bloqueada' };
   try { return { ok: true, data: await fn(...args) }; } catch (err) { return { ok: false, error: err.message }; }
+});
+// Complemento de Ecos para WordPress (después de definir handle: antes daba «Cannot access 'handle' before initialization» al arrancar)
+handle('helper:check', async () => { await refreshHelper(true); return publicCfg(); });
+handle('helper:save', async () => {
+  const r = await dialog.showSaveDialog(mainWin, { title: 'Guardar el Complemento de Ecos', defaultPath: path.join(app.getPath('downloads'), 'ecos-wordpress.zip'), filters: [{ name: 'ZIP', extensions: ['zip'] }] });
+  if (r.canceled || !r.filePath) return null;
+  let src = app.isPackaged ? path.join(process.resourcesPath, 'ecos-wordpress.zip') : null;
+  if (!src || !fs.existsSync(src)) src = require('./scripts/build-wp-plugin').build(path.join(app.getPath('temp'), 'ecos-wordpress.zip')).out;
+  fs.copyFileSync(src, r.filePath);
+  return r.filePath;
 });
 
 const PROTECTED_KEYS = new Set(['lock', 'vault', '__totp', '__recovery', 'metaUserToken', 'wpToken', 'gpAccessToken', 'gpRefreshToken', 'gpTokenExpires', 'sentContent', 'restored', 'exported', 'origUploads', 'mediaHashes']);

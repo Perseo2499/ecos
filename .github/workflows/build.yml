@@ -68,6 +68,7 @@ jobs:
           if (Test-Path $log) { Write-Host "--- ecos.log ---"; Get-Content $log }
           else { Write-Host "No se ha creado ecos.log" }
           if ((Test-Path $log) -and (Select-String -Path $log -Pattern "Autocomprobaci.n terminal: (FALLO|ERROR)" -Quiet)) { Write-Error "La terminal integrada no funciona en Windows"; exit 1 }
+          if ((Test-Path $log) -and (Select-String -Path $log -Pattern "ERROR FATAL" -Quiet)) { Get-Process Ecos -ErrorAction SilentlyContinue | Stop-Process -Force; Write-Error "Ecos no ha podido arrancar (ERROR FATAL en ecos.log)"; exit 1 }
           Get-Process Ecos -ErrorAction SilentlyContinue | Stop-Process -Force
           if (-not $vivo) { Write-Error "Ecos se ha cerrado al arrancar (código $($p.ExitCode))"; exit 1 }
       - name: Versión
