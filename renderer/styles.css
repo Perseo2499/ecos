@@ -2698,3 +2698,12 @@ body:has(.tab.active .b-bulk.on) #toast { bottom: 120px; }
 .imp-it { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 0; border-radius: var(--r-m); background: var(--surface-c-high); color: var(--on-surface); font: inherit; text-align: left; cursor: pointer; }
 .imp-it:hover, .imp-it:focus-visible { box-shadow: inset 0 0 0 1px var(--primary); outline: none; }
 .imp-it b { flex: 1; } .imp-it .ms { color: var(--primary); }
+
+/* Registro de errores (Ajustes → Avanzado) */
+.log-box { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--outline-var); }
+.log-box h3 { display: flex; align-items: center; gap: 8px; font-size: 15px; margin: 0 0 6px; }
+.log-view { font-family: ui-monospace, 'Cascadia Mono', Consolas, 'Courier New', monospace; font-size: 12px; line-height: 1.5; white-space: pre; overflow: auto; min-height: 220px; margin: 8px 0 4px; resize: vertical; tab-size: 4; }
+
+/* Historial: secciones de la lista (versiones de WordPress / copias de Ecos) */
+.hist-sec { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--on-surface-var); padding: 10px 12px 4px; }
+.hist-sec:first-child { padding-top: 4px; }

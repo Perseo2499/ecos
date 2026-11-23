@@ -852,7 +852,7 @@ test('imagen y texto: tamaño, alineación, rellenar y estilo hacen ida y vuelta
   const b = { id: 'm', type: 'mediatext', img: mtImg(5), html: 'Hola<br><br>Dos', right: true, mediaWidth: 33, valign: 'bottom', fill: true, ratio: '4/3', frame: 'border', frameColor: '#cc0000', fx: 'zoom' };
   const html = T.composeBlocks([b]);
   assert.match(html, /<!-- wp:media-text \{[^}]*"mediaPosition":"right"[^}]*"mediaWidth":33[^}]*"verticalAlignment":"bottom"[^}]*"imageFill":true/);
-  assert.match(html, /is-vertically-aligned-bottom is-image-fill" style="grid-template-columns:auto 33%"/);
+  assert.match(html, /is-vertically-aligned-bottom is-image-fill-element" style="grid-template-columns:auto 33%"/);
   assert.match(html, /<style class="ecos-fx">.*ecos-mt-zoom/);
   const back = P.parseBlocks(html);
   assert.equal(back.length, 1);
@@ -945,8 +945,9 @@ test('imagen y texto: el formato del texto (alineación, tamaño, color, fuente)
 
 test('texto justificado: la clase de WordPress y la regla que lo asegura aunque el tema no la traiga', () => {
   const html = T.composeBlocks([{ id: 'p', type: 'paragraph', html: 'Hola', align: 'justify' }]);
-  assert.match(html, /class="has-text-align-justify"/);
-  assert.match(html, /<style class="ecos-fx">[^<]*\.has-text-align-justify\{text-align:justify\}/);
+  // WordPress actual no admite «justify» en el párrafo: clase propia (válida en cualquier versión) y su regla
+  assert.match(html, /<p class="ecos-justify">/);
+  assert.match(html, /<style class="ecos-fx">[^<]*\.ecos-justify,\.has-text-align-justify\{text-align:justify\}/);
   assert.doesNotMatch(T.composeBlocks([{ id: 'p', type: 'paragraph', html: 'Hola' }]), /ecos-fx/);
 });
 
@@ -997,7 +998,7 @@ test('vídeo suelto con estilo: ida y vuelta de colocación, recorte, marco y ef
   const b = { id: 'v1', type: 'video', video: v, caption: '', align: 'right', width: 33, ratio: '16/9', frame: 'rounded', fx: 'zoom' };
   const html = T.composeBlocks([b]);
   assert.match(html, /<!-- wp:video \{"autoplay":true,"controls":false,"loop":true,"muted":true,"playsInline":true,"id":3,"className":"ecos-v-a-right ecos-v-w-33 ecos-v-r-16-9 ecos-v-rounded ecos-v-zoom ecos-vp"\} -->/);
-  assert.match(html, /<video autoplay loop muted preload="metadata" src="v\.mp4" playsinline><\/video>/);
+  assert.match(html, /<video autoplay loop muted src="v\.mp4" playsinline><\/video>/);
   assert.match(html, /<script class="ecos-vjs">new Function\(atob\("[A-Za-z0-9+\/=]+"\)\)\(\)<\/script>/);
   assert.match(html, /<figure class="wp-block-video ecos-v-a-right/);
   assert.match(html, /<style class="ecos-fx">.*\.wp-block-video\.ecos-v-rounded\{border-radius:16px;overflow:hidden\}/);

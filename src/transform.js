@@ -71,11 +71,11 @@ function videoBlock(v, cap = '', place = {}, fx = null) {
   if (v.id) attrs.id = Number(v.id) || v.id;
   attrs.className = cn.join(' ');
   const json = ' ' + JSON.stringify(attrs);
-  return `<!-- wp:video${json} -->\n<figure class="${['wp-block-video', ...cn].join(' ')}"><video autoplay loop muted preload="metadata" src="${esc(v.url)}" playsinline></video>${c ? `<figcaption class="wp-element-caption">${c}</figcaption>` : ''}</figure>\n<!-- /wp:video -->`;
+  return `<!-- wp:video${json} -->\n<figure class="${['wp-block-video', ...cn].join(' ')}"><video autoplay loop muted src="${esc(v.url)}" playsinline></video>${c ? `<figcaption class="wp-element-caption">${c}</figcaption>` : ''}</figure>\n<!-- /wp:video -->`;
 }
 
 function embedBlock(url, provider) {
-  return `<!-- wp:embed {"url":"${url}","type":"rich","providerNameSlug":"${provider}"} -->\n<figure class="wp-block-embed is-type-rich is-provider-${provider}"><div class="wp-block-embed__wrapper">\n${url}\n</div></figure>\n<!-- /wp:embed -->`;
+  return `<!-- wp:embed {"url":"${url}","type":"rich","providerNameSlug":"${provider}"} -->\n<figure class="wp-block-embed is-type-rich is-provider-${provider} wp-block-embed-${provider}"><div class="wp-block-embed__wrapper">\n${url}\n</div></figure>\n<!-- /wp:embed -->`;
 }
 
 // Redes donde estaba la publicación (la propia + las duplicadas que se juntaron con ella)
@@ -267,8 +267,8 @@ const FX_CSS = {
   // con esquinas redondeadas, el marco que recorta el zoom también las lleva (si no, al ampliar salen picos)
   zoom: '.wp-block-image.ecos-zoom:has(img[style*="border-radius:16px"]){border-radius:16px;width:fit-content;max-width:100%}.wp-block-image.ecos-zoom.is-style-rounded{border-radius:9999px;width:fit-content;max-width:100%}.wp-block-image.ecos-zoom{overflow:hidden}.wp-block-image.ecos-zoom img{transition:transform .5s cubic-bezier(.2,0,0,1)}.wp-block-image.ecos-zoom:hover img{transform:scale(1.08)}',
   bw: '.wp-block-image.ecos-bn img{filter:grayscale(1)}',
-  // el tema puede no traer la clase de WordPress para «justificado»: se asegura aquí (sin tocar el bloque, que sigue siendo válido en WordPress)
-  justify: '.has-text-align-justify{text-align:justify}',
+  // texto justificado (clase propia ecos-justify; la de WordPress, has-text-align-justify, de entradas antiguas)
+  justify: '.ecos-justify,.has-text-align-justify{text-align:justify}',
   vplay: '.wp-block-video.ecos-vp{position:relative}.wp-block-video.ecos-vp video{display:block;width:100%}',
   iconos: '.wp-block-list.ecos-iconos{list-style:none;padding-left:0}.wp-block-list.ecos-iconos li{margin:.4em 0}.ecos-iconos .ecos-ico{display:inline-block;min-width:1.6em;color:#fd9800;font-weight:700}',
 };
@@ -278,14 +278,14 @@ Object.assign(FX_CSS, {
   'mt-rounded': `${MT}.ecos-mt-rounded .wp-block-media-text__media{border-radius:16px;overflow:hidden}`,
   'mt-circle': `${MT}.ecos-mt-circle .wp-block-media-text__media{border-radius:9999px;overflow:hidden}`,
   'mt-shadow': `${MT}.ecos-mt-shadow .wp-block-media-text__media{box-shadow:6px 6px 9px rgba(0,0,0,.2)}`,
-  'mt-border': `${MT}.ecos-mt-border .wp-block-media-text__media{box-sizing:border-box}`,
+  'mt-border': `${MT}.ecos-mt-border .wp-block-media-text__media{border:2px solid #333333;box-sizing:border-box}`,
   'mt-zoom': `${MT}.ecos-mt-zoom .wp-block-media-text__media{overflow:hidden}${MT}.ecos-mt-zoom img{transition:transform .5s cubic-bezier(.2,0,0,1)}${MT}.ecos-mt-zoom:hover img{transform:scale(1.08)}`,
   'mt-bw': `${MT}.ecos-mt-bn .wp-block-media-text__media{filter:grayscale(1)}`,
   // WordPress deja un 8 % de margen a cada lado del texto: el texto queda metido hacia dentro. Ecos lo alinea con el
   // resto de la página y deja solo una separación entre la foto y el texto (en el móvil, debajo de la foto)
   mt: `${MT}.ecos-mt>.wp-block-media-text__content{padding:0 0 0 2em}${MT}.ecos-mt.has-media-on-the-right>.wp-block-media-text__content{padding:0 2em 0 0}@media (max-width:600px){${MT}.ecos-mt.is-stacked-on-mobile>.wp-block-media-text__content{padding:1em 0 0}}`,
 });
-for (const r of ['1', '4/3', '3/2', '16/9', '9/16']) { const c = r.replace('/', '-'); FX_CSS['mt-r-' + c] = `${MT}.ecos-mt-r-${c}:not(.is-image-fill) img{aspect-ratio:${r};object-fit:cover;height:auto}`; }
+for (const r of ['1', '4/3', '3/2', '16/9', '9/16']) { const c = r.replace('/', '-'); FX_CSS['mt-r-' + c] = `${MT}.ecos-mt-r-${c}:not(.is-image-fill):not(.is-image-fill-element) img{aspect-ratio:${r};object-fit:cover;height:auto}`; }
 const VC = '.wp-block-video.ecos-v-';
 Object.assign(FX_CSS, {
   'v-rounded': `${VC}rounded{border-radius:16px;overflow:hidden}`,
@@ -323,7 +323,9 @@ Object.assign(FX_CSS, {
 });
 const FX_MARK = 'ecos-fx';
 function fxBlock(set) {
-  const css = Object.keys(FX_CSS).filter((k) => set.has(k)).map((k) => FX_CSS[k]).join('');
+  const dyn = [...set].filter((k) => /^mt-bc-[0-9a-f]{3,8}$/.test(k)).sort()
+    .map((k) => `${MT}.ecos-${k} .wp-block-media-text__media{border-color:#${k.slice(6)}}`).join('');
+  const css = Object.keys(FX_CSS).filter((k) => set.has(k)).map((k) => FX_CSS[k]).join('') + dyn;
   const js = set.has('vplay') && VIDEOS_B64() ? `<script class="ecos-vjs">new Function(atob("${VIDEOS_B64()}"))()</script>` : '';
   return `<!-- wp:html -->\n<style class="${FX_MARK}">${css}</style>${js}\n<!-- /wp:html -->`;
 }
@@ -356,7 +358,7 @@ function imageBlockFull(img, cap = '', place = {}, fx = null) {
   if (cn.length) attrs.className = cn.join(' ');
   if (Object.keys(st).length) attrs.style = st;
   figCls.push(...cn);
-  const cls = imgId(img) ? `wp-image-${imgId(img)}` : '';
+  const cls = [frame === 'border' ? 'has-border-color' : '', imgId(img) ? `wp-image-${imgId(img)}` : ''].filter(Boolean).join(' ');
   return `<!-- wp:image ${JSON.stringify(attrs)} -->\n<figure class="${figCls.join(' ')}"><img src="${esc(img.url)}"${alt}${cls ? ` class="${cls}"` : ''}${css.length ? ` style="${css.join(';')}"` : ''}/>${caption(cap)}</figure>\n<!-- /wp:image -->`;
 }
 
@@ -442,8 +444,11 @@ function mediaTextBlock(b, fx = null) {
   if (ratio) cn.push('ecos-mt-r-' + ratio.replace('/', '-'));
   const frame = MT_FRAMES.includes(b.frame) ? b.frame : '';
   if (frame) cn.push('ecos-mt-' + frame);
+  // el color del borde no puede ir en un estilo de la foto (WordPress lo daría por inválido): clase por color + su CSS en ecos-fx
+  const bcol = frame === 'border' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(b.frameColor || '') && b.frameColor.slice(1).toLowerCase();
+  if (bcol && bcol !== '333333') { cn.push('ecos-mt-bc-' + bcol); fx?.add('mt-bc-' + bcol); }
   if (b.fx === 'zoom') cn.push('ecos-mt-zoom'); else if (b.fx === 'bw') cn.push('ecos-mt-bn');
-  cn.forEach((c) => fx?.add(c === 'ecos-mt-bn' ? 'mt-bw' : c.replace('ecos-', '')));
+  cn.forEach((c) => !c.startsWith('ecos-mt-bc-') && fx?.add(c === 'ecos-mt-bn' ? 'mt-bw' : c.replace('ecos-', '')));
   const attrs = {};
   if (right) attrs.mediaPosition = 'right';
   if (imgId(img)) attrs.mediaId = imgId(img);
@@ -452,15 +457,17 @@ function mediaTextBlock(b, fx = null) {
   if (va) attrs.verticalAlignment = va;
   if (fill) attrs.imageFill = true;
   if (cn.length) attrs.className = cn.join(' ');
-  const cls = ['wp-block-media-text', ...(cn), ...(right ? ['has-media-on-the-right'] : []), 'is-stacked-on-mobile', ...(va ? ['is-vertically-aligned-' + va] : []), ...(fill ? ['is-image-fill'] : [])];
+  // Como el save() de core/media-text: con la foto a la derecha, el texto va ANTES de la foto en el HTML; la foto
+  // «rellenar» lleva object-position en la <img> (clase is-image-fill-element); la <img> solo lleva clase si hay número
+  const cls = ['wp-block-media-text', ...(cn), ...(right ? ['has-media-on-the-right'] : []), 'is-stacked-on-mobile', ...(va ? ['is-vertically-aligned-' + va] : []), ...(fill ? ['is-image-fill-element'] : [])];
   const grid = mw !== 50 ? ` style="grid-template-columns:${right ? `auto ${mw}%` : `${mw}% auto`}"` : '';
-  const fig = [];
-  if (fill) fig.push(`background-image:url(${esc(img.url)})`, 'background-position:50% 50%');
-  if (frame === 'border') fig.push(`border:2px solid ${SAFE_COLOR.test(b.frameColor || '') ? b.frameColor : '#333333'}`);
   // el texto lleva el mismo formato que un párrafo (alineación, tamaño, fuente, color…), igual en cada párrafo
   const st = blockStyle(b, { fx });
   const text = sanitizeParagraphs(b.html).map((p) => `<!-- wp:paragraph${st.json} -->\n<p${st.cls ? ` class="${st.cls.trim()}"` : ''}${st.style}>${p}</p>\n<!-- /wp:paragraph -->`).join('\n');
-  return `<!-- wp:media-text ${JSON.stringify(attrs).replace(/--/g, '\\u002d\\u002d')} -->\n<div class="${cls.join(' ')}"${grid}><figure class="wp-block-media-text__media"${fig.length ? ` style="${fig.join(';')}"` : ''}><img src="${esc(img.url)}" alt="${esc(img.alt || '')}" class="${imgId(img) ? `wp-image-${imgId(img)} ` : ''}size-full"/></figure><div class="wp-block-media-text__content">${text}</div></div>\n<!-- /wp:media-text -->`;
+  const imgTag = `<img src="${esc(img.url)}" alt="${esc(img.alt || '')}"${imgId(img) ? ` class="wp-image-${imgId(img)} size-full"` : ''}${fill ? ' style="object-position:50% 50%"' : ''}/>`;
+  const media = `<figure class="wp-block-media-text__media">${imgTag}</figure>`;
+  const content = `<div class="wp-block-media-text__content">${text}</div>`;
+  return `<!-- wp:media-text ${JSON.stringify(attrs).replace(/--/g, '\\u002d\\u002d')} -->\n<div class="${cls.join(' ')}"${grid}>${right ? content + media : media + content}</div>\n<!-- /wp:media-text -->`;
 }
 
 function carouselBlock(b) {
@@ -529,7 +536,11 @@ const FONTS = {
 };
 function blockStyle(b, { alignKey = 'align', align = true, dropCap = false, fx = null } = {}) {
   const attrs = {}, cls = [], css = [];
-  if (align && ['center', 'right', 'justify'].includes(b.align)) { attrs[alignKey] = b.align; cls.push('has-text-align-' + b.align); if (b.align === 'justify') fx?.add('justify'); }
+  // «justify» no existe en el bloque de texto de WordPress actual (solo izquierda, centro y derecha): se marca con una clase
+  // propia (ecos-justify, CSS en el bloque ecos-fx) para que el bloque siga siendo válido en cualquier versión
+  const custom = [];
+  if (align && ['center', 'right'].includes(b.align)) { attrs[alignKey] = b.align; cls.push('has-text-align-' + b.align); }
+  if (align && b.align === 'justify') { custom.push('ecos-justify'); fx?.add('justify'); }
   if (dropCap && b.dropCap) { attrs.dropCap = true; cls.push('has-drop-cap'); }
   const st = {};
   const color = SAFE_COLOR.test(b.color || '') && b.color, bg = SAFE_COLOR.test(b.bg || '') && b.bg;
@@ -552,7 +563,8 @@ function blockStyle(b, { alignKey = 'align', align = true, dropCap = false, fx =
     st.border = { radius: '10px' };
     css.push('border-radius:10px', 'padding-top:14px', 'padding-right:18px', 'padding-bottom:14px', 'padding-left:18px');
   }
-  if (b.shadow && align) { attrs.className = 'ecos-sombra'; cls.push('ecos-sombra'); fx?.add('sombra'); }
+  if (b.shadow && align) { custom.push('ecos-sombra'); fx?.add('sombra'); }
+  if (custom.length) { attrs.className = custom.join(' '); cls.push(...custom); }
   if (Object.keys(st).length) attrs.style = st;
   const json = Object.keys(attrs).length ? ' ' + JSON.stringify(attrs) : '';
   return { json, attrs, cls: cls.length ? ' ' + cls.join(' ') : '', style: css.length ? ` style="${css.join(';')}"` : '' };
@@ -739,7 +751,7 @@ function coverBlock(b, opts, ctx) {
   const focal = img && fp && (fp.x !== 0.5 || fp.y !== 0.5) ? fp : null;
   const parallax = !!b.parallax && !!img;
   const attrs = {};
-  if (img) { attrs.url = img.url; if (imgId(img)) attrs.id = imgId(img); }
+  if (img) { attrs.url = img.url; if (imgId(img)) attrs.id = imgId(img) }
   if (focal) attrs.focalPoint = focal;
   if (parallax) attrs.hasParallax = true;
   attrs.dimRatio = dim; attrs.customOverlayColor = overlay;
@@ -751,21 +763,25 @@ function coverBlock(b, opts, ctx) {
   if (align) attrs.align = align;
   const mar = marginOf(b);
   if (mar.margin) attrs.style = { spacing: { margin: mar.margin } };
+  if (img && img.alt) attrs.alt = img.alt;
   attrs.layout = { type: 'constrained' };
   const cls = ['wp-block-cover'];
   if (align) cls.push('align' + align);
   if (parallax) cls.push('has-parallax');
   if (!dark) cls.push('is-light');
+  // Como el save() de core/cover: primero la foto, luego la capa de color (span) y al final el contenido
   const dimCls = ['wp-block-cover__background', 'has-background-dim'];
   if (grad) dimCls.push('has-background-gradient');
   if (dim !== 50) dimCls.push(`has-background-dim-${dim}`);
+  if (img && grad && dim !== 0) dimCls.push('wp-block-cover__gradient-background');
   const pos = focal ? `${Math.round(focal.x * 100)}% ${Math.round(focal.y * 100)}%` : '';
   const wpImg = imgId(img || {}) ? ` wp-image-${imgId(img)}` : '';
   let imgTag = '';
-  if (img && parallax) imgTag = `<div role="img" class="wp-block-cover__image-background${wpImg} has-parallax" style="background-position:${pos || '50% 50%'};background-image:url(${esc(img.url)})" aria-label="${esc(img.alt || '')}"></div>`;
-  else if (img) imgTag = `<img class="wp-block-cover__image-background${wpImg}" alt="${esc(img.alt || '')}" src="${esc(img.url)}"${pos ? ` style="object-position:${pos}"` : ''} data-object-fit="cover"${pos ? ` data-object-position="${pos}"` : ''}/>`;
+  if (img && parallax) imgTag = `<div${img.alt ? ` role="img"` : ''} class="wp-block-cover__image-background${wpImg} has-parallax" style="background-position:${pos || '50% 50%'};background-image:url(${esc(img.url)})"${img.alt ? ` aria-label="${esc(img.alt)}"` : ''}></div>`;
+  else if (img) imgTag = `<img class="wp-block-cover__image-background${wpImg}" alt="${esc(img.alt || '')}" src="${esc(img.url)}"${pos ? ` style="object-position:${pos}"` : ''}/>`;
   const style = [h ? `min-height:${h}px` : '', ...mar.css].filter(Boolean).join(';');
-  return `<!-- wp:cover ${JSON.stringify(attrs)} -->\n<div class="${cls.join(' ')}"${style ? ` style="${style}"` : ''}><span aria-hidden="true" class="${dimCls.join(' ')}" style="${grad ? 'background:' + grad : 'background-color:' + overlay}"></span>${imgTag}<div class="wp-block-cover__inner-container">${inner ? '\n' + inner + '\n' : ''}</div></div>\n<!-- /wp:cover -->`;
+  const veil = `background-color:${overlay}${grad ? ';background:' + grad : ''}`;
+  return `<!-- wp:cover ${JSON.stringify(attrs)} -->\n<div class="${cls.join(' ')}"${style ? ` style="${style}"` : ''}>${imgTag}<span aria-hidden="true" class="${dimCls.join(' ')}" style="${veil}"></span><div class="wp-block-cover__inner-container">${inner ? '\n' + inner + '\n' : ''}</div></div>\n<!-- /wp:cover -->`;
 }
 
 // Mapa: una dirección en un mapa de Google incrustado (bloque HTML), con alto y esquinas redondeadas
