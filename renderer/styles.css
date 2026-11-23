@@ -2736,3 +2736,25 @@ body:has(.tab.active .b-bulk.on) #toast { bottom: 120px; }
 /* Historial: secciones de la lista (versiones de WordPress / copias de Ecos) */
 .hist-sec { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--on-surface-var); padding: 10px 12px 4px; }
 .hist-sec:first-child { padding-top: 4px; }
+
+/* ===== Inicio: visitas ===== */
+.home-grid > .home-views { grid-column: 1 / -1; }
+.home-views .seg { align-self: flex-start; }
+.hv-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+@media (min-width: 800px) { .hv-grid { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 32px; } }
+.hv-chart { margin: 12px 0 0; }
+.hv-chart svg { display: block; width: 100%; height: 110px; }
+.hv-chart rect { fill: var(--primary); }
+.hv-chart rect.zero { fill: var(--outline-var); }
+.hv-chart figcaption { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; color: var(--on-surface-var); }
+.hv-h { margin: 0 0 6px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--on-surface-var); }
+.hv-top { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; counter-reset: hv; }
+.hv-row { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border-radius: var(--r-m); cursor: pointer; counter-increment: hv; }
+.hv-row::before { content: counter(hv); width: 20px; flex: none; font-size: 12px; color: var(--on-surface-var); text-align: center; }
+.hv-row:hover { background: color-mix(in srgb, var(--on-surface) 6%, transparent); }
+.hv-row:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.hv-n { font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; }
+.helper-set { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 8px; }
+@media (min-width: 700px) { .helper-set { grid-template-columns: 1fr 1fr; } .helper-set .wide { grid-column: 1 / -1; } }
+.helper-set .field { margin: 0; }
+.helper-sep { margin: 14px 0 0; font-size: 14px; font-weight: 600; }

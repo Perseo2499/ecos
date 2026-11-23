@@ -293,6 +293,9 @@ const handle = (name, fn) => ipcMain.handle(name, async (_e, ...args) => {
 });
 // Complemento de Ecos para WordPress (después de definir handle: antes daba «Cannot access 'handle' before initialization» al arrancar)
 handle('helper:check', async () => { await refreshHelper(true); return publicCfg(); });
+handle('helper:stats', (days) => wpself.helperStats(cfg, days));
+handle('helper:settings', () => wpself.helperSettings(cfg));
+handle('helper:settingsSave', (s) => wpself.helperSaveSettings(cfg, s));
 handle('helper:save', async () => {
   const r = await dialog.showSaveDialog(mainWin, { title: 'Guardar el Complemento de Ecos', defaultPath: path.join(app.getPath('downloads'), 'ecos-wordpress.zip'), filters: [{ name: 'ZIP', extensions: ['zip'] }] });
   if (r.canceled || !r.filePath) return null;

@@ -70,7 +70,7 @@ function postThumb(p) {
 const Home = (() => {
   const HL = window.HomeLogic;
   const hs = { drafts: null, health: null, probThumbs: {}, free: null, freeErr: null, loading: false, at: 0, err: null,
-    pend: null, counting: false, tok: 0, };
+    pend: null, counting: false, tok: 0, views: { days: 7, data: {}, err: null, loading: false } };
   const ymd = HL.ymd;
   const lang = () => (prefs().lang === 'en' ? 'en-GB' : 'es-ES');
   const title = (x) => escHtml(decodeEntities(x.title || '') || t('(sin título)'));
@@ -303,6 +303,47 @@ const Home = (() => {
     }
     return card('home-week', 'event', head, body, '', ['HOME · 04 AGENDA', '予定']);
   }
+  // ---- visitas (complemento ≥ 1.1.0): total, gráfica por día y las entradas más leídas
+  const helperReady = () => !!CFG.ecosHelper?.installed && !CFG.ecosHelper.outdated;
+  function viewsChart(data) {
+    const W = 600, H = 100, bars = HL.viewsBars(data.daily, W, H, data.daily.length > 14 ? 2 : 4);
+    const first = data.daily[0]?.day || '', last = data.daily[data.daily.length - 1]?.day || '';
+    const fmt = (d) => { const [y, m, dd] = d.split('-').map(Number); return new Date(y, m - 1, dd).toLocaleDateString(lang(), { day: 'numeric', month: 'short' }); };
+    const label = t('Visitas por día, del {a} al {b}: {n} en total', { a: first && fmt(first), b: last && fmt(last), n: data.total });
+    const rects = bars.map((b) => `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${Math.max(b.h, 1)}" rx="2" class="${b.views ? '' : 'zero'}"><title>${escHtml(fmt(b.day))}: ${b.views}</title></rect>`).join('');
+    return `<figure class="hv-chart"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${escHtml(label)}">${rects}</svg>
+      <figcaption><span>${escHtml(first && fmt(first))}</span><span>${escHtml(last && fmt(last))}</span></figcaption></figure>`;
+  }
+  function viewsCard() {
+    const v = hs.views, silk = ['HOME · 06 STATS', '統計'];
+    let body;
+    if (!wpOk() || !self()) body = !wpOk() ? needWp() : `<p class="hint">${t('Las visitas solo están disponibles con «Mi web (wp-admin)» y el complemento de Ecos.')}</p>`;
+    else if (!helperReady()) body = `<div class="home-empty"><span class="ms">extension</span><span>${CFG.ecosHelper?.installed ? t('Actualiza el complemento de Ecos para ver las visitas.') : t('Instala el complemento de Ecos para contar las visitas, sin cookies.')}</span><button class="btn tonal small" data-h="conn">${t('Ir a Conexiones')}</button></div>`;
+    else {
+      const data = v.data[v.days];
+      const sel = `<div class="seg" role="radiogroup" aria-label="${escHtml(t('Periodo'))}">${[7, 30].map((d) => `<button class="${v.days === d ? 'active' : ''}" data-h="views-days" data-d="${d}" role="radio" aria-checked="${v.days === d}">${t('{n} días', { n: d })}</button>`).join('')}</div>`;
+      let inner;
+      if (!data) inner = v.err ? `<p class="hint">${escHtml(v.err)} <button class="btn text small" data-h="retry"><span class="ms">refresh</span>${t('Reintentar')}</button></p>` : `${hcSkel()}`;
+      else {
+        const top = data.top.length ? `<ol class="hv-top">${data.top.map((x) => `<li><button class="hv-row" data-h="open" data-id="${x.id}"><span class="home-li-t"><b>${escHtml(decodeEntities(x.title) || t('(sin título)'))}</b></span><span class="hv-n">${x.views}</span></button></li>`).join('')}</ol>` : `<p class="hint">${t('Aún no hay visitas en este periodo.')}</p>`;
+        inner = `<div class="hv-grid"><div><div class="home-big"><b>${data.total}</b><span>${t(data.total === 1 ? 'visita' : 'visitas')}</span></div>${viewsChart(data)}</div>
+          <div><h3 class="hv-h">${t('Más leídas')}</h3>${top}</div></div><p class="hint">${t('Sin cookies ni datos personales: solo cuentas agregadas por día.')}</p>`;
+      }
+      body = sel + inner;
+    }
+    return card('home-views', 'monitoring', t('Visitas'), body, '', silk);
+  }
+  async function viewsLoad(force) {
+    const v = hs.views;
+    if (!wpOk() || !self() || !helperReady() || v.loading) return;
+    if (force) v.data = {};
+    const d = v.days;
+    if (v.data[d]) return;
+    v.loading = true;
+    try { v.data[d] = await window.api.helperStats(d); v.err = null; } catch (e) { v.err = friendlyError(e).text; }
+    v.loading = false; draw();
+  }
+
   function quickCard() {
     const q = (h, icon, label) => `<button class="home-q" data-h="${h}"><span class="ms">${icon}</span><span>${label}</span></button>`;
     return card('home-quick', 'bolt', t('Accesos rápidos'), `<div class="home-qs">
@@ -314,7 +355,7 @@ const Home = (() => {
     const box = $('#home');
     if (!box) return;
     const sc = $$('.hc-track', box).map((x) => x.scrollLeft), wsc = $('.wk-cal', box)?.scrollLeft || 0;
-    box.innerHTML = `${hero()}${newBlock()}<div class="home-grid">${socialCard()}${draftsCard()}${reviewCard()}${freeCard()}${weekCard()}${quickCard()}</div>`;
+    box.innerHTML = `${hero()}${newBlock()}<div class="home-grid">${socialCard()}${draftsCard()}${reviewCard()}${freeCard()}${weekCard()}${viewsCard()}${quickCard()}</div>`;
     $$('.hc-track', box).forEach((x, i) => { x.scrollLeft = sc[i] || 0; });
     const w = $('.wk-cal', box); if (w) w.scrollLeft = wsc;
     $$('.hc', box).forEach(hcSync);
@@ -409,6 +450,7 @@ const Home = (() => {
     const jobs = [
       window.api.blogList({ type: 'post', status: 'draft', number: 5, orderby: 'modified' }).then((r) => { hs.drafts = r.items; hs.err = null; }, (e) => { hs.drafts = hs.drafts || []; hs.err = friendlyError(e).text; }),
       agLoad(),
+      viewsLoad(force),
     ];
     jobs.forEach((j) => j.then(draw));
     if (self()) {
@@ -488,8 +530,9 @@ const Home = (() => {
     const b = e.target.closest('#home [data-h]');
     if (!b) return;
     const a = b.dataset.h;
-    if (a === 'retry') { hs.err = null; hs.errHealth = null; hs.freeErr = null; ag.err = null; ag.cache.delete(agKey()); return load(true); }
+    if (a === 'retry') { hs.err = null; hs.errHealth = null; hs.freeErr = null; hs.views.err = null; ag.err = null; ag.cache.delete(agKey()); return load(true); }
     if (a === 'conn') return showTab('connections');
+    if (a === 'views-days') { hs.views.days = Number(b.dataset.d); draw(); viewsLoad(); return; }
     if (a === 'see-all') return goPosts('pending');
     if (a === 'new-see') return goPosts('pending');
     if (a === 'new-drafts') return busy(b, newSocialDrafts);

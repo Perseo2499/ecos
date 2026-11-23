@@ -453,6 +453,21 @@
           <button type="button" id="helper-recheck" class="btn text"><span class="ms">refresh</span><span data-i18n>Comprobar de nuevo</span></button>
           <button type="button" id="helper-save" class="btn filled"><span class="ms">download</span><span data-i18n>Guardar el complemento (.zip)</span></button>
         </div>
+        <form id="helper-org" class="hidden" autocomplete="off">
+          <h3 class="helper-sep" data-i18n>Datos de la asociación para Google</h3>
+          <p class="hint" data-i18n>Ecos los publica en tu portada como datos estructurados (schema.org) para que Google muestre bien tu asociación. Se guardan en tu WordPress.</p>
+          <div class="helper-set">
+            <div class="field wide"><label data-i18n>Nombre</label><input id="ho-name"></div>
+            <div class="field"><label data-i18n>Dirección</label><input id="ho-street"></div>
+            <div class="field"><label data-i18n>Código postal</label><input id="ho-postal" inputmode="numeric"></div>
+            <div class="field"><label data-i18n>Ciudad</label><input id="ho-city"></div>
+            <div class="field"><label data-i18n>Correo electrónico</label><input id="ho-email" type="email"></div>
+            <div class="field"><label data-i18n>Teléfono</label><input id="ho-phone" type="tel"></div>
+            <div class="field"><label>Instagram</label><input id="ho-instagram" type="url" placeholder="https://www.instagram.com/…"></div>
+            <div class="field wide"><label>Facebook</label><input id="ho-facebook" type="url" placeholder="https://www.facebook.com/…"></div>
+          </div>
+          <div class="card-actions"><button type="submit" class="btn filled"><span class="ms">save</span><span data-i18n>Guardar en mi web</span></button></div>
+        </form>
       </div>
 
       <form class="card" id="f-gp">

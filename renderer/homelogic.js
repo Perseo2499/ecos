@@ -65,6 +65,16 @@
   // publicadas (y privadas) / programadas / borradores (y pendientes de revisión)
   const agGroup = (status) => (status === 'future' ? 'future' : status === 'draft' || status === 'pending' ? 'draft' : 'publish');
   function agCount(items) { const c = { publish: 0, future: 0, draft: 0 }; for (const it of items || []) c[agGroup(it.status)]++; return c; }
-  const api = { agRange, agStep, agIsNow, agGroup, agCount, LIMITS, countPending, isStale, weekStart, weekDays, groupByWeekday, problemItems, unusedPhotos, ymd, addDays };
+  // Visitas: daily [{day, views}] → barras para un SVG (viewBox width×height). Altura mínima de 2 si hay visitas.
+  function viewsBars(daily, width = 300, height = 90, gap = 2) {
+    const list = daily || [], n = list.length || 1;
+    const max = Math.max(1, ...list.map((d) => d.views || 0));
+    const w = Math.max(1, (width - gap * (n - 1)) / n);
+    return list.map((d, i) => {
+      const v = d.views || 0, h = v ? Math.max(2, Math.round((v / max) * height)) : 0;
+      return { x: +(i * (w + gap)).toFixed(2), y: height - h, w: +w.toFixed(2), h, day: d.day, views: v };
+    });
+  }
+  const api = { viewsBars, agRange, agStep, agIsNow, agGroup, agCount, LIMITS, countPending, isStale, weekStart, weekDays, groupByWeekday, problemItems, unusedPhotos, ymd, addDays };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.HomeLogic = api;
 })(typeof window !== 'undefined' ? window : globalThis);

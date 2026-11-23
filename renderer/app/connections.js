@@ -104,8 +104,24 @@ function renderHelper() {
   $('#helper-state').textContent = !h?.installed ? t('No instalado: Ecos pondrá el carrusel y los vídeos dentro de cada entrada.')
     : h.outdated ? t('Desactualizado (tienes la v{v}; esta versión de Ecos trae la v{n}). Instala el .zip de nuevo para actualizarlo.', { v: h.version, n: h.bundled })
     : t('Instalado v{v}{c}', { v: h.version, c: h.caches?.length ? ' · ' + t('Caché detectada: {c}', { c: h.caches.join(', ') }) : '' });
+  const form = $('#helper-org'), ok = !!h?.installed && !h.outdated;
+  form.classList.toggle('hidden', !ok);
+  if (ok && orgLoadedFor !== h.version) { orgLoadedFor = h.version; loadOrg(); }
   renderConnStates();
 }
+// Datos de la asociación para Google (se guardan en WordPress, en el complemento). Si aún no hay nada guardado, se ofrecen los de Asociación Elín.
+let orgLoadedFor = null;
+const ORG_KEYS = ['name', 'street', 'postal', 'city', 'email', 'phone', 'instagram', 'facebook'];
+const ORG_DEFAULTS = { name: 'Asociación Elín', street: 'Carretera Red Permanente nº 60', postal: '51004', city: 'Ceuta', email: 'asociacionelin@gmail.com', phone: '606 12 91 24', instagram: 'https://www.instagram.com/asociacionelin/', facebook: 'https://www.facebook.com/asociacionelin/' };
+const fillOrg = (s) => ORG_KEYS.forEach((k) => { $('#ho-' + k).value = s[k] || ''; });
+async function loadOrg() {
+  try { const r = await window.api.helperSettings(); fillOrg(r.saved ? r.settings : { ...ORG_DEFAULTS, ...Object.fromEntries(Object.entries(r.settings).filter(([, v]) => v)) }); }
+  catch (e) { fillOrg(ORG_DEFAULTS); orgLoadedFor = null; }
+}
+$('#helper-org').onsubmit = (e) => { e.preventDefault(); busy($('#helper-org button[type=submit]'), async () => {
+  try { const r = await window.api.helperSettingsSave(Object.fromEntries(ORG_KEYS.map((k) => [k, $('#ho-' + k).value.trim()]))); fillOrg(r.settings); toast(t('Datos guardados en tu web')); }
+  catch (err) { toast(friendlyError(err).text, true); }
+}); };
 $('#helper-recheck').onclick = (e) => busy(e.target, async () => { CFG = await window.api.helperCheck(); renderHelper(); toast(CFG.ecosHelper?.installed ? t('Complemento encontrado') : t('No se encuentra el complemento en tu web')); });
 $('#helper-save').onclick = (e) => busy(e.target, async () => { const f = await window.api.helperSave(); if (f) toast(t('Complemento guardado. Ahora súbelo desde WordPress → Plugins → Añadir nuevo.')); });
 function fillConnections() {

@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       Ecos para WordPress
  * Plugin URI:        https://asociacionelin.com
- * Description:       Complemento de Ecos: carga una sola vez el carrusel de fotos, los vídeos y los estilos de Ecos, y vacía la caché de la entrada cuando la envías desde Ecos.
- * Version:           1.0.0
+ * Description:       Complemento de Ecos: carga una sola vez el carrusel de fotos, los vídeos y los estilos de Ecos, añade la vista previa al compartir y los datos para Google, cuenta visitas sin cookies y vacía la caché de la entrada cuando la envías desde Ecos.
+ * Version:           1.1.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Asociación Elín
@@ -16,8 +16,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'ECOS_WP_VERSION', '1.0.0' );
+define( 'ECOS_WP_VERSION', '1.1.0' );
 define( 'ECOS_WP_URL', plugin_dir_url( __FILE__ ) );
+define( 'ECOS_WP_DIR', plugin_dir_path( __FILE__ ) );
+
+require_once ECOS_WP_DIR . 'includes/seo.php';
+require_once ECOS_WP_DIR . 'includes/stats.php';
 
 /**
  * ¿Este contenido usa algo de Ecos? (data-ecos-carousel, ecos-vp o cualquier clase ecos-)
@@ -203,6 +207,8 @@ function ecos_wp_rest_status() {
 			'plugin'  => 'ecos',
 			'version' => ECOS_WP_VERSION,
 			'caches'  => ecos_wp_detect_caches(),
+			'seo'     => ecos_wp_seo_plugin_name(),
+			'stats'   => true,
 		)
 	);
 }
