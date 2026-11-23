@@ -496,7 +496,7 @@ function carouselBlock(b) {
     return `<figure class="ec-slide${vid ? ' ec-vslide' : ''}" id="${id}-${k + 1}" style="position:relative;${slideSize};margin:0;border-radius:${radius}px;overflow:hidden;background-color:#111${o.shadow === 'on' ? ';box-shadow:' + CAR_SHADOW : ''}">`
       + (bgUrl ? `<img class="ec-bg" src="${esc(bgUrl)}" alt="" aria-hidden="true" loading="lazy" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;filter:blur(24px) brightness(.7);margin:0"/>` : '')
       + (vid
-        ? `<video class="ec-vid" controls preload="metadata" playsinline muted src="${esc(i.url)}"${i.poster ? ` poster="${esc(i.poster)}"` : ''}${Number(i.id) ? ` data-id="${i.id}"` : ''} style="position:relative;display:block;width:100%;height:100%;object-fit:${R ? 'cover' : 'contain'};margin:0;border-radius:0;background-color:#000"></video>`
+        ? `<video class="ec-vid" autoplay muted loop playsinline preload="metadata" src="${esc(i.url)}"${i.poster ? ` poster="${esc(i.poster)}"` : ''}${Number(i.id) ? ` data-id="${i.id}"` : ''} style="position:relative;display:block;width:100%;height:100%;object-fit:cover;margin:0;border-radius:0;background-color:#000"></video>`
         : `<img src="${esc(i.url)}" alt="${alt}" loading="lazy"${Number(i.id) ? ` class="wp-image-${i.id}"` : ''} style="position:relative;display:block;width:100%;height:100%;object-fit:contain;margin:0;border-radius:0"/>`)
       + (n > 1 && o.arrows !== false ? `<span class="ec-nav"><a class="ec-sbtn" href="#${prev}" aria-label="Anterior" style="${btn};left:12px">&#8249;</a>`
         + `<a class="ec-sbtn" href="#${next}" aria-label="Siguiente" style="${btn};right:12px">&#8250;</a>`

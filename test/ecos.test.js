@@ -976,7 +976,8 @@ test('carrusel con vídeos: HTML propio aunque haya Spectra, con <video> y las o
   const html = T.composeBlocks([{ id: 'c', type: 'carousel', images: imgs, ...opts }], { spectra: true });
   assert.doesNotMatch(html, /uagb\/image-gallery/);
   assert.match(html, /<!-- wp:html -->/);
-  assert.match(html, /<video class="ec-vid" controls preload="metadata" playsinline muted src="v\.mp4" poster="p\.jpg" data-id="7" style="[^"]*object-fit:cover/);
+  assert.match(html, /<video class="ec-vid" autoplay muted loop playsinline preload="metadata" src="v\.mp4" poster="p\.jpg" data-id="7" style="[^"]*object-fit:cover/);
+  assert.doesNotMatch(html, /<video class="ec-vid"[^>]*controls/, "sin los controles del reproductor");
   assert.match(html, /height:360px;aspect-ratio:16\/9/);
   assert.match(html, /border-radius:0px/);
   const back = P.parseBlocks(html);

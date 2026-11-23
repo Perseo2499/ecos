@@ -11,7 +11,7 @@
     if (!track) return;
     if (slides.length < 2) {
       var solo = root.querySelector('video');
-      if (solo) { solo.muted = true; if (window.IntersectionObserver) new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { var p = solo.play(); if (p) p.catch(function () {}); } else solo.pause(); }); }, { threshold: 0.4 }).observe(root); }
+      if (solo) { solo.muted = true; solo.removeAttribute('controls'); solo.addEventListener('click', function () { if (solo.paused) solo.play(); else solo.pause(); }); var b1 = doc.createElement('button'); b1.type = 'button'; b1.className = 'ec-snd'; b1.textContent = '\uD83D\uDD07'; b1.setAttribute('aria-label', 'Activar o quitar el sonido'); b1.setAttribute('style', 'position:absolute;right:12px;bottom:12px;z-index:3;width:40px;height:40px;border:0;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;cursor:pointer;font-size:18px'); b1.onclick = function () { solo.muted = !solo.muted; b1.textContent = solo.muted ? '\uD83D\uDD07' : '\uD83D\uDD0A'; }; (solo.closest('.ec-slide') || root).appendChild(b1); if (window.IntersectionObserver) new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { var p = solo.play(); if (p) p.catch(function () {}); } else solo.pause(); }); }, { threshold: 0.4 }).observe(root); }
       return;
     }
     root.classList.add('ec-js');
@@ -121,6 +121,21 @@
       if (v.paused) { v.muted = v.muted || !v.dataset.ecSound; var p = v.play(); if (p) p.catch(function () {}); }
     }
     vids.forEach(function (v) {
+      v.loop = false; v.removeAttribute('controls');
+      var slide = v.closest ? v.closest('.ec-slide') : null;
+      if (slide) {
+        var snd = doc.createElement('button');
+        snd.type = 'button'; snd.className = 'ec-snd';
+        snd.setAttribute('aria-label', 'Activar o quitar el sonido');
+        snd.setAttribute('style', 'position:absolute;right:12px;bottom:12px;z-index:3;width:40px;height:40px;border:0;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;backdrop-filter:blur(6px)');
+        var paint = function () { snd.innerHTML = v.muted ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.6 3 2.7-2.7-1.4-1.4-2.7 2.7-2.7-2.7-1.4 1.4 2.7 2.7-2.7 2.7 1.4 1.4 2.7-2.7 2.7 2.7 1.4-1.4z"/></svg>' : '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg>'; };
+        paint();
+        snd.onclick = function (e) { e.stopPropagation(); v.muted = !v.muted; if (!v.muted) { v.dataset.ecSound = '1'; var pp = v.play(); if (pp) pp.catch(function () {}); } paint(); };
+        v.addEventListener('volumechange', paint);
+        slide.appendChild(snd);
+        v.style.cursor = 'pointer';
+        v.addEventListener('click', function () { if (v.paused) { var pp = v.play(); if (pp) pp.catch(function () {}); } else v.pause(); });
+      }
       v.addEventListener('volumechange', function () { if (!v.muted) v.dataset.ecSound = '1'; });
       v.addEventListener('ended', function () { if (slides.length > 1) { go(cur + 1); hold(); } });
     });
