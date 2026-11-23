@@ -115,7 +115,7 @@ Con las capturas, la IA (Claude) lee el texto y recorta las fotos de la captura.
 | `src/importers.js` | Importar ZIP de Meta, capturas con IA y entrada manual |
 | `src/transform.js` | Publicación → bloques de Gutenberg |
 | `src/backup.js` | Análisis y restauración de copias de seguridad de WordPress |
-| `renderer/blocks.js` | Editor de bloques |
+| `renderer/blocks/` | Editor de bloques (kit, core, drag, block, body, style, media y types/*) |
 | `src/devterm.js` | Terminal integrada del modo desarrollador (node-pty) |
 | `src/ai.js` | Proveedores de IA (Claude, OpenAI, Gemini, DeepSeek, Mistral, Qwen, Ollama, OpenRouter) |
 | `renderer/i18n.js` | Textos de la interfaz en español e inglés |
