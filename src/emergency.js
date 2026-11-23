@@ -426,7 +426,7 @@ function cleanPartials(dir) {
 const DAY = 864e5;
 const AUTO_DAYS = { weekly: 7, monthly: 30 };
 // ¿Toca hacer una copia automática ahora? Tras un fallo se reintenta como pronto a las 6 horas.
-function shouldAutoRun({ auto = 'weekly', lastCopyAt = 0, lastAttempt = 0, lastFailed = false, now = Date.now() } = {}) {
+function shouldAutoRun({ auto = 'monthly', lastCopyAt = 0, lastAttempt = 0, lastFailed = false, now = Date.now() } = {}) {
   const days = AUTO_DAYS[auto];
   if (!days) return false;
   if (lastFailed && lastAttempt && now - lastAttempt < 6 * 3600e3) return false;

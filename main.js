@@ -1489,7 +1489,7 @@ handle('backup:create', async (opts = {}) => {
 // --- Copia de emergencia: contenido + copia visual navegable + configuración + guía, en un ZIP (src/emergency.js) ---
 const EM = () => require('./src/emergency');
 const emDefaultDir = () => path.join(app.getPath('documents'), 'Ecos', 'Copias de emergencia');
-const emCfg = () => ({ dir: '', auto: 'weekly', keep: 4, lastAttempt: 0, lastFailed: false, lastError: '', ...(cfg.emergency || {}) });
+const emCfg = () => ({ dir: '', auto: 'monthly', keep: 3, lastAttempt: 0, lastFailed: false, lastError: '', ...(cfg.emergency || {}) });
 const emDir = () => emCfg().dir || emDefaultDir();
 const emSaveCfg = (patch) => { cfg.emergency = { ...emCfg(), ...patch }; store.save(cfg); };
 const emSend = (ch, p) => { if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send(ch, p); };
