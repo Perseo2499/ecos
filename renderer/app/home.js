@@ -32,6 +32,7 @@ async function checkNewSocial() {
     Object.assign(NS, { fresh, raw: r.posts, cursors: r.cursors, newest: NewPosts.newestDate(merged), seen: false });
     paintSocialBadge();
     if ($('#tab-home').classList.contains('active')) Home.render();
+    if (typeof runAutoDrafts === 'function') runAutoDrafts(fresh); // borradores automáticos (Ajustes → Avisos), si están activados
     // notificación del sistema (solo si Ecos no está a la vista y los avisos están activados en Ajustes → Avisos)
     if (typeof Notification !== 'undefined' && !document.hasFocus()) {
       try { new Notification('Ecos', { body: newSocialTitle(fresh) }); } catch { /* sin notificaciones */ }

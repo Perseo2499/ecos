@@ -144,6 +144,7 @@ try {
   ai = require('./src/ai');
   ai.setCliLog((...a) => log(...a));
   require('./src/imgopt').setEnabled(() => cfg?.prefs?.optimizePhotos !== false);
+  require('./src/imgopt').setWebp(() => cfg?.prefs?.webpPhotos !== false);
   importers = require('./src/importers');
   updater = require('./src/updater');
 } catch (err) {
@@ -1086,7 +1087,7 @@ handle('media:exifDates', async (items) => {
   const work = async () => {
     while (next < (items || []).length) {
       const m = items[next++];
-      if (!/\.jpe?g(\?|$)/i.test(m.url || '')) continue;
+      if (!/\.(jpe?g|webp)(\?|$)/i.test(m.url || '')) continue; // las WebP de Ecos llevan la fecha de captura en su EXIF
       try {
         const r = await fetch(m.url, { headers: { Range: 'bytes=0-131071' }, signal: AbortSignal.timeout(20000) });
         const reader = r.body?.getReader?.();

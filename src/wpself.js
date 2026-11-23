@@ -118,12 +118,22 @@ const decode = (s) => String(s || '').replace(/&amp;/g, '&').replace(/&#8217;/g,
 // --- Medios -----------------------------------------------------------------------
 const MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm' };
 async function uploadBuffer(cfg, buf, filename, type, { keep = false } = {}) {
-  if (!keep) ({ buf, type, name: filename } = require('./imgopt').optimize(buf, type, filename)); // fotos más ligeras
-  const m = await req(cfg, '/wp/v2/media', {
-    method: 'POST', body: buf,
-    headers: { 'Content-Type': type, 'Content-Disposition': `attachment; filename="${filename.replace(/["\r\n]/g, '')}"` },
-  });
-  return { id: m.id, url: m.source_url };
+  const send = async (b, ty, fn) => {
+    const m = await req(cfg, '/wp/v2/media', {
+      method: 'POST', body: b,
+      headers: { 'Content-Type': ty, 'Content-Disposition': `attachment; filename="${fn.replace(/["\r\n]/g, '')}"` },
+    });
+    return { id: m.id, url: m.source_url };
+  };
+  if (keep) return send(buf, type, filename);
+  const o = await require('./imgopt').prepare(buf, type, filename); // fotos más ligeras (WebP si compensa)
+  try { return await send(o.buf, o.type, o.name); }
+  catch (e) {
+    if (!o.webp || e instanceof AuthError) throw e;
+    console.warn('WordPress no aceptó el WebP; se sube la original:', e.message);
+    const f = o.fallback();
+    return send(f.buf, f.type, f.name);
+  }
 }
 async function uploadFile(cfg, filePath) {
   const ext = path.extname(filePath).slice(1).toLowerCase();

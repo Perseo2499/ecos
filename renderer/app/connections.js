@@ -147,6 +147,7 @@ $('#meta-login').onclick = (e) => busy(e.target, doMetaLogin);
 $('#wp-login').onclick = (e) => busy(e.target, doWpLogin);
 async function loadCategories() {
   try { categories = await window.api.wpCategories(); } catch { categories = []; }
+  window.renderAutoDraftOpts?.();
 }
 
 // ---------------------------------------------------------------- Conexiones: selector de IA

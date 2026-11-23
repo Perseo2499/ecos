@@ -22,56 +22,54 @@ $$('#ai-opts [data-opt]').forEach((el) => {
 });
 renderAiOpts();
 
+// Reescribe como artículo los textos de una lista de bloques con la IA (lo comparten el editor y los borradores automáticos).
+// Con texto en la entrada se reescribe por tramos (el resto de bloques se queda donde está; `apply` envuelve la edición in situ,
+// p. ej. E.change en el editor). Sin texto, se escribe a partir de `sourceText` y se devuelven los bloques nuevos en `blocks`.
+// → { mode: 'segments'|'whole', title, excerpt, tags, missing, blocks? }
+async function aiArticleCore({ blocks, title, sourceText, opts, E, apply = (fn) => fn() }) {
+  const TEXT = ['paragraph', 'heading', 'quote', 'list'];
+  const srcLinks = (r) => [E.create('heading', { level: 3, html: escHtml(t('Fuentes')) }), E.create('list', { items: r.sources.map((s) => `<a href="${escHtml(s.url)}">${escHtml(s.title || s.url)}</a>`) })];
+  const seg = aiSegments(blocks, E);
+  if (seg.segments.length) {
+    const r = await window.api.aiArticle({ title, text: seg.segments.map((s) => s.text).join('\n\n'), segments: seg.segments, layout: seg.layout, opts });
+    let missing = 0;
+    apply(() => {
+      // de atrás adelante, para que los índices de cada tramo sigan valiendo
+      for (const run of [...seg.runs].reverse()) {
+        const got = (r.sections || []).find((s) => s.id === run.id);
+        const nb = got && aiBlocks(got.blocks, E, run.blocks);
+        if (!nb || !nb.length) { missing++; continue; }
+        run.arr.splice(run.start, run.blocks.length, ...nb);
+      }
+      if (r.sources?.length) blocks.push(...srcLinks(r));
+    });
+    return { mode: 'segments', title: r.title, excerpt: r.excerpt, tags: r.tags || [], missing, blocks };
+  }
+  // Sin texto todavía (entrada recién creada desde redes): se escribe a partir de la publicación original
+  const r = await window.api.aiArticle({ title, text: sourceText, opts });
+  const media = blocks.filter((b) => !TEXT.includes(b.type));
+  const body = r.blocks.filter((b) => b.text.trim()).map((b) => (b.kind === 'h2' ? E.create('heading', { level: 2, html: escHtml(b.text) }) : E.create('paragraph', { html: escHtml(b.text) })));
+  // las fotos se reparten tras el primer párrafo para que no queden todas al final
+  const firstP = Math.max(0, body.findIndex((b) => b.type === 'paragraph'));
+  let out = body.length ? [...body.slice(0, firstP + 1), ...media.slice(0, 1), ...body.slice(firstP + 1), ...media.slice(1)] : media;
+  if (r.sources?.length) out = [...out, ...srcLinks(r)];
+  return { mode: 'whole', title: r.title, excerpt: r.excerpt, tags: r.tags || [], missing: 0, blocks: out };
+}
+
 // IA en el editor: el texto se reescribe con las opciones elegidas; las fotos, vídeos y su orden se conservan
 $('#ai-article').onclick = (e) => busy(e.target, async () => {
   const TEXT = ['paragraph', 'heading', 'quote', 'list'];
   if (draft.blocks.some((b) => TEXT.includes(b.type)) && !await ask(t('La IA reescribirá los textos de la entrada (las fotos y vídeos se quedan). ¿Continuar?'))) return;
   const opts = { ...aiOpts(), notes: $('#ai-opts [data-opt="notes"]').value.trim() };
   const E0 = window.BlockEditor;
-  // Hay texto en la entrada: se reescribe por tramos y cada bloque que no es texto se queda exactamente donde está
-  const seg = aiSegments(draft.blocks, E0);
-  if (seg.segments.length) {
-    const r = await window.api.aiArticle({ title: $('#d-title').value, text: seg.segments.map((s) => s.text).join('\n\n'), segments: seg.segments, layout: seg.layout, opts });
-    if (r.title) { $('#d-title').value = r.title; autoTitle(); }
-    if (r.excerpt) $('#d-excerpt').value = r.excerpt;
-    let missing = 0;
-    E0.change(() => {
-      // de atrás adelante, para que los índices de cada tramo sigan valiendo
-      for (const run of [...seg.runs].reverse()) {
-        const got = (r.sections || []).find((s) => s.id === run.id);
-        const nb = got && aiBlocks(got.blocks, E0, run.blocks);
-        if (!nb || !nb.length) { missing++; continue; }
-        run.arr.splice(run.start, run.blocks.length, ...nb);
-      }
-      if (r.sources?.length) draft.blocks.push(E0.create('heading', { level: 3, html: escHtml(t('Fuentes')) }), E0.create('list', { items: r.sources.map((s) => `<a href="${escHtml(s.url)}">${escHtml(s.title || s.url)}</a>`) }));
-    });
-    const cur = $('#d-tags').value.split(',').map((x) => x.trim()).filter(Boolean);
-    $('#d-tags').value = [...new Set([...cur, ...(r.tags || [])])].join(', ');
-    toast(missing ? t('Listo. {n} tramo(s) se han dejado como estaban porque la IA no los devolvió. Revisa el texto antes de enviarlo.', { n: missing }) : t('Listo: el texto está reescrito y las fotos siguen en su sitio. Revísalo antes de enviarlo (Ctrl+Z para deshacer).'));
-    return;
-  }
-  // Sin texto todavía (entrada recién creada desde redes): se escribe a partir de la publicación original
-  const text = draft.sourceText || window.BlockEditor.plainText();
-  const r = await window.api.aiArticle({ title: $('#d-title').value, text, opts });
-  $('#d-title').value = r.title; autoTitle();
-  $('#d-excerpt').value = r.excerpt;
-  window.BlockEditor.change(() => {
-    const media = draft.blocks.filter((b) => !TEXT.includes(b.type));
-    const E = window.BlockEditor;
-    const body = r.blocks.filter((b) => b.text.trim()).map((b) => (b.kind === 'h2' ? E.create('heading', { level: 2, html: escHtml(b.text) }) : E.create('paragraph', { html: escHtml(b.text) })));
-    // las fotos se reparten tras el primer párrafo para que no queden todas al final
-    const firstP = Math.max(0, body.findIndex((b) => b.type === 'paragraph'));
-    let blocks = body.length ? [...body.slice(0, firstP + 1), ...media.slice(0, 1), ...body.slice(firstP + 1), ...media.slice(1)] : media;
-    // fuentes de internet al final, como lista de enlaces
-    if (r.sources?.length) {
-      blocks = [...blocks, E.create('heading', { level: 3, html: escHtml(t('Fuentes')) }),
-        E.create('list', { items: r.sources.map((s) => `<a href="${escHtml(s.url)}">${escHtml(s.title || s.url)}</a>`) })];
-    }
-    draft.blocks = blocks;
-  });
+  const r = await aiArticleCore({ blocks: draft.blocks, title: $('#d-title').value, sourceText: draft.sourceText || E0.plainText(), opts, E: E0, apply: (fn) => E0.change(fn) });
+  if (r.title) { $('#d-title').value = r.title; autoTitle(); }
+  if (r.excerpt) $('#d-excerpt').value = r.excerpt;
+  if (r.mode === 'whole') E0.change(() => { draft.blocks = r.blocks; });
   const cur = $('#d-tags').value.split(',').map((x) => x.trim()).filter(Boolean);
   $('#d-tags').value = [...new Set([...cur, ...r.tags])].join(', ');
-  toast(t('Listo. Revisa el texto antes de enviarlo.'));
+  if (r.mode === 'whole') return toast(t('Listo. Revisa el texto antes de enviarlo.'));
+  toast(r.missing ? t('Listo. {n} tramo(s) se han dejado como estaban porque la IA no los devolvió. Revisa el texto antes de enviarlo.', { n: r.missing }) : t('Listo: el texto está reescrito y las fotos siguen en su sitio. Revísalo antes de enviarlo (Ctrl+Z para deshacer).'));
 });
 // Tramos de texto de la entrada (también dentro de secciones y columnas): bloques de texto seguidos entre dos bloques
 // que no son texto. Devuelve { runs: [{ id, arr, start, blocks }], segments: [{ id, text }], layout }
