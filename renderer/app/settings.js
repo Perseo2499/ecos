@@ -164,6 +164,9 @@ $('#update-install').onclick = () => window.api.installUpdate();
 $('#update-check').onclick = async () => renderUpdate(await window.api.checkUpdate());
 $('#open-releases').onclick = () => window.api.open('https://github.com/Perseo2499/ecos/releases');
 $('#open-repo').onclick = () => window.api.open('https://github.com/Perseo2499/ecos');
+for (const [id, path] of [['#open-license', '/blob/main/LICENSE'], ['#open-source', ''], ['#open-third', '/blob/main/THIRD-PARTY-NOTICES.md']]) {
+  $(id).onclick = (e) => { e.preventDefault(); window.api.open('https://github.com/Perseo2499/ecos' + path); };
+}
 
 // Avanzado
 function renderMode(m) {

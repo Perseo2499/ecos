@@ -7,12 +7,28 @@ on:
 
 permissions:
   contents: write
+  actions: read   # SignPath descarga el artefacto sin firmar de esta ejecución
 
 jobs:
   windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: ¿Firma con SignPath Foundation configurada?
+        id: sp
+        shell: bash
+        env:
+          SP_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SP_ORG: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          SP_PROJECT: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          SP_POLICY: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          SP_ARTIFACT: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+        run: |
+          if [ -n "$SP_TOKEN" ] && [ -n "$SP_ORG" ] && [ -n "$SP_PROJECT" ] && [ -n "$SP_POLICY" ] && [ -n "$SP_ARTIFACT" ]; then
+            echo "on=true" >> "$GITHUB_OUTPUT"; echo "Firma con SignPath activada"
+          else
+            echo "on=false" >> "$GITHUB_OUTPUT"; echo "SignPath no configurado: se sigue el flujo normal"
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -47,9 +63,10 @@ jobs:
           elseif ($o -match 'vkCreateInstance|invalid gpu') { Write-Host "Motor de IA OK: arranca; aquí no hay tarjeta gráfica (esperado)" }
           else { Write-Error "El motor de IA no arranca"; exit 1 }
           exit 0
-      - name: Compilar (firma con Azure Trusted Signing, con certificado o sin firmar)
+      - name: Compilar (SignPath después, firma con Azure Trusted Signing, con certificado o sin firmar)
         shell: bash
         env:
+          SIGNPATH_ON: ${{ steps.sp.outputs.on }}
           # Azure Trusted Signing (opcional): secretos y variables del repositorio (ver docs/firma-windows.md)
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -64,7 +81,11 @@ jobs:
         run: |
           node scripts/build-wp-plugin.js
           EXTRA=()
-          if [ -n "$AZURE_TENANT_ID" ] && [ -n "$AZURE_CLIENT_ID" ] && [ -n "$AZURE_CLIENT_SECRET" ] && [ -n "$AZ_ENDPOINT" ] && [ -n "$AZ_ACCOUNT" ] && [ -n "$AZ_PROFILE" ] && [ -n "$AZ_PUBLISHER" ]; then
+          if [ "$SIGNPATH_ON" = "true" ]; then
+            # SignPath firma después: electron-builder compila sin firmar y sin credenciales de firma
+            unset AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET WIN_CSC_LINK WIN_CSC_KEY_PASSWORD CSC_LINK CSC_KEY_PASSWORD
+            echo "Compilando sin firmar: se firmará con SignPath"
+          elif [ -n "$AZURE_TENANT_ID" ] && [ -n "$AZURE_CLIENT_ID" ] && [ -n "$AZURE_CLIENT_SECRET" ] && [ -n "$AZ_ENDPOINT" ] && [ -n "$AZ_ACCOUNT" ] && [ -n "$AZ_PROFILE" ] && [ -n "$AZ_PUBLISHER" ]; then
             echo "Firmando con Azure Trusted Signing"
             unset WIN_CSC_LINK WIN_CSC_KEY_PASSWORD
             EXTRA=("-c.win.azureSignOptions.publisherName=$AZ_PUBLISHER" "-c.win.azureSignOptions.endpoint=$AZ_ENDPOINT" "-c.win.azureSignOptions.codeSigningAccountName=$AZ_ACCOUNT" "-c.win.azureSignOptions.certificateProfileName=$AZ_PROFILE")
@@ -89,6 +110,69 @@ jobs:
           if ((Test-Path $log) -and (Select-String -Path $log -Pattern "ERROR FATAL" -Quiet)) { Get-Process Ecos -ErrorAction SilentlyContinue | Stop-Process -Force; Write-Error "Ecos no ha podido arrancar (ERROR FATAL en ecos.log)"; exit 1 }
           Get-Process Ecos -ErrorAction SilentlyContinue | Stop-Process -Force
           if (-not $vivo) { Write-Error "Ecos se ha cerrado al arrancar (código $($p.ExitCode))"; exit 1 }
+      # --- Firma con SignPath Foundation (solo si hay secreto y variables; ver docs/signpath-solicitud.md) ---
+      - name: SignPath · reunir los .exe sin firmar
+        if: steps.sp.outputs.on == 'true'
+        shell: bash
+        run: |
+          mkdir signing-input
+          cp dist/Ecos-Setup-*.exe dist/Ecos-*-portable.exe signing-input/
+          ls -l signing-input
+      - name: SignPath · subir los .exe sin firmar
+        if: steps.sp.outputs.on == 'true'
+        id: unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecos-sin-firmar
+          path: signing-input
+          if-no-files-found: error
+      - name: SignPath · solicitar la firma y esperar
+        if: steps.sp.outputs.on == 'true'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+      - name: SignPath · sustituir por los firmados y regenerar latest.yml y .blockmap
+        if: steps.sp.outputs.on == 'true'
+        shell: pwsh
+        run: |
+          # por si la acción dejó un ZIP en vez de los archivos sueltos
+          Get-ChildItem signed -Recurse -Filter *.zip | ForEach-Object { Expand-Archive $_.FullName -DestinationPath signed -Force }
+          $firmados = Get-ChildItem signed -Recurse -Filter *.exe
+          if ($firmados.Count -lt 2) { Write-Error "SignPath no devolvió los dos .exe (hay $($firmados.Count))"; exit 1 }
+          foreach ($f in $firmados) {
+            if (-not (Test-Path "dist\$($f.Name)")) { Write-Error "Archivo inesperado devuelto por SignPath: $($f.Name)"; exit 1 }
+            Copy-Item $f.FullName "dist\$($f.Name)" -Force
+          }
+          $inst = (Get-ChildItem dist -Filter "Ecos-Setup-*.exe" | Select-Object -First 1).Name
+          # .blockmap del instalador firmado (descarga diferencial); si no se puede, se borra (es seguro: se descarga entero)
+          $ab = node -p "require('app-builder-bin').appBuilderPath"
+          Remove-Item "dist\$inst.blockmap" -Force -ErrorAction SilentlyContinue
+          & $ab blockmap --input "dist\$inst" --output "dist\$inst.blockmap"
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path "dist\$inst.blockmap")) {
+            Write-Host "No se pudo regenerar el .blockmap: se omite (sin descarga diferencial)"
+            Remove-Item "dist\$inst.blockmap" -Force -ErrorAction SilentlyContinue
+            node scripts/update-latest-yml.js dist/latest.yml "dist/$inst"
+          } else {
+            node scripts/update-latest-yml.js dist/latest.yml "dist/$inst" --blockmap "dist/$inst.blockmap"
+          }
+          if ($LASTEXITCODE -ne 0) { Write-Error "No se pudo actualizar latest.yml"; exit 1 }
+          Get-Content dist\latest.yml
+      - name: SignPath · comprobar las firmas
+        if: steps.sp.outputs.on == 'true'
+        shell: pwsh
+        run: |
+          foreach ($f in Get-ChildItem dist -Filter *.exe) {
+            $s = Get-AuthenticodeSignature $f.FullName
+            Write-Host "$($f.Name): $($s.Status) · $($s.SignerCertificate.Subject)"
+            if ($s.Status -ne 'Valid') { Write-Error "Firma no válida en $($f.Name)"; exit 1 }
+          }
       - name: Versión
         id: v
         shell: bash

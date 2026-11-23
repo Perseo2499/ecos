@@ -21,7 +21,7 @@ Ecos se publica sin firmar, así que Windows SmartScreen avisa al instalarlo. Fi
 1. Dentro de la cuenta: «Identity validations» → Nueva → **Organización** (public trust).
 2. Datos que piden: nombre legal exacto de la asociación, país, dirección, **CIF**, sitio web y correo corporativo. Para una asociación española prepara: certificado de inscripción en el Registro de Asociaciones, tarjeta/certificado del CIF (NIF de la entidad), estatutos y el DNI/identificación del representante legal. El nombre debe coincidir letra por letra con los documentos.
 3. La validación la hace Microsoft (con un proveedor externo) y puede tardar de unos días a un par de semanas. Hay que ser el representante o tener autorización de la entidad. Nota: Microsoft limita este servicio a organizaciones con una antigüedad mínima de unos 3 años (comprueba las condiciones vigentes en su documentación); si no se cumple, usa la alternativa del final.
-4. Cuando se apruebe, el nombre validado es el **publisher** (`AZURE_SIGNING_PUBLISHER`): copia el «Subject» exacto, p. ej. `CN=Asociación Elín, O=Asociación Elín, L=..., C=ES`... En electron-builder basta el nombre de organización que aparece en el certificado (`publisherName`).
+4. Cuando se apruebe, el nombre validado es el **publisher** (`AZURE_SIGNING_PUBLISHER`): copia el «Subject» exacto, p. ej. `CN=Nombre del titular, O=Nombre del titular, L=..., C=ES`... En electron-builder basta el nombre de organización que aparece en el certificado (`publisherName`).
 
 ### 4. Perfil de certificado público
 En la cuenta: «Certificate profiles» → Crear → tipo **Public Trust** → elige la validación de identidad aprobada. El nombre del perfil será `AZURE_SIGNING_PROFILE`.

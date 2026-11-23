@@ -7,7 +7,8 @@
     "start": "electron .",
     "test": "node --test test/*.test.js",
     "plugin": "node scripts/build-wp-plugin.js",
-    "dist": "node scripts/build-wp-plugin.js && electron-builder --win"
+    "dist": "node scripts/build-wp-plugin.js && electron-builder --win",
+    "third-party": "node scripts/third-party.js"
   },
   "devDependencies": {
     "@wordpress/block-library": "^12.2.0",
@@ -52,7 +53,7 @@
         "releaseType": "release"
       }
     ],
-    "copyright": "Copyright © 2026 Asociación Elín. Todos los derechos reservados.",
+    "copyright": "Copyright © 2026 Perseo2499. Software libre bajo GPL-3.0-or-later.",
     "asarUnpack": [
       "**/node_modules/@lydell/node-pty*/**",
       "**/node_modules/ffmpeg-static/**"
@@ -65,6 +66,18 @@
       {
         "from": "build/ecos-wordpress.zip",
         "to": "ecos-wordpress.zip"
+      },
+      {
+        "from": "LICENSE",
+        "to": "LICENSE.txt"
+      },
+      {
+        "from": "NOTICE",
+        "to": "NOTICE.txt"
+      },
+      {
+        "from": "THIRD-PARTY-NOTICES.md",
+        "to": "THIRD-PARTY-NOTICES.md"
       }
     ]
   },
@@ -80,7 +93,12 @@
     "yauzl": "^3.4.0",
     "zod": "^4.6.7"
   },
-  "license": "UNLICENSED",
+  "license": "GPL-3.0-or-later",
   "private": true,
-  "author": "Asociación Elín"
+  "author": "Perseo2499",
+  "homepage": "https://github.com/Perseo2499/ecos",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Perseo2499/ecos.git"
+  }
 }

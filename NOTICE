@@ -1,0 +1,42 @@
+Ecos — aplicación de escritorio para pasar publicaciones de Instagram y Facebook a un blog de WordPress y gestionar la web.
+Copyright (C) 2026 Perseo2499
+
+Este programa es software libre: puedes redistribuirlo y/o modificarlo
+según los términos de la Licencia Pública General de GNU publicada por
+la Free Software Foundation, ya sea la versión 3 de la Licencia o
+(a tu elección) cualquier versión posterior.
+
+Este programa se distribuye con la esperanza de que sea útil, pero
+SIN NINGUNA GARANTÍA; ni siquiera la garantía implícita de
+COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulta la
+Licencia Pública General de GNU para más detalles.
+
+Deberías haber recibido una copia de la Licencia Pública General de GNU
+junto con este programa (archivo LICENSE). Si no es así, consulta
+<https://www.gnu.org/licenses/>.
+
+(Traducción no oficial; el texto con validez legal es el de la licencia
+en inglés, en el archivo LICENSE.)
+
+Los componentes de terceros que se distribuyen con Ecos conservan sus
+propias licencias: consulta THIRD-PARTY-NOTICES.md.
+
+------------------------------------------------------------------------
+
+Ecos — desktop app that turns Instagram and Facebook posts into a WordPress blog and helps manage the site.
+Copyright (C) 2026 Perseo2499
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Third-party components keep their own licenses: see THIRD-PARTY-NOTICES.md.
