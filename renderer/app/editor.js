@@ -186,6 +186,18 @@ function openEditor() {
       const pool = mediaPool();
       openLightbox(pool.map((x) => ({ type: x.type, src: x.url, poster: x.poster })), Math.max(0, pool.findIndex((x) => x.id === m.id)));
     },
+    // «Sustituir por el original»: del ordenador o de Google Fotos; el vídeo pasa por el mismo procesado (1080p + portada)
+    onReplaceVideo: async (src) => {
+      if (src === 'pc') {
+        toast(t('Se abrirá el selector de vídeos; después se comprime a 1080p si hace falta y se sube (puede tardar).'));
+        return window.api.videoPickLocal();
+      }
+      const got = await pickFromGPhotos();
+      const v = (got || []).find((g) => g.type === 'video');
+      if (!v) { if (got?.length) toast(t('No has elegido ningún vídeo'), true); return null; }
+      toast(t('Preparando el vídeo (se comprime a 1080p si hace falta)…'));
+      return window.api.videoFinish({ url: v.url, id: v.id });
+    },
     // Estilo «vecinas asomando»: se copia para pegarlo una vez en la web
     onPeekCss: async () => {
       navigator.clipboard.writeText(await window.api.peekCss());

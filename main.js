@@ -318,8 +318,76 @@ handle('wp:categories', async () => {
 
 // Sube los medios (remotos o locales) y genera el borrador para revisar
 handle('draft:unifyTitle', (posts) => require('./src/transform').unifyTitle(posts, publicCfg().format?.cleanTitle !== false));
+// --- Vídeos y medios externos ---
+// Los vídeos se descargan, se comprimen a 1080p si hace falta (ffmpeg), se les saca una portada y se suben a la biblioteca.
+// Si no hay ffmpeg, se suben tal cual. Las imágenes de los CDN de Meta (caducan) se suben a la biblioteca una sola vez.
+const vq = () => require('./src/videoq');
+const VQ = () => require('./renderer/vidq');
+const metaUrlCache = new Map(); // dirección de Meta → { id, url } en la biblioteca
+async function uploadMetaUrl(url) {
+  if (metaUrlCache.has(url)) return metaUrlCache.get(url);
+  const up = (await wpCall(() => WP().uploadFromUrls(cfg, [url])))[0];
+  if (!up?.url) throw new Error('No se pudo subir un medio externo');
+  metaUrlCache.set(url, up);
+  return up;
+}
+// Sube a la biblioteca lo que haya de los CDN de Meta dentro de unos bloques y lo sustituye en el sitio. Devuelve { map, failed }
+async function externalizeMedia(root) {
+  const map = {}; let failed = 0;
+  for (const u of VQ().collectExpiring(root)) {
+    try { map[u] = (await uploadMetaUrl(u)).url; } catch (e) { if (e instanceof wp.AuthError) throw e; failed++; log('Medio externo no subido', u.slice(0, 80), e.message); }
+  }
+  VQ().replaceUrls(root, map);
+  return { map, failed };
+}
+async function downloadToFile(url, file) {
+  const res = await fetch(url, { redirect: 'follow' });
+  if (!res.ok || !res.body) throw new Error(`No se pudo descargar el vídeo (${res.status})`);
+  await require('stream/promises').pipeline(require('stream').Readable.fromWeb(res.body), fs.createWriteStream(file));
+}
+// Procesa un vídeo del disco (comprimir + portada) y lo sube. Devuelve { id, url, poster?, width?, height? }
+async function uploadVideoFile(file, { name, keepIfSmall = null } = {}) {
+  const pr = await vq().processVideo(file, { name });
+  try {
+    let up = keepIfSmall && !pr.transcoded ? keepIfSmall : await wpCall(() => WP().uploadFile(cfg, pr.file));
+    if (pr.transcoded) log('Vídeo comprimido a', pr.width + '×' + pr.height);
+    const out = { id: up.id, url: up.url };
+    if (pr.width && pr.height) { out.width = pr.width; out.height = pr.height; }
+    if (pr.posterFile) {
+      try {
+        const base = path.basename(pr.file).replace(/\.[^.]+$/, '');
+        const named = path.join(pr.dir, base + '-portada.jpg');
+        fs.renameSync(pr.posterFile, named);
+        out.poster = (await wpCall(() => WP().uploadFile(cfg, named))).url;
+      } catch (e) { if (e instanceof wp.AuthError) throw e; log('Portada no subida:', e.message); }
+    }
+    return out;
+  } finally { fs.rm(pr.dir, { recursive: true, force: true }, () => {}); }
+}
+// Un vídeo remoto (de Meta u otra dirección): se descarga y pasa por uploadVideoFile
+async function uploadVideoFromUrl(url, opts = {}) {
+  const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'ecos-dl-'));
+  try {
+    let name = 'video.mp4';
+    try { name = decodeURIComponent(new URL(url).pathname.split('/').pop() || '') || name; } catch { /* nombre por defecto */ }
+    if (!/\.(mp4|mov|webm|m4v)$/i.test(name)) name = name.replace(/\.[^.]*$/, '') + '.mp4';
+    const file = path.join(dir, name.replace(/[\\/:*?"<>|]+/g, '-').slice(0, 80));
+    await downloadToFile(url, file);
+    return await uploadVideoFile(file, { name: file, ...opts });
+  } finally { fs.rm(dir, { recursive: true, force: true }, () => {}); }
+}
+// Mejor versión de cada vídeo entre Instagram y Facebook (y el nodo de vídeo de Facebook); si algo falla, se deja como está
+async function withBestVideos(post) {
+  try {
+    const acc = accounts.find((a) => a.pageToken);
+    const extraUrls = async (m) => (acc ? vq().facebookNodeSource(m, { graph: `https://graph.facebook.com/${cfg.graphVersion || 'v23.0'}`, token: acc.pageToken }) : []);
+    return await vq().bestVersionPost(post, { extraUrls });
+  } catch (e) { log('Mejor versión de vídeo:', e.message); return post; }
+}
+
 handle('draft:build', async (posts, unify) => {
   if (!wpIsConnected()) throw new Error('Primero conecta tu WordPress en «Conexiones».');
+  posts = await Promise.all(posts.map(withBestVideos));
   const items = new Map();
   for (const p of posts) for (const m of p.media) {
     if ((m.type === 'image' && (m.url || m.path)) || (m.type === 'video' && (m.path || m.videoUrl))) items.set(mediaKey(m), m);
@@ -330,15 +398,42 @@ handle('draft:build', async (posts, unify) => {
   for (const [key, m] of items) {
     // uno a uno, para que un fallo no tumbe el resto
     try {
-      const src = m.type === 'video' ? m.path || m.videoUrl : m.path || m.url;
-      uploaded.set(key, m.path ? await WP().uploadFile(cfg, src) : (await WP().uploadFromUrls(cfg, [src]))[0]);
+      if (m.type === 'video') {
+        const up = m.path ? await uploadVideoFile(m.path) : await uploadVideoFromUrl(m.videoUrl);
+        // sin portada generada: la miniatura de la red social (caduca) se sube también a la biblioteca
+        if (!up.poster && m.url && !m.path && VQ().isMetaCdn(m.url)) { try { up.poster = (await uploadMetaUrl(m.url)).url; } catch (e) { log('Portada externa no subida:', e.message); } }
+        uploaded.set(key, up);
+      } else {
+        const src = m.path || m.url;
+        uploaded.set(key, m.path ? await WP().uploadFile(cfg, src) : (await WP().uploadFromUrls(cfg, [src]))[0]);
+      }
     } catch (e) {
       if (e instanceof wp.AuthError) throw wpAuthFailed(e); // no tiene sentido seguir con el resto
       // Un vídeo que no se puede subir (p. ej. el plan no admite vídeo) se inserta desde la red social
       if (m.type === 'video') { notes.push('video'); log('Vídeo no subido; se insertará el original:', e.message); } else failed.push(e.message);
     }
   }
-  return { ...buildDraft(posts, uploaded, unify ? { ...publicCfg().format, unify } : publicCfg().format), failed, notes };
+  const draft = buildDraft(posts, uploaded, unify ? { ...publicCfg().format, unify } : publicCfg().format);
+  await externalizeMedia(draft).catch((e) => { if (e instanceof wp.AuthError) throw wpAuthFailed(e); log('Medios externos:', e.message); });
+  return { ...draft, failed, notes };
+});
+// Sube a la biblioteca los medios de Meta que quedan en los bloques del editor (botón de «Revisión»)
+handle('media:externalize', async (blocks) => {
+  const r = await externalizeMedia(blocks || []);
+  return r;
+});
+// Sustituir un vídeo por el original: del ordenador (solo vídeos) o ya subido desde Google Fotos (se mide, comprime y saca portada)
+handle('video:pickLocal', async () => {
+  const r = await dialog.showOpenDialog(mainWin, {
+    title: 'Elige el vídeo original', properties: ['openFile'],
+    filters: [{ name: 'Vídeos', extensions: ['mp4', 'mov', 'webm', 'm4v'] }],
+  });
+  if (r.canceled || !r.filePaths[0]) return null;
+  return { ...(await uploadVideoFile(r.filePaths[0], { name: r.filePaths[0] })), type: 'video' };
+});
+handle('video:finish', async ({ url, id }) => {
+  if (!/^https?:\/\//i.test(String(url || ''))) throw new Error('Dirección de vídeo no válida');
+  return { ...(await uploadVideoFromUrl(url, { keepIfSmall: { id, url } })), type: 'video' };
 });
 
 // --- Importaciones alternativas ---
@@ -568,8 +663,9 @@ handle('media:upload', async () => {
   if (r.canceled) return [];
   const out = [];
   for (const f of r.filePaths) {
-    const up = await wpCall(() => WP().uploadFile(cfg, f));
-    out.push({ ...up, alt: '', type: /\.(mp4|mov|webm)$/i.test(f) ? 'video' : 'image' });
+    const isVid = /\.(mp4|mov|webm)$/i.test(f);
+    const up = isVid ? await uploadVideoFile(f, { name: f }) : await wpCall(() => WP().uploadFile(cfg, f));
+    out.push({ ...up, alt: '', type: isVid ? 'video' : 'image' });
   }
   return out;
 });
@@ -630,6 +726,7 @@ handle('draft:publish', async (d) => { require('./src/pagelinks').forget();
   }
   if (d.status === 'future' && (!d.scheduleAt || new Date(d.scheduleAt) <= new Date())) throw new Error('Elige una fecha y hora futuras para programar la entrada.');
   // Si ya se guardó como borrador para la vista previa, se actualiza esa misma entrada
+  await externalizeMedia(d.blocks || d.sections || []).catch((e) => log('Medios externos al enviar:', e.message)); // los de Meta caducan
   d.featuredImageId = await resolveFeatured(d);
   const fields = postFields(d, d.status || 'draft');
   // WordPress pone como «fecha de modificación» la de la entrada solo cuando se crea; cada vez que se

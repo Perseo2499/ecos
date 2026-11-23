@@ -302,10 +302,19 @@
         [!imgs.length || !noAlt, t('Todas las fotos tienen descripción'), t('{n} foto(s) sin descripción (alt)', { n: noAlt })],
         [words < 350 || heads.length > 0, t('Texto bien estructurado'), t('Texto largo sin títulos: divídelo con alguno (H2)')],
       ];
+      const ext = window.VidQ ? window.VidQ.collectExpiring(ed.draft.blocks) : [];
       box.innerHTML = `
         <div class="rv-stats"><div><b>${words}</b><span>${t('palabras')}</span></div><div><b>${minutes}</b><span>${t('min de lectura')}</span></div><div><b>${imgs.length}</b><span>${t('fotos')}</span></div></div>
         ${checks.map(([ok, good, bad]) => `<div class="rv-check ${ok ? 'ok' : 'warn'}"><span class="ms fill">${ok ? 'check_circle' : 'error'}</span>${esc(ok ? good : bad || good)}</div>`).join('')}
+        ${ext.length ? `<div class="rv-check warn rv-ext"><span class="ms fill">schedule</span><span>${esc(t('{n} medio(s) de Instagram o Facebook caducan: súbelos a tu web', { n: ext.length }))}<br><button class="btn tonal small" data-ext="1"><span class="ms">cloud_upload</span><span>${esc(t('Subirlos a mi web'))}</span></button></span></div>` : ''}
         ${heads.length ? `<div class="rv-outline">${heads.map((h) => `<a href="#" data-id="${h.id}" class="lvl${h.level || 2}">${esc(h.html.replace(/<[^>]+>/g, ''))}</a>`).join('')}</div>` : ''}`;
+      $('[data-ext]', box)?.addEventListener('click', (e) => busy(e.currentTarget, async () => {
+        const r = await window.api.externalizeMedia(ed.draft.blocks);
+        const n = Object.keys(r.map || {}).length;
+        if (n) ed.change(() => window.VidQ.replaceUrls(ed.draft.blocks, r.map));
+        if (r.failed) toast(t('No se ha podido subir {n} medio(s)', { n: r.failed }), true);
+        else toast(t('Subidos {n} medio(s) a tu web', { n }));
+      }));
       $$('.rv-outline a', box).forEach((x) => (x.onclick = (e) => { e.preventDefault(); const el = $(`.blk[data-id="${x.dataset.id}"]`); el?.scrollIntoView({ behavior: 'smooth', block: 'center' }); ed.focus(x.dataset.id, true); }));
       $('#ed-count').textContent = t('{n} palabras · {m} min', { n: words, m: minutes });
     }, 250);
