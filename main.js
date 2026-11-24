@@ -33,7 +33,7 @@ const readStartup = () => { try { return JSON.parse(fs.readFileSync(startupFile(
 const saveStartup = (s) => { startupState = s; try { fs.mkdirSync(path.dirname(startupFile()), { recursive: true }); fs.writeFileSync(startupFile(), JSON.stringify(s)); } catch { /* nada */ } };
 // Descarga el instalador publicado más reciente y lo ejecuta; si falla, abre la página de descargas
 async function installPublished() {
-  const RELEASES = 'https://github.com/Perseo2499/ecos/releases/latest';
+  const RELEASES = 'https://github.com/Perseo2499/ecos-releases/releases/latest';
   try {
     const file = await require('./src/startup').downloadInstaller(app.getPath('temp'));
     if (process.platform === 'win32') require('child_process').spawn(file, [], { detached: true, stdio: 'ignore' }).unref();
@@ -1862,6 +1862,17 @@ function openSafe(url) {
   if (!['https:', 'http:', 'mailto:'].includes(u.protocol)) { log('Enlace bloqueado:', u.protocol); return false; }
   shell.openExternal(u.href); return true;
 }
+// Documentos de la licencia incluidos en la app: LICENSE, avisos de terceros y cómo obtener el código fuente (GPL)
+handle('app:openDoc', async (name) => {
+  const files = { license: 'LICENSE.txt', third: 'THIRD-PARTY-NOTICES.md', source: 'NOTICE.txt' };
+  const f = files[name];
+  if (!f) throw new Error('Documento desconocido');
+  const p = app.isPackaged ? path.join(process.resourcesPath, f) : path.join(__dirname, { 'LICENSE.txt': 'LICENSE', 'NOTICE.txt': 'NOTICE' }[f] || f);
+  if (!fs.existsSync(p)) throw new Error('No se encuentra ' + f);
+  const err = await shell.openPath(p);
+  if (err) throw new Error(err);
+  return true;
+});
 handle('open', (url) => { if (!openSafe(url)) throw new Error('Ese enlace no se puede abrir desde Ecos'); });
 
 handle('update:status', () => updater.current());

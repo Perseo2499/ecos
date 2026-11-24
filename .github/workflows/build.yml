@@ -194,3 +194,29 @@ jobs:
             dist/Ecos-Setup-*.exe.blockmap
             dist/Ecos-*-portable.exe
             dist/latest.yml
+      # Repositorio público de versiones (Perseo2499/ecos-releases): es donde la app busca las actualizaciones.
+      # Necesita el secreto RELEASES_TOKEN (token con permiso de escritura en ese repositorio); sin él, se omite.
+      - name: ¿Hay token del repositorio de versiones?
+        id: rel
+        shell: bash
+        run: echo "ok=${{ secrets.RELEASES_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
+      - name: Publicar en el repositorio de versiones
+        if: ${{ steps.rel.outputs.ok == 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: Perseo2499/ecos-releases
+          token: ${{ secrets.RELEASES_TOKEN }}
+          tag_name: v${{ steps.v.outputs.version }}
+          prerelease: false
+          make_latest: true
+          name: Ecos ${{ steps.v.outputs.version }}
+          body: |
+            **Recomendado: `Ecos-Setup-${{ steps.v.outputs.version }}.exe`** (instalador, se actualiza solo).
+            Alternativa sin instalar: `Ecos-${{ steps.v.outputs.version }}-portable.exe` (no se actualiza sola).
+            Si Windows SmartScreen avisa: *Más información → Ejecutar de todas formas*.
+            Ecos es software libre (GPL-3.0). Para obtener el código fuente de esta versión, abre una incidencia en este repositorio.
+          files: |
+            dist/Ecos-Setup-*.exe
+            dist/Ecos-Setup-*.exe.blockmap
+            dist/Ecos-*-portable.exe
+            dist/latest.yml

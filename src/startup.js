@@ -3,7 +3,7 @@
 // principal está lista; si en el siguiente arranque sigue en true, el anterior no llegó a mostrarse.
 const FAILS_TO_OFFER = 2;
 const READY_TIMEOUT_MS = 60000;
-const REPO = { owner: 'Perseo2499', repo: 'ecos' };
+const REPO = { owner: 'Perseo2499', repo: 'ecos-releases' }; // instaladores públicos (el código es privado)
 
 const clean = (s) => ({ pending: !!s?.pending, failures: Math.max(0, Number(s?.failures) || 0), version: String(s?.version || '') });
 

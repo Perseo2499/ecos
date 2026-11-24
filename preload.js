@@ -99,6 +99,7 @@ contextBridge.exposeInMainWorld('api', {
   aiAlts: (urls, context) => call('ai:alts', urls, context),
   aiAlt: (url, context) => call('ai:alt', url, context),
   draftImportFile: () => call('draft:importFile'),
+  openDoc: (name) => call('app:openDoc', name),
   aiSetActive: (id) => call('ai:setActive', id),
   aiSave: (id, data) => call('ai:save', id, data),
   aiRemove: (id) => call('ai:remove', id),

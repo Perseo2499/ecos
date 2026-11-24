@@ -10,7 +10,7 @@ Este archivo lo genera `node scripts/third-party.js` a partir de `package-lock.j
 - Ecos incluye un ejecutable de **FFmpeg** (paquete npm `ffmpeg-static` 5.3.0, publicación de binarios `b6.1.1`, FFmpeg 6.1.1) para recomprimir vídeos y convertir imágenes a WebP. Se ejecuta como programa aparte (no se enlaza con el código de Ecos).
 - Licencia del binario: **GPL-3.0-or-later** (las compilaciones de Windows de gyan.dev usadas por `ffmpeg-static` se construyen con `--enable-gpl --enable-version3`). El paquete `ffmpeg-static` también es GPL-3.0-or-later.
 - **Código fuente de FFmpeg**: <https://ffmpeg.org/download.html> (repositorio: <https://git.ffmpeg.org/ffmpeg.git>; etiqueta de la versión 6.1.1: `n6.1.1`). Texto de la licencia: <https://www.gnu.org/licenses/gpl-3.0.html>.
-- Origen de los binarios: <https://github.com/eugeneware/ffmpeg-static/releases/tag/b6.1.1> (Windows x64 de <https://www.gyan.dev/ffmpeg/builds/>; sus scripts de compilación y opciones están en esa web). Si necesitas el código fuente exacto del binario incluido, pídelo abriendo una incidencia en <https://github.com/Perseo2499/ecos/issues> o consúltalo en los enlaces anteriores.
+- Origen de los binarios: <https://github.com/eugeneware/ffmpeg-static/releases/tag/b6.1.1> (Windows x64 de <https://www.gyan.dev/ffmpeg/builds/>; sus scripts de compilación y opciones están en esa web). Si necesitas el código fuente exacto del binario incluido, pídelo abriendo una incidencia en <https://github.com/Perseo2499/ecos-releases/issues> o consúltalo en los enlaces anteriores.
 - FFmpeg es una marca registrada de Fabrice Bellard. Los derechos de autor de FFmpeg pertenecen a sus autores (<https://ffmpeg.org/legal.html>).
 
 ### Electron y Chromium
