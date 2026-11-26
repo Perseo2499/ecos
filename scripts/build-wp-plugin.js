@@ -15,6 +15,7 @@ function writeAssets() {
   const rd = (n) => fs.readFileSync(path.join(ROOT, 'renderer', n), 'utf8');
   fs.writeFileSync(path.join(assets, 'ecos-carousel.js'), head('renderer/carousel.js') + rd('carousel.js'));
   fs.writeFileSync(path.join(assets, 'ecos-videos.js'), head('renderer/videos.js') + rd('videos.js'));
+  fs.writeFileSync(path.join(assets, 'ecos-anim.js'), head('renderer/anim.js') + rd('anim.js'));
   const { FX_CSS } = require('../src/transform');
   fs.writeFileSync(path.join(assets, 'ecos.css'), '/* Generado por scripts/build-wp-plugin.js: estilos comunes de los efectos de Ecos. */\n' + Object.values(FX_CSS).join('\n') + '\n');
 }

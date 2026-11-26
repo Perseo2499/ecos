@@ -91,6 +91,7 @@
     else if (b.type === 'mediatext') b.img = null;
     else if (b.type === 'cover') b.img = null;
     else if (b.type === 'video') b.video = null;
+    delete b.bgi; delete b.bgVideo; // fondos con foto o vídeo concretos: tampoco pasan a la plantilla
     if (Array.isArray(b.children)) b.children = blocksToTemplate(b.children);
     if (Array.isArray(b.cols)) b.cols = b.cols.map((c) => ({ width: c.width, children: blocksToTemplate(c.children) }));
     return b;

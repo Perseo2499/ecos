@@ -48,6 +48,55 @@ function ecos_wp_enqueue() {
 	);
 	wp_enqueue_script( 'ecos-carousel', ECOS_WP_URL . 'assets/ecos-carousel.js', array(), ECOS_WP_VERSION, $args );
 	wp_enqueue_script( 'ecos-videos', ECOS_WP_URL . 'assets/ecos-videos.js', array(), ECOS_WP_VERSION, $args );
+	wp_enqueue_script( 'ecos-anim', ECOS_WP_URL . 'assets/ecos-anim.js', array(), ECOS_WP_VERSION, $args );
+}
+
+/**
+ * Fuentes de Google (opcionales): solo se cargan las familias que la entrada usa, detectadas por la clase ecos-font-<slug>.
+ * Esto conecta con Google (fonts.googleapis.com): ver docs/politica-privacidad-estadisticas.md.
+ */
+function ecos_wp_google_fonts() {
+	return array(
+		'inter' => 'Inter:wght@400;700',
+		'roboto' => 'Roboto:wght@400;700',
+		'open-sans' => 'Open+Sans:wght@400;700',
+		'lato' => 'Lato:wght@400;700',
+		'montserrat' => 'Montserrat:wght@400;700',
+		'poppins' => 'Poppins:wght@400;700',
+		'nunito' => 'Nunito:wght@400;700',
+		'raleway' => 'Raleway:wght@400;700',
+		'merriweather' => 'Merriweather:wght@400;700',
+		'playfair-display' => 'Playfair+Display:wght@400;700',
+		'lora' => 'Lora:wght@400;700',
+		'source-serif' => 'Source+Serif+4:wght@400;700',
+		'work-sans' => 'Work+Sans:wght@400;700',
+		'rubik' => 'Rubik:wght@400;700',
+		'karla' => 'Karla:wght@400;700',
+		'dm-sans' => 'DM+Sans:wght@400;700',
+		'quicksand' => 'Quicksand:wght@400;700',
+		'oswald' => 'Oswald:wght@400;700',
+		'bebas-neue' => 'Bebas+Neue',
+		'caveat' => 'Caveat:wght@400;700',
+	);
+}
+
+function ecos_wp_enqueue_fonts( $content ) {
+	if ( ! is_string( $content ) || false === strpos( $content, 'ecos-font-' ) ) {
+		return;
+	}
+	if ( ! preg_match_all( '/ecos-font-([a-z-]+)/', $content, $m ) ) {
+		return;
+	}
+	$all = ecos_wp_google_fonts();
+	$fam = array();
+	foreach ( array_unique( $m[1] ) as $slug ) {
+		if ( isset( $all[ $slug ] ) ) {
+			$fam[] = 'family=' . $all[ $slug ];
+		}
+	}
+	if ( $fam ) {
+		wp_enqueue_style( 'ecos-fonts', 'https://fonts.googleapis.com/css2?' . implode( '&', $fam ) . '&display=swap', array(), null );
+	}
 }
 
 /**
@@ -60,6 +109,7 @@ function ecos_wp_maybe_enqueue() {
 	$post = get_queried_object();
 	if ( $post instanceof WP_Post && ecos_wp_content_needs_assets( $post->post_content ) ) {
 		ecos_wp_enqueue();
+		ecos_wp_enqueue_fonts( $post->post_content );
 	}
 }
 add_action( 'wp_enqueue_scripts', 'ecos_wp_maybe_enqueue' );
@@ -70,6 +120,7 @@ add_action( 'wp_enqueue_scripts', 'ecos_wp_maybe_enqueue' );
 function ecos_wp_content_filter( $content ) {
 	if ( ! is_admin() && ecos_wp_content_needs_assets( $content ) ) {
 		ecos_wp_enqueue();
+		ecos_wp_enqueue_fonts( $content );
 	}
 	return $content;
 }
