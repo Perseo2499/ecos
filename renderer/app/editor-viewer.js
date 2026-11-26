@@ -43,7 +43,8 @@ document.addEventListener('keydown', (e) => {
 // Dentro de Ecos con los estilos reales de tu web (leídos de su portada); «Ver en mi web» guarda un
 // borrador y abre la vista previa de WordPress.
 // Ventana de vista previa con los estilos reales de la web (editor y entradas de una copia)
-async function showPreview({ title, date: when, cats = [], featured, content, web = false, pageBg = null }) {
+async function showPreview({ title, date: when, cats = [], featured, content, web = false, pageBg = null, modes = false }) {
+  $('#pv-frame').setAttribute('sandbox', 'allow-same-origin'); $('#pv-mode').classList.toggle('hidden', !modes);
   // enlaces de vídeo solos en una línea: el reproductor, como hace WordPress
   content = content.replace(/<p>\s*(https?:\/\/[^\s<]+)\s*<\/p>/g, (m, url) => {
     const e = window.BlockEditor.detectEmbed(url.replace(/&amp;/g, '&'));
@@ -91,6 +92,15 @@ async function showPreview({ title, date: when, cats = [], featured, content, we
   if (!site.css) toast(t('No se pudieron leer los estilos de tu web; la vista previa usa un estilo genérico.'));
 }
 $('#preview').onclick = (e) => busy(e.target, async () => {
+  // con el complemento 1.4.0: «Vista exacta (con tu tema)» por defecto; si falla o no hay complemento, la vista rápida de siempre
+  pvQuick = () => quickPreview();
+  if (exactAvailable()) {
+    try { await openExactPreview(); $('#pv-mode').classList.remove('hidden'); setPvMode('exact'); return; } catch (err) { toast(t('No se pudo preparar la vista exacta ({e}); se muestra la vista rápida.', { e: err.message }), true); }
+  }
+  await quickPreview();
+  if (exactAvailable()) setPvMode('quick');
+});
+async function quickPreview() {
   let content = await window.api.composeDraft(draft.blocks);
   // Lo que WordPress añade al mostrar la entrada: alineación de los botones y reproductores de vídeo
   content = content.replace(/<!-- wp:buttons \{"layout":\{"type":"flex","justifyContent":"(center|right)"\}\} -->\n<div class="wp-block-buttons/g, (_m, j) => `<div class="wp-block-buttons is-content-justification-${j}`)
@@ -101,8 +111,8 @@ $('#preview').onclick = (e) => busy(e.target, async () => {
     });
   const featured = window.BlockEditor.flat(draft.blocks).flatMap((b) => (b.img ? [b.img] : b.images || [])).filter((i) => i.type !== 'video').find((i) => i.id === draft.featuredImageId);
   const cats = $$('#d-cats input:checked').map((i) => i.value);
-  await showPreview({ title: $('#d-title').value, date: $('#d-keepdate').checked ? draft.date : Date.now(), cats, featured: featured?.url, content, web: true, pageBg: draft.pageBg });
-});
+  await showPreview({ title: $('#d-title').value, date: $('#d-keepdate').checked ? draft.date : Date.now(), cats, featured: featured?.url, content, web: true, pageBg: draft.pageBg, modes: exactAvailable() });
+}
 
 $$('#pv-size button').forEach((b) => b.onclick = () => {
   $$('#pv-size button').forEach((x) => x.classList.toggle('active', x === b));

@@ -4,6 +4,7 @@
 const { FONTS, FX_MARK } = require('./transform');
 const PageBg = require('../renderer/pagebg');
 const DK = require('../renderer/sections');
+const TS = require('./themestyles');
 
 const FONT_KEY = Object.fromEntries(Object.entries(FONTS).map(([k, v]) => [v, k]));
 let seq = 0;
@@ -48,14 +49,27 @@ function tokenize(content) {
 function safeJson(s) { try { return s ? JSON.parse(s) : {}; } catch { return {}; } }
 
 // Estilos de bloque (los mismos que escribe Ecos)
+// Colores de la web (textColor / backgroundColor con el nombre del color del tema): se guarda su valor y, en o.th, el nombre
+function themeColors(a, o) {
+  for (const [attrName, key] of [['textColor', 'color'], ['backgroundColor', 'bg']]) {
+    const slug = a[attrName];
+    if (typeof slug === 'string' && TS.SLUG.test(slug)) { o[key] = TS.value('color', slug); (o.th ||= {})[key] = { slug, v: o[key] }; }
+  }
+  return o;
+}
+const slugOk = (v) => v === undefined || (typeof v === 'string' && TS.SLUG.test(v));
 function styleFrom(a) {
   const st = a.style || {}, o = {};
+  themeColors(a, o);
+  if (typeof a.fontSize === 'string' && TS.SLUG.test(a.fontSize)) { o.size = TS.value('size', a.fontSize); (o.th ||= {}).size = { slug: a.fontSize, v: o.size }; }
+  if (typeof a.fontFamily === 'string' && TS.SLUG.test(a.fontFamily)) o.font = 'wp:' + a.fontFamily;
   if (a.align || a.textAlign) o.align = a.align || a.textAlign;
   if (a.dropCap) o.dropCap = true;
   if (st.color?.text) o.color = st.color.text;
   if (st.color?.background) o.bg = st.color.background;
   if (st.typography?.fontSize) o.size = st.typography.fontSize;
   if (st.typography?.fontFamily && FONT_KEY[st.typography.fontFamily]) o.font = FONT_KEY[st.typography.fontFamily];
+  else if (st.typography?.fontFamily && st.typography.fontFamily === TS.get()?.headingFont) { o.font = 'heading'; (o.th ||= {}).font = { slug: 'heading', v: st.typography.fontFamily }; }
   if (st.typography?.letterSpacing && /^\d{1,2}(\.\d)?px$/.test(st.typography.letterSpacing)) o.spacing = st.typography.letterSpacing;
   if (/(^|\s)ecos-sombra(\s|$)/.test(a.className || '')) o.shadow = true;
   if (/(^|\s)ecos-justify(\s|$)/.test(a.className || '')) o.align = 'justify';
@@ -157,6 +171,7 @@ function toBlock(t) {
       const out = { id: bid(), type: 'buttons', html: inner(link, 'a'), url: attr(link, 'href'), align: a.layout?.justifyContent || 'left', variant: /is-style-outline/.test(ba.className || '') ? 'outline' : 'fill' };
       if (bst.color?.background) out.bg = bst.color.background;
       if (bst.color?.text) out.color = bst.color.text;
+      themeColors(ba, out);
       const rad = parseInt(bst.border?.radius, 10);
       if (!Number.isNaN(rad)) out.radius = rad === 0 ? 'square' : rad >= 100 ? 'pill' : 'round';
       const pt = parseInt(bst.spacing?.padding?.top, 10);
@@ -261,6 +276,7 @@ function toBlock(t) {
       if (st.color?.gradient) b.gradient = st.color.gradient;
       if (st.color?.background) b.bg = st.color.background;
       if (st.color?.text) b.color = st.color.text;
+      themeColors(a, b);
       b.pad = padOf(st.spacing?.padding);
       const rad = parseInt(st.border?.radius, 10);
       if (rad > 0) b.radius = rad;
@@ -270,7 +286,7 @@ function toBlock(t) {
       return b;
     }
     case 'columns': {
-      if (!onlyKeys(a, ['verticalAlignment', 'isStackedOnMobile', 'style']) || !columnsStyleKnown(a.style)) return raw();
+      if (!onlyKeys(a, ['verticalAlignment', 'isStackedOnMobile', 'style', 'backgroundColor']) || !slugOk(a.backgroundColor) || !columnsStyleKnown(a.style)) return raw();
       const cols = tokenize(h).filter((x) => x.name !== 'freeform' || x.inner.replace(/<[^>]+>|\s|&nbsp;/g, ''));
       if (!cols.length || cols.some((x) => x.name !== 'column' || !onlyKeys(x.attrs, ['width', 'verticalAlignment']))) return raw();
       const eq = pctString(100 / cols.length);
@@ -281,6 +297,7 @@ function toBlock(t) {
       if (a.isStackedOnMobile === false) b.stack = false;
       if (a.style?.color?.gradient) b.gradient = a.style.color.gradient;
       if (a.style?.color?.background) b.bg = a.style.color.background;
+      themeColors({ backgroundColor: a.backgroundColor }, b);
       if (a.style?.spacing?.blockGap) b.gap = parseInt(a.style.spacing.blockGap, 10);
       Object.assign(b, marginFrom(a.style?.spacing));
       return b;
@@ -315,7 +332,7 @@ const onlyKeys = (o, keys) => Object.keys(o || {}).every((k) => keys.includes(k)
 const pctString = (n) => `${Math.round(n * 100) / 100}%`;
 // Solo se convierte en sección lo que Ecos sabe volver a escribir igual; el resto se conserva tal cual (bloque «raw»)
 function groupKnown(a) {
-  if (!onlyKeys(a, ['align', 'style', 'layout'])) return false;
+  if (!onlyKeys(a, ['align', 'style', 'layout', 'textColor', 'backgroundColor']) || !slugOk(a.textColor) || !slugOk(a.backgroundColor)) return false;
   if (a.align && !ALIGN_OK.includes(a.align)) return false;
   if (a.layout && !(a.layout.type === 'constrained' && Object.keys(a.layout).length === 1)) return false;
   const st = a.style || {};

@@ -4,6 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const { AuthError } = require('./wpcom');
+const TS = require('./themestyles');
 
 const base = (cfg) => {
   const raw = (cfg.wpUrl || '').trim();
@@ -283,13 +284,20 @@ async function mediaUsage(cfg, knownMedia) {
 
 // --- Entradas ----------------------------------------------------------------------
 // Recibe los campos en el formato de WordPress.com (nombres separados por comas) y los adapta
+// Metas que se envían: descripción SEO y ajustes de página de Astra (f.astraMeta, solo con el complemento 1.4)
+function metaOf(f) {
+  const meta = {};
+  if (Object.values(SEO_KEYS).includes(f.seoKey) && f.seoDesc !== undefined) meta[f.seoKey] = f.seoDesc;
+  if (f.astraMeta && typeof f.astraMeta === 'object') for (const k of TS.ASTRA_KEYS) if (typeof f.astraMeta[k] === 'string') meta[k] = f.astraMeta[k];
+  return Object.keys(meta).length ? { meta } : {};
+}
 async function toRest(cfg, f) {
   const split = (s) => String(s || '').split(',').map((x) => x.trim()).filter(Boolean);
   const isPage = f.type === 'page'; // las páginas no tienen categorías ni etiquetas
   return {
     title: f.title, content: f.content, status: f.status, excerpt: f.excerpt || '',
     ...(f.slug ? { slug: f.slug } : {}),
-    ...(Object.values(SEO_KEYS).includes(f.seoKey) && f.seoDesc !== undefined ? { meta: { [f.seoKey]: f.seoDesc } } : {}),
+    ...metaOf(f),
     ...(f.featured_image ? { featured_media: f.featured_image } : {}),
     ...(isPage && f.parent !== undefined ? { parent: Number(f.parent) || 0 } : {}),
     ...(f.date ? { date_gmt: new Date(f.date).toISOString().slice(0, 19) } : {}),
@@ -459,6 +467,7 @@ async function getPost(cfg, id, type) {
     id: p.id, status: p.status, url: p.link, date: p.date_gmt ? p.date_gmt + 'Z' : p.date, modified: p.modified_gmt ? p.modified_gmt + 'Z' : p.modified,
     title: p.title?.raw ?? '', excerpt: p.excerpt?.raw ?? '', content: p.content?.raw ?? '', featured: p.featured_media || null, slug: p.slug || '',
     seoDesc: p.meta?.[SEO_KEYS.yoast] || p.meta?.[SEO_KEYS.rankmath] || '',
+    astra: TS.astraFromMeta(p.meta),
     type: type === 'page' ? 'page' : 'post', parent: Number(p.parent) || 0,
   };
 }
@@ -728,4 +737,13 @@ async function helperExport(cfg) {
   return d;
 }
 
-module.exports = { getJson, helperHasExport, helperExport, helperHasLock, me, parseMe, postModified, helperLock, helperUnlock, parseHelperLock, helperStats, parseHelperStats, helperSettings, helperSaveSettings, parseHelperSettings, helperStatus, helperPurge, parseHelperStatus, helperBundledVersion, detectSeo, seoInfo, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText };
+// Estilos de la web y vista previa exacta (complemento 1.4.0)
+const helperHasRender = (version) => TS.helperHasTheme(version);
+async function helperRender(cfg, payload) {
+  const d = await req(cfg, '/ecos/v1/render', { method: 'POST', json: payload });
+  if (!d || d.plugin !== 'ecos' || typeof d.html !== 'string') throw new Error('El complemento no devolvió la vista previa. Actualízalo desde Conexiones.');
+  return d.html;
+}
+const themeStyles = (cfg, helperVersion) => TS.fetchTheme((route) => req(cfg, route), helperVersion);
+
+module.exports = { helperHasRender, helperRender, themeStyles, getJson, helperHasExport, helperExport, helperHasLock, me, parseMe, postModified, helperLock, helperUnlock, parseHelperLock, helperStats, parseHelperStats, helperSettings, helperSaveSettings, parseHelperSettings, helperStatus, helperPurge, parseHelperStatus, helperBundledVersion, detectSeo, seoInfo, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText };

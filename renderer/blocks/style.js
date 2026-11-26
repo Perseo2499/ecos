@@ -205,7 +205,7 @@
         if (r.chips) body = `<div class="sp-chips">${r.chips.map((c, ci) => `<button class="sp-chip ${c.on ? 'on' : ''}" data-r="${ri}" data-c="${ci}" ${c.off ? 'disabled' : ''} ${c.title ? `title="${esc(c.title)}"` : ''}>${c.ic ? `<span class="ms">${c.ic}</span>` : ''}${esc(c.t)}</button>`).join('')}</div>`;
         else if (r.color) {
           const cur = r.color.get() || '';
-          body = `<div class="sp-chips sp-sws">${r.color.none ? `<button class="sp-chip ${!cur ? 'on' : ''}" data-r="${ri}" data-sw="">${t('Ninguno')}</button>` : ''}${SWATCH.map((c) => `<button class="sp-sw ${cur.toLowerCase() === c ? 'on' : ''}" data-r="${ri}" data-sw="${c}" style="background:${c}" title="${c}"></button>`).join('')}<label class="sp-sw sp-custom" title="${t('Otro color')}"><span class="ms">palette</span><input type="color" data-r="${ri}" value="${/^#[0-9a-f]{6}$/i.test(cur) ? cur : '#888888'}"></label></div>`;
+          body = `<div class="sp-chips sp-sws">${r.color.none ? `<button class="sp-chip ${!cur ? 'on' : ''}" data-r="${ri}" data-sw="">${t('Ninguno')}</button>` : ''}${window.ThemeUI ? window.ThemeUI.panelSwatches(ri, cur, SWATCH) : SWATCH.map((c) => `<button class="sp-sw ${cur.toLowerCase() === c ? 'on' : ''}" data-r="${ri}" data-sw="${c}" style="background:${c}" title="${c}"></button>`).join('')}<label class="sp-sw sp-custom" title="${t('Otro color')}"><span class="ms">palette</span><input type="color" data-r="${ri}" value="${/^#[0-9a-f]{6}$/i.test(cur) ? cur : '#888888'}"></label></div>`;
         } else if (r.grad) {
           const cur = r.grad.get() || '';
           body = `<div class="sp-chips sp-sws"><button class="sp-chip ${!cur ? 'on' : ''}" data-r="${ri}" data-gr="">${t('Ninguno')}</button>${SK().GRADIENTS.map((g) => `<button class="sp-sw ${cur === g.css ? 'on' : ''}" data-r="${ri}" data-gr="${esc(g.css)}" style="background:${g.css}" title="${esc(t(g.name))}"></button>`).join('')}</div>`;
@@ -225,7 +225,7 @@
       el.style.top = Math.max(8, Math.min(innerHeight - hh - 8, pos.y)) + 'px';
       $('.sp-x', el).onclick = () => { this.closeStyle(); if (!this.repaintBlock(id)) this.render(); };
       $$('.sp-chip[data-c]', el).forEach((x) => (x.onclick = () => { const c = rows[Number(x.dataset.r)].chips[Number(x.dataset.c)]; if (c.raw) c.raw(); else this.changeBlock(id, c.fn); }));
-      $$('[data-sw]', el).forEach((x) => (x.onclick = () => this.changeBlock(id, () => rows[Number(x.dataset.r)].color.set(x.dataset.sw))));
+      $$('[data-sw]', el).forEach((x) => (x.onclick = () => this.changeBlock(id, () => { const before = { bg: b.bg, color: b.color }; rows[Number(x.dataset.r)].color.set(x.dataset.sw); window.ThemeUI?.tagChanged(b, before, x.dataset.sw, x.dataset.th || ''); })));
       $$('[data-gr]', el).forEach((x) => (x.onclick = () => this.changeBlock(id, () => rows[Number(x.dataset.r)].grad.set(x.dataset.gr))));
       $$('input[type=color]', el).forEach((x) => {
         const r = rows[Number(x.dataset.r)];

@@ -248,6 +248,8 @@ const wpIsConnected = () => (isSelf() ? !!cfg.wpAppPassword && !!cfg.wpSelfOk : 
 const wpLabel = () => (isSelf() ? (cfg.wpUrl || '').replace(/^https?:\/\//, '').replace(/\/$/, '') : cfg.wpSite);
 // Complemento de Ecos para WordPress: solo con «Mi web (wp-admin)». El estado se guarda en cfg.ecosHelper
 const helperOn = () => isSelf() && !!cfg.ecosHelper?.installed;
+const astraOnOrRender = () => helperOn() && wpself.helperHasRender(cfg.ecosHelper.version);
+const astraOn = () => astraOnOrRender() && !!cfg.themeStyles?.theme?.isAstra;
 async function refreshHelper(force = false) {
   if (!isSelf() || !cfg.wpUrl || !cfg.wpSelfOk) { if (cfg.ecosHelper) { cfg.ecosHelper = null; store.save(cfg); } return null; }
   try {
@@ -590,6 +592,7 @@ function postFields(d, status) {
   return {
     ...(d.type === 'page' ? { type: 'page', parent: Number(d.parent) || 0 } : {}),
     title: d.title, content: d.blocks ? composeBlocks(d.blocks, { spectra: isSelf(), helper: helperOn(), pageBg: d.pageBg || null }) : composeContent(d.sections), status: scheduled ? 'future' : status,
+    ...(d.astra && astraOn() ? { astraMeta: require('./src/themestyles').astraToMeta(d.astra) } : {}),
     tags: (d.tags || []).join(','), categories: (d.categories || []).join(','),
     excerpt: d.excerpt || '',
     ...(d.seoKey && isSelf() ? { seoKey: d.seoKey, seoDesc: d.seoDesc || '' } : {}),
@@ -609,6 +612,32 @@ handle('draft:preview', async (d) => {
   return { postId: post.ID, previewUrl: `${base}/?p=${post.ID}&preview=true` };
 });
 handle('draft:compose', (blocks) => composeBlocks(blocks));
+// Estilos de la web (paleta, tamaños y fuentes del tema), en caché en cfg.themeStyles; se renuevan cada 12 horas o con force
+const TSM = () => require('./src/themestyles');
+const themeFresh = (c) => c && c.site === cfg.wpUrl && Date.now() - (c.at || 0) < 12 * 3600e3;
+async function loadThemeStyles(force = false) {
+  if (!isSelf() || !cfg.wpUrl || !cfg.wpSelfOk) { TSM().set(null); return null; }
+  if (!force && themeFresh(cfg.themeStyles)) { TSM().set(cfg.themeStyles); return cfg.themeStyles; }
+  try {
+    await refreshHelper();
+    const st = { ...(await wpCall(() => wpself.themeStyles(cfg, cfg.ecosHelper?.installed ? cfg.ecosHelper.version : ''))), site: cfg.wpUrl };
+    cfg.themeStyles = st; store.save(cfg); TSM().set(st); return st;
+  } catch (e) {
+    log('Estilos de la web:', e.message);
+    TSM().set(cfg.themeStyles?.site === cfg.wpUrl ? cfg.themeStyles : null);
+    return cfg.themeStyles?.site === cfg.wpUrl ? cfg.themeStyles : null;
+  }
+}
+handle('theme:get', (force) => loadThemeStyles(!!force));
+// Vista previa exacta con el tema real (complemento 1.4.0): devuelve la página completa; no se guarda nada en WordPress
+handle('draft:renderExact', async (d) => {
+  await refreshHelper();
+  if (!astraOnOrRender()) throw new Error('Para la vista exacta hace falta el complemento de Ecos 1.4.0 o posterior (Conexiones → WordPress).');
+  const f = postFields(d, 'draft');
+  const meta = d.astra && astraOn() ? TSM().astraToMeta(d.astra) : undefined;
+  const html = await wpCall(() => wpself.helperRender(cfg, { id: d.postId || 0, type: d.type === 'page' ? 'page' : 'post', title: d.title, excerpt: d.excerpt || '', content: f.content, ...(meta ? { meta } : {}), ...(d.featuredImageId ? { featured_media: Number(d.featuredImageId) || 0 } : {}) }));
+  return { html: await TSM().prepareExact(html, async (u) => { const r = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0 Ecos' } }); if (!r.ok) throw new Error(r.status); return r.text(); }, { base: WP().publicBase(cfg) + '/' }) };
+});
 handle('draft:peekCss', () => require('./src/transform').PEEK_CSS);
 // Convierte los bloques de Spectra de una página en bloques editables de Ecos (lógica pura, sin tocar WordPress)
 handle('spectra:convert', (blocks) => require('./src/spectra').convertSpectra(blocks));
@@ -2030,6 +2059,7 @@ app.whenReady().then(() => {
   log(`Arrancando Ecos ${app.getVersion()} (${process.platform} ${process.arch}, Electron ${process.versions.electron}, modo ${mode}: ${MODES[mode].name})`);
   const stored = store.load();
   cfg = { graphVersion: 'v23.0', ...stored };
+  try { require('./src/themestyles').set(cfg.themeStyles || null); } catch { /* sin estilos guardados */ }
   // Hasta la 2.x la app traía una web preconfigurada por defecto; quien la usaba sin haber escrito la suya la conserva
   // (se guarda una vez). Las instalaciones nuevas empiezan sin ninguna web.
   const LEGACY = 'https://www.asociacionelin.com'; // valor por defecto de las versiones 1.x y 2.x (solo para esta migración)

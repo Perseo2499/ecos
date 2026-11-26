@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       Ecos para WordPress
  * Plugin URI:        https://github.com/Perseo2499/ecos-releases
- * Description:       Complemento de Ecos: carga una sola vez el carrusel de fotos, los vídeos y los estilos de Ecos, añade la vista previa al compartir y los datos para Google, cuenta visitas sin cookies, vacía la caché de la entrada cuando la envías desde Ecos y avisa si otra persona la está editando y exporta la configuración para la copia de emergencia de Ecos.
- * Version:           1.3.0
+ * Description:       Complemento de Ecos: carga una sola vez el carrusel de fotos, los vídeos y los estilos de Ecos, añade la vista previa al compartir y los datos para Google, cuenta visitas sin cookies, vacía la caché de la entrada cuando la envías desde Ecos y avisa si otra persona la está editando exporta la configuración para la copia de emergencia de Ecos, ofrece al editor los colores, tamaños y fuentes de tu tema, la vista previa exacta con el tema y los ajustes de página de Astra.
+ * Version:           1.4.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Perseo2499
@@ -16,13 +16,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'ECOS_WP_VERSION', '1.3.0' );
+define( 'ECOS_WP_VERSION', '1.4.0' );
 define( 'ECOS_WP_URL', plugin_dir_url( __FILE__ ) );
 define( 'ECOS_WP_DIR', plugin_dir_path( __FILE__ ) );
 
 require_once ECOS_WP_DIR . 'includes/seo.php';
 require_once ECOS_WP_DIR . 'includes/stats.php';
 require_once ECOS_WP_DIR . 'includes/export.php';
+require_once ECOS_WP_DIR . 'includes/theme.php';
+require_once ECOS_WP_DIR . 'includes/render.php';
 
 /**
  * ¿Este contenido usa algo de Ecos? (data-ecos-carousel, ecos-vp o cualquier clase ecos-)
@@ -246,6 +248,9 @@ function ecos_wp_rest_status() {
 			'stats'   => true,
 			'lock'    => true,
 			'export'  => true,
+			'theme'   => true,
+			'render'  => true,
+			'astra'   => ecos_wp_is_astra(),
 		)
 	);
 }

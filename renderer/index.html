@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data: file: blob:; frame-src https://www.google.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.dailymotion.com https://open.spotify.com; media-src * data: file: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data: file: blob:; frame-src https://www.google.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.dailymotion.com https://open.spotify.com; media-src * data: file: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' https: data:">
 <title>Ecos</title>
 <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
 <link rel="stylesheet" href="styles.css">
@@ -240,6 +240,19 @@
                 <label class="switch small"><input type="checkbox" id="bg-header"><span data-i18n>Mostrar también detrás de la cabecera</span></label>
                 <button id="bg-off" class="btn text small"><span class="ms">hide_image</span><span data-i18n>Quitar fondo</span></button>
               </div>
+            </details>
+            <details class="ai-opts hidden" id="d-astra">
+              <summary><span class="ms">web_asset</span><span data-i18n>Diseño de la página (Astra)</span><span class="ai-opts-sum" id="astra-sum"></span></summary>
+              <div class="ai-opt"><label data-i18n>Ancho del contenido</label>
+                <div class="seg mini" data-astra="layout"><button data-v="" data-i18n>Por defecto</button><button data-v="normal" data-i18n>Normal</button><button data-v="wide" data-i18n>Ancho completo</button><button data-v="narrow" data-i18n>Estrecho</button></div></div>
+              <div class="ai-opt"><label data-i18n>Barra lateral</label>
+                <div class="seg mini" data-astra="sidebar"><button data-v="" data-i18n>Por defecto</button><button data-v="none" data-i18n>Sin barra</button><button data-v="left" data-i18n>Izquierda</button><button data-v="right" data-i18n>Derecha</button></div></div>
+              <div class="ai-opt"><label data-i18n>Cabecera transparente</label>
+                <div class="seg mini" data-astra="transparent"><button data-v="" data-i18n>Por defecto</button><button data-v="on" data-i18n>Sí</button><button data-v="off" data-i18n>No</button></div></div>
+              <label class="switch small"><input type="checkbox" data-astra-flag="hideTitle"><span data-i18n>Ocultar el título de la página</span></label>
+              <label class="switch small"><input type="checkbox" data-astra-flag="hideImage"><span data-i18n>Ocultar la imagen destacada</span></label>
+              <label class="switch small"><input type="checkbox" data-astra-flag="hideHeader"><span data-i18n>Ocultar la cabecera</span></label>
+              <label class="switch small"><input type="checkbox" data-astra-flag="hideFooter"><span data-i18n>Ocultar el pie</span></label>
             </details>
             <details class="ai-opts" id="ai-opts">
               <summary><span class="ms">tune</span><span data-i18n>Cómo convertir en artículo</span><span class="ai-opts-sum" id="ai-opts-sum"></span></summary>
@@ -862,8 +875,10 @@
     <div class="pv-head">
       <div class="seg" id="pv-size">
         <button data-w="1100" class="active" data-i18n-title title="Ordenador"><span class="ms">desktop_windows</span></button>
+        <button data-w="820" data-i18n-title title="Tableta"><span class="ms">tablet_mac</span></button>
         <button data-w="420" data-i18n-title title="Móvil"><span class="ms">smartphone</span></button>
       </div>
+      <div class="seg hidden" id="pv-mode"><button data-m="exact" class="active"><span class="ms">verified</span><span data-i18n>Vista exacta (con tu tema)</span></button><button data-m="quick"><span class="ms">bolt</span><span data-i18n>Vista rápida</span></button></div>
       <span class="spacer"></span>
       <button id="pv-web" class="btn tonal"><span class="ms">open_in_browser</span><span data-i18n>Ver en mi web</span></button>
       <button id="pv-close" class="btn text icon-only" data-i18n-title title="Cerrar"><span class="ms">close</span></button>
@@ -1002,6 +1017,7 @@
 <script src="vidq.js"></script>
 <script src="templates.js"></script>
 <script src="sections.js"></script>
+<script src="themeui.js"></script>
 <script src="blocks/kit.js"></script>
 <script src="blocks/core.js"></script>
 <script src="blocks/drag.js"></script>
@@ -1034,6 +1050,7 @@
 <script src="app/editor-alt.js"></script>
 <script src="app/editor-send.js"></script>
 <script src="app/editor-viewer.js"></script>
+<script src="app/editor-astra.js"></script>
 <script src="app/editor-history.js"></script>
 <script src="app/editor-multi.js"></script>
 <script src="app/editor-find.js"></script>

@@ -16,6 +16,7 @@ const draftPayload = (status) => ({
   ...(seoInfo.writable ? { seoKey: seoInfo.key, seoDesc: $('#d-seodesc').value.trim() } : {}),
   recreate: !!draft.previewOnly,
   pageBg: PageBg.normalize(draft.pageBg),
+  ...(draft.astra && typeof astraAvailable === 'function' && astraAvailable() ? { astra: draft.astra } : {}), // diseño de la página de Astra (metas)
 });
 
 // Actualizar desde WordPress (la app envía y también recibe cambios)
@@ -53,6 +54,7 @@ $('#ed-pull').onclick = (e) => busy(e.currentTarget, async () => {
   $('#d-excerpt').value = r.excerpt || '';
   window.BlockEditor.change(() => {
     if (r.contentChanged) { draft.blocks = r.blocks; draft.pageBg = r.pageBg || null; renderPageBg(); }
+    if (r.astra) { draft.astra = r.astra; renderAstra(); }
     if (r.featured) { draft.featuredImageId = r.featured; draft.keepFeaturedInBody = true; }
   });
   // las fotos que ahora usa la entrada, también en la bandeja

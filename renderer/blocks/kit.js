@@ -51,7 +51,7 @@
     if (!el) return;
     el.style.textAlign = ['center', 'right', 'justify'].includes(b.align) ? b.align : '';
     el.style.fontSize = b.size || '';
-    el.style.fontFamily = FONTS[b.font] || '';
+    el.style.fontFamily = FONTS[b.font] || window.ThemeUI?.fontCss(b.font) || '';
     el.style.color = b.color || '';
     el.style.backgroundColor = b.bg || '';
     el.style.padding = b.bg ? '14px 18px' : '';
