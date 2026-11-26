@@ -33,7 +33,7 @@ const readStartup = () => { try { return JSON.parse(fs.readFileSync(startupFile(
 const saveStartup = (s) => { startupState = s; try { fs.mkdirSync(path.dirname(startupFile()), { recursive: true }); fs.writeFileSync(startupFile(), JSON.stringify(s)); } catch { /* nada */ } };
 // Descarga el instalador publicado más reciente y lo ejecuta; si falla, abre la página de descargas
 async function installPublished() {
-  const RELEASES = 'https://github.com/Perseo2499/ecos-releases/releases/latest';
+  const RELEASES = 'https://github.com/Perseo2499/ecos/releases/latest';
   try {
     const file = await require('./src/startup').downloadInstaller(app.getPath('temp'));
     if (process.platform === 'win32') require('child_process').spawn(file, [], { detached: true, stdio: 'ignore' }).unref();

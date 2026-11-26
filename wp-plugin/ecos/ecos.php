@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name:       Ecos para WordPress
- * Plugin URI:        https://github.com/Perseo2499/ecos-releases
+ * Plugin URI:        https://github.com/Perseo2499/ecos
  * Description:       Complemento de Ecos: carga una sola vez el carrusel de fotos, los vídeos y los estilos de Ecos, añade la vista previa al compartir y los datos para Google, cuenta visitas sin cookies, vacía la caché de la entrada cuando la envías desde Ecos y avisa si otra persona la está editando y exporta la configuración para la copia de emergencia de Ecos.
  * Version:           1.3.0
  * Requires at least: 6.0

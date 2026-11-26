@@ -162,8 +162,8 @@ function renderUpdate(st) {
 window.api.onUpdate(renderUpdate);
 $('#update-install').onclick = () => window.api.installUpdate();
 $('#update-check').onclick = async () => renderUpdate(await window.api.checkUpdate());
-$('#open-releases').onclick = () => window.api.open('https://github.com/Perseo2499/ecos-releases/releases');
-$('#open-repo').onclick = () => window.api.open('https://github.com/Perseo2499/ecos-releases');
+$('#open-releases').onclick = () => window.api.open('https://github.com/Perseo2499/ecos/releases');
+$('#open-repo').onclick = () => window.api.open('https://github.com/Perseo2499/ecos');
 // Licencia, avisos y cómo pedir el código: archivos incluidos en la propia app (el repositorio del código es privado)
 for (const [id, doc] of [['#open-license', 'license'], ['#open-source', 'source'], ['#open-third', 'third']]) {
   $(id).onclick = (e) => { e.preventDefault(); window.api.openDoc(doc).catch(toastError); };
