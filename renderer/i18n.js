@@ -317,6 +317,13 @@
     'Oculto en el editor': 'Hidden in the editor', 'Desplegar': 'Expand', 'Columna {n}': 'Column {n}', '{n} foto': '{n} photo', '{n} fotos': '{n} photos', '{n} bloque': '{n} block', '{n} bloques': '{n} blocks', '{n} columnas': '{n} columns',
     'Esta entrada aún no tiene bloques.': 'This entry has no blocks yet.', '{n} seleccionados': '{n} selected', 'Agrupar en sección': 'Group into a section', 'Pegar': 'Paste', 'Cortar': 'Cut', 'Deseleccionar (Esc)': 'Deselect (Esc)',
     'Mover arriba': 'Move up', 'Mover abajo': 'Move down', 'Para agrupar, elige bloques del mismo nivel.': 'To group, pick blocks at the same level.', '{n} bloques copiados.': '{n} blocks copied.', '1 bloque copiado.': '1 block copied.', 'Los bloques se ven en el editor aunque estén ocultos solo aquí.': 'Hidden blocks only disappear here, not on the website.',
+    // Estilos de la web, vista exacta y Astra
+    'Colores de tu web': 'Your site colors', 'Otros colores': 'Other colors', 'Tamaños de tu web': 'Your site sizes', 'Fuentes de tu web': 'Your site fonts', 'Fuente de los títulos': 'Headings font',
+    'Vista exacta (con tu tema)': 'Exact view (with your theme)', 'Vista rápida': 'Quick view', 'Tableta': 'Tablet',
+    'No se pudo preparar la vista exacta ({e}); se muestra la vista rápida.': 'The exact view could not be prepared ({e}); showing the quick view.',
+    'Para la vista exacta hace falta el complemento de Ecos 1.4.0 o posterior (Conexiones → WordPress).': 'The exact view needs the Ecos plugin 1.4.0 or later (Connections → WordPress).',
+    'Diseño de la página (Astra)': 'Page layout (Astra)', 'Ancho del contenido': 'Content width', 'Por defecto': 'Default', 'Ancho completo': 'Full width', 'Barra lateral': 'Sidebar', 'Sin barra': 'No sidebar',
+    'Cabecera transparente': 'Transparent header', 'Ocultar el título de la página': 'Hide the page title', 'Ocultar la imagen destacada': 'Hide the featured image', 'Ocultar la cabecera': 'Hide the header', 'Ocultar el pie': 'Hide the footer',
     // Copia de emergencia
     'Copia de emergencia': 'Emergency backup',
     'Un solo ZIP con todo lo necesario para volver a levantar la web si se pierde: el contenido y las fotos, una copia navegable de cómo se ve ahora (se abre sin internet), la configuración (menús, ajustes y personalizador de Astra, CSS adicional, plugins y temas con su versión) y una guía de recuperación paso a paso.': 'A single ZIP with everything needed to bring the website back if it is lost: the content and photos, a browsable copy of how it looks now (opens without internet), the settings (menus, Astra customizer settings, additional CSS, plugins and themes with their versions) and a step-by-step recovery guide.',

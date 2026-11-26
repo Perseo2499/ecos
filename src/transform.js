@@ -10,6 +10,7 @@ const DEFAULT_FOOTER = 'Publicado originalmente en {redes}.';
 const SAFE_COLOR = /^(#[0-9a-f]{3,8}|rgba?\([\d.,\s%]+\))$/i;
 const NET = { instagram: 'Instagram', facebook: 'Facebook' };
 const DK = require('../renderer/sections');
+const TS = require('./themestyles');
 const U = require('../renderer/unify');
 
 function extractTags(text) {
@@ -123,8 +124,16 @@ function sanitizeParagraphs(html) {
   h = h.replace(/<mark\b[^>]*>/gi, (m) => {
     const st = (m.match(/style\s*=\s*"([^"]*)"/i) || [])[1] || '';
     const val = (k) => { const v = (st.match(new RegExp('(?:^|;)\\s*' + k + '\\s*:\\s*([^;]+)', 'i')) || [])[1]?.trim(); return v && SAFE_COLOR.test(v) ? v : ''; };
-    const bg = val('background-color'), fg = val('color');
-    return `<mark style="background-color:${bg || 'rgba(0, 0, 0, 0)'}${fg ? ';color:' + fg : ''}" class="has-inline-color">`;
+    // colores de la web: clases has-<slug>-color / has-<slug>-background-color (la clase manda sobre el color suelto)
+    let fgSlug = '', bgSlug = '';
+    for (const c of ((m.match(/class\s*=\s*"([^"]*)"/i) || [])[1] || '').split(/\s+/)) {
+      let x;
+      if ((x = c.match(/^has-([a-z0-9-]+)-background-color$/)) && TS.SLUG.test(x[1])) bgSlug = x[1];
+      else if ((x = c.match(/^has-([a-z0-9-]+)-color$/)) && x[1] !== 'inline' && TS.SLUG.test(x[1])) fgSlug = x[1];
+    }
+    const bg = bgSlug ? '' : val('background-color'), fg = fgSlug ? '' : val('color');
+    const cn = ['has-inline-color', fgSlug && `has-${fgSlug}-color`, bgSlug && `has-${bgSlug}-background-color`].filter(Boolean).join(' ');
+    return `<mark style="background-color:${bg || 'rgba(0, 0, 0, 0)'}${fg ? ';color:' + fg : ''}" class="${cn}">`;
   });
   h = h.replace(/<(?!\/?(strong|em|a|s|u|code|sub|sup|mark)\b)[^>]*>/gi, ''); // el resto de etiquetas fuera
   h = h.replace(/<a>([\s\S]*?)<\/a>/gi, '$1');
@@ -534,6 +543,19 @@ const FONTS = {
   serif: 'Georgia, Times New Roman, serif', sans: 'Helvetica Neue, Arial, sans-serif', round: 'Trebuchet MS, Segoe UI, sans-serif',
   mono: 'Courier New, monospace', hand: 'Segoe Print, Comic Sans MS, cursive',
 };
+// Elemento del tema elegido en un bloque (b.th = { color: { slug, v }, … }); vale solo si b[key] sigue siendo el valor del tema
+function themeSel(b, key) {
+  const t = b.th?.[key];
+  return t && TS.SLUG.test(String(t.slug)) && t.v === b[key] ? String(t.slug) : '';
+}
+// Fuente de la web: b.font = 'wp:<slug>' (familia registrada en el tema → clase has-<slug>-font-family) o 'heading' (fuente de los títulos: la familia va en línea)
+function themeFont(b) {
+  const f = String(b.font || '');
+  if (f.startsWith('wp:') && TS.SLUG.test(f.slice(3))) return { slug: f.slice(3) };
+  const fam = b.th?.font?.v;
+  if (f === 'heading' && typeof fam === 'string' && /^[\w\s,'"\-.]{1,200}$/.test(fam)) return { family: fam };
+  return null;
+}
 function blockStyle(b, { alignKey = 'align', align = true, dropCap = false, fx = null } = {}) {
   const attrs = {}, cls = [], css = [];
   // «justify» no existe en el bloque de texto de WordPress actual (solo izquierda, centro y derecha): se marca con una clase
@@ -543,22 +565,30 @@ function blockStyle(b, { alignKey = 'align', align = true, dropCap = false, fx =
   if (align && b.align === 'justify') { custom.push('ecos-justify'); fx?.add('justify'); }
   if (dropCap && b.dropCap) { attrs.dropCap = true; cls.push('has-drop-cap'); }
   const st = {};
-  const color = SAFE_COLOR.test(b.color || '') && b.color, bg = SAFE_COLOR.test(b.bg || '') && b.bg;
+  // Colores, tamaño y fuente de la web (b.th): clases y atributos estándar de WordPress (has-<slug>-color, textColor…);
+  // así, si cambia el tema, cambia todo. Solo valen mientras el valor del bloque siga siendo el del tema
+  const tc = themeSel(b, 'color'), tb = themeSel(b, 'bg'), tz = themeSel(b, 'size'), tf = themeFont(b);
+  if (tc) { attrs.textColor = tc; cls.push(`has-${tc}-color`, 'has-text-color'); }
+  if (tb) { attrs.backgroundColor = tb; cls.push(`has-${tb}-background-color`, 'has-background'); }
+  const color = !tc && SAFE_COLOR.test(b.color || '') && b.color, bg = !tb && SAFE_COLOR.test(b.bg || '') && b.bg;
   if (color || bg) {
     st.color = {};
     if (color) { st.color.text = color; cls.push('has-text-color'); css.push('color:' + color); }
     if (bg) { st.color.background = bg; cls.push('has-background'); css.push('background-color:' + bg); }
   }
-  const size = /^\d{1,3}px$/.test(b.size || '') && b.size, font = FONTS[b.font];
+  const size = !tz && /^\d{1,3}px$/.test(b.size || '') && b.size, font = !tf && FONTS[b.font];
   const spacing = /^\d{1,2}(\.\d)?px$/.test(b.spacing || '') && b.spacing;
-  if (size || font || spacing) {
+  if (tz) { attrs.fontSize = tz; cls.push(`has-${tz}-font-size`); }
+  if (tf?.slug) { attrs.fontFamily = tf.slug; cls.push(`has-${tf.slug}-font-family`); }
+  const famInline = tf?.family || font;
+  if (size || famInline || spacing) {
     st.typography = {};
-    if (font) { st.typography.fontFamily = font; css.push('font-family:' + font); }
+    if (famInline) { st.typography.fontFamily = famInline; css.push('font-family:' + famInline); }
     if (size) { st.typography.fontSize = size; css.push('font-size:' + size); }
     if (spacing) { st.typography.letterSpacing = spacing; css.push('letter-spacing:' + spacing); }
   }
   // Resaltado de bloque: el color de fondo lleva margen interior y esquinas suaves
-  if (bg && align) {
+  if ((bg || tb) && align) {
     st.spacing = { padding: { top: '14px', right: '18px', bottom: '14px', left: '18px' } };
     st.border = { radius: '10px' };
     css.push('border-radius:10px', 'padding-top:14px', 'padding-right:18px', 'padding-bottom:14px', 'padding-left:18px');
@@ -617,7 +647,8 @@ function buttonsBlock(b) {
   const outline = b.variant === 'outline';
   // Estilo del botón con atributos estándar de core/button
   const st = {}, aCls = ['wp-block-button__link'], css = [];
-  const bg = !outline && SAFE_COLOR.test(b.bg || '') && b.bg, fg = SAFE_COLOR.test(b.color || '') && b.color;
+  const tb = !outline && themeSel(b, 'bg'), tc = themeSel(b, 'color');
+  const bg = !outline && !tb && SAFE_COLOR.test(b.bg || '') && b.bg, fg = !tc && SAFE_COLOR.test(b.color || '') && b.color;
   const rad = BTN_RADIUS[b.radius], sz = BTN_SIZE[b.size];
   if (rad) { st.border = { radius: rad }; css.push('border-radius:' + rad); }
   if (fg || bg) {
@@ -633,6 +664,8 @@ function buttonsBlock(b) {
   }
   aCls.push('wp-element-button');
   const attrs = {};
+  if (tb) { attrs.backgroundColor = tb; aCls.push(`has-${tb}-background-color`, 'has-background'); }
+  if (tc) { attrs.textColor = tc; aCls.push(`has-${tc}-color`, 'has-text-color'); }
   if (outline) attrs.className = 'is-style-outline';
   if (full) attrs.width = 100;
   if (Object.keys(st).length) attrs.style = st;
@@ -677,7 +710,10 @@ function groupBlock(b, opts, ctx) {
   const attrs = {}, st = {}, cls = ['wp-block-group'], css = [];
   const align = ALIGNS.includes(b.width) ? b.width : '';
   if (align) { attrs.align = align; cls.push('align' + align); }
-  const bg = SAFE_COLOR.test(b.bg || '') && b.bg, fg = SAFE_COLOR.test(b.color || '') && b.color, grad = DK.safeGradient(b.gradient);
+  const grad = DK.safeGradient(b.gradient), tb = !grad && themeSel(b, 'bg'), tc = themeSel(b, 'color');
+  const bg = !tb && SAFE_COLOR.test(b.bg || '') && b.bg, fg = !tc && SAFE_COLOR.test(b.color || '') && b.color;
+  if (tb) { attrs.backgroundColor = tb; cls.push(`has-${tb}-background-color`, 'has-background'); }
+  if (tc) { attrs.textColor = tc; cls.push(`has-${tc}-color`, 'has-text-color'); }
   if (bg || fg || grad) {
     st.color = {};
     if (grad) { st.color.gradient = grad; cls.push('has-background'); css.push('background:' + grad); }
@@ -715,7 +751,8 @@ function columnsBlock(b, opts, ctx) {
   if (valign) { attrs.verticalAlignment = valign; cls.push('are-vertically-aligned-' + valign); }
   if (b.stack === false) { attrs.isStackedOnMobile = false; cls.push('is-not-stacked-on-mobile'); }
   // diseño: degradado o color de fondo, separación entre columnas y margen exterior
-  const st = {}, grad = DK.safeGradient(b.gradient), bg = SAFE_COLOR.test(b.bg || '') && b.bg, gap = gapOf(b), mar = marginOf(b);
+  const st = {}, grad = DK.safeGradient(b.gradient), tb = !grad && themeSel(b, 'bg'), bg = !tb && SAFE_COLOR.test(b.bg || '') && b.bg, gap = gapOf(b), mar = marginOf(b);
+  if (tb) { attrs.backgroundColor = tb; cls.push(`has-${tb}-background-color`, 'has-background'); }
   if (grad || bg) { st.color = grad ? { gradient: grad } : { background: bg }; cls.push('has-background'); css.push(grad ? 'background:' + grad : 'background-color:' + bg); }
   if (gap || mar.margin) { st.spacing = {}; if (gap) st.spacing.blockGap = gap; if (mar.margin) { st.spacing.margin = mar.margin; css.push(...mar.css); } }
   if (Object.keys(st).length) attrs.style = st;

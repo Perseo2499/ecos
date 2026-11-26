@@ -1922,6 +1922,10 @@ span.pv-pill[data-pill]:hover { background: var(--primary); color: var(--on-prim
 .sp-x { margin-left: auto; width: 28px; height: 28px; border: 0; border-radius: 50%; background: none; color: var(--on-surface-var); display: grid; place-items: center; }
 .sp-x:hover { background: var(--surface-c-high); }
 .sp-row { padding: 8px 0; border-top: 1px solid var(--outline-var); }
+.sp-sub { flex-basis: 100%; font-size: 11px; font-weight: 600; color: var(--on-surface-var); margin: 2px 0 0; }
+.fmt-pop .pop-sub { font-size: 11px; font-weight: 600; color: var(--on-surface-var); padding: 4px 4px 0; }
+#pv-mode button { display: inline-flex; align-items: center; gap: 6px; }
+#pv-mode .ms { font-size: 18px; }
 .sp-lbl { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--on-surface-var); margin-bottom: 5px; }
 .sp-chips { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
 .sp-chip { display: inline-flex; align-items: center; gap: 4px; min-height: 30px; padding: 0 11px; border: 1px solid var(--outline-var); border-radius: var(--r-full); background: none; color: var(--on-surface); font-size: 12.5px; }

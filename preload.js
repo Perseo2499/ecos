@@ -54,6 +54,8 @@ contextBridge.exposeInMainWorld('api', {
   autosaved: () => call('draft:autosaved'),
   autosaveClear: () => call('draft:autosaveClear'),
   siteStyles: () => call('site:styles'),
+  themeStyles: (force) => call('theme:get', force),
+  renderExact: (d) => call('draft:renderExact', d),
   uploadMedia: () => call('media:upload'),
   externalizeMedia: (blocks) => call('media:externalize', blocks),
   videoPickLocal: () => call('video:pickLocal'),

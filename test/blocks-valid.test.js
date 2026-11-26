@@ -186,6 +186,28 @@ check('entrada completa (como la que genera Ecos)', [
   { id: 'f2', type: 'image', img: IMG, caption: 'Pie' }, { id: 'f3', type: 'gallery', images: [IMG, IMG2, IMG3], columns: 3 },
   { id: 'f4', type: 'separator' }, { id: 'f5', type: 'video', video: VID }, { id: 'f6', type: 'embed', url: 'https://www.instagram.com/p/z/', provider: 'instagram' }], ['core/heading', 'core/gallery']);
 
+// --- Colores, tamaños y fuentes de la web (clases estándar de WordPress: has-<slug>-color, textColor, fontSize…) ---------
+const TH = (o) => ({ th: Object.fromEntries(Object.entries(o).map(([k, [slug, v]]) => [k, { slug, v }])) });
+check('párrafo con color, fondo, tamaño y fuente del tema', [
+  P('Texto', { color: '#e04400', ...TH({ color: ['ast-global-color-0', '#e04400'] }) }),
+  P('Texto', { bg: '#fff3e0', ...TH({ bg: ['accent', '#fff3e0'] }) }),
+  P('Texto', { size: '1.5rem', ...TH({ size: ['large', '1.5rem'] }) }),
+  P('Texto', { font: 'wp:body-font', align: 'center' }),
+  P('Texto', { color: '#112233', bg: '#ffeecc', size: '2rem', font: 'wp:heading-font', ...TH({ color: ['contrast', '#112233'], bg: ['base', '#ffeecc'], size: ['x-large', '2rem'] }), dropCap: true, shadow: true }),
+  P('Texto', { font: 'heading', ...TH({ font: ['heading', "'Playfair Display', serif"] }) }),
+  P('Texto', { color: '#aa0000', ...TH({ color: ['accent', '#00aa00'] }) })], ['core/paragraph']);
+check('títulos, listas y citas con colores del tema', [
+  { id: 'th1', type: 'heading', level: 3, html: 'Título', color: '#222222', size: '2rem', ...TH({ color: ['contrast', '#222222'], size: ['x-large', '2rem'] }) },
+  { id: 'th2', type: 'list', items: ['Uno', 'Dos'], bg: '#eeeeee', ...TH({ bg: ['base-2', '#eeeeee'] }) },
+  { id: 'th3', type: 'quote', html: 'Cita', color: '#333333', ...TH({ color: ['contrast', '#333333'] }) },
+  { id: 'th4', type: 'quote', pull: true, html: 'Destacada', cite: 'Alguien', color: '#333333', ...TH({ color: ['contrast', '#333333'] }) }], ['core/heading', 'core/list', 'core/quote', 'core/pullquote']);
+check('texto en línea con colores del tema', [P('Hola <mark style="background-color:rgba(0, 0, 0, 0)" class="has-inline-color has-vivid-red-color">rojo</mark> y <mark style="background-color:rgba(0, 0, 0, 0)" class="has-inline-color has-base-background-color">fondo</mark>')], ['core/paragraph']);
+check('sección, columnas y botón con colores del tema', [
+  { id: 'tg1', type: 'group', bg: '#fafafa', color: '#111111', pad: 'm', children: [P('Dentro')], ...TH({ bg: ['base', '#fafafa'], color: ['contrast', '#111111'] }) },
+  { id: 'tc1', type: 'columns', bg: '#eeeeee', cols: [{ width: '50%', children: [P('A')] }, { width: '50%', children: [P('B')] }], ...TH({ bg: ['base-2', '#eeeeee'] }) },
+  { id: 'tb1', type: 'buttons', html: 'Pulsa', url: 'https://x.org', bg: '#e04400', color: '#ffffff', ...TH({ bg: ['accent', '#e04400'], color: ['base', '#ffffff'] }) },
+  { id: 'tb2', type: 'buttons', html: 'Contorno', url: 'https://x.org', variant: 'outline', color: '#e04400', ...TH({ color: ['accent', '#e04400'] }) }], ['core/group', 'core/columns', 'core/button']);
+
 test('el validador detecta de verdad un bloque mal formado', () => {
   const { found } = problems('<!-- wp:embed {"url":"https://a.b/x","type":"rich","providerNameSlug":"instagram"} -->\n<figure class="wp-block-embed is-type-rich is-provider-instagram"><div class="wp-block-embed__wrapper">\nhttps://a.b/x\n</div></figure>\n<!-- /wp:embed -->');
   assert.ok(found.length >= 1, 'a un embed sin su clase wp-block-embed-* debe invalidarlo');

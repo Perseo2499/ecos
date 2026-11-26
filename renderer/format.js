@@ -35,11 +35,12 @@
   const isText = (b) => b && (E().TEXT_TYPES.includes(b.type) || b.type === 'mediatext');
 
   // --- Formato del bloque (alineación, tamaño, fuente, colores, letra capital)
-  function setBlock(prop, val) {
+  function setBlock(prop, val, themeSlug, themeV) {
     const a = E().active;
     if (!a || !isText(a.b)) { window.toast?.(t('Pulsa primero dentro del texto que quieres cambiar. (El título de la página no es un bloque: su alineación la pone el tema de tu web.)'), true); return; }
     E().snapshot();
     if (val) a.b[prop] = val; else delete a.b[prop];
+    window.ThemeUI?.tag(a.b, prop, val ? themeSlug : '', themeV); // colores, tamaños y fuentes de tu web
     E().applyStyle(a.styleEl, a.b);
     E().onChange();
     state();
@@ -87,15 +88,17 @@
     const sel = hasSel();
     openPop(anchor, `
       <div class="pop-title">${kind === 'bg' ? t('Resaltado') : t('Color del texto')} <span class="hint">· ${sel ? t('texto seleccionado') : t('todo el bloque')}</span></div>
-      <div class="sw-grid">${list.map((c) => `<span class="sw" data-c="${c}" style="background:${c}" title="${c}"></span>`).join('')}</div>
+      ${window.ThemeUI?.barSwatches() || ''}<div class="sw-grid">${list.map((c) => `<span class="sw" data-c="${c}" style="background:${c}" title="${c}"></span>`).join('')}</div>
       <div class="pop-row"><label class="btn text small"><span class="ms">palette</span>${t('Otro color')}<input type="color" class="pick"></label><span class="spacer"></span><button class="btn text small" data-clear><span class="ms">format_color_reset</span>${t('Quitar')}</button></div>`,
     (p) => {
-      const apply = (c) => {
-        if (sel) wrap('mark', { style: kind === 'bg' ? `background-color:${c}` : `background-color:rgba(0, 0, 0, 0);color:${c}`, class: 'has-inline-color' });
-        else setBlock(kind === 'bg' ? 'bg' : 'color', c);
+      const apply = (c, slug) => {
+        // color de tu web: la marca lleva la clase estándar has-<nombre>-color (o -background-color) y se ve con la hoja del tema
+        if (sel && slug) wrap('mark', { style: 'background-color:rgba(0, 0, 0, 0)', class: `has-inline-color has-${slug}-${kind === 'bg' ? 'background-' : ''}color` });
+        else if (sel) wrap('mark', { style: kind === 'bg' ? `background-color:${c}` : `background-color:rgba(0, 0, 0, 0);color:${c}`, class: 'has-inline-color' });
+        else setBlock(kind === 'bg' ? 'bg' : 'color', c, slug);
         closePop();
       };
-      $$('.sw', p).forEach((x) => (x.onclick = () => apply(x.dataset.c)));
+      $$('.sw', p).forEach((x) => (x.onclick = () => apply(x.dataset.c, x.dataset.th || '')));
       $('.pick', p).onchange = (e) => apply(e.target.value);
       $('[data-clear]', p).onclick = () => { if (sel) unwrapMarks(); else setBlock(kind === 'bg' ? 'bg' : 'color', null); closePop(); };
     });
@@ -171,13 +174,13 @@
   $('[data-x="clear"]', bar).onclick = () => {
     const a = E().active; if (!a) return;
     if (hasSel()) { restore(); document.execCommand('removeFormat'); unwrapMarks(); document.execCommand('unlink'); fire(); }
-    else if (isText(a.b)) { E().change(() => ['align', 'size', 'font', 'color', 'bg', 'dropCap', 'shadow', 'spacing'].forEach((k) => delete a.b[k])); }
+    else if (isText(a.b)) { E().change(() => ['align', 'size', 'font', 'color', 'bg', 'dropCap', 'shadow', 'spacing', 'th'].forEach((k) => delete a.b[k])); }
   };
   $('[data-x="ai"]', bar).onclick = (e) => aiPop(e.currentTarget);
-  $('#fmt-font').onchange = (e) => setBlock('font', e.target.value);
+  $('#fmt-font').onchange = (e) => { const f = window.ThemeUI?.pickFont(e.target.value) || { value: e.target.value, slug: '' }; setBlock('font', f.value, f.slug, f.css); };
   $('#fmt-ls').onchange = (e) => setBlock('spacing', e.target.value);
   $('[data-x="shadow"]', bar).onclick = () => { const a = E().active; if (a && isText(a.b)) setBlock('shadow', !a.b.shadow); };
-  $('#fmt-size').onchange = (e) => setBlock('size', e.target.value);
+  $('#fmt-size').onchange = (e) => { const z = window.ThemeUI?.pickSize(e.target.value) || { value: e.target.value, slug: '' }; setBlock('size', z.value, z.slug); };
   $('#fmt-type').onchange = (e) => {
     const a = E().active, v = e.target.value;
     if (!a || !isText(a.b) || a.b.type === 'mediatext') return;
@@ -270,7 +273,7 @@
       $('#fmt-type').value = b.type === 'heading' ? 'h' + (b.level || 2) : b.type === 'list' ? (b.ordered ? 'ol' : 'ul') : b.type === 'mediatext' ? 'paragraph' : b.type;
       $('#fmt-type').disabled = b.type === 'mediatext';
       $('#fmt-font').value = b.font || '';
-      $('#fmt-size').value = b.size || '';
+      $('#fmt-size').value = window.ThemeUI?.sizeValue(b) ?? (b.size || '');
       $('#fmt-ls').value = b.spacing || '';
       $('[data-x="shadow"]', bar).classList.toggle('on', !!b.shadow);
       $$('[data-al]', bar).forEach((x) => { x.classList.toggle('on', (b.align || 'left') === x.dataset.al); x.disabled = !['paragraph', 'heading', 'mediatext'].includes(b.type); });
