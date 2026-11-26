@@ -311,6 +311,7 @@
         ${checks.map(([ok, good, bad]) => `<div class="rv-check ${ok ? 'ok' : 'warn'}"><span class="ms fill">${ok ? 'check_circle' : 'error'}</span>${esc(ok ? good : bad || good)}</div>`).join('')}
         ${ext.length ? `<div class="rv-check warn rv-ext"><span class="ms fill">schedule</span><span>${esc(t('{n} medio(s) de Instagram o Facebook caducan: súbelos a tu web', { n: ext.length }))}<br><button class="btn tonal small" data-ext="1"><span class="ms">cloud_upload</span><span>${esc(t('Subirlos a mi web'))}</span></button></span></div>` : ''}
         ${heads.length ? `<div class="rv-outline">${heads.map((h) => `<a href="#" data-id="${h.id}" class="lvl${h.level || 2}">${esc(h.html.replace(/<[^>]+>/g, ''))}</a>`).join('')}</div>` : ''}`;
+      window.A11yUI?.render(box);
       $('[data-ext]', box)?.addEventListener('click', (e) => busy(e.currentTarget, async () => {
         const r = await window.api.externalizeMedia(ed.draft.blocks);
         const n = Object.keys(r.map || {}).length;

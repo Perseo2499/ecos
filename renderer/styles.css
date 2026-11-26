@@ -908,6 +908,28 @@ body.dragging-internal .g-grid .drop-zone.small, body.dragging-internal .g-car .
 .rv-outline a { font-size: 12.5px; color: var(--on-surface); text-decoration: none; padding: 2px 0; }
 .rv-outline a:hover { color: var(--primary); } .rv-outline a.lvl3 { padding-left: 10px; } .rv-outline a.lvl4, .rv-outline a.lvl5 { padding-left: 20px; opacity: .8; }
 
+/* Revisión de accesibilidad (renderer/a11y-ui.js) */
+.a11y-host { margin-top: 8px; }
+.a11y { border: 1px solid var(--outline-var); border-radius: var(--r-m); overflow: hidden; }
+.a11y-sum { display: flex; align-items: center; gap: 10px; padding: 8px 10px; cursor: pointer; list-style: none; }
+.a11y-sum::-webkit-details-marker { display: none; }
+.a11y-score { min-width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 15px; border: 3px solid var(--a11y-c, #2e7d32); color: var(--on-surface); flex: none; }
+.a11y-sum.good { --a11y-c: #2e7d32; } .a11y-sum.mid { --a11y-c: #e6a700; } .a11y-sum.bad { --a11y-c: #c62828; }
+.a11y-st { display: flex; flex-direction: column; flex: 1; min-width: 0; font-size: 12px; color: var(--on-surface-var); } .a11y-st b { font-size: 13px; color: var(--on-surface); }
+.a11y-chev { transition: transform .2s; } .a11y[open] .a11y-chev { transform: rotate(180deg); }
+.a11y-list { list-style: none; margin: 0; padding: 0 8px 4px; max-height: 420px; overflow: auto; }
+.a11y-i { display: flex; gap: 8px; padding: 8px 2px; border-top: 1px solid var(--outline-var); }
+.a11y-ic { font-size: 18px; margin-top: 1px; } .a11y-i.error .a11y-ic { color: #c62828; } .a11y-i.aviso .a11y-ic { color: #e6a700; } .a11y-i.sugerencia .a11y-ic { color: var(--primary); }
+.a11y-t { display: flex; flex-direction: column; gap: 3px; font-size: 12px; line-height: 1.35; color: var(--on-surface-var); min-width: 0; } .a11y-t b { font-size: 12.5px; color: var(--on-surface); font-weight: 600; }
+.a11y-lv { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; opacity: .75; margin-right: 2px; }
+.a11y-b { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.ed-side .a11y-b .btn { width: auto; flex: 0 0 auto; height: 32px; padding: 0 12px; font-size: 12px; white-space: nowrap; margin: 0; }
+.a11y-b .btn .ms { font-size: 16px; }
+.a11y-ok { display: flex; gap: 6px; align-items: center; padding: 8px 2px; font-size: 12.5px; } .a11y-ok .ms { color: #2e7d32; font-size: 18px; }
+.a11y-note { padding: 0 10px 8px; margin: 4px 0 0; }
+.blk.a11y-flash { outline: 3px solid var(--primary); outline-offset: 3px; border-radius: 6px; transition: outline-color .4s; }
+:root[data-vinyl="on"] .a11y-score { font-family: 'Doto', monospace; }
+
 /* ======================================================================
    Tema Vinilo (negro + serigrafías)
    ====================================================================== */

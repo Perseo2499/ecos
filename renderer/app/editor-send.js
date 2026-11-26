@@ -69,7 +69,11 @@ $('#ed-pull').onclick = (e) => busy(e.currentTarget, async () => {
 $('#send').onclick = (e) => busy(e.target, async () => {
   const when = $('input[name="d-when"]:checked').value;
   if (!$('#d-title').value.trim()) throw new Error(t('Escribe un título'));
-  if (when === 'publish' && !await ask(t('Se publicará ahora y será visible en la web. ¿Continuar?'))) return;
+  if (when === 'publish') {
+    const ac = window.A11yUI ? await window.A11yUI.beforePublish() : { ok: true, asked: false, line: '' };
+    if (!ac.ok) return;
+    if (!ac.asked && !await ask(t('Se publicará ahora y será visible en la web. ¿Continuar?') + ac.line)) return;
+  }
   if (!await multiPreSend()) return;
   const res = await window.api.publish(draftPayload(MU.sendStatus(when, currentMe())));
   if (res.queued) { exported = res.exported || exported; toast(t('Sin conexión: el envío queda en cola y se hará solo')); return; }

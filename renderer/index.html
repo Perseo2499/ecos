@@ -746,6 +746,7 @@
           <label class="switch"><input type="checkbox" id="s-fmt-fixed"><span data-i18n>Barra de formato fija arriba del editor (si no, aparece al seleccionar texto, como en Word)</span></label>
           <label class="switch"><input type="checkbox" id="s-webp"><span data-i18n>Convertir las fotos a WebP al subirlas</span></label>
           <p class="hint" data-i18n>Las fotos JPEG y PNG (sin transparencia) se suben como WebP de calidad alta cuando así pesan menos. Si WordPress no lo acepta, se sube la original.</p>
+          <label class="switch"><input type="checkbox" id="s-a11y-warn"><span data-i18n>Avisar antes de publicar si hay errores de accesibilidad</span></label>
           <label class="switch"><input type="checkbox" id="s-share-fb"><span data-i18n>Compartir en Facebook al publicar</span></label>
           <p class="hint" data-i18n>Añade el botón «Compartir en Facebook» al publicar una entrada. Necesita el permiso pages_manage_posts en tu app de Meta. Apagado, Ecos no publica nada en tus redes.</p>
           <label class="switch"><input type="checkbox" id="s-beta"><span data-i18n>Recibir las versiones nuevas antes (canal de pruebas)</span></label>
@@ -1041,6 +1042,8 @@
 <script src="blocks/design-ui.js"></script>
 <script src="blocks/media.js"></script>
 <script src="blocks/layers.js"></script>
+<script src="a11y.js"></script>
+<script src="a11y-ui.js"></script>
 <script src="format.js"></script>
 <script src="sitemap.js"></script>
 <script src="structure.js"></script>
