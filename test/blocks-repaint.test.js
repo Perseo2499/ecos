@@ -11,7 +11,7 @@ const R = path.join(__dirname, '..', 'renderer');
 // el mismo orden que en renderer/index.html
 const SCRIPTS = ['i18n.js', 'sections.js', 'mosaic.js', 'vidq.js', 'blocks/kit.js', 'blocks/core.js', 'blocks/drag.js', 'blocks/block.js', 'blocks/body.js',
   'blocks/types/text.js', 'blocks/types/image.js', 'blocks/types/gallery.js', 'blocks/types/mediatext.js', 'blocks/types/video.js',
-  'blocks/types/containers.js', 'blocks/types/misc.js', 'blocks/style.js', 'blocks/media.js'];
+  'blocks/types/containers.js', 'blocks/types/misc.js', 'blocks/style.js', 'blocks/media.js', 'blocks/layers.js'];
 
 function editor() {
   const dom = new JSDOM('<!doctype html><body><div id="editor"><div id="ed-canvas"><div id="d-cover"></div><div id="d-blocks"></div></div>'

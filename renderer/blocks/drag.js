@@ -207,17 +207,21 @@
       el.innerHTML = `<button class="ins-btn" title="${t('Añadir bloque')}"><span class="ms">add</span></button>`;
       el.querySelector('button').onclick = (e) => this.openMenu(e.currentTarget, (type, list) => (list ? this.insertList(i, list, arr) : this.insertAt(i, this.create(type), true, arr)));
       // un contenedor no puede entrar en sí mismo
-      const ok = () => K.drag && !(K.drag.kind === 'block' && owner && this.within(K.drag.id, owner));
+      const ids = (d) => (d.ids?.length > 1 ? d.ids : [d.id]);
+      const ok = () => K.drag && !(K.drag.kind === 'block' && owner && ids(K.drag).some((x) => this.within(x, owner)));
       el.ondragover = (e) => { if (ok()) { e.preventDefault(); e.stopPropagation(); el.classList.add('over'); } };
       el.ondragleave = () => el.classList.remove('over');
       el.ondrop = (e) => {
         e.preventDefault(); e.stopPropagation(); el.classList.remove('over');
         const d = K.drag; K.drag = null; endDrag();
-        if (!d || (d.kind === 'block' && owner && this.within(d.id, owner))) return;
+        if (!d || (d.kind === 'block' && owner && ids(d).some((x) => this.within(x, owner)))) return;
         // posición estable: el bloque que estaba justo después de la línea (puede moverse al sacar la foto)
         const after = arr[i]?.id;
         const at = () => (after ? arr.findIndex((b) => b.id === after) : arr.length);
-        if (d.kind === 'block') {
+        if (d.kind === 'block' && d.ids?.length > 1) {
+          // varios bloques seleccionados: se mueven juntos, en un solo paso de «deshacer»
+          this.change(() => this.moveBlocks(d.ids, arr, after || null));
+        } else if (d.kind === 'block') {
           const from = this.locate(d.id);
           if (!from || (from.arr === arr && (from.i === i || from.i === i - 1))) return;
           this.change(() => { const [b] = from.arr.splice(from.i, 1); arr.splice(at(), 0, b); });

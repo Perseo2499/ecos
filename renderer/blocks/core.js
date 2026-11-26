@@ -44,6 +44,120 @@
     within(dragId, ownerId) { const loc = this.locate(dragId); return !!loc && this.holds(loc.b, ownerId); },
     // Copia de un bloque con identificadores nuevos (también los de dentro)
     cloneBlock(b) { const c = JSON.parse(JSON.stringify(b)); this.flat([c]).forEach((x) => (x.id = bid())); return c; },
+    // --- Capas y selección múltiple (la interfaz está en layers.js; aquí la lógica, sin DOM) -----------------------
+    // Texto corto de un bloque para la lista de capas: primeras palabras, nombre de la foto…
+    summary(b) {
+      const plain = (h) => String(h || '').replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim();
+      const words = (s, n = 7) => { const w = plain(s).split(' ').filter(Boolean); return w.slice(0, n).join(' ') + (w.length > n ? '…' : ''); };
+      const file = (u) => { try { return decodeURIComponent(String(u || '').split('?')[0].split('/').pop() || ''); } catch { return String(u || '').split('/').pop(); } };
+      const photo = (i) => (i ? plain(i.alt) || plain(i.title) || file(i.url) : '');
+      switch (b.type) {
+        case 'paragraph': case 'heading': case 'quote': case 'buttons': return words(b.html);
+        case 'list': return words((b.items || [])[0]);
+        case 'image': return photo(b.img) || words(b.caption);
+        case 'mediatext': return words(b.html) || photo(b.img);
+        case 'gallery': case 'carousel': { const n = (b.images || []).length; return n ? t(n === 1 ? '{n} foto' : '{n} fotos', { n }) : ''; }
+        case 'video': return plain(b.video?.title) || file(b.video?.url);
+        case 'embed': return file(b.url) || b.url || '';
+        case 'table': return words((b.rows || [])[0]?.[0]);
+        case 'details': return words(b.summary);
+        case 'toc': return words(b.title);
+        case 'map': return words(b.address);
+        case 'group': case 'cover': { const n = (b.children || []).length; return n ? t(n === 1 ? '{n} bloque' : '{n} bloques', { n }) : ''; }
+        case 'columns': return t('{n} columnas', { n: (b.cols || []).length });
+        default: return '';
+      }
+    },
+    // Árbol de capas: [{ id, type, summary, kids: [...] }]. Las columnas aparecen como filas «col» con sus bloques dentro.
+    layerTree(arr = this.draft?.blocks || []) {
+      return arr.map((b) => {
+        const n = { id: b.id, type: b.type, summary: this.summary(b), kids: [] };
+        if (Array.isArray(b.children)) n.kids = this.layerTree(b.children);
+        else if (Array.isArray(b.cols)) n.kids = b.cols.map((c, i) => ({ id: `${b.id}#${i}`, type: 'col', owner: b.id, index: i, summary: c.width || '', kids: this.layerTree(c.children || []) }));
+        return n;
+      });
+    },
+    // La lista en la que está `arr` pertenece a este contenedor (null si es la raíz)
+    ownerOf(arr) {
+      if (arr === this.draft.blocks) return null;
+      return this.flat().find((b) => this.kids(b).includes(arr)) || null;
+    },
+    // Ids seleccionados reducidos a los de más arriba (si el contenedor está elegido, sus hijos no), en el orden del documento
+    topIds(ids) {
+      const set = new Set(ids);
+      return this.flat().filter((b) => set.has(b.id)).filter((b) => {
+        let loc = this.locate(b.id);
+        while (loc?.parent) { if (set.has(loc.parent.id)) return false; loc = this.locate(loc.parent.id); }
+        return true;
+      }).map((b) => b.id);
+    },
+    // Rango entre dos bloques del mismo nivel (si no están en la misma lista, solo el segundo)
+    rangeIds(fromId, toId) {
+      const a = this.locate(fromId), b = this.locate(toId);
+      if (!a || !b || a.arr !== b.arr) return b ? [toId] : [];
+      const [i, j] = a.i < b.i ? [a.i, b.i] : [b.i, a.i];
+      return a.arr.slice(i, j + 1).map((x) => x.id);
+    },
+    // Mueve bloques (por id) a la lista `dest`, justo antes del bloque `beforeId` (o al final). Un contenedor no entra en sí mismo.
+    // Se llama dentro de change(); devuelve si ha movido algo.
+    moveBlocks(ids, dest, beforeId = null) {
+      const owner = this.ownerOf(dest);
+      const top = this.topIds(ids).map((id) => this.locate(id)?.b).filter(Boolean);
+      if (!top.length || top.some((m) => owner && this.holds(m, owner.id))) return false;
+      // si el bloque de referencia también se mueve, se toma el siguiente que se quede
+      const moving = new Set(top.map((m) => m.id));
+      while (beforeId && moving.has(beforeId)) { const k = dest.findIndex((x) => x.id === beforeId); beforeId = dest[k + 1]?.id || null; }
+      for (const m of top) { const l = this.locate(m.id); l.arr.splice(l.i, 1); }
+      const at = beforeId ? dest.findIndex((x) => x.id === beforeId) : -1;
+      dest.splice(at < 0 ? dest.length : at, 0, ...top);
+      return true;
+    },
+    // ¿Se puede soltar `ids` dentro de `dest`? (un contenedor no entra en sí mismo)
+    canMoveTo(ids, dest) {
+      const owner = this.ownerOf(dest);
+      return !owner || !this.topIds(ids).some((id) => { const l = this.locate(id); return l && this.holds(l.b, owner.id); });
+    },
+    // Subir (-1) o bajar (1) los bloques elegidos dentro de su lista; los de cada lista se mueven juntos
+    shiftIds(ids, dir) {
+      const set = new Set(this.topIds(ids));
+      let moved = false;
+      const lists = new Set([...set].map((id) => this.locate(id)?.arr).filter(Boolean));
+      for (const arr of lists) {
+        const idx = arr.map((b, i) => (set.has(b.id) ? i : -1)).filter((i) => i >= 0);
+        if (dir < 0) { for (const i of idx) if (i > 0 && !set.has(arr[i - 1].id)) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; moved = true; } }
+        else for (const i of idx.reverse()) if (i < arr.length - 1 && !set.has(arr[i + 1].id)) { [arr[i + 1], arr[i]] = [arr[i], arr[i + 1]]; moved = true; }
+      }
+      return moved;
+    },
+    // Duplica los bloques elegidos (cada copia justo después de su original); devuelve los ids nuevos
+    duplicateIds(ids) {
+      const out = [];
+      for (const id of this.topIds(ids)) { const l = this.locate(id); const c = this.cloneBlock(l.b); l.arr.splice(l.i + 1, 0, c); out.push(c.id); }
+      return out;
+    },
+    deleteIds(ids) { for (const id of this.topIds(ids)) { const l = this.locate(id); if (l) l.arr.splice(l.i, 1); } },
+    // Agrupa bloques del mismo nivel en una sección nueva (en el sitio del primero); devuelve el grupo o null
+    groupIds(ids) {
+      const top = this.topIds(ids).map((id) => this.locate(id));
+      if (!top.length || top.some((l) => l.arr !== top[0].arr)) return null;
+      const arr = top[0].arr, g = this.create('group');
+      const blocks = top.map((l) => l.b), at = Math.min(...top.map((l) => l.i));
+      g.children = blocks;
+      for (const b of blocks) arr.splice(arr.indexOf(b), 1);
+      arr.splice(at, 0, g);
+      return g;
+    },
+    // Portapapeles interno de bloques (copias con sus hijos; al pegar reciben ids nuevos)
+    clip: [],
+    copyIds(ids) { this.clip = this.topIds(ids).map((id) => JSON.parse(JSON.stringify(this.locate(id).b))); return this.clip.length; },
+    // Pega después de `afterId` (o al final de la entrada); devuelve los ids pegados. Llamar dentro de change()
+    pasteClip(afterId = null) {
+      const copies = this.clip.map((b) => this.cloneBlock(b));
+      const l = afterId ? this.locate(afterId) : null;
+      if (l) l.arr.splice(l.i + 1, 0, ...copies); else this.draft.blocks.push(...copies);
+      return copies.map((b) => b.id);
+    },
+
     // Plantillas: lista de bloques sin id (con hijos) → bloques de verdad
     fromTemplate(list) {
       return (list || []).map(({ type, children, cols, ...rest }) => {

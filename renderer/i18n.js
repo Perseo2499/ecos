@@ -312,6 +312,11 @@
     'Canal de pruebas activado: Ecos instalará las versiones nuevas en cuanto salgan.': 'Test channel on: Ecos will install new versions as soon as they are out.',
     'Canal estable: Ecos esperará 24 horas antes de instalar una versión nueva.': 'Stable channel: Ecos will wait 24 hours before installing a new version.',
     // 1.2 (editor completo)
+    // Capas y selección múltiple
+    'Capas': 'Layers', 'Capas de la entrada': 'Entry layers', 'Ocultar en el editor (no afecta a la web)': 'Hide in the editor (does not affect the website)', 'Mostrar en el editor': 'Show in the editor',
+    'Oculto en el editor': 'Hidden in the editor', 'Desplegar': 'Expand', 'Columna {n}': 'Column {n}', '{n} foto': '{n} photo', '{n} fotos': '{n} photos', '{n} bloque': '{n} block', '{n} bloques': '{n} blocks', '{n} columnas': '{n} columns',
+    'Esta entrada aún no tiene bloques.': 'This entry has no blocks yet.', '{n} seleccionados': '{n} selected', 'Agrupar en sección': 'Group into a section', 'Pegar': 'Paste', 'Cortar': 'Cut', 'Deseleccionar (Esc)': 'Deselect (Esc)',
+    'Mover arriba': 'Move up', 'Mover abajo': 'Move down', 'Para agrupar, elige bloques del mismo nivel.': 'To group, pick blocks at the same level.', '{n} bloques copiados.': '{n} blocks copied.', '1 bloque copiado.': '1 block copied.', 'Los bloques se ven en el editor aunque estén ocultos solo aquí.': 'Hidden blocks only disappear here, not on the website.',
     // Copia de emergencia
     'Copia de emergencia': 'Emergency backup',
     'Un solo ZIP con todo lo necesario para volver a levantar la web si se pierde: el contenido y las fotos, una copia navegable de cómo se ve ahora (se abre sin internet), la configuración (menús, ajustes y personalizador de Astra, CSS adicional, plugins y temas con su versión) y una guía de recuperación paso a paso.': 'A single ZIP with everything needed to bring the website back if it is lost: the content and photos, a browsable copy of how it looks now (opens without internet), the settings (menus, Astra customizer settings, additional CSS, plugins and themes with their versions) and a step-by-step recovery guide.',
