@@ -97,6 +97,7 @@
         });
       });
       this.body(b, i, $('.blk-body', el), $('.blk-extra', el), arr);
+      this.decorateBlock?.(el, b, $('.blk-extra', el)); // botones «Estilo» y «⋯», diseño y ocultos por dispositivo (blocks/design-ui.js)
       return el;
     },
 
@@ -173,6 +174,7 @@
       const text = b.type === 'list' ? (b.items || []).join('<br>') : b.html || '';
       const nb = this.create(type, extra);
       for (const k of ['align', 'size', 'font', 'color', 'bg', 'shadow', 'spacing']) if (b[k]) nb[k] = b[k];
+      window.Design?.apply(nb, window.Design.pick(b)); // y su diseño (espaciado, bordes, fondo, dispositivos…)
       if (type === 'list') nb.items = b.type === 'list' ? b.items : text.split(/<br\s*\/?>/i).filter((x) => x.replace(/<[^>]+>/g, '').trim()).concat(text ? [] : ['']);
       else nb.html = text;
       if (type === 'list' && !nb.items.length) nb.items = [''];

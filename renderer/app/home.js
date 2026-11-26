@@ -322,7 +322,9 @@ const Home = (() => {
     if (!wpOk() || !self()) body = !wpOk() ? needWp() : `<p class="hint">${t('Las visitas solo están disponibles con «Mi web (wp-admin)» y el complemento de Ecos.')}</p>`;
     else if (!helperReady()) body = `<div class="home-empty"><span class="ms">extension</span><span>${CFG.ecosHelper?.installed ? t('Actualiza el complemento de Ecos para ver las visitas.') : t('Instala el complemento de Ecos para contar las visitas, sin cookies.')}</span><button class="btn tonal small" data-h="conn">${t('Ir a Conexiones')}</button></div>`;
     else {
-      const data = v.data[v.days];
+      // datos incompletos (complemento antiguo o respuesta a medias): se completan para no romper la tarjeta
+      const raw = v.data[v.days];
+      const data = raw && { ...raw, total: Number(raw.total) || 0, top: Array.isArray(raw.top) ? raw.top : [], daily: Array.isArray(raw.daily) ? raw.daily : [] };
       const sel = `<div class="seg" role="radiogroup" aria-label="${escHtml(t('Periodo'))}">${[7, 30].map((d) => `<button class="${v.days === d ? 'active' : ''}" data-h="views-days" data-d="${d}" role="radio" aria-checked="${v.days === d}">${t('{n} días', { n: d })}</button>`).join('')}</div>`;
       let inner;
       if (!data) inner = v.err ? `<p class="hint">${escHtml(v.err)} <button class="btn text small" data-h="retry"><span class="ms">refresh</span>${t('Reintentar')}</button></p>` : `${hcSkel()}`;

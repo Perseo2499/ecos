@@ -972,7 +972,7 @@ handle('ai:models', (id, draftKey, draftUrl) => {
 handle('ai:test', async () => { const c = await ai.testConnection(cfg.ai); return c.tool ? `${require('./src/clirun').TOOLS[c.tool].name}${c.model ? ' · ' + c.model : ''}` : `${ai.PROVIDERS[c.id].name} · ${c.model}`; });
 
 // --- Copia de seguridad de la configuración ---
-const BACKUP_KEYS = ['devDir', 'metaAppId', 'metaAppSecret', 'metaConfigId', 'graphVersion', 'wpMode', 'wpUrl', 'wpUser', 'wpAppPassword', 'wpSite', 'wpPublicUrl', 'wpEditor', 'wpClientId', 'wpClientSecret', 'gpClientId', 'gpClientSecret', 'ai', 'aiInstructions', 'format', 'templates', 'blockTemplates', 'blockSections', 'exported', 'prefs'];
+const BACKUP_KEYS = ['devDir', 'metaAppId', 'metaAppSecret', 'metaConfigId', 'graphVersion', 'wpMode', 'wpUrl', 'wpUser', 'wpAppPassword', 'wpSite', 'wpPublicUrl', 'wpEditor', 'wpClientId', 'wpClientSecret', 'gpClientId', 'gpClientSecret', 'ai', 'aiInstructions', 'format', 'templates', 'blockTemplates', 'blockSections', 'designStyles', 'exported', 'prefs'];
 handle('config:export', async (withSecrets) => {
   const r = await dialog.showSaveDialog(mainWin, { title: 'Guardar copia de la configuración', defaultPath: `ecos-configuracion-${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] });
   if (r.canceled) return false;

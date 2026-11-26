@@ -144,15 +144,8 @@
         ] });
         rows.push({ label: t('Efecto'), chips: [chip(t('Ninguno'), !b.fx, () => { delete b.fx; }), chip(t('Zoom al pasar el ratón'), b.fx === 'zoom', () => { b.fx = 'zoom'; }), chip(t('Blanco y negro'), b.fx === 'bw', () => { b.fx = 'bw'; })] });
       } else if (b.type === 'group') {
-        rows.push({ label: t('Color de fondo'), color: { get: () => b.bg || '', set: (v) => { set('bg', v)(); if (v) delete b.gradient; }, none: true } });
-        rows.push(gradRow());
         rows.push({ label: t('Color del texto'), color: { get: () => b.color || '', set: (v) => set('color', v)(), none: true } });
-        rows.push({ label: t('Margen interior'), chips: choose('pad', [['none', t('Ninguno')], ['s', t('Pequeño')], ['m', t('Medio')], ['l', t('Grande')]]).map((c, k) => ({ ...c, on: (b.pad || 'none') === ['none', 's', 'm', 'l'][k] })) });
-        rows.push(widthRow());
-        rows.push({ label: t('Esquinas'), chips: [[0, t('Rectas')], [12, t('Suaves')], [28, t('Redondas')]].map(([v, n]) => chip(n, (Number(b.radius) || 0) === v, () => { if (v) b.radius = v; else delete b.radius; })) });
-        rows.push({ label: t('Sombra'), chips: [chip(t('No'), !b.shadow, () => { delete b.shadow; }), chip(t('Sí'), !!b.shadow, () => { b.shadow = true; })] });
-        rows.push({ label: t('Borde'), color: { get: () => b.border || '', set: (v) => set('border', v)(), none: true } });
-        rows.push(...marginRows());
+        // espaciado, bordes, esquinas, sombra, fondo y ancho: apartado «Diseño» (designRows)
         rows.push({ label: t('Imagen de fondo'), chips: [{ t: t('Poner una imagen de fondo…'), ic: 'wallpaper', on: false, raw: () => this.pickFromTray((m) => this.change(() => { b.type = 'cover'; b.img = { ...m }; b.overlay = '#000000'; b.dim = 40; b.height = 300; delete b.bg; delete b.gradient; delete b.border; delete b.pad; delete b.radius; delete b.shadow; }), 'image') }] });
       } else if (b.type === 'columns') {
         rows.push({ label: t('Columnas'), chips: [2, 3, 4].map((n) => chip(String(n), b.cols.length === n, () => {}, { raw: () => this.setColumns(b, n), on: b.cols.length === n })) });
@@ -161,9 +154,6 @@
         rows.push({ label: t('Alineación vertical'), chips: [['', t('Arriba')], ['center', t('Centro')], ['bottom', t('Abajo')]].map(([v, n]) => chip(n, (b.valign || '') === v, () => { if (v) b.valign = v; else delete b.valign; })) });
         rows.push({ label: t('Apilar en móvil'), chips: [chip(t('Sí'), b.stack !== false, () => { b.stack = true; }), chip(t('No'), b.stack === false, () => { b.stack = false; })] });
         rows.push({ label: t('Separación entre columnas'), chips: [chip(t('Normal'), !has(b.gap), () => { delete b.gap; }), ...[0, 16, 32, 48, 64].map((v) => chip(v + ' px', has(b.gap) && Number(b.gap) === v, () => { b.gap = v; }))] });
-        rows.push({ label: t('Color de fondo'), color: { get: () => b.bg || '', set: (v) => { set('bg', v)(); if (v) delete b.gradient; }, none: true } });
-        rows.push(gradRow());
-        rows.push(...marginRows());
       } else if (b.type === 'cover') {
         rows.push({ label: t('Imagen de fondo'), chips: [{ t: t('Cambiar imagen…'), ic: 'add_photo_alternate', on: false, raw: () => this.pickFromTray((m) => this.change(() => this.setCoverImg(b, m)), 'image') }, chip(t('Quitar imagen'), false, () => { b.img = null; delete b.focalPoint; delete b.parallax; }, { off: !b.img })] });
         if (b.img) rows.push(focalRow());
@@ -172,8 +162,6 @@
         rows.push(gradRow(t('Degradado en la capa')));
         rows.push({ label: t('Opacidad de la capa'), range: { min: 0, max: 100, step: 10, get: () => Number(b.dim ?? 50), set: (v) => { b.dim = v; }, fmt: (v) => v + '%' } });
         rows.push({ label: t('Altura'), chips: [[0, t('Auto')], [240, t('Baja')], [360, t('Media')], [480, t('Alta')], [600, t('Muy alta')]].map(([v, n]) => chip(n, (Number(b.height) || 0) === v, () => { b.height = v; })) });
-        rows.push(widthRow());
-        rows.push(...marginRows());
       } else if (b.type === 'map') {
         rows.push({ label: t('Altura'), chips: [[260, t('Baja')], [360, t('Media')], [480, t('Alta')]].map(([v, n]) => chip(n, (Number(b.height) || 360) === v, () => { b.height = v; })) });
         rows.push({ label: t('Esquinas'), chips: [[0, t('Rectas')], [16, t('Suaves')], [28, t('Redondas')]].map(([v, n]) => chip(n, (Number(b.radius) || 0) === v, () => { b.radius = v; })) });
@@ -196,11 +184,18 @@
         document.addEventListener('mousedown', (e) => { if (this.pop && !e.target.closest('#sty-pop, [data-sty]')) this.closeStyle(); });
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && this.pop) this.closeStyle(); });
       }
-      const b = loc.b, rows = this.styleRows(b);
+      const b = loc.b, rows = [...this.styleRows(b), ...(this.designRows ? this.designRows(b) : [])];
       if (!rows.length) { this.closeStyle(); return; }
       const T = TYPES()[b.type];
       const h = [`<div class="sp-title"><span class="ms">${T.icon}</span>${esc(T.name)}<button class="sp-x" title="${t('Cerrar')}"><span class="ms">close</span></button></div>`];
+      let sec = null; // apartado del panel «Diseño» al que pertenece cada fila (se abren y se cierran)
+      const isOpen = (key) => this.secOpen[key] ?? (key === 'saved' && this.savedStyles().length > 0);
       rows.forEach((r, ri) => {
+        if (r.head) {
+          sec = r.head;
+          h.push(`<button class="sp-head ${isOpen(sec) ? 'open' : ''}" data-hd="${sec}" aria-expanded="${isOpen(sec)}"><span class="ms">${r.icon || 'tune'}</span><span class="sp-ht">${esc(r.label)}</span><span class="ms sp-chev">expand_more</span></button>`);
+          return;
+        }
         let body = '';
         if (r.chips) body = `<div class="sp-chips">${r.chips.map((c, ci) => `<button class="sp-chip ${c.on ? 'on' : ''}" data-r="${ri}" data-c="${ci}" ${c.off ? 'disabled' : ''} ${c.title ? `title="${esc(c.title)}"` : ''}>${c.ic ? `<span class="ms">${c.ic}</span>` : ''}${esc(c.t)}</button>`).join('')}</div>`;
         else if (r.color) {
@@ -211,7 +206,7 @@
           body = `<div class="sp-chips sp-sws"><button class="sp-chip ${!cur ? 'on' : ''}" data-r="${ri}" data-gr="">${t('Ninguno')}</button>${SK().GRADIENTS.map((g) => `<button class="sp-sw ${cur === g.css ? 'on' : ''}" data-r="${ri}" data-gr="${esc(g.css)}" style="background:${g.css}" title="${esc(t(g.name))}"></button>`).join('')}</div>`;
         } else if (r.range) body = `<div class="sp-range"><input type="range" data-r="${ri}" min="${r.range.min}" max="${r.range.max}" step="${r.range.step}" value="${r.range.get()}"><output>${r.range.fmt(r.range.get())}</output></div>`;
         else if (r.html) body = `<div class="sp-chips sp-custom-row" data-r="${ri}">${r.html}</div>`;
-        h.push(`<div class="sp-row"><div class="sp-lbl">${esc(r.label)}</div>${body}</div>`);
+        h.push(`<div class="sp-row ${sec && !isOpen(sec) ? 'hidden' : ''}"><div class="sp-lbl">${esc(r.label)}</div>${body}</div>`);
       });
       const keptSty = el.dataset.for === String(id) && this.setPopHtml(el, h.join(''));
       if (!keptSty) el.innerHTML = h.join('');
@@ -224,6 +219,7 @@
       el.style.left = Math.max(8, Math.min(innerWidth - w - 8, pos.x)) + 'px';
       el.style.top = Math.max(8, Math.min(innerHeight - hh - 8, pos.y)) + 'px';
       $('.sp-x', el).onclick = () => { this.closeStyle(); if (!this.repaintBlock(id)) this.render(); };
+      $$('.sp-head', el).forEach((x) => (x.onclick = () => { this.secOpen[x.dataset.hd] = !isOpen(x.dataset.hd); this.openStyle(id, true); }));
       $$('.sp-chip[data-c]', el).forEach((x) => (x.onclick = () => { const c = rows[Number(x.dataset.r)].chips[Number(x.dataset.c)]; if (c.raw) c.raw(); else this.changeBlock(id, c.fn); }));
       $$('[data-sw]', el).forEach((x) => (x.onclick = () => this.changeBlock(id, () => { const before = { bg: b.bg, color: b.color }; rows[Number(x.dataset.r)].color.set(x.dataset.sw); window.ThemeUI?.tagChanged(b, before, x.dataset.sw, x.dataset.th || ''); })));
       $$('[data-gr]', el).forEach((x) => (x.onclick = () => this.changeBlock(id, () => rows[Number(x.dataset.r)].grad.set(x.dataset.gr))));

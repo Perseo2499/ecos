@@ -330,13 +330,20 @@ Object.assign(FX_CSS, {
   'cg-s': `${CA}.ecos-cg-s .slick-slide{padding:0 4px}`,
   'cg-l': `${CA}.ecos-cg-l .slick-slide{padding:0 14px}`,
 });
+// Panel de diseño universal (renderer/design.js): sus clases ecos-d-*, ecos-hide-*, ecos-anim-*, ecos-m-* y ecos-font-* con su CSS
+const Design = require('../renderer/design');
+Object.assign(FX_CSS, Design.CSS);
 const FX_MARK = 'ecos-fx';
 function fxBlock(set, helper = false) {
   const dyn = [...set].filter((k) => /^mt-bc-[0-9a-f]{3,8}$/.test(k)).sort()
     .map((k) => `${MT}.ecos-${k} .wp-block-media-text__media{border-color:#${k.slice(6)}}`).join('');
-  const css = Object.keys(FX_CSS).filter((k) => set.has(k)).map((k) => FX_CSS[k]).join('') + dyn;
+  // reglas de colores, resaltados e imágenes de fondo del diseño (una por valor usado)
+  const dz = [...set].filter((k) => k.startsWith('dyn:')).map((k) => k.slice(4)).sort().join('');
+  const css = Object.keys(FX_CSS).filter((k) => set.has(k)).map((k) => FX_CSS[k]).join('') + dyn + dz;
   const js = !helper && set.has('vplay') && VIDEOS_B64() ? `<script class="ecos-vjs">new Function(atob("${VIDEOS_B64()}"))()</script>` : '';
-  return `<!-- wp:html -->\n<style class="${FX_MARK}">${css}</style>${js}\n<!-- /wp:html -->`;
+  // animaciones al aparecer: el guion (renderer/anim.js) va codificado igual que los demás; con el complemento lo pone él
+  const ajs = !helper && set.has('anim') && ANIM_B64() ? `<script class="ecos-ajs">new Function(atob("${ANIM_B64()}"))()</script>` : '';
+  return `<!-- wp:html -->\n<style class="${FX_MARK}">${css}</style>${js}${ajs}\n<!-- /wp:html -->`;
 }
 function imageBlockFull(img, cap = '', place = {}, fx = null) {
   const alt = img.alt ? ` alt="${esc(img.alt)}"` : ' alt=""';
@@ -387,6 +394,16 @@ const VIDEOS_B64 = () => {
     vidB64 = Buffer.from(src.replace(/[^\x00-\x7f]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')), 'utf8').toString('base64');
   } catch { vidB64 = ''; }
   return vidB64;
+};
+// Guion de las animaciones al aparecer (renderer/anim.js), codificado igual
+let animB64 = null;
+const ANIM_B64 = () => {
+  if (animB64 !== null) return animB64;
+  try {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'renderer', 'anim.js'), 'utf8').split('\n').filter((l) => !/^\s*\/\//.test(l)).map((l) => l.trim()).join(' ');
+    animB64 = Buffer.from(src.replace(/[^\x00-\x7f]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')), 'utf8').toString('base64');
+  } catch { animB64 = ''; }
+  return animB64;
 };
 // El script del carrusel, en base64 y solo con caracteres ASCII: WordPress no puede alterarlo al guardar la entrada
 let carB64 = '';
@@ -570,25 +587,31 @@ function blockStyle(b, { alignKey = 'align', align = true, dropCap = false, fx =
   const tc = themeSel(b, 'color'), tb = themeSel(b, 'bg'), tz = themeSel(b, 'size'), tf = themeFont(b);
   if (tc) { attrs.textColor = tc; cls.push(`has-${tc}-color`, 'has-text-color'); }
   if (tb) { attrs.backgroundColor = tb; cls.push(`has-${tb}-background-color`, 'has-background'); }
-  const color = !tc && SAFE_COLOR.test(b.color || '') && b.color, bg = !tb && SAFE_COLOR.test(b.bg || '') && b.bg;
-  if (color || bg) {
+  const color = !tc && SAFE_COLOR.test(b.color || '') && b.color;
+  const grad = !tb && DK.safeGradient(b.gradient), bg = !tb && !grad && SAFE_COLOR.test(b.bg || '') && b.bg;
+  if (color || bg || grad) {
     st.color = {};
     if (color) { st.color.text = color; cls.push('has-text-color'); css.push('color:' + color); }
+    if (grad) { st.color.gradient = grad; cls.push('has-background'); css.push('background:' + grad); }
     if (bg) { st.color.background = bg; cls.push('has-background'); css.push('background-color:' + bg); }
   }
-  const size = !tz && /^\d{1,3}px$/.test(b.size || '') && b.size, font = !tf && FONTS[b.font];
+  // una fuente de Google (ecos-font-*) sustituye a la de sistema; la del tema (b.th) va como fontFamily
+  const size = !tz && /^\d{1,3}px$/.test(b.size || '') && b.size, font = !tf && !Design.fontBySlug(b.gf) && FONTS[b.font];
   const spacing = /^\d{1,2}(\.\d)?px$/.test(b.spacing || '') && b.spacing;
+  const lh = Design.LH.includes(String(b.lh)) && String(b.lh), tt = Design.TT.includes(b.tt) && b.tt;
   if (tz) { attrs.fontSize = tz; cls.push(`has-${tz}-font-size`); }
   if (tf?.slug) { attrs.fontFamily = tf.slug; cls.push(`has-${tf.slug}-font-family`); }
   const famInline = tf?.family || font;
-  if (size || famInline || spacing) {
+  if (size || famInline || spacing || lh || tt) {
     st.typography = {};
     if (famInline) { st.typography.fontFamily = famInline; css.push('font-family:' + famInline); }
     if (size) { st.typography.fontSize = size; css.push('font-size:' + size); }
     if (spacing) { st.typography.letterSpacing = spacing; css.push('letter-spacing:' + spacing); }
+    if (lh) { st.typography.lineHeight = lh; css.push('line-height:' + lh); }
+    if (tt) { st.typography.textTransform = tt; css.push('text-transform:' + tt); }
   }
   // Resaltado de bloque: el color de fondo lleva margen interior y esquinas suaves
-  if ((bg || tb) && align) {
+  if ((bg || tb || grad) && align) {
     st.spacing = { padding: { top: '14px', right: '18px', bottom: '14px', left: '18px' } };
     st.border = { radius: '10px' };
     css.push('border-radius:10px', 'padding-top:14px', 'padding-right:18px', 'padding-bottom:14px', 'padding-left:18px');
@@ -750,6 +773,7 @@ function columnsBlock(b, opts, ctx) {
   const cls = ['wp-block-columns'], css = [];
   if (valign) { attrs.verticalAlignment = valign; cls.push('are-vertically-aligned-' + valign); }
   if (b.stack === false) { attrs.isStackedOnMobile = false; cls.push('is-not-stacked-on-mobile'); }
+  if (ALIGNS.includes(b.width)) { attrs.align = b.width; cls.push('align' + b.width); }
   // diseño: degradado o color de fondo, separación entre columnas y margen exterior
   const st = {}, grad = DK.safeGradient(b.gradient), tb = !grad && themeSel(b, 'bg'), bg = !tb && SAFE_COLOR.test(b.bg || '') && b.bg, gap = gapOf(b), mar = marginOf(b);
   if (tb) { attrs.backgroundColor = tb; cls.push(`has-${tb}-background-color`, 'has-background'); }
@@ -781,6 +805,8 @@ function coverBlock(b, opts, ctx) {
   const overlay = /^#[0-9a-f]{6}$/i.test(b.overlay || '') ? b.overlay : '#000000';
   const dim = Math.max(0, Math.min(100, Math.round(Number(b.dim ?? 50) / 10) * 10));
   const h = Number(b.height) > 0 ? Math.min(1200, Math.round(Number(b.height))) : 0;
+  // vídeo de fondo (sin sonido y en bucle): solo si no hay foto
+  const vurl = !(b.img && b.img.url) && b.bgVideo && /^https?:\/\/[^\s"'<>]+$/i.test(b.bgVideo.url || '') ? b.bgVideo.url : '';
   const img = b.img && b.img.url ? b.img : null;
   const grad = DK.safeGradient(b.gradient);
   const fpv = (v) => Math.round(Math.max(0, Math.min(1, Number(v))) * 100) / 100;
@@ -789,12 +815,13 @@ function coverBlock(b, opts, ctx) {
   const parallax = !!b.parallax && !!img;
   const attrs = {};
   if (img) { attrs.url = img.url; if (imgId(img)) attrs.id = imgId(img) }
+  if (vurl) { attrs.url = vurl; attrs.backgroundType = 'video'; if (imgId(b.bgVideo)) attrs.id = imgId(b.bgVideo); }
   if (focal) attrs.focalPoint = focal;
   if (parallax) attrs.hasParallax = true;
   attrs.dimRatio = dim; attrs.customOverlayColor = overlay;
   if (grad) attrs.customGradient = grad;
   if (h) { attrs.minHeight = h; attrs.minHeightUnit = 'px'; }
-  const dark = dim < 40 && img ? true : grad ? true : isDarkColor(overlay);
+  const dark = dim < 40 && (img || vurl) ? true : grad ? true : isDarkColor(overlay);
   if (!dark) attrs.isDark = false;
   const align = ALIGNS.includes(b.width) ? b.width : '';
   if (align) attrs.align = align;
@@ -818,6 +845,7 @@ function coverBlock(b, opts, ctx) {
   else if (img) imgTag = `<img class="wp-block-cover__image-background${wpImg}" alt="${esc(img.alt || '')}" src="${esc(img.url)}"${pos ? ` style="object-position:${pos}"` : ''}/>`;
   const style = [h ? `min-height:${h}px` : '', ...mar.css].filter(Boolean).join(';');
   const veil = `background-color:${overlay}${grad ? ';background:' + grad : ''}`;
+  if (vurl) imgTag = `<video class="wp-block-cover__video-background intrinsic-ignore" autoplay muted loop playsinline src="${esc(vurl)}" data-object-fit="cover"></video>`;
   return `<!-- wp:cover ${JSON.stringify(attrs)} -->\n<div class="${cls.join(' ')}"${style ? ` style="${style}"` : ''}>${imgTag}<span aria-hidden="true" class="${dimCls.join(' ')}" style="${veil}"></span><div class="wp-block-cover__inner-container">${inner ? '\n' + inner + '\n' : ''}</div></div>\n<!-- /wp:cover -->`;
 }
 
@@ -888,6 +916,7 @@ function composeList(blocks, opts, ctx) {
     // un bloque que no rodea la foto (o un título, que empieza apartado nuevo): primero el corte
     if (floating && (!WRAPS.has(b.type) || b.type === 'heading')) { out.push(CLEAR_BLOCK); floating = false; }
     if (b.type === 'image' && b.img && (b.align === 'left' || b.align === 'right')) floating = true;
+    const first = out.length;
     switch (b.type) {
       case 'paragraph': {
         const st = blockStyle(b, { dropCap: true, fx: ctx.fx });
@@ -970,6 +999,8 @@ function composeList(blocks, opts, ctx) {
       case 'separator': out.push('<!-- wp:separator -->\n<hr class="wp-block-separator has-alpha-channel-opacity"/>\n<!-- /wp:separator -->'); break;
       default: break;
     }
+    // diseño universal (espaciado, bordes, fondo, dispositivos, animación, tipografía): sobre el bloque ya escrito
+    if (b.type !== 'raw' && Design.hasDesign(b)) for (let k = first; k < out.length; k++) out[k] = Design.decorate(out[k], b, (key) => ctx.fx.add(key));
   }
   if (floating) out.push(CLEAR_BLOCK);
   return out.join('\n\n');

@@ -5,6 +5,7 @@ const { FONTS, FX_MARK } = require('./transform');
 const PageBg = require('../renderer/pagebg');
 const DK = require('../renderer/sections');
 const TS = require('./themestyles');
+const Design = require('../renderer/design');
 
 const FONT_KEY = Object.fromEntries(Object.entries(FONTS).map(([k, v]) => [v, k]));
 let seq = 0;
@@ -67,6 +68,9 @@ function styleFrom(a) {
   if (a.dropCap) o.dropCap = true;
   if (st.color?.text) o.color = st.color.text;
   if (st.color?.background) o.bg = st.color.background;
+  if (st.color?.gradient && DK.safeGradient(st.color.gradient)) o.gradient = st.color.gradient;
+  if (st.typography?.lineHeight && Design.LH.includes(String(st.typography.lineHeight))) o.lh = String(st.typography.lineHeight);
+  if (Design.TT.includes(st.typography?.textTransform)) o.tt = st.typography.textTransform;
   if (st.typography?.fontSize) o.size = st.typography.fontSize;
   if (st.typography?.fontFamily && FONT_KEY[st.typography.fontFamily]) o.font = FONT_KEY[st.typography.fontFamily];
   else if (st.typography?.fontFamily && st.typography.fontFamily === TS.get()?.headingFont) { o.font = 'heading'; (o.th ||= {}).font = { slug: 'heading', v: st.typography.fontFamily }; }
@@ -92,8 +96,32 @@ function carouselOptsFrom(cn) {
   return o;
 }
 
+// Diseño universal: bloques que Ecos escribe con clases y atributos de diseño (ver renderer/design.js)
+const DESIGN_NAMES = new Set(['paragraph', 'heading', 'list', 'quote', 'pullquote', 'image', 'gallery', 'video', 'embed', 'separator', 'spacer', 'table', 'buttons', 'details', 'group', 'columns', 'cover', 'media-text', 'uagb/image-gallery']);
+let BGI = {}; // reglas de imágenes de fondo del bloque de estilos de Ecos de la entrada que se está leyendo
+const AUTO_HL = { t: 14, r: 18, b: 14, l: 18 };
 function toBlock(t) {
   const n = t.name.replace(/^core\//, '');
+  let dz = null;
+  if (DESIGN_NAMES.has(n)) {
+    dz = Design.read(t.attrs, n, { bgi: BGI });
+    if (!dz.ok && !['paragraph', 'heading', 'list', 'quote', 'pullquote'].includes(n)) return { id: bid(), type: 'raw', markup: t.raw, label: n };
+    // el margen interior y las esquinas del resaltado de un párrafo o título los pone Ecos solos
+    if ((n === 'paragraph' || n === 'heading') && (t.attrs.style?.color?.background || t.attrs.style?.color?.gradient)) {
+      if (dz.d.p && ['t', 'r', 'b', 'l'].every((k) => dz.d.p[k] === AUTO_HL[k])) delete dz.d.p;
+      if (dz.d.rd === 10) delete dz.d.rd;
+    }
+    t = { ...t, attrs: dz.rest };
+  }
+  const b = toBlockCore(t, n, dz && dz.d);
+  if (b && !Array.isArray(b) && dz && b.type !== 'raw') {
+    // el ancho de secciones, columnas y portadas se guarda como b.width (como siempre); en el resto, b.wd
+    if (['group', 'columns', 'cover'].includes(b.type) && dz.d.wd) { b.width = dz.d.wd; delete dz.d.wd; }
+    for (const [k, v] of Object.entries(dz.d)) if (b[k] === undefined) b[k] = v;
+  }
+  return b;
+}
+function toBlockCore(t, n, d) {
   const a = t.attrs, h = t.inner;
   const raw = () => ({ id: bid(), type: 'raw', markup: t.raw, label: n });
   switch (n) {
@@ -192,6 +220,15 @@ function toBlock(t) {
         : { id: bid(), type: 'gallery', images, columns: a.columnsDesk || 3 };
     }
     case 'html': {
+      // diseño en la primera etiqueta (clases ecos-d-*, ecos-hide-*, ecos-anim-*…): se lee y se quita para reconocer el bloque
+      const ht = String(h).match(/^(\s*<div class=")([^"]*)(")/);
+      if (ht && /ecos-(carrusel|mosaico|galeria|mapa)/.test(ht[2])) {
+        const r = Design.read({ className: ht[2] }, 'html', { bgi: BGI });
+        if (Object.keys(r.d).length) {
+          const b = toBlock({ ...t, inner: h.replace(ht[0], ht[1] + (r.rest.className || '') + ht[3]) });
+          if (b && !Array.isArray(b) && b.type !== 'raw') { Object.assign(b, r.d); return b; }
+        }
+      }
       if (/^\s*<div class="ecos-clear"[^>]*><\/div>\s*$/.test(h)) return null; // corte tras una foto a un lado: se vuelve a poner al enviar
       if (new RegExp(`<style class="${FX_MARK}"`).test(h)) return null; // estilos de los efectos de Ecos: se vuelven a poner al enviar
       if (PageBg.isBlock(h) || /^\s*<div class="ecos-page-bg"[^>]*><\/div>\s*$/.test(h)) return null; // fondo de la página: va a draft.pageBg (PageBg.parse), no es un bloque
@@ -272,17 +309,20 @@ function toBlock(t) {
       const st = a.style || {}, kids = parseList(h, true);
       if (kids.lossy) return raw();
       const b = { id: bid(), type: 'group', children: kids };
-      if (ALIGN_OK.includes(a.align)) b.width = a.align;
+      if (d.wd) { b.width = d.wd; delete d.wd; }
       if (st.color?.gradient) b.gradient = st.color.gradient;
       if (st.color?.background) b.bg = st.color.background;
       if (st.color?.text) b.color = st.color.text;
       themeColors(a, b);
-      b.pad = padOf(st.spacing?.padding);
-      const rad = parseInt(st.border?.radius, 10);
-      if (rad > 0) b.radius = rad;
-      if (st.border?.color) b.border = st.border.color;
-      Object.assign(b, marginFrom(st.spacing));
-      if (st.shadow) b.shadow = true;
+      // margen interior: uno de los tres tamaños de Ecos o los valores propios (b.p)
+      const pad = padPreset(d.p);
+      b.pad = pad || 'none';
+      if (d.p && !pad) b.p = d.p;
+      delete d.p;
+      // lo que ya existía antes del panel de diseño (esquinas, borde de 1 px, sombra) conserva su forma
+      if (d.rd > 0 && d.rd <= 60) { b.radius = d.rd; delete d.rd; }
+      if (d.bw === 1 && !d.bs && d.bc) { b.border = d.bc; delete d.bw; delete d.bc; }
+      if (d.sh === 'm') { b.shadow = true; delete d.sh; }
       return b;
     }
     case 'columns': {
@@ -303,7 +343,9 @@ function toBlock(t) {
       return b;
     }
     case 'cover': {
-      if (!onlyKeys(a, ['url', 'id', 'dimRatio', 'customOverlayColor', 'customGradient', 'minHeight', 'minHeightUnit', 'isDark', 'align', 'layout', 'alt', 'focalPoint', 'hasParallax', 'style'])) return raw();
+      if (!onlyKeys(a, ['url', 'id', 'dimRatio', 'customOverlayColor', 'customGradient', 'minHeight', 'minHeightUnit', 'isDark', 'align', 'layout', 'alt', 'focalPoint', 'hasParallax', 'style', 'backgroundType'])) return raw();
+      if (a.backgroundType && a.backgroundType !== 'video') return raw();
+      if (a.backgroundType === 'video' && !/^https?:\/\/[^\s"'<>]+$/i.test(a.url || '')) return raw();
       if (a.style && !(onlyKeys(a.style, ['spacing']) && onlyKeys(a.style.spacing, ['margin']) && marginKnown(a.style.spacing.margin))) return raw();
       if (a.customGradient && !DK.safeGradient(a.customGradient)) return raw();
       if (a.focalPoint && !(onlyKeys(a.focalPoint, ['x', 'y']) && [a.focalPoint.x, a.focalPoint.y].every((v) => typeof v === 'number' && v >= 0 && v <= 1))) return raw();
@@ -314,7 +356,9 @@ function toBlock(t) {
       const kids = parseList(h, true);
       if (kids.lossy) return raw();
       const tag = (h.match(/<(?:img|div)\b[^>]*wp-block-cover__image-background[^>]*>/i) || [''])[0];
-      const b = { id: bid(), type: 'cover', img: a.url ? { id: Number(a.id) || a.url, url: a.url, alt: attr(tag, 'alt') || attr(tag, 'aria-label') } : null, overlay: a.customOverlayColor || '#000000', dim: a.dimRatio ?? 100, height: Number(a.minHeight) || 0, children: kids };
+      const vid = a.backgroundType === 'video';
+      const b = { id: bid(), type: 'cover', img: a.url && !vid ? { id: Number(a.id) || a.url, url: a.url, alt: attr(tag, 'alt') || attr(tag, 'aria-label') } : null, overlay: a.customOverlayColor || '#000000', dim: a.dimRatio ?? 100, height: Number(a.minHeight) || 0, children: kids };
+      if (vid) b.bgVideo = { id: Number(a.id) || a.url, url: a.url };
       if (ALIGN_OK.includes(a.align)) b.width = a.align;
       if (a.customGradient) b.gradient = a.customGradient;
       if (a.focalPoint) b.focalPoint = { x: a.focalPoint.x, y: a.focalPoint.y };
@@ -336,15 +380,10 @@ function groupKnown(a) {
   if (a.align && !ALIGN_OK.includes(a.align)) return false;
   if (a.layout && !(a.layout.type === 'constrained' && Object.keys(a.layout).length === 1)) return false;
   const st = a.style || {};
-  if (!onlyKeys(st, ['spacing', 'color', 'border', 'shadow'])) return false;
-  if (!onlyKeys(st.spacing, ['padding', 'margin']) || !onlyKeys(st.color, ['background', 'text', 'gradient']) || !onlyKeys(st.border, ['radius', 'width', 'color', 'style'])) return false;
+  // el espaciado, el borde y la sombra ya los ha leído Design.read (y si traían algo raro, el bloque no llega aquí)
+  if (!onlyKeys(st, ['color'])) return false;
+  if (!onlyKeys(st.color, ['background', 'text', 'gradient'])) return false;
   if (st.color?.gradient && !DK.safeGradient(st.color.gradient)) return false;
-  if (st.spacing?.margin !== undefined && !marginKnown(st.spacing.margin)) return false;
-  // borde propio de Ecos: 1 px sólido de un color; si no, es de WordPress
-  if (st.border && (st.border.width !== undefined || st.border.color !== undefined || st.border.style !== undefined)
-    && !(st.border.width === '1px' && st.border.style === 'solid' && /^#[0-9a-f]{3,8}$/i.test(st.border.color || ''))) return false;
-  if (st.spacing?.padding && (typeof st.spacing.padding !== 'object' || !/^\d+px$/.test(String(st.spacing.padding.top ?? '0px')))) return false;
-  if (st.border?.radius !== undefined && !/^\d+px$/.test(String(st.border.radius))) return false;
   return true;
 }
 // Margen exterior (arriba y abajo, en píxeles) y estilos de columnas
@@ -363,9 +402,11 @@ function columnsStyleKnown(st) {
   if (st.spacing && !(onlyKeys(st.spacing, ['blockGap', 'margin']) && (st.spacing.blockGap === undefined || /^\d{1,3}px$/.test(String(st.spacing.blockGap))) && (st.spacing.margin === undefined || marginKnown(st.spacing.margin)))) return false;
   return true;
 }
-function padOf(p) {
-  const v = parseInt(p?.top, 10);
-  return !v ? 'none' : v <= 36 ? 's' : v <= 64 ? 'm' : 'l';
+// ¿El margen interior es uno de los tres tamaños de sección de Ecos (arriba y abajo / a los lados)?
+function padPreset(p) {
+  if (!p) return 'none';
+  for (const [k, [v, h]] of Object.entries({ s: [24, 24], m: [48, 32], l: [80, 40] })) if (p.t === v && p.b === v && p.l === h && p.r === h) return k;
+  return '';
 }
 // Bloques de dentro de un contenedor (los envoltorios <div> sin texto no cuentan)
 function parseList(content, nested) {
@@ -508,6 +549,9 @@ function classicBlocks(html) {
   return blocks;
 }
 
-function parseBlocks(content) { return parseList(content, false); }
+function parseBlocks(content) {
+  BGI = Design.parseBgiRules((String(content || '').match(new RegExp(`<style class="${FX_MARK}">[\\s\\S]*?</style>`, 'g')) || []).join(''));
+  return parseList(content, false);
+}
 
 module.exports = { parseBlocks, tokenize, classicBlocks, toBlock };

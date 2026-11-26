@@ -45,7 +45,7 @@ test('sección: un degradado raro o un margen ajeno la dejan como bloque de Word
   assert.equal(P.parseBlocks(mk({ color: { gradient: 'var(--wp--preset--gradient--x)' } }))[0].type, 'raw');
   assert.equal(P.parseBlocks(mk({ spacing: { margin: { left: '10px' } } }))[0].type, 'raw');
   assert.equal(P.parseBlocks(mk({ spacing: { blockGap: '1em' } }))[0].type, 'raw');
-  assert.equal(P.parseBlocks(mk({ border: { width: '4px', color: '#000000', style: 'dashed' } }))[0].type, 'raw');
+  assert.equal(P.parseBlocks(mk({ border: { width: '4px', color: '#000000', style: 'double' } }))[0].type, 'raw');
 });
 
 test('columnas: separación, margen, degradado y fondo hacen la ida y vuelta', () => {
