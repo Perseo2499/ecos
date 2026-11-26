@@ -115,6 +115,7 @@
           <button id="ed-pull" class="btn text" data-i18n-title title="Comprobar en WordPress si la entrada se ha publicado o cambiado allí y traer los cambios"><span class="ms">sync</span><span data-i18n>Actualizar</span></button>
           <button id="ed-import" class="btn text" data-i18n-title title="Importar una entrada o página exportada de WordPress (.xml) o un archivo .html"><span class="ms">upload_file</span><span data-i18n>Importar</span></button>
           <button id="ed-history" class="btn text hidden" data-i18n-title title="Ver y recuperar versiones anteriores de esta entrada"><span class="ms">history</span><span data-i18n>Historial</span></button>
+          <button id="ed-layers-btn" class="btn text" aria-pressed="false" aria-controls="ed-layers" data-i18n-title title="Capas de la entrada"><span class="ms">account_tree</span><span data-i18n>Capas</span></button>
           <button id="ed-find" class="btn text icon-only" data-i18n-title title="Buscar y reemplazar"><span class="ms">find_replace</span></button>
           <button id="ed-undo" class="btn text icon-only" data-i18n-title title="Deshacer"><span class="ms">undo</span></button>
           <button id="ed-redo" class="btn text icon-only" data-i18n-title title="Rehacer"><span class="ms">redo</span></button>
@@ -202,6 +203,11 @@
               <div id="d-blocks" class="blocks"></div>
             </div>
           </div>
+          <!-- Panel de capas: el árbol de bloques de la entrada (se abre sobre la columna derecha) -->
+          <aside id="ed-layers" class="ed-layers hidden" aria-label="Capas de la entrada">
+            <div class="ly-head"><b data-i18n>Capas</b><span class="hint ly-count"></span><span class="spacer"></span><button class="btn text icon-only ly-close" data-i18n-title title="Cerrar"><span class="ms">close</span></button></div>
+            <div class="ly-list" role="tree" aria-label="Capas de la entrada"></div>
+          </aside>
           <!-- Ajustes de la entrada -->
           <div class="ed-side">
             <div class="section-label" data-i18n>Revisión</div>
@@ -1016,6 +1022,7 @@
 <script src="blocks/types/misc.js"></script>
 <script src="blocks/style.js"></script>
 <script src="blocks/media.js"></script>
+<script src="blocks/layers.js"></script>
 <script src="format.js"></script>
 <script src="sitemap.js"></script>
 <script src="structure.js"></script>
