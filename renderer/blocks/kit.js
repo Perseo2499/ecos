@@ -19,6 +19,12 @@
     details: { icon: 'expand_circle_down', name: t('Desplegable') }, toc: { icon: 'toc', name: t('Índice') },
     group: { icon: 'web_asset', name: t('Sección') }, columns: { icon: 'view_column', name: t('Columnas') }, cover: { icon: 'wallpaper', name: t('Portada') },
     map: { icon: 'map', name: t('Mapa') },
+    // «Más bloques» (renderer/blocks/types/more.js y more2.js)
+    tabs: { icon: 'tab', name: t('Pestañas') }, timeline: { icon: 'timeline', name: t('Línea de tiempo') }, figures: { icon: '123', name: t('Cifras destacadas') },
+    testimonials: { icon: 'rate_review', name: t('Testimonios') }, cards: { icon: 'view_agenda', name: t('Tarjetas con icono') }, cta: { icon: 'campaign', name: t('Llamada a la acción') },
+    donate: { icon: 'volunteer_activism', name: t('Donación') }, event: { icon: 'event', name: t('Evento') }, audio: { icon: 'headphones', name: t('Audio o pódcast') },
+    pdf: { icon: 'picture_as_pdf', name: t('PDF') }, hotspots: { icon: 'ads_click', name: t('Imagen con puntos') }, compare: { icon: 'compare', name: t('Antes y después') },
+    faq: { icon: 'quiz', name: t('Preguntas frecuentes') },
     raw: { icon: 'code_blocks', name: t('De WordPress') },
   });
   const TEXT_TYPES = ['paragraph', 'heading', 'quote', 'list'];

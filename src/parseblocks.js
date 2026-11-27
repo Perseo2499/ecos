@@ -6,6 +6,7 @@ const PageBg = require('../renderer/pagebg');
 const DK = require('../renderer/sections');
 const TS = require('./themestyles');
 const Design = require('../renderer/design');
+const More = require('../renderer/moreblocks');
 
 const FONT_KEY = Object.fromEntries(Object.entries(FONTS).map(([k, v]) => [v, k]));
 let seq = 0;
@@ -124,6 +125,9 @@ function toBlock(t) {
 function toBlockCore(t, n, d) {
   const a = t.attrs, h = t.inner;
   const raw = () => ({ id: bid(), type: 'raw', markup: t.raw, label: n });
+  // «Más bloques» (pestañas, cifras, testimonios…): se reconocen por la clase ecos-* del grupo (renderer/moreblocks.js)
+  const more = More.read(t, n, d || {}, MORE_ENV);
+  if (more) return more;
   switch (n) {
     case 'paragraph': return { id: bid(), type: 'paragraph', html: inner(h, 'p'), ...styleFrom(a) };
     case 'heading': { const l = a.level || 2; return { id: bid(), type: 'heading', level: [2, 3, 4, 5].includes(l) ? l : 2, html: inner(h, 'h' + l), ...styleFrom(a) }; }
@@ -369,6 +373,9 @@ function toBlockCore(t, n, d) {
     default: return raw();
   }
 }
+
+// Herramientas que usa renderer/moreblocks.js para leer sus bloques
+const MORE_ENV = { tokenize, inner, all, attr, decode, imgOf, bid, get core() { return toBlockCore; }, parseList: (c) => parseList(c, true) };
 
 // --- Contenedores (sección, columnas, portada) ---------------------------------------------------------------
 const ALIGN_OK = ['wide', 'full'];

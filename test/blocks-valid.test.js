@@ -208,6 +208,15 @@ check('sección, columnas y botón con colores del tema', [
   { id: 'tb1', type: 'buttons', html: 'Pulsa', url: 'https://x.org', bg: '#e04400', color: '#ffffff', ...TH({ bg: ['accent', '#e04400'], color: ['base', '#ffffff'] }) },
   { id: 'tb2', type: 'buttons', html: 'Contorno', url: 'https://x.org', variant: 'outline', color: '#e04400', ...TH({ color: ['accent', '#e04400'] }) }], ['core/group', 'core/columns', 'core/button']);
 
+// --- Más bloques (pestañas, línea de tiempo, cifras, testimonios, tarjetas, llamada a la acción, donación, evento, audio, PDF…) ---
+const MORE = require('./moreblocks-samples').samples;
+const MORE_NAMES = { tabs: ['core/group', 'core/heading'], tabsPill: ['core/group'], timelineV: ['core/group', 'core/image'], timelineH: ['core/group'], figures: ['core/group', 'core/paragraph'], figuresNoCount: ['core/group'],
+  testimonials: ['core/quote', 'core/image'], testimonialsSlider: ['core/quote'], cards: ['core/heading', 'core/paragraph'], cta: ['core/group', 'core/buttons', 'core/button'], ctaGradient: ['core/buttons'],
+  donateBizum: ['core/buttons'], donatePaypal: ['core/buttons'], donateHosted: ['core/button'], donateTransfer: ['core/button'], donateLink: ['core/button'],
+  event: ['core/buttons'], eventMap: ['core/group'], audioFile: ['core/audio'], audioEmbed: ['core/embed'], pdf: ['core/file'], pdfNoPreview: ['core/file'], pdfViewerOnly: ['core/file'],
+  hotspots: ['core/image'], compare: ['core/image'], faq: ['core/details'], faqMany: ['core/details'] };
+for (const [k, mk] of Object.entries(MORE)) check('más bloques: ' + k, [mk()], MORE_NAMES[k] || ['core/group']);
+
 test('el validador detecta de verdad un bloque mal formado', () => {
   const { found } = problems('<!-- wp:embed {"url":"https://a.b/x","type":"rich","providerNameSlug":"instagram"} -->\n<figure class="wp-block-embed is-type-rich is-provider-instagram"><div class="wp-block-embed__wrapper">\nhttps://a.b/x\n</div></figure>\n<!-- /wp:embed -->');
   assert.ok(found.length >= 1, 'a un embed sin su clase wp-block-embed-* debe invalidarlo');
