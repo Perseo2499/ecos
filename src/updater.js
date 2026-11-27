@@ -10,6 +10,20 @@ let lastStatus = { state: 'idle' };
 let beta = false;
 let nextCheckAt = 0;
 let holdTimer = null;
+// Notas de la release (electron-updater las da como texto/HTML o como lista por versión)
+const notesOf = (i) => {
+  const n = i && i.releaseNotes;
+  if (!n) return '';
+  const txt = Array.isArray(n) ? n.map((x) => x && x.note).filter(Boolean).join('\n') : String(n);
+  return txt.slice(0, 20000);
+};
+// Notas de la release (electron-updater las da como texto/HTML o como lista por versión)
+const notesOf = (i) => {
+  const n = i && i.releaseNotes;
+  if (!n) return '';
+  const txt = Array.isArray(n) ? n.map((x) => x && x.note).filter(Boolean).join('\n') : String(n);
+  return txt.slice(0, 20000);
+};
 const extra = () => ({ channel: beta ? 'beta' : 'stable', nextCheckAt });
 const status = (s) => { lastStatus = s; send({ ...s, ...extra() }); };
 
@@ -32,16 +46,16 @@ function init(sendToRenderer) {
     const until = manualNext ? 0 : holdUntil(i.releaseDate, beta);
     manualNext = false;
     if (until) {
-      status({ state: 'waiting', version: i.version, until });
+      status({ state: 'waiting', version: i.version, until, notes: notesOf(i) });
       clearTimeout(holdTimer);
       holdTimer = setTimeout(check, Math.min(until - Date.now() + 60 * 1000, EVERY_MS)); // se reintenta más tarde
       return;
     }
-    status({ state: 'downloading', version: i.version, percent: 0 });
+    status({ state: 'downloading', version: i.version, percent: 0, notes: notesOf(i) });
     autoUpdater.downloadUpdate().catch(() => {}); // el error llega por el evento 'error'
   });
   autoUpdater.on('download-progress', (p) => status({ ...lastStatus, state: 'downloading', percent: Math.round(p.percent) }));
-  autoUpdater.on('update-downloaded', (i) => status({ state: 'ready', version: i.version }));
+  autoUpdater.on('update-downloaded', (i) => status({ state: 'ready', version: i.version, notes: notesOf(i) || lastStatus.notes || '' }));
   autoUpdater.on('error', (e) => {
     const msg = e.message.split('\n')[0];
     // 404: GitHub no deja ver las versiones (repositorio privado) o aún no hay ninguna publicada
@@ -72,4 +86,4 @@ function setBeta(on) {
 const install = () => autoUpdater.quitAndInstall(false, true);
 const current = () => ({ version: app.getVersion(), ...lastStatus, ...extra() });
 
-module.exports = { init, check, install, current, setBeta };
+module.exports = { notesOf, init, check, install, current, setBeta };

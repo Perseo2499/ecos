@@ -159,6 +159,7 @@ function renderUpdate(st) {
   $('#update-text').textContent = texts[st.state] || '';
   $('#update-install').classList.toggle('hidden', st.state !== 'ready');
   if (st.channel) $('#update-channel').textContent = st.channel === 'beta' ? t('De pruebas') : t('Estable');
+  if (typeof clUpdate === 'function') clUpdate(st);
   $('#update-next').textContent = st.nextCheckAt && st.state !== 'unsupported' ? t('Próxima comprobación: {d}', { d: new Date(st.nextCheckAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }) : '';
 }
 window.api.onUpdate(renderUpdate);

@@ -311,6 +311,15 @@
     'La versión {v} se instalará dentro de unas {h} h: el canal estable espera 24 h tras publicarse una versión.': 'Version {v} will be installed in about {h} h: the stable channel waits 24 h after a version is released.',
     'Canal de pruebas activado: Ecos instalará las versiones nuevas en cuanto salgan.': 'Test channel on: Ecos will install new versions as soon as they are out.',
     'Canal estable: Ecos esperará 24 horas antes de instalar una versión nueva.': 'Stable channel: Ecos will wait 24 hours before installing a new version.',
+    // Historial de versiones y novedades
+    'Novedades de esta versión': "What's new in this version", 'Historial de versiones': 'Version history', 'Buscar en el historial': 'Search the history',
+    'Desplegar todo': 'Expand all', 'Plegar todo': 'Collapse all', 'Ninguna versión coincide.': 'No version matches.', 'Instalada': 'Installed',
+    'Mejorado': 'Improved', 'Corregido': 'Fixed', 'Para tu web': 'For your website', 'Novedades en GitHub': 'News on GitHub',
+    'Complemento de WordPress: versión {v}': 'WordPress plugin: version {v}', 'Qué trae la {v}': 'What {v} brings',
+    'Todavía no tenemos el detalle de esta versión dentro de Ecos.': 'We do not have the details of this version inside Ecos yet.', 'Ver la versión en GitHub': 'See the release on GitHub',
+    'Novedades de Ecos {v}': "What's new in Ecos {v}", 'Esto ha cambiado desde la última versión que usaste.': 'This is what has changed since the last version you used.',
+    'Esto ha cambiado desde la última versión que usaste ({n} versiones).': 'This is what has changed since the last version you used ({n} versions).',
+    'Ver todo el historial': 'See the full history',
     // 1.2 (editor completo)
     'Describiendo…': 'Describing…',
     'La IA no ha devuelto ninguna descripción. Escríbela debajo de la foto.': 'The AI returned no description. Write it below the photo.',

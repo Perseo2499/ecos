@@ -4,6 +4,7 @@
 // ---------------------------------------------------------------- textos que dependen del idioma
 function refreshTexts() {
   window.I18N.apply(document);
+  if (typeof clRefreshTexts === 'function') clRefreshTexts();
   renderStatus(); updateCount(); renderFeed(); renderAi(); renderManualCount();
   if ($('#bn-token')) checkTokenExpiry();
   if (CFG.startMode) renderMode(CFG.startMode);
@@ -198,6 +199,7 @@ window.api.onConfigChanged((c) => { CFG = { ...CFG, ...c }; renderStatus(); });
   updateCount(); renderFeed(); renderManualCount();
   window.api.updateStatus().then(renderUpdate).catch(() => {});
   window.api.appInfo().then((i) => ($('#about-info').textContent = `${t('Versión')} ${i.version || "–"} · Electron ${i.electron || "–"} · ${i.platform || "–"}`)).catch(() => {});
+  initChangelogUi().then(() => maybeShowWhatsNew()).catch(() => {});
   Home.show(); // Inicio es lo primero que se ve (se pinta enseguida y se rellena al llegar los datos)
   if (CFG.wpConnected) { loadCategories(); refreshExported(true); }
   checkTokenExpiry();
