@@ -156,14 +156,27 @@ let accounts = [];
 let mainWin;
 
 function createWindow() {
+  // Tema de la pantalla de arranque (el mismo fondo que tendrá la app): la ventana no se enseña hasta pintarla
+  let boot = 'light';
+  try {
+    const pr = cfg.prefs || {};
+    const dark = pr.theme === 'dark' || (pr.theme !== 'light' && require('electron').nativeTheme?.shouldUseDarkColors);
+    boot = pr.vinyl ? 'vinyl' : dark ? 'dark' : 'light';
+  } catch { /* claro */ }
   const win = mainWin = new BrowserWindow({
+    show: false, backgroundColor: { light: '#fbf9f7', dark: '#121413', vinyl: '#0b0b0b' }[boot],
     width: 1280, height: 860, // .ico: cada tamaño dibujado aparte
     icon: path.join(__dirname, 'renderer', 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
     title: IS_DEV ? 'Ecos (desarrollo)' : 'Ecos', autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false },
   });
   win.removeMenu(); // sin la barra File/Edit/View de Windows (los atajos de copiar y pegar siguen funcionando)
-  win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  win.loadFile(path.join(__dirname, 'renderer', 'index.html'), { query: { boot } });
+  // se enseña en cuanto está pintada la pantalla de arranque (y, por si acaso, a los 3 s aunque no avise)
+  let shown = false;
+  const showWin = () => { if (shown || win.isDestroyed()) return; shown = true; try { win.show(); } catch { /* nada */ } };
+  win.once('ready-to-show', showWin);
+  setTimeout(showWin, 3000);
   win.once('ready-to-show', () => { try { saveStartup(require('./src/startup').ready(startupState || readStartup())); } catch { /* nada */ } });
   if (IS_DEV) win.on('page-title-updated', (e) => e.preventDefault()); // que se note que es la versión de desarrollo
   win.webContents.setWindowOpenHandler(({ url }) => { openSafe(url); return { action: 'deny' }; });

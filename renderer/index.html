@@ -4,10 +4,13 @@
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data: file: blob:; frame-src https://www.google.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.dailymotion.com https://open.spotify.com; media-src * data: file: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https: data:">
 <title>Ecos</title>
+<link rel="stylesheet" href="boot.css">
+<script src="boot-splash.js"></script>
 <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<div id="boot-splash" role="status" aria-label="Abriendo Ecos"><img class="bs-logo" src="assets/logo-mark.svg" alt=""><span class="bs-name">Ecos</span><span class="bs-bar" aria-hidden="true"></span></div>
 <header class="appbar">
   <div class="brand"><span class="logo"><img src="assets/logo-mark.svg" alt=""></span><b>Ecos</b></div>
   <nav class="tabs">

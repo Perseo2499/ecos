@@ -8,6 +8,13 @@
 
   const ENTRIES = [
     {
+      version: '3.5.4', date: '2026-11-27',
+      title: c('Pantalla de arranque', 'Startup screen'),
+      improved: [
+        c('Al abrir Ecos se ve una pantalla de arranque con el logo y el color de tu tema, en lugar del fondo blanco con la interfaz a medio cargar, y pasa directamente a la pantalla de acceso o a Inicio.', 'When Ecos opens, a startup screen with the logo and your theme colour is shown instead of the white background with a half-loaded interface, and it goes straight to the sign-in screen or Home.'),
+      ],
+    },
+    {
       version: '3.5.3', date: '2026-11-27',
       title: c('Cuadrícula o detalle en Publicaciones', 'Grid or details in Posts'),
       improved: [

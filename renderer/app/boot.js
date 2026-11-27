@@ -38,6 +38,7 @@ async function lockGate() {
   window.Vinyl?.apply({ vinyl: !!prefs().vinyl, silk: prefs().silk !== false });
   $('#lock').classList.remove('hidden');
   document.body.classList.add('locked');
+  window.BootSplash?.done(); // la pantalla de acceso ya está pintada con su tema
   $('#lock-pass').focus();
   await new Promise((resolve) => {
     let needCode = !!st.needCode;
@@ -201,6 +202,7 @@ window.api.onConfigChanged((c) => { CFG = { ...CFG, ...c }; renderStatus(); });
   window.api.appInfo().then((i) => ($('#about-info').textContent = `${t('Versión')} ${i.version || "–"} · Electron ${i.electron || "–"} · ${i.platform || "–"}`)).catch(() => {});
   initChangelogUi().then(() => maybeShowWhatsNew()).catch(() => {});
   Home.show(); // Inicio es lo primero que se ve (se pinta enseguida y se rellena al llegar los datos)
+  window.BootSplash?.done();
   if (CFG.wpConnected) { loadCategories(); refreshExported(true); }
   checkTokenExpiry();
   if (typeof checkEmergency === "function") checkEmergency(); // aviso si la última copia de emergencia es antigua

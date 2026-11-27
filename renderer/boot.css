@@ -1,0 +1,24 @@
+/* Ecos · Pantalla de arranque: se ve desde el primer instante (antes que styles.css y que la pantalla de acceso)
+   y desaparece con un fundido cuando la app ya está lista (renderer/boot-splash.js). */
+html { background: #fbf9f7; }
+html[data-boot="dark"] { background: #121413; }
+html[data-boot="vinyl"] { background: #0b0b0b; }
+#boot-splash {
+  position: fixed; inset: 0; z-index: 2147483000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+  background: #fbf9f7; color: #1b1c1b; font: 500 15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  transition: opacity .35s ease, visibility 0s linear .35s;
+}
+html[data-boot="dark"] #boot-splash { background: #121413; color: #e3e3e1; }
+html[data-boot="vinyl"] #boot-splash { background: #0b0b0b; color: #f2f2f2; }
+#boot-splash.out { opacity: 0; visibility: hidden; pointer-events: none; }
+#boot-splash .bs-logo { width: 84px; height: 84px; border-radius: 22px; box-shadow: 0 10px 40px rgba(0, 0, 0, .25); animation: bs-in .6s cubic-bezier(.2, .9, .3, 1.2) both; }
+#boot-splash .bs-name { font-size: 22px; font-weight: 600; letter-spacing: .02em; animation: bs-fade .6s .1s both; }
+#boot-splash .bs-bar { width: 120px; height: 3px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, currentColor 14%, transparent); animation: bs-fade .6s .25s both; }
+#boot-splash .bs-bar::after { content: ""; display: block; width: 40%; height: 100%; border-radius: 3px; background: #e0442a; animation: bs-slide 1.1s ease-in-out infinite; }
+@keyframes bs-in { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: none; } }
+@keyframes bs-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes bs-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+@media (prefers-reduced-motion: reduce) {
+  #boot-splash, #boot-splash * { animation: none !important; transition: none !important; }
+  #boot-splash .bs-bar::after { width: 100%; opacity: .5; }
+}
