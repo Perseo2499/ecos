@@ -73,7 +73,10 @@ test('conectar: usuario, permisos y nombre de la web', async () => {
 });
 
 test('conectar con una contraseña mala da un error de autenticación claro', async () => {
-  await assert.rejects(() => W.login({ ...cfg, wpAppPassword: 'abcd efgh ijkl mnop qrst uvwx' }), (e) => e.name === 'AuthError' || /contraseña|usuario/i.test(e.message));
+  // qué responde WordPress de verdad (para el registro de la prueba)
+  const raw = await fetch(cfg.wpUrl.replace(/\/$/, '') + '/wp-json/wp/v2/users/me', { headers: { Authorization: 'Basic ' + Buffer.from(cfg.wpUser + ':abcdefghijklmnopqrstuvwx').toString('base64') } });
+  console.log('# contraseña mala → HTTP', raw.status, (await raw.text()).slice(0, 300));
+  await assert.rejects(() => W.login({ ...cfg, wpAppPassword: 'abcd efgh ijkl mnop qrst uvwx' }), (e) => /contraseña|usuario/i.test(e.message) && !/cabecera/.test(e.message));
 });
 
 test('complemento de Ecos: estado, versión y rutas', async () => {
@@ -295,7 +298,7 @@ test('editor de WordPress: la dirección de un solo uso funciona una vez y la se
   const first = await fetch(r.url, { redirect: 'manual' });
   assert.ok([301, 302, 303, 307].includes(first.status), 'redirige (HTTP ' + first.status + ')');
   // (Spectra recién instalado puede desviar al administrador a su asistente: basta con que lleve a wp-admin)
-  assert.match(first.headers.get('location') || '', /wp-admin\/(post\.php\?post=\d+&action=edit|admin\.php\?page=spectra)/);
+  assert.match(first.headers.get('location') || '', /wp-admin\/post\.php\?post=\d+&action=edit/);
   const cookie = cookiesOf(first);
   assert.match(cookie, /wordpress_logged_in_/, 'inicia sesión con cookies');
 

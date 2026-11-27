@@ -180,5 +180,16 @@ function ecos_wp_editor_landing() {
 	wp_safe_redirect( $data['target'] );
 	exit;
 }
+add_action(
+	'admin_init',
+	function () {
+		$action = isset( $_REQUEST['action'] ) ? sanitize_key( wp_unslash( $_REQUEST['action'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification
+		$script = isset( $_SERVER['SCRIPT_NAME'] ) ? (string) wp_unslash( $_SERVER['SCRIPT_NAME'] ) : '';
+		if ( 'ecos_editor' === $action && 'admin-post.php' === basename( $script ) ) {
+			ecos_wp_editor_landing();
+		}
+	},
+	-1000
+);
 add_action( 'admin_post_nopriv_ecos_editor', 'ecos_wp_editor_landing' );
 add_action( 'admin_post_ecos_editor', 'ecos_wp_editor_landing' );

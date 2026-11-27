@@ -73,7 +73,7 @@ test('bloques sincronizados de la web: normalizar wp_block y cuerpo para crearlo
   ]);
   assert.deepEqual(list.map((s) => [s.id, s.title, s.sync]), [[5, 'Aviso de cierre', ''], [6, 'Mi patrón', 'unsynced']]);
   const body = P.syncedPayload('  Mi bloque ', T.composeBlocks([para('Hola')]), '');
-  assert.equal(body.title, 'Mi bloque'); assert.equal(body.status, 'publish'); assert.equal(body.meta.wp_pattern_sync_status, '');
+  assert.equal(body.title, 'Mi bloque'); assert.equal(body.status, 'publish'); assert.equal(body.meta, undefined, 'sincronizado: sin meta (WordPress solo admite partial/unsynced)');
   assert.match(body.content, /<!-- wp:paragraph -->/);
   assert.equal(P.syncedPayload('x', '', 'unsynced').meta.wp_pattern_sync_status, 'unsynced');
   assert.equal(P.normalizeSynced([{ id: 7, title: 'm', content: { raw: '' }, meta: { wp_pattern_sync_status: 'unsynced' } }])[0].sync, 'unsynced');
