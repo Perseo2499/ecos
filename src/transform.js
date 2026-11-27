@@ -333,6 +333,9 @@ Object.assign(FX_CSS, {
 // Panel de diseño universal (renderer/design.js): sus clases ecos-d-*, ecos-hide-*, ecos-anim-*, ecos-m-* y ecos-font-* con su CSS
 const Design = require('../renderer/design');
 Object.assign(FX_CSS, Design.CSS);
+// «Más bloques» (pestañas, cifras, testimonios…): lógica en renderer/moreblocks.js, guion en renderer/morefx.js
+const More = require('../renderer/moreblocks');
+Object.assign(FX_CSS, More.CSS);
 const FX_MARK = 'ecos-fx';
 function fxBlock(set, helper = false) {
   const dyn = [...set].filter((k) => /^mt-bc-[0-9a-f]{3,8}$/.test(k)).sort()
@@ -343,7 +346,9 @@ function fxBlock(set, helper = false) {
   const js = !helper && set.has('vplay') && VIDEOS_B64() ? `<script class="ecos-vjs">new Function(atob("${VIDEOS_B64()}"))()</script>` : '';
   // animaciones al aparecer: el guion (renderer/anim.js) va codificado igual que los demás; con el complemento lo pone él
   const ajs = !helper && set.has('anim') && ANIM_B64() ? `<script class="ecos-ajs">new Function(atob("${ANIM_B64()}"))()</script>` : '';
-  return `<!-- wp:html -->\n<style class="${FX_MARK}">${css}</style>${js}${ajs}\n<!-- /wp:html -->`;
+  // «Más bloques»: pestañas, contador, copiar, puntos, comparador… (renderer/morefx.js; con el complemento lo pone él)
+  const mjs = !helper && set.has('more') && MORE_B64() ? `<script class="ecos-mjs">new Function(atob("${MORE_B64()}"))()</script>` : '';
+  return `<!-- wp:html -->\n<style class="${FX_MARK}">${css}</style>${js}${ajs}${mjs}\n<!-- /wp:html -->`;
 }
 function imageBlockFull(img, cap = '', place = {}, fx = null) {
   const alt = img.alt ? ` alt="${esc(img.alt)}"` : ' alt=""';
@@ -404,6 +409,16 @@ const ANIM_B64 = () => {
     animB64 = Buffer.from(src.replace(/[^\x00-\x7f]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')), 'utf8').toString('base64');
   } catch { animB64 = ''; }
   return animB64;
+};
+// Guion de «Más bloques» (renderer/morefx.js), codificado igual
+let moreB64 = null;
+const MORE_B64 = () => {
+  if (moreB64 !== null) return moreB64;
+  try {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'renderer', 'morefx.js'), 'utf8').split('\n').filter((l) => !/^\s*\/\//.test(l)).map((l) => l.trim()).join(' ');
+    moreB64 = Buffer.from(src.replace(/[^\x00-\x7f]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')), 'utf8').toString('base64');
+  } catch { moreB64 = ''; }
+  return moreB64;
 };
 // El script del carrusel, en base64 y solo con caracteres ASCII: WordPress no puede alterarlo al guardar la entrada
 let carB64 = '';
@@ -664,7 +679,7 @@ const BTN_SIZE = { s: { pad: ['8px', '18px'], font: '14px' }, l: { pad: ['18px',
 function buttonsBlock(b) {
   const text = inline(b.html || '');
   if (!text) return '';
-  const href = /^(https?:|mailto:|tel:|#)/i.test(b.url || '') ? ` href="${esc(b.url)}"` : '';
+  const href = /^(https?:|mailto:|tel:|#|data:text\/calendar[;,])/i.test(b.url || '') ? ` href="${esc(b.url)}"` : '';
   const full = !!b.full;
   const just = !full && ['center', 'right'].includes(b.align) ? { layout: { type: 'flex', justifyContent: b.align } } : null;
   const outline = b.variant === 'outline';
@@ -1001,6 +1016,13 @@ function composeList(blocks, opts, ctx) {
       case 'raw': if (b.markup) out.push(b.markup); break; // bloque de WordPress que Ecos conserva sin tocar
       case 'synced': if (Number(b.ref) > 0) out.push(syncedBlock(b.ref)); break; // bloque sincronizado: solo la referencia al wp_block
       case 'separator': out.push('<!-- wp:separator -->\n<hr class="wp-block-separator has-alpha-channel-opacity"/>\n<!-- /wp:separator -->'); break;
+      // «Más bloques»: cada uno sale como bloques estándar de WordPress con clases ecos-* (renderer/moreblocks.js)
+      case 'tabs': case 'timeline': case 'figures': case 'testimonials': case 'cards': case 'cta': case 'donate': case 'event':
+      case 'audio': case 'pdf': case 'hotspots': case 'compare': case 'faq': {
+        const m = More.compose(b, moreEnv(opts, ctx));
+        if (m) out.push(m);
+        break;
+      }
       default: break;
     }
     // diseño universal (espaciado, bordes, fondo, dispositivos, animación, tipografía): sobre el bloque ya escrito
@@ -1008,6 +1030,17 @@ function composeList(blocks, opts, ctx) {
   }
   if (floating) out.push(CLEAR_BLOCK);
   return out.join('\n\n');
+}
+
+// Herramientas que usa renderer/moreblocks.js para escribir cada bloque (sin repetir lo que ya hay aquí)
+function moreEnv(opts, ctx) {
+  return {
+    esc, inline, sanitize: sanitizeParagraphs, embedFull, buttonsBlock, mapBlock,
+    imageBlock: (img, cap, place) => imageBlockFull(img, cap, place, ctx.fx),
+    groupBlock: (g) => groupBlock(g, opts, ctx),
+    composeList: (list) => composeList(list, opts, ctx),
+    fx: (k) => ctx.fx.add(k),
+  };
 }
 
 // Todas las imágenes de los bloques (para el texto alternativo y la imagen destacada)

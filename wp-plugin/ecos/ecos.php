@@ -54,6 +54,26 @@ function ecos_wp_enqueue() {
 }
 
 /**
+ * «Más bloques» (pestañas, cifras con contador, donación, evento, puntos, antes/después, preguntas frecuentes):
+ * su guion solo se carga si el contenido lleva alguna de sus clases.
+ */
+function ecos_wp_enqueue_more( $content ) {
+	if ( ! is_string( $content ) || ! preg_match( '/ecos-(?:tabs|cifras|donar|evento|puntos|compare|faq-uno)/', $content ) ) {
+		return;
+	}
+	wp_enqueue_script(
+		'ecos-more',
+		ECOS_WP_URL . 'assets/ecos-more.js',
+		array(),
+		ECOS_WP_VERSION,
+		array(
+			'in_footer' => true,
+			'strategy'  => 'defer',
+		)
+	);
+}
+
+/**
  * Fuentes de Google (opcionales): solo se cargan las familias que la entrada usa, detectadas por la clase ecos-font-<slug>.
  * Esto conecta con Google (fonts.googleapis.com): ver docs/politica-privacidad-estadisticas.md.
  */
@@ -112,6 +132,7 @@ function ecos_wp_maybe_enqueue() {
 	if ( $post instanceof WP_Post && ecos_wp_content_needs_assets( $post->post_content ) ) {
 		ecos_wp_enqueue();
 		ecos_wp_enqueue_fonts( $post->post_content );
+		ecos_wp_enqueue_more( $post->post_content );
 	}
 }
 add_action( 'wp_enqueue_scripts', 'ecos_wp_maybe_enqueue' );
@@ -123,6 +144,7 @@ function ecos_wp_content_filter( $content ) {
 	if ( ! is_admin() && ecos_wp_content_needs_assets( $content ) ) {
 		ecos_wp_enqueue();
 		ecos_wp_enqueue_fonts( $content );
+		ecos_wp_enqueue_more( $content );
 	}
 	return $content;
 }
