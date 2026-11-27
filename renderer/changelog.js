@@ -8,6 +8,13 @@
 
   const ENTRIES = [
     {
+      version: '3.5.2', date: '2026-11-27',
+      title: c('Detalles visuales', 'Visual details'),
+      fixed: [
+        c('El icono de los avisos de arriba (por ejemplo, «Tienes una entrada sin enviar») queda alineado con el texto.', 'The icon of the notices at the top (for example, "You have an unsent post") is aligned with the text.'),
+      ],
+    },
+    {
       version: '3.5.1', date: '2026-11-27',
       title: c('Publicaciones con todo su detalle', 'Posts with all their details'),
       new: [

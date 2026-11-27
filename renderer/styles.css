@@ -253,6 +253,8 @@ details.help .field { background: none; padding: 0; margin: 10px 0 0; }
   border-radius: var(--r-l); background: color-mix(in srgb, var(--primary-container) 85%, transparent);
   color: var(--on-primary-container); backdrop-filter: blur(12px); box-shadow: var(--e1); animation: enter .4s var(--spring); }
 .update-bar > span:not(.ms), .banner > span { flex: 1; }
+.banner > span:first-child:has(> .ms) { display: flex; align-items: center; gap: 10px; }
+.banner > span:first-child > .ms { flex: none; font-size: 20px; line-height: 1; }
 .banner .x { border: 0; background: none; width: 36px; height: 36px; border-radius: 50%; color: inherit; font-size: 20px; }
 .banner .x:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
 #banners:empty { display: none; }
