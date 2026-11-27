@@ -8,6 +8,26 @@
 
   const ENTRIES = [
     {
+      version: '3.6.0', date: '2026-11-27', plugin: '1.7.0',
+      title: c('Más estable: envíos que se reanudan, sin conexión, diagnóstico y copias programadas', 'More stable: resumable sends, offline mode, diagnostics and scheduled backups'),
+      new: [
+        c('Modo sin conexión: puedes seguir trabajando sin internet; Inicio y Blog muestran los últimos datos guardados y los envíos esperan a que vuelva la conexión.', 'Offline mode: keep working without internet; Home and Blog show the last saved data and sends wait until you are back online.'),
+        c('Diagnóstico de conexión: comprueba internet, tu web, la API, el complemento, Meta y la IA y te dice qué falla (VPN, cortafuegos, certificado…).', 'Connection diagnostics: checks internet, your site, the API, the plugin, Meta and the AI and tells you what is wrong (VPN, firewall, certificate…).'),
+        c('Tarjeta «Tu web» en Conexiones: versión de WordPress y PHP, tema, plugins y límites de subida, con avisos de incompatibilidad.', '"Your site" card in Connections: WordPress and PHP versions, theme, plugins and upload limits, with compatibility warnings.'),
+        c('Copias de seguridad programadas (diaria, semanal o mensual), incrementales, con historial, verificación y opción de subirlas a Google Drive.', 'Scheduled backups (daily, weekly or monthly), incremental, with history, verification and optional upload to Google Drive.'),
+        c('Informes de errores opcionales (desactivados por defecto): si algo falla, Ecos te ofrece abrir un aviso ya preparado y sin datos personales.', 'Optional error reports (off by default): if something fails, Ecos offers to open a prepared report without personal data.'),
+      ],
+      improved: [
+        c('Los envíos a WordPress se reanudan tras un corte o un cierre: no se vuelven a subir las fotos ya subidas ni se crea otra entrada.', 'Sends to WordPress resume after a drop or a crash: photos already uploaded are not uploaded again and no second post is created.'),
+        c('Si una entrada cambió en WordPress mientras trabajabas sin conexión, Ecos te deja comparar, sobrescribir o guardar como copia.', 'If a post changed in WordPress while you were offline, Ecos lets you compare, overwrite or save as a copy.'),
+        c('Un solo aviso cuando no hay conexión, en lugar de muchos seguidos.', 'A single notice when there is no connection, instead of many in a row.'),
+        c('Cada versión se prueba automáticamente contra un WordPress real (Astra, Spectra y Yoast) y en todas las pantallas de la app.', 'Every version is automatically tested against a real WordPress (Astra, Spectra and Yoast) and on every screen of the app.'),
+      ],
+      web: [
+        c('Actualiza el Complemento de Ecos a la 1.7.0 para ver todos los datos de «Tu web».', 'Update the Ecos plugin to 1.7.0 to see all "Your site" data.'),
+      ],
+    },
+    {
       version: '3.5.4', date: '2026-11-27',
       title: c('Pantalla de arranque', 'Startup screen'),
       improved: [
