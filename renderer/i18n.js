@@ -321,6 +321,12 @@
     'Esto ha cambiado desde la última versión que usaste ({n} versiones).': 'This is what has changed since the last version you used ({n} versions).',
     'Ver todo el historial': 'See the full history',
     // 1.2 (editor completo)
+    'Vista de las publicaciones': 'Posts view', 'Detalle': 'Detail', 'Rejilla': 'Grid',
+    'Detalle: fecha, texto y fotos junto a cada tarjeta': 'Detail: date, text and photos next to each card',
+    'Abrir la publicación original': 'Open the original post', 'Ver en {red}': 'View on {red}',
+    'Fotos y vídeos de la publicación': 'Photos and videos of the post', 'Ver más': 'Show more',
+    'Ver el vídeo {i} de {n}': 'View video {i} of {n}', 'Ver la foto {i} de {n}': 'View photo {i} of {n}', 'Ver todas en grande': 'View all larger',
+    '{n} me gusta': '{n} likes', '{n} comentario': '{n} comment', '{n} comentarios': '{n} comments',
     'Orden por fecha': 'Sort by date',
     'Más recientes': 'Newest first',
     'Más antiguas': 'Oldest first',

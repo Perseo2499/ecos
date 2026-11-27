@@ -32,6 +32,95 @@ function postsLaneUpdate(groups) {
     more: postsMoreAvailable() ? { label: t('Cargar publicaciones más antiguas'), run: async () => { await loadMore(); } } : null,
   });
 }
+// ---------------------------------------------------------------- Publicaciones: detalle junto a cada tarjeta
+// Vista «Detalle» (por defecto): cada publicación es una fila con la tarjeta y, al lado, fecha, redes, texto completo y todas sus fotos y vídeos.
+const feedLayout = () => { try { return localStorage.getItem('ecos-feed-layout') === 'grid' ? 'grid' : 'detail'; } catch { return 'detail'; } };
+const PD_NARROW = 720; // por debajo de este ancho de contenido, el detalle pasa debajo de la tarjeta
+const PD_MAX_THUMBS = 24;
+const pdLang = () => (prefs().lang === 'en' ? 'en' : 'es');
+const NET_NAME = { instagram: 'Instagram', facebook: 'Facebook' };
+function pdThumbSrc(m) { return m.url || (m.type === 'image' && m.path ? fileUrl(m.path) : ''); }
+function postDetail(p) {
+  const el = document.createElement('div');
+  el.className = 'pdetail';
+  const d = new Date(p.date), ok = !Number.isNaN(d.getTime());
+  const lang = pdLang(), loc = lang === 'en' ? 'en-GB' : 'es-ES';
+  const full = ok ? d.toLocaleString(loc, { dateStyle: 'full', timeStyle: 'short' }) : '';
+  const nets = [p, ...(p.alsoOn || [])];
+  const net = (x) => `<span class="pd-net"><span class="badge ${escHtml(x.source)}">${x.source === 'instagram' ? 'IG' : 'FB'}</span>${x.permalink
+    ? `<a class="pd-open" href="${escHtml(x.permalink)}" title="${escHtml(t('Abrir la publicación original'))}">${escHtml(t('Ver en {red}', { red: NET_NAME[x.source] || x.source }))}<span class="ms">open_in_new</span></a>`
+    : `<span class="pd-nolink">${escHtml(NET_NAME[x.source] || x.source)}</span>`}</span>`;
+  const metrics = [];
+  const mt = (icon, n, one, many) => { if (n !== null && n !== undefined && n !== '' && Number.isFinite(Number(n))) metrics.push(`<span class="pd-metric" title="${escHtml(t(Number(n) === 1 ? one : many, { n }))}"><span class="ms">${icon}</span>${Number(n).toLocaleString(loc)}</span>`); };
+  mt('favorite', p.likes ?? p.likeCount, '{n} me gusta', '{n} me gusta'); mt('chat_bubble', p.comments ?? p.commentCount, '{n} comentario', '{n} comentarios');
+  const text = (p.text || '').trim();
+  el.innerHTML = `
+    <div class="pd-head">
+      ${ok ? `<time class="pd-date" datetime="${escHtml(d.toISOString())}">${escHtml(full)}</time><span class="pd-rel">${escHtml(PostFmt.relTime(d, Date.now(), lang))}</span>` : `<span class="pd-date">${escHtml(t('Sin fecha'))}</span>`}
+      ${metrics.length ? `<span class="pd-metrics">${metrics.join('')}</span>` : ''}
+    </div>
+    <div class="pd-nets">${nets.map(net).join('')}</div>
+    <div class="pd-body">${text ? `<div class="pd-text clamp">${PostFmt.formatText(text)}</div>
+      <button type="button" class="pd-more" hidden aria-expanded="false">${escHtml(t('Ver más'))}</button>` : `<div class="pd-text empty">${escHtml(t('Sin texto'))}</div>`}</div>`;
+  // Miniaturas de todas las fotos y vídeos: un clic abre el visor en esa
+  if (p.media.length) {
+    const strip = document.createElement('div');
+    strip.className = 'pd-strip';
+    strip.setAttribute('role', 'list');
+    strip.setAttribute('aria-label', t('Fotos y vídeos de la publicación'));
+    const items = mediaItemsOf(p);
+    p.media.slice(0, PD_MAX_THUMBS).forEach((m, i) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'pd-th' + (m.type === 'video' ? ' vid' : ''); b.setAttribute('role', 'listitem');
+      const lab = m.type === 'video' ? t('Ver el vídeo {i} de {n}', { i: i + 1, n: p.media.length }) : t('Ver la foto {i} de {n}', { i: i + 1, n: p.media.length });
+      b.title = lab; b.setAttribute('aria-label', lab);
+      const src = pdThumbSrc(m);
+      const dur = m.type === 'video' ? PostFmt.fmtDuration(m.duration ?? m.durationSec) : '';
+      b.innerHTML = (src ? `<img src="${escHtml(src)}" loading="lazy" decoding="async" alt="">` : `<span class="pd-noimg"><span class="ms">${m.type === 'video' ? 'videocam' : 'image'}</span></span>`)
+        + (m.type === 'video' ? `<span class="pd-play"><span class="ms fill">play_arrow</span>${dur ? `<i>${escHtml(dur)}</i>` : ''}</span>` : '');
+      b.onclick = () => openLightbox(items, i);
+      strip.appendChild(b);
+    });
+    if (p.media.length > PD_MAX_THUMBS) {
+      const rest = document.createElement('button');
+      rest.type = 'button'; rest.className = 'pd-th pd-rest';
+      rest.textContent = '+' + (p.media.length - PD_MAX_THUMBS);
+      rest.title = t('Ver todas en grande');
+      rest.onclick = () => openLightbox(items, PD_MAX_THUMBS);
+      strip.appendChild(rest);
+    }
+    el.appendChild(strip);
+  }
+  const more = el.querySelector('.pd-more'), tx = el.querySelector('.pd-text.clamp');
+  if (more) more.onclick = () => {
+    const open = tx.classList.toggle('clamp') === false;
+    more.textContent = open ? t('Ver menos') : t('Ver más'); more.setAttribute('aria-expanded', String(open));
+  };
+  return el;
+}
+// «Ver más» solo si el texto recortado de verdad se pasa de 8 líneas (se mide todo junto para no forzar el diseño una y otra vez)
+function pdMeasure(root) {
+  const rows = [...root.querySelectorAll('.pd-text.clamp')];
+  const over = rows.map((x) => x.scrollHeight > x.clientHeight + 1);
+  rows.forEach((x, i) => { const b = x.nextElementSibling; if (b && b.classList.contains('pd-more')) b.hidden = !over[i]; });
+  root.querySelectorAll('.pd-text:not(.clamp) + .pd-more').forEach((b) => (b.hidden = false)); // los desplegados mantienen su botón
+}
+let pdRO = null, pdT = 0;
+function pdWatch(feed) {
+  if (pdRO || !window.ResizeObserver) return;
+  pdRO = new ResizeObserver(() => {
+    clearTimeout(pdT);
+    pdT = setTimeout(() => { const f = $('#feed'); if (!f.classList.contains('detail')) return; f.classList.toggle('pd-narrow', f.clientWidth < PD_NARROW); pdMeasure(f); }, 80);
+  });
+  pdRO.observe(feed);
+}
+// Los enlaces del texto y «Ver en Instagram» se abren en el navegador, no dentro de Ecos
+$('#feed').addEventListener('click', (e) => {
+  const a = e.target.closest && e.target.closest('.pdetail a[href]');
+  if (!a) return;
+  e.preventDefault();
+  if (/^https?:\/\//i.test(a.getAttribute('href'))) window.api.open(a.getAttribute('href'));
+});
 function renderFeed() {
   const list = visiblePosts();
   const feed = $('#feed');
@@ -39,6 +128,9 @@ function renderFeed() {
   if (!rawPosts.length) { postsLaneUpdate([]); feed.innerHTML = `<div class="empty"><span class="ms fill">photo_library</span><b>${t('Aún no hay publicaciones')}</b><span>${t('Elige un origen arriba o arrastra archivos aquí.')}</span></div>`; return; }
   if (!list.length) { postsLaneUpdate([]); feed.innerHTML = `<div class="empty"><span class="ms">filter_alt_off</span><span>${t('Ninguna publicación coincide con el filtro.')}</span></div>`; return; }
   feed.innerHTML = '';
+  const detail = feedLayout() === 'detail';
+  feed.classList.toggle('detail', detail);
+  feed.classList.toggle('pd-narrow', detail && feed.clientWidth < PD_NARROW);
   // Orden por fecha (recordado) y encabezados por mes y, si hay varias en el mes, por día
   const groups = DateLane.groupByMonth(list, (p) => p.date, dlOrder('posts'));
   const flat = [];
@@ -75,10 +167,28 @@ function renderFeed() {
     const toggle = () => { selected.has(key) ? selected.delete(key) : selected.add(key); card.classList.toggle('sel'); updateCount(); feed.classList.toggle('selecting', selected.size > 0); };
     card.onclick = toggle;
     card.onkeydown = (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(); } };
-    feed.appendChild(card);
+    if (detail) {
+      const row = document.createElement('div');
+      row.className = 'prow';
+      row.append(card, postDetail(p));
+      feed.appendChild(row);
+    } else feed.appendChild(card);
   }
+  if (detail) { pdWatch(feed); requestAnimationFrame(() => pdMeasure(feed)); }
   postsLaneUpdate(groups);
 }
+// Rejilla / Detalle (recordado)
+function syncLayoutChips() {
+  const cur = feedLayout();
+  $$('#f-layout [data-l]').forEach((x) => { const on = x.dataset.l === cur; x.classList.toggle('active', on); x.setAttribute('aria-pressed', String(on)); });
+}
+$$('#f-layout [data-l]').forEach((b) => (b.onclick = () => {
+  try { localStorage.setItem('ecos-feed-layout', b.dataset.l); } catch { /* sin almacenamiento */ }
+  syncLayoutChips(); renderFeed();
+}));
+$('#f-layout').setAttribute('aria-label', t('Vista de las publicaciones'));
+$$('#f-layout [data-l]').forEach((b) => b.setAttribute('aria-label', t(b.dataset.l === 'grid' ? 'Rejilla' : 'Detalle')));
+syncLayoutChips();
 $('#f-order').value = dlOrder('posts');
 $('#f-order').onchange = (e) => { dlSetOrder('posts', e.target.value); renderFeed(); };
 // ---------------------------------------------------------------- Publicaciones: calendario
@@ -121,6 +231,7 @@ $$('#f-view [data-v]').forEach((b) => (b.onclick = () => {
   $$('#f-view [data-v]').forEach((x) => x.classList.toggle('active', x === b));
   $('#feed').classList.toggle('hidden', feedCal.on);
   $('#feed-cal').classList.toggle('hidden', !feedCal.on);
+  $('#f-layout').classList.toggle('hidden', feedCal.on);
   renderFeedCal();
 }));
 

@@ -3170,3 +3170,66 @@ body.editing .dl { display: none; }
 @media (max-width: 760px) { .dl { width: 24px; right: 2px; } .dl-y { display: none; } .dl-pad { margin-right: 28px; } .dl-now span { right: 24px; } .dl-hover { right: 24px; } }
 @media (max-width: 480px) { .dl { display: none; } .dl-pad { margin-right: 0; } }
 @media (prefers-reduced-motion: reduce) { .dl-now, .dl-track::before { transition: none !important; } }
+
+/* ---------------------------------------------------------------- Publicaciones: filas con detalle (tarjeta + fecha, texto, fotos y vídeos) */
+#f-layout.hidden { display: none; }
+.feed.detail { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.prow { display: grid; grid-template-columns: clamp(200px, 26%, 270px) minmax(0, 1fr); gap: 8px 22px; align-items: start; }
+.feed.detail .prow > .post .meta, .feed.detail .prow > .post p { display: none; }
+.feed.detail .prow > .post .edit-entry { margin-top: 6px; }
+.pdetail { min-width: 0; padding: 10px 4px 6px; display: flex; flex-direction: column; gap: 10px; }
+.pd-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.pd-date { font-size: 15px; font-weight: 600; color: var(--on-surface); }
+.pd-date::first-letter { text-transform: uppercase; }
+.pd-rel { font-size: 12.5px; color: var(--on-surface-var); }
+.pd-metrics { margin-left: auto; display: inline-flex; gap: 12px; font-size: 12.5px; color: var(--on-surface-var); }
+.pd-metric { display: inline-flex; align-items: center; gap: 4px; }
+.pd-metric .ms { font-size: 16px; }
+.pd-nets { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
+.pd-net { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+.pd-open { display: inline-flex; align-items: center; gap: 4px; color: var(--primary); text-decoration: none; border-radius: var(--r-s); }
+.pd-open:hover { text-decoration: underline; }
+.pd-open .ms { font-size: 15px; }
+.pd-nolink { color: var(--on-surface-var); }
+.pd-body { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; max-width: 78ch; }
+.pd-text { font-size: 14.5px; line-height: 1.55; color: var(--on-surface); user-select: text; cursor: text; overflow-wrap: anywhere; word-break: break-word; }
+.pd-text.clamp { display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; overflow: hidden; }
+.pd-text.empty { color: var(--on-surface-var); font-style: italic; }
+.pd-link { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
+.pd-tag, .pd-men { color: var(--primary); font-weight: 500; }
+.pd-more { border: 0; background: none; padding: 4px 8px; margin-left: -8px; color: var(--primary); font: inherit; font-size: 13px; font-weight: 600; border-radius: var(--r-full); cursor: pointer; }
+.pd-more:hover { background: color-mix(in srgb, var(--primary) 10%, transparent); }
+.pd-strip { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 2px; }
+.pd-th { position: relative; width: 64px; height: 64px; padding: 0; border: 0; border-radius: var(--r-m); overflow: hidden; cursor: pointer; flex: none;
+  background: var(--surface-c-high); box-shadow: 0 0 0 1px var(--outline-var); transition: transform .2s var(--ease), box-shadow .2s var(--ease); }
+.pd-th img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pd-th:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px var(--outline), var(--e2); }
+.pd-noimg { width: 100%; height: 100%; display: grid; place-items: center; color: var(--on-surface-var); }
+.pd-play { position: absolute; inset: auto 3px 3px 3px; display: flex; align-items: center; gap: 2px; justify-content: space-between; color: #fff; pointer-events: none; }
+.pd-th.vid .pd-play { inset: 0; justify-content: center; align-items: center; background: rgba(0,0,0,.22); flex-direction: column; gap: 0; }
+.pd-play .ms { font-size: 26px; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+.pd-play i { position: absolute; right: 4px; bottom: 3px; font: 600 10.5px/1 inherit; font-style: normal; padding: 2px 5px; border-radius: 6px; background: rgba(0,0,0,.65); }
+.pd-rest { display: grid; place-items: center; font: 600 14px inherit; color: var(--on-surface-var); }
+.pd-more:focus-visible, .pd-th:focus-visible, .pd-open:focus-visible, .pd-link:focus-visible { outline: 3px solid color-mix(in srgb, var(--primary) 55%, transparent); outline-offset: 2px; }
+/* Contenido estrecho: el detalle pasa debajo de la tarjeta */
+.feed.pd-narrow .prow { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.feed.pd-narrow .prow > .post { width: min(100%, 260px); }
+.feed.pd-narrow .pdetail { padding: 6px 6px 10px; }
+:root[data-vinyl="on"] .pd-date { font-family: 'Doto', monospace; font-weight: 700; letter-spacing: .5px; font-size: 16px; }
+:root[data-vinyl="on"] .pd-th { border-radius: 8px; box-shadow: 0 0 0 1px #2a2a2a; }
+:root[data-vinyl="on"] .pd-th:hover { box-shadow: 0 0 0 1px var(--vinyl); }
+:root[data-vinyl="on"] .pd-link, :root[data-vinyl="on"] .pd-open, :root[data-vinyl="on"] .pd-more, :root[data-vinyl="on"] .pd-tag, :root[data-vinyl="on"] .pd-men { color: var(--vinyl); }
+@media (prefers-reduced-motion: reduce) { .pd-th { transition: none; } .pd-th:hover { transform: none; } }
+
+/* Actualizaciones: botones junto a la versión; historial plegado tras «Ver el historial de versiones» */
+.version-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.cl-top-actions { margin-left: auto; display: inline-flex; gap: 8px; flex-wrap: wrap; }
+details.cl-hist { margin-top: 12px; border: 1px solid var(--outline-var); border-radius: 16px; padding: 0 12px; }
+details.cl-hist > summary.cl-hist-sum { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 12px 4px; margin: 0; }
+details.cl-hist > summary.cl-hist-sum::-webkit-details-marker { display: none; }
+details.cl-hist > summary .cl-hist-n { color: var(--on-surface-var); font-weight: 400; font-size: .85em; }
+details.cl-hist > summary .cl-chev { margin-left: auto; transition: transform .2s; }
+details.cl-hist[open] > summary .cl-chev { transform: rotate(180deg); }
+details.cl-hist[open] { padding-bottom: 12px; }
+details.cl-hist > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 12px; }
+@media (prefers-reduced-motion: reduce) { details.cl-hist > summary .cl-chev { transition: none; } }
