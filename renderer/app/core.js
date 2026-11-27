@@ -141,7 +141,12 @@ try {
 } catch { /* sin observador */ }
 // 2,5–6 s según la longitud del texto (los errores se quedan algo más)
 function toastDuration(msg, isError) { const base = Math.min(6000, Math.max(2500, 1800 + String(msg).length * 45)); return isError ? Math.min(9000, base + 2000) : base; }
-function toastError(e, opts) { const f = friendlyError(e); return toast(f.text, true, { detail: f.detail, ...opts }); }
+function toastError(e, opts) {
+  const f = friendlyError(e);
+  // Si parece un fallo de conexión, se ofrece el diagnóstico (renderer/app/diagnose-ui.js)
+  const diag = !opts?.action && window.Diagnose?.isConnectionProblem(e) && window.openDiagnostics ? { action: { label: t('Diagnosticar'), onClick: () => window.openDiagnostics() } } : {};
+  return toast(f.text, true, { detail: f.detail, ...diag, ...opts });
+}
 async function busy(btn, fn) {
   const label = btn.innerHTML; btn.disabled = true; btn.textContent = t('Trabajando…');
   // en tareas largas (IA), los segundos que lleva: así se ve que sigue trabajando

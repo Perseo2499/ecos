@@ -154,8 +154,13 @@ const decode = (s) => String(s || '').replace(/&amp;/g, '&').replace(/&#8217;/g,
 
 // --- Medios -----------------------------------------------------------------------
 const MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm' };
+// Aviso antes de subir: si se conoce el límite de la web (Conexiones → «Tu web») y el archivo no cabe, ni se intenta
+let uploadGuard = null;
+const setUploadGuard = (fn) => { uploadGuard = typeof fn === 'function' ? fn : null; };
 async function uploadBuffer(cfg, buf, filename, type, { keep = false } = {}) {
   const send = async (b, ty, fn) => {
+    const bad = uploadGuard && uploadGuard(b.length || b.byteLength || 0, fn);
+    if (bad) throw new Error(bad);
     const m = await req(cfg, '/wp/v2/media', {
       method: 'POST', body: b,
       headers: { 'Content-Type': ty, 'Content-Disposition': `attachment; filename="${fn.replace(/["\r\n]/g, '')}"` },
@@ -780,7 +785,7 @@ async function helperRender(cfg, payload) {
 }
 const themeStyles = (cfg, helperVersion) => TS.fetchTheme((route) => req(cfg, route), helperVersion);
 
-module.exports = { helperHasRender, helperRender, themeStyles, getJson, helperHasExport, helperExport, helperHasLock, me, parseMe, postModified, helperLock, helperUnlock, parseHelperLock, helperStats, parseHelperStats, helperSettings, helperSaveSettings, parseHelperSettings, helperStatus, helperPurge, parseHelperStatus, helperBundledVersion, detectSeo, seoInfo, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, listDates, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText };
+module.exports = { setUploadGuard, helperHasRender, helperRender, themeStyles, getJson, helperHasExport, helperExport, helperHasLock, me, parseMe, postModified, helperLock, helperUnlock, parseHelperLock, helperStats, parseHelperStats, helperSettings, helperSaveSettings, parseHelperSettings, helperStatus, helperPurge, parseHelperStatus, helperBundledVersion, detectSeo, seoInfo, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, listDates, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText };
 
 // Para módulos propios que hablan con la API (src/wpblocks.js)
 module.exports.request = req;
