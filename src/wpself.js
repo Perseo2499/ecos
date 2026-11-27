@@ -233,12 +233,12 @@ async function uploadFromUrls(cfg, urls) {
 const updateMedia = (cfg, id, fields) => req(cfg, `/wp/v2/media/${id}`, { method: 'POST', json: { alt_text: fields.alt ?? fields.alt_text } });
 
 // --- Biblioteca de medios ------------------------------------------------------------
-const MEDIA_FIELDS = 'id,date,source_url,mime_type,media_type,alt_text,title,media_details,post';
+const MEDIA_FIELDS = 'id,date,modified_gmt,source_url,mime_type,media_type,alt_text,title,media_details,post';
 const normMedia = (m) => {
   const d = m.media_details || {}, sz = d.sizes || {};
   const file = decodeURIComponent((m.source_url || '').split('?')[0].split('/').pop() || '');
   return {
-    id: m.id, date: m.date, parent: m.post || 0, url: m.source_url, type: m.media_type === 'video' ? 'video' : 'image', mime: m.mime_type || '',
+    id: m.id, date: m.date, modified: m.modified_gmt || '', parent: m.post || 0, url: m.source_url, type: m.media_type === 'video' ? 'video' : 'image', mime: m.mime_type || '',
     alt: m.alt_text || '', name: decode((m.title && (m.title.rendered ?? m.title.raw)) || '').replace(/<[^>]+>/g, '') || file,
     thumb: (sz.medium || sz.thumbnail || {}).source_url || '', tiny: (sz.thumbnail || sz.medium || {}).source_url || '', large: (sz.large || {}).source_url || '',
     width: d.width || 0, height: d.height || 0, size: d.filesize || 0,

@@ -191,6 +191,19 @@ contextBridge.exposeInMainWorld('api', {
   emergencyOpen: (kind, name) => call('emergency:open', kind, name),
   onEmergencyProgress: on('emergency:progress'),
   onEmergencyDone: on('emergency:done'),
+  // Copias programadas
+  bkState: () => call('bk:state'),
+  bkSave: (p) => call('bk:save', p),
+  bkRun: (kind) => call('bk:run', kind),
+  bkCancel: () => call('bk:cancel'),
+  bkPickDir: () => call('bk:pickDir'),
+  bkOpen: (id) => call('bk:open', id),
+  bkVerify: (id) => call('bk:verify', id),
+  bkDriveLogin: () => call('bk:driveLogin'),
+  bkDriveLogout: () => call('bk:driveLogout'),
+  bkDismissFailure: () => call('bk:dismissFailure'),
+  bkClearCache: () => call('bk:clearCache'),
+  onBkEvent: on('bk:event'),
 
   // Modo desarrollador: terminal integrada
   devTools: () => call('dev:tools'),

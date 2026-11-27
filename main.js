@@ -1622,6 +1622,7 @@ handle('backup:create', async (opts = {}) => {
       },
     }, { file: pick.filePath, photos, onProgress: send, cancelled: () => job.stop });
     log(`Copia de seguridad de la web: ${r.posts} entradas, ${r.pages} páginas, ${r.files} fotos (${r.missing} sin poder bajar) → ${pick.filePath}`);
+    sbRecordManual('web', pick.filePath, r.bytes, { posts: r.posts, pages: r.pages, photos: r.files });
     return r;
   } finally { webBackupJob = null; }
 });
@@ -1643,7 +1644,8 @@ function emState() {
     canRun: isSelf() && wpIsConnected(),
   };
 }
-async function emRun({ auto = false } = {}) {
+// dir/keep/wrap/onProgress: para las copias programadas (otra carpeta, sin rotar aquí, incrementales y con indicador)
+async function emRun({ auto = false, dir = null, keep = null, wrap = null, onProgress = null } = {}) {
   if (!isSelf() || !wpIsConnected()) throw new Error('La copia de emergencia solo está disponible con «Mi web (wp-admin)» conectada en Conexiones → WordPress.');
   if (emJob) throw new Error('Ya se está haciendo una copia de emergencia');
   const job = emJob = { stop: false, ctrl: new AbortController(), auto, startedAt: Date.now(), last: null };
@@ -1654,17 +1656,19 @@ async function emRun({ auto = false } = {}) {
     const helper = cfg.ecosHelper;
     const me = cfg.wpMe || await wpCall(() => wpself.me(cfg)).catch(() => null);
     const media = await mediaAll(false).catch(() => []);
+    const listAll0 = (route) => wpCall(() => wpself.allParallel(cfg, route, { conc: 3 }));
+    const download0 = async (url) => { const res = await fetch(url, { signal: job.ctrl.signal }); return res.ok ? Buffer.from(await res.arrayBuffer()) : null; };
     const r = await EM().runEmergency({
       siteName: wpLabel(), siteUrl: wpself.publicBase(cfg), media, me: me || {}, ecosVersion: app.getVersion(),
-      listAll: (route) => wpCall(() => wpself.allParallel(cfg, route, { conc: 3 })),
+      listAll: wrap ? wrap.listAll(listAll0) : listAll0, incrementalStats: wrap?.stats || null,
       getJson: (route) => wpCall(() => wpself.getJson(cfg, route)),
       exportData: helper?.installed && wpself.helperHasExport(helper.version) ? () => wpCall(() => wpself.helperExport(cfg)) : null,
-      download: async (url) => { const res = await fetch(url, { signal: job.ctrl.signal }); return res.ok ? Buffer.from(await res.arrayBuffer()) : null; },
-    }, { dir: emDir(), keep: c.keep, delayMs: 250, signal: job.ctrl.signal, cancelled: () => job.stop, onProgress: (p) => { job.last = p; emSend('emergency:progress', { ...p, auto }); } });
+      download: wrap ? wrap.download(download0, media) : download0,
+    }, { dir: dir || emDir(), keep: keep ?? c.keep, delayMs: 250, signal: job.ctrl.signal, cancelled: () => job.stop, onProgress: (p) => { job.last = p; emSend('emergency:progress', { ...p, auto }); onProgress?.(p); } });
     emSaveCfg({ lastFailed: false, lastError: '' });
     log(`Copia de emergencia${auto ? ' (automática)' : ''}: ${r.posts} entradas, ${r.pages} páginas, ${r.photos} fotos, ${r.visualPages} páginas visuales, ${r.visualAssets} recursos → ${r.file}`);
     emSend('emergency:done', { ok: true, auto, name: r.name, bytes: r.bytes, notes: r.notes.length });
-    return { name: r.name, bytes: r.bytes, posts: r.posts, pages: r.pages, photos: r.photos, visualPages: r.visualPages, visualAssets: r.visualAssets, notes: r.notes };
+    return { name: r.name, file: r.file, bytes: r.bytes, posts: r.posts, pages: r.pages, photos: r.photos, visualPages: r.visualPages, visualAssets: r.visualAssets, notes: r.notes };
   } catch (e) {
     const cancelled = /Cancelado/.test(e.message);
     if (!cancelled) emSaveCfg({ lastFailed: true, lastError: e.message });
@@ -1686,7 +1690,7 @@ handle('emergency:pickDir', async () => {
   const r = await dialog.showOpenDialog(mainWin, { title: 'Carpeta para las copias de emergencia', defaultPath: emDir(), properties: ['openDirectory', 'createDirectory'] });
   return r.canceled || !r.filePaths[0] ? null : r.filePaths[0];
 });
-handle('emergency:run', () => emRun({ auto: false }));
+handle('emergency:run', async () => { const r = await emRun({ auto: false }); sbRecordManual('emergency', r.file, r.bytes, { posts: r.posts, pages: r.pages, photos: r.photos }); return r; });
 handle('emergency:cancel', () => { if (emJob) { emJob.stop = true; emJob.ctrl.abort(); } return true; });
 handle('emergency:open', async (kind, name) => {
   const dir = emDir();
@@ -1708,6 +1712,7 @@ handle('emergency:open', async (kind, name) => {
 async function emAutoCheck() {
   try {
     if (isLocked() || emJob || !isSelf() || !wpIsConnected()) return;
+    if (sbCfg().enabled && sbCfg().kind === 'emergency') return; // la programación de Ajustes ya se ocupa
     const c = emCfg(), dir = emDir();
     const interrupted = EM().cleanPartials(dir) > 0; // se cerró Ecos a medias: se vuelve a empezar
     const last = EM().listCopies(dir)[0];
@@ -1716,6 +1721,180 @@ async function emAutoCheck() {
     await emRun({ auto: true });
   } catch (e) { if (!/Cancelado/.test(e.message)) log('Copia de emergencia automática: ' + e.message); }
 }
+
+// --- Copias programadas: web o emergencia, diaria/semanal/mensual, incrementales, con historial, verificación y Drive ---
+// Lógica en src/backupsched.js (calendario y retención), src/backupinc.js (incremental), src/backupverify.js y src/gdrive.js.
+const SB = () => require('./src/backupsched');
+const sbHistFile = () => path.join(app.getPath('userData'), 'backup-history.json');
+let sbHist = null;
+const sbHistory = () => sbHist || (sbHist = (() => { try { const j = JSON.parse(fs.readFileSync(sbHistFile(), 'utf8')); return Array.isArray(j) ? j : []; } catch { return []; } })());
+const sbHistSave = (l) => { sbHist = l; try { fs.writeFileSync(sbHistFile(), JSON.stringify(l)); } catch (e) { log('Historial de copias', e.message); } };
+const sbCfg = () => SB().withDefaults(cfg?.backupSchedule);
+const sbSaveCfg = (next) => { cfg.backupSchedule = next; store.save(cfg); };
+const sbDefaultDir = () => path.join(app.getPath('documents'), 'Ecos', 'Copias programadas');
+const sbDir = () => sbCfg().dir || sbDefaultDir();
+const sbSiteKey = () => require('crypto').createHash('sha1').update(String(cfg.wpUrl || '')).digest('hex').slice(0, 10);
+const sbCacheDir = () => path.join(app.getPath('userData'), 'backup-cache', sbSiteKey());
+const sbSend = (p) => emSend('bk:event', p);
+const sbOnBattery = () => { try { return !!require('electron').powerMonitor.onBatteryPower; } catch { return false; } };
+const sbOnline = () => { try { return require('electron').net.isOnline(); } catch { return true; } };
+const sbHost = () => { try { return new URL(wpself.publicBase(cfg)).hostname.replace(/^www\./, '').replace(/[^a-z0-9.-]/gi, '') || 'web'; } catch { return 'web'; } };
+const sbCacheInfo = () => { try { const I = require('./src/backupinc'); const c = new I.MediaCache(path.join(sbCacheDir(), 'media-cache')); return { count: c.count(), bytes: c.bytes() }; } catch { return { count: 0, bytes: 0 }; } };
+let sbJob = null;
+
+function sbState() {
+  const s = sbCfg();
+  const pub = { enabled: s.enabled, kind: s.kind, freq: s.freq, weekday: s.weekday, monthday: s.monthday, time: s.time, onlyPlugged: s.onlyPlugged, needNetwork: s.needNetwork, keep: s.keep, photos: s.photos, cloud: s.cloud };
+  return {
+    cfg: pub, dir: sbDir(), defaultDir: sbDefaultDir(), custom: !!s.dir,
+    nextRun: s.enabled ? SB().nextRun(s) : null, history: sbHistory(), failure: s.lastFailure || null,
+    running: sbJob ? { kind: sbJob.kind, auto: sbJob.auto, startedAt: sbJob.startedAt, last: sbJob.last } : null,
+    drive: { connected: !!cfg.gdRefreshToken, hasClient: !!(cfg.gpClientId && cfg.gpClientSecret) },
+    cache: sbCacheInfo(), canRun: isSelf() && wpIsConnected(), onBattery: sbOnBattery(),
+  };
+}
+// Copias hechas a mano (los botones de siempre) también quedan en el historial
+function sbRecordManual(kind, file, bytes, stats) {
+  try {
+    let size = bytes; try { size = fs.statSync(file).size; } catch { /* sin archivo */ }
+    sbHistSave(SB().addEntry(sbHistory(), { id: SB().newId(), at: Date.now(), kind, auto: false, ok: true, bytes: size, file, name: path.basename(file), stats: stats || {} }));
+    sbSend({ type: 'history' });
+  } catch { /* sin historial */ }
+}
+function sbNotify(title, body) { try { queueNotify(title, body); } catch { /* sin notificaciones */ } }
+
+// Borra una copia antigua (archivo local y de Drive) por retención; solo se llama con automáticas
+async function sbRemoveOld(e, gd) {
+  const okName = /^ecos-(web|emergencia)-.+\.(zip|xml)$/.test(path.basename(e.file || ''));
+  if (e.file && okName) { try { fs.unlinkSync(e.file); } catch { /* ya no está */ } }
+  if (e.cloud?.id && gd) { try { await gd.remove(cfg, e.cloud.id); } catch (er) { log('Copia programada: no se pudo borrar de Drive', er.message); } }
+}
+
+async function sbRun({ kind, auto = false } = {}) {
+  if (!isSelf() || !wpIsConnected()) throw new Error('Las copias solo están disponibles con «Mi web (wp-admin)» conectada en Conexiones → WordPress.');
+  if (sbJob || emJob || webBackupJob) throw new Error('Ya se está haciendo una copia');
+  const s0 = sbCfg();
+  kind = kind || s0.kind;
+  const dir = sbDir(); fs.mkdirSync(dir, { recursive: true });
+  const job = sbJob = { kind, auto, stop: false, ctrl: new AbortController(), startedAt: Date.now(), last: null };
+  const push = (p) => { job.last = { kind, ...p }; sbSend({ type: 'progress', auto, ...job.last }); };
+  sbSaveCfg({ ...sbCfg(), lastAttempt: Date.now() });
+  sbSend({ type: 'start', kind, auto });
+  const entry = { id: SB().newId(), at: Date.now(), kind, auto, ok: false, bytes: 0, file: '', name: '', stats: {}, cloud: null };
+  const I = require('./src/backupinc'), stats = {};
+  const mc = new I.MediaCache(path.join(sbCacheDir(), 'media-cache')), pc = new I.PostCache(path.join(sbCacheDir(), 'posts'));
+  const wrap = { stats, listAll: (base) => I.incrementalListAll(base, pc, stats), download: (raw, media) => I.cachedDownload(mc, media, raw, stats) };
+  let gd = null;
+  try {
+    if (kind === 'web') {
+      const media = await mediaAll(false).catch(() => []);
+      const siteUrl = wpself.publicBase(cfg) || '';
+      const base = (route) => wpCall(() => wpself.allParallel(cfg, route, { onProgress: (d, t) => push({ step: 'entradas', done: d, total: t }) }));
+      const raw = async (url) => { const res = await fetch(url, { signal: job.ctrl.signal }); return res.ok ? Buffer.from(await res.arrayBuffer()) : null; };
+      entry.name = SB().webName(sbHost(), new Date(), s0.photos); entry.file = path.join(dir, entry.name);
+      const r = await require('./src/backupcreate').createBackup({
+        siteName: wpLabel() || sbHost(), siteUrl, media, listAll: wrap.listAll(base), download: wrap.download(raw, media),
+      }, { file: entry.file, photos: s0.photos, onProgress: push, cancelled: () => job.stop,
+        beforeFinish: (zip, res) => require('./src/backupverify').addManifest(zip, { kind: 'web', site: siteUrl, ecos: app.getVersion(), counts: { posts: res.posts, pages: res.pages, photos: res.files }, incremental: stats }) });
+      Object.assign(entry.stats, { posts: r.posts, pages: r.pages, photos: r.files, missing: r.missing });
+      if (s0.photos) mc.prune(media.map((m) => m.id));
+    } else {
+      const r = await emRun({ auto, dir, keep: Infinity, wrap, onProgress: push });
+      entry.file = r.file; entry.name = r.name;
+      Object.assign(entry.stats, { posts: r.posts, pages: r.pages, photos: r.photos, visualPages: r.visualPages, notes: r.notes?.length || 0 });
+    }
+    try { mc.save(); } catch { /* sin caché */ }
+    entry.bytes = fs.statSync(entry.file).size;
+    Object.assign(entry.stats, { reused: stats.mediaReused || 0, downloaded: stats.mediaDownloaded || 0, postsReused: stats.postsReused || 0, postsFetched: stats.postsFetched || 0, savedBytes: stats.mediaBytesSaved || 0 });
+    entry.ok = true;
+    let cloudErr = '';
+    if (sbCfg().cloud === 'drive') {
+      entry.cloud = { ok: false, id: '', name: entry.name, error: '' };
+      try {
+        if (!cfg.gdRefreshToken) throw new Error('Google Drive no está conectado.');
+        const G = require('./src/gdrive'); gd = G.make({ save: () => store.save(cfg) });
+        const parent = await gd.ensureFolder(cfg);
+        push({ step: 'subida', done: 0, total: entry.bytes });
+        const up = await gd.upload(cfg, { name: entry.name, mime: /\.xml$/.test(entry.name) ? 'application/xml' : 'application/zip', src: G.fileSource(entry.file), parent },
+          { cancelled: () => job.stop, onProgress: (p) => push({ step: 'subida', ...p }), onSession: (u) => { entry.cloud.session = u; } });
+        entry.cloud = { ok: true, id: up.id, name: up.name, error: '' };
+      } catch (e) { if (/Cancelado/.test(e.message)) throw e; cloudErr = e.message; entry.cloud.error = e.message; log('Copia programada: no se pudo subir a Drive: ' + e.message); }
+    }
+    // retención: solo las automáticas antiguas del mismo tipo
+    let list = SB().addEntry(sbHistory(), entry);
+    if (auto) for (const old of SB().pickRetention(list, kind, sbCfg().keep)) { await sbRemoveOld(old, gd || (cfg.gdRefreshToken ? require('./src/gdrive').make({ save: () => store.save(cfg) }) : null)); list = SB().patchEntry(list, old.id, { removed: true }); }
+    sbHistSave(list);
+    const c = sbCfg();
+    sbSaveCfg({ ...c, lastOkAt: Date.now(), lastFailed: false, failures: 0, lastFailure: cloudErr && auto ? { at: Date.now(), kind, auto, error: 'Se guardó en el ordenador, pero no se pudo subir a Drive: ' + cloudErr } : null });
+    log(`Copia ${kind === 'web' ? 'de la web' : 'de emergencia'}${auto ? ' programada' : ''}: ${entry.name} · ${entry.bytes} bytes · fotos reutilizadas ${entry.stats.reused}, bajadas ${entry.stats.downloaded}${cloudErr ? ' · Drive: ' + cloudErr : ''}`);
+    sbNotify('Ecos', cloudErr ? 'Copia guardada, pero no se pudo subir a Drive.' : (kind === 'web' ? 'La copia de seguridad de la web está lista.' : 'La copia de emergencia está lista.'));
+    sbSend({ type: 'done', ok: true, auto, kind, entry });
+    return entry;
+  } catch (e) {
+    const cancelled = /Cancelado/.test(e.message);
+    try { if (entry.file && !entry.ok) fs.unlinkSync(entry.file); } catch { /* sin archivo */ }
+    if (cancelled) { log(`Copia ${kind}: cancelada`); sbSend({ type: 'done', ok: false, cancelled: true, auto, kind }); throw e; }
+    entry.error = e.message; entry.ok = false;
+    sbHistSave(SB().addEntry(sbHistory(), entry));
+    if (auto) {
+      const c = sbCfg();
+      sbSaveCfg({ ...c, lastFailed: true, failures: c.lastFailed ? c.failures + 1 : 1, lastFailure: { at: Date.now(), kind, auto, error: e.message } });
+      sbNotify('Ecos', 'La copia programada ha fallado: ' + e.message);
+    }
+    log(`Copia ${kind}${auto ? ' programada' : ''}: error ${e.message}`);
+    sbSend({ type: 'done', ok: false, auto, kind, error: e.message, entry });
+    throw e;
+  } finally { try { mc.save(); } catch { /* nada */ } sbJob = null; }
+}
+
+let sbWarned = '';
+async function sbTick() {
+  try {
+    if (!cfg || isLocked() || sbJob || emJob || webBackupJob) return;
+    const s = sbCfg();
+    if (!SB().isDue(s)) { sbWarned = ''; return; }
+    if (!isSelf() || !wpIsConnected()) return;
+    const c = SB().conditions(s, { onBattery: sbOnBattery(), online: sbOnline() });
+    if (!c.ok) { if (sbWarned !== c.reason) { sbWarned = c.reason; log('Copia programada en espera: ' + (c.reason === 'battery' ? 'el ordenador va con batería' : 'sin conexión')); sbSend({ type: 'waiting', reason: c.reason }); } return; }
+    sbWarned = '';
+    log('Copia programada: toca hacerla');
+    await sbRun({ kind: s.kind, auto: true });
+  } catch (e) { if (!/Cancelado/.test(e.message)) log('Copia programada: ' + e.message); }
+}
+
+handle('bk:state', () => sbState());
+handle('bk:save', (patch = {}) => { sbSaveCfg(SB().applyPatch(sbCfg(), patch)); return sbState(); });
+handle('bk:run', async (kind) => { const e = await sbRun({ kind, auto: false }); return { entry: e, state: sbState() }; });
+handle('bk:cancel', () => { if (sbJob) { sbJob.stop = true; sbJob.ctrl.abort(); } if (emJob) { emJob.stop = true; emJob.ctrl.abort(); } return true; });
+handle('bk:pickDir', async () => {
+  const r = await dialog.showOpenDialog(mainWin, { title: 'Carpeta para las copias programadas (puede ser una carpeta sincronizada con Google Drive, OneDrive o Dropbox)', defaultPath: sbDir(), properties: ['openDirectory', 'createDirectory'] });
+  return r.canceled || !r.filePaths[0] ? null : r.filePaths[0];
+});
+handle('bk:open', async (id) => {
+  if (!id) { fs.mkdirSync(sbDir(), { recursive: true }); const e = await shell.openPath(sbDir()); if (e) throw new Error(e); return true; }
+  const en = sbHistory().find((x) => x.id === id);
+  if (!en?.file || !fs.existsSync(en.file)) throw new Error('Esa copia ya no está en la carpeta');
+  shell.showItemInFolder(en.file); return true;
+});
+handle('bk:verify', async (id) => {
+  const en = sbHistory().find((x) => x.id === id);
+  if (!en?.file) throw new Error('No se encuentra esa copia');
+  const r = await require('./src/backupverify').verifyZip(en.file, { onProgress: (p) => sbSend({ type: 'verify', id, ...p }) });
+  sbHistSave(SB().patchEntry(sbHistory(), id, { verified: { at: Date.now(), ok: r.ok, manifest: r.manifest, problems: r.problems.slice(0, 5), entries: r.entries } }));
+  log(`Verificación de ${path.basename(en.file)}: ${r.ok ? 'correcta' : r.problems.join(' | ')}`);
+  return { ...r, state: sbState() };
+});
+handle('bk:driveLogin', async () => {
+  const G = require('./src/gdrive').make({ save: () => store.save(cfg) });
+  const r = await G.login(cfg);
+  cfg.gdAccessToken = r.accessToken; cfg.gdRefreshToken = r.refreshToken; cfg.gdTokenExpires = r.expiresAt; cfg.gdFolderId = '';
+  store.save(cfg);
+  await G.ensureFolder(cfg); // comprueba de paso que la Drive API está activada
+  return sbState();
+});
+handle('bk:driveLogout', () => { cfg.gdAccessToken = ''; cfg.gdRefreshToken = ''; cfg.gdTokenExpires = ''; cfg.gdFolderId = ''; store.save(cfg); sbSaveCfg({ ...sbCfg(), cloud: 'none' }); return sbState(); });
+handle('bk:dismissFailure', () => { sbSaveCfg({ ...sbCfg(), lastFailure: null }); return true; });
+handle('bk:clearCache', () => { try { const I = require('./src/backupinc'); new I.MediaCache(path.join(sbCacheDir(), 'media-cache')).clear(); new I.PostCache(path.join(sbCacheDir(), 'posts')).clear(); } catch { /* nada */ } return sbState(); });
 
 // --- Restaurar entradas desde una copia de seguridad (src/backup.js) ---
 let backupAn = null;
@@ -2223,7 +2402,7 @@ app.whenReady().then(() => {
         .then((r) => { if (r.response === 0) installPublished().then((ok) => { if (ok && process.platform === 'win32') app.quit(); }); }).catch(() => {});
     }
   } catch { /* nada */ }
-  try { const { powerMonitor } = require('electron'); powerMonitor.on('lock-screen', () => lockApp('pantalla bloqueada')); powerMonitor.on('suspend', () => lockApp('suspensión')); } catch { /* sin powerMonitor */ }
+  try { const { powerMonitor } = require('electron'); powerMonitor.on('lock-screen', () => lockApp('pantalla bloqueada')); powerMonitor.on('suspend', () => lockApp('suspensión')); powerMonitor.on('resume', () => setTimeout(sbTick, 15000).unref?.()); powerMonitor.on('on-ac', () => setTimeout(sbTick, 5000).unref?.()); } catch { /* sin powerMonitor */ }
   mainWin.webContents.on('render-process-gone', (_e, d) => { if (d.reason !== 'clean-exit') escalate(`la ventana se ha cerrado (${d.reason}, código ${d.exitCode})`); });
   // Si la ventana no termina de cargar en 20 s (pantalla en blanco), también se pasa al modo compatible
   const loadTimer = setTimeout(() => escalate('la ventana no ha cargado en 20 segundos'), 20000);
@@ -2251,6 +2430,7 @@ app.whenReady().then(() => {
     updater.setBeta(!!cfg.prefs?.betaChannel);
     queueSave(); // programa los envíos pendientes
     setTimeout(emAutoCheck, 120000).unref?.(); // copia de emergencia automática, si toca
+    setTimeout(sbTick, 60000).unref?.(); setInterval(sbTick, 60000).unref?.(); // copias programadas: al abrir (si toca) y cada minuto
     setTimeout(wpEditorCleanup, 20000).unref?.(); // borradores temporales del editor de WordPress que quedaron de un cierre brusco
     updater.init((st) => {
       if (st.state === 'error') log('Actualizador:', st.message);
