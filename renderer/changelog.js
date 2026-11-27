@@ -8,6 +8,19 @@
 
   const ENTRIES = [
     {
+      version: '3.6.1', date: '2026-11-27', plugin: '1.7.1',
+      title: c('Arreglos hallados al probar con un WordPress real', 'Fixes found by testing against a real WordPress'),
+      fixed: [
+        c('Guardar como «Patrón sin sincronizar» ahora se respeta (antes se guardaba como sincronizado) y guardar como sincronizado ya no da error.', 'Saving as "Unsynced pattern" is now respected (it used to be saved as synced), and saving as synced no longer fails.'),
+        c('Con una contraseña de aplicación mal copiada, Ecos ya no dice que tu servidor pierde la autorización: con el complemento te dice cuál de las dos cosas es.', 'With a mistyped application password, Ecos no longer says your server drops the authorization: with the plugin it tells you which of the two it is.'),
+        c('En webs con Astra recién instalado, los colores del tema aparecen en el editor aunque no se hayan guardado en el personalizador.', 'On sites with a freshly installed Astra, the theme colours show up in the editor even if they were never saved in the Customizer.'),
+        c('El editor de WordPress integrado se abre aunque otro plugin (por ejemplo, Spectra recién activado) intente llevarte a su asistente.', 'The built-in WordPress editor opens even if another plugin (for example, a freshly activated Spectra) tries to send you to its setup wizard.'),
+      ],
+      web: [
+        c('Actualiza el Complemento de Ecos a la 1.7.1.', 'Update the Ecos plugin to 1.7.1.'),
+      ],
+    },
+    {
       version: '3.6.0', date: '2026-11-27', plugin: '1.7.0',
       title: c('Más estable: envíos que se reanudan, sin conexión, diagnóstico y copias programadas', 'More stable: resumable sends, offline mode, diagnostics and scheduled backups'),
       new: [
