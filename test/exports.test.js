@@ -21,3 +21,13 @@ test('las funciones usadas con require(…).nombre están exportadas', () => {
   }
   assert.deepEqual(missing, []);
 });
+
+// Todos los archivos JavaScript de la app deben compilar (p. ej. una declaración repetida tras una fusión rompe el arranque)
+test('todos los .js de la app son sintácticamente válidos', () => {
+  const { execFileSync } = require('child_process');
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : e.name.endsWith('.js') ? [path.join(d, e.name)] : []));
+  const all = [path.join(ROOT, 'main.js'), path.join(ROOT, 'preload.js'), ...walk(path.join(ROOT, 'src')), ...walk(path.join(ROOT, 'renderer'))];
+  const bad = [];
+  for (const f of all) { try { execFileSync(process.execPath, ['--check', f], { stdio: 'pipe' }); } catch (e) { bad.push(path.relative(ROOT, f) + ': ' + String(e.stderr).split('\n').find((l) => /Error/.test(l))); } }
+  assert.deepEqual(bad, []);
+});

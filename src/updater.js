@@ -17,13 +17,6 @@ const notesOf = (i) => {
   const txt = Array.isArray(n) ? n.map((x) => x && x.note).filter(Boolean).join('\n') : String(n);
   return txt.slice(0, 20000);
 };
-// Notas de la release (electron-updater las da como texto/HTML o como lista por versión)
-const notesOf = (i) => {
-  const n = i && i.releaseNotes;
-  if (!n) return '';
-  const txt = Array.isArray(n) ? n.map((x) => x && x.note).filter(Boolean).join('\n') : String(n);
-  return txt.slice(0, 20000);
-};
 const extra = () => ({ channel: beta ? 'beta' : 'stable', nextCheckAt });
 const status = (s) => { lastStatus = s; send({ ...s, ...extra() }); };
 
