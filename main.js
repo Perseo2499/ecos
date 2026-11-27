@@ -619,6 +619,33 @@ handle('blocks:synced', async () => { needBlocks(); return wpCall(() => require(
 handle('blocks:syncedGet', async (id) => { needBlocks(); return wpCall(() => require('./src/wpblocks').getSynced(cfg, id)); });
 handle('blocks:syncedSave', async (o) => { needBlocks(); return wpCall(() => require('./src/wpblocks').saveSynced(cfg, { id: o.id, title: o.title, sync: o.sync, content: composeBlocks(o.blocks || []) })); });
 handle('blocks:parse', (content) => require('./src/parseblocks').parseBlocks(String(content || '')));
+// Editor de WordPress dentro de Ecos (src/wpeditor.js + src/wpeditorwin.js): bloques de otros plugins y entrada completa. Solo con «Mi web (wp-admin)»
+const needWpEditor = () => { if (!isSelf() || !wpIsConnected()) throw new Error('El editor de WordPress solo está disponible con «Mi web (wp-admin)» conectada en Conexiones → WordPress.'); };
+let _wew = null;
+const wpEditorWin = () => _wew || (_wew = require('./src/wpeditorwin').create({
+  electron: require('electron'), W: wpself, wped: require('./src/wpeditor'), getCfg: () => cfg, getParent: () => mainWin, log,
+  getHelperVersion: async () => { await refreshHelper(); return cfg.ecosHelper?.installed ? cfg.ecosHelper.version : ''; },
+  openExternal: (u) => openSafe(u),
+}));
+// { markup, labels, colors } → { cancelled } o { blocks }; markup vacío = bloque nuevo («Bloque de WordPress»)
+handle('wped:edit', async (o) => {
+  needWpEditor();
+  const r = await wpCall(() => wpEditorWin().editMarkup({ markup: String(o?.markup || ''), labels: o?.labels, colors: o?.colors }));
+  if (r.cancelled) return { cancelled: true };
+  return { blocks: require('./src/parseblocks').parseBlocks(r.content || '') };
+});
+// { postId, type, labels, colors } → { cancelled } o { done }
+handle('wped:post', async (o) => {
+  needWpEditor();
+  const id = Math.floor(Number(o?.postId));
+  if (!(id > 0)) throw new Error('Esta entrada todavía no está en WordPress.');
+  return wpCall(() => wpEditorWin().editPost({ postId: id, labels: o?.labels, colors: o?.colors }));
+});
+// Al arrancar: borra los borradores temporales que quedaron de un cierre brusco
+async function wpEditorCleanup() {
+  if (!isSelf() || !wpIsConnected()) return;
+  try { const n = await require('./src/wpeditor').cleanupOrphans(wpself, cfg); if (n) log('Editor de WordPress: borrados', n, 'borradores temporales huérfanos'); } catch { /* sin conexión: otra vez será */ }
+}
 // Estilos de la web (paleta, tamaños y fuentes del tema), en caché en cfg.themeStyles; se renuevan cada 12 horas o con force
 const TSM = () => require('./src/themestyles');
 const themeFresh = (c) => c && c.site === cfg.wpUrl && Date.now() - (c.at || 0) < 12 * 3600e3;
@@ -2133,6 +2160,7 @@ app.whenReady().then(() => {
     updater.setBeta(!!cfg.prefs?.betaChannel);
     queueSave(); // programa los envíos pendientes
     setTimeout(emAutoCheck, 120000).unref?.(); // copia de emergencia automática, si toca
+    setTimeout(wpEditorCleanup, 20000).unref?.(); // borradores temporales del editor de WordPress que quedaron de un cierre brusco
     updater.init((st) => {
       if (st.state === 'error') log('Actualizador:', st.message);
       if (!mainWin.isDestroyed()) mainWin.webContents.send('update:status', { version: app.getVersion(), ...st });

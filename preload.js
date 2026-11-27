@@ -42,6 +42,8 @@ contextBridge.exposeInMainWorld('api', {
   syncedGet: (id) => call('blocks:syncedGet', id),
   syncedSave: (o) => call('blocks:syncedSave', o),
   parseBlocks: (content) => call('blocks:parse', content),
+  wpEditorEdit: (o) => call('wped:edit', o),
+  wpEditorPost: (o) => call('wped:post', o),
   peekCss: () => call('draft:peekCss'),
   convertSpectra: (blocks) => call('spectra:convert', blocks),
   pullPost: (id, type) => call('post:pull', id, type),
