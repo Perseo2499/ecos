@@ -69,6 +69,7 @@
     if (!m) return '';
     return (m[1].length === 3 ? m[1].split('').map((x) => x + x).join('') : m[1]).toLowerCase();
   };
+  const ANCHOR = /^[a-z0-9]{4,12}$/; // ancla de bloque para las notas de revisión
   const SAFE_URL = /^https?:\/\/[^\s"'()<>\\]+$/i;
   const cleanBgi = (g) => {
     if (!g || !SAFE_URL.test(g.url || '')) return null;
@@ -220,11 +221,13 @@
     if (b.tg) { const i = TG().indexOf(b.tg); if (i >= 0) addCls('ecos-d-tg-' + i); }
     if (hex6(b.hl)) dyn('ecos-d-hl-' + hex6(b.hl));
     if (fontBySlug(b.gf)) addCls('ecos-font-' + b.gf);
+    // ancla estable para las notas de revisión (renderer/editorial.js): clase ecos-a-<id corto>, sin CSS ni efectos
+    if (ANCHOR.test(b.anc || '')) { P.cls.push('ecos-a-' + b.anc); P.custom.push('ecos-a-' + b.anc); }
     if (st.spacing || st.border || st.shadow || st.color) P.attrs.style = st;
     return P;
   }
   const isEmpty = (P) => !P.cls.length && !Object.keys(P.attrs).length;
-  const hasDesign = (b) => DESIGN_KEYS.some((k) => has(b[k]) && !(typeof b[k] === 'object' && !Object.keys(b[k]).length));
+  const hasDesign = (b) => ANCHOR.test(b.anc || '') || DESIGN_KEYS.some((k) => has(b[k]) && !(typeof b[k] === 'object' && !Object.keys(b[k]).length));
 
   // --- Aplicar el plan al HTML de un bloque ya escrito (solo la etiqueta exterior y el comentario de WordPress) ----------------
   const splitDecls = (s) => { const out = []; let cur = '', depth = 0; for (const ch of String(s)) { if (ch === '(') depth++; if (ch === ')') depth--; if (ch === ';' && !depth) { out.push(cur); cur = ''; } else cur += ch; } out.push(cur); return out.map((x) => x.trim()).filter(Boolean); };
@@ -304,6 +307,7 @@
       else if ((m = c.match(/^ecos-d-tg-(\d+)$/))) { if (tgs[Number(m[1])]) d.tg = tgs[Number(m[1])]; }
       else if ((m = c.match(/^ecos-d-hl-([0-9a-f]{6})$/))) d.hl = '#' + m[1];
       else if ((m = c.match(/^ecos-font-([a-z-]+)$/))) { if (fontBySlug(m[1])) d.gf = m[1]; }
+      else if ((m = c.match(/^ecos-a-([a-z0-9]{4,12})$/))) d.anc = m[1];
       else keep.push(c);
     }
     if (keep.length) rest.className = keep.join(' '); else delete rest.className;

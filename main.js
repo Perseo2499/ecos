@@ -328,6 +328,14 @@ handle('postlock:release', async (id) => {
   if (!helperOn() || !id) return false;
   try { return await wpself.helperUnlock(cfg, id); } catch { return false; }
 });
+// Revisión entre varias personas (complemento ≥ 1.8.0): {supported:false} si no lo hay
+const reviewOn = () => helperOn() && wpself.helperHasReview(cfg.ecosHelper.version);
+handle('review:notes', async (postId) => (reviewOn() && postId ? { supported: true, notes: await wpCall(() => wpself.notesList(cfg, postId)) } : { supported: false, notes: [] }));
+handle('review:noteAdd', (n) => wpCall(() => wpself.noteAdd(cfg, n || {})));
+handle('review:noteResolve', (id, on) => wpCall(() => wpself.noteResolve(cfg, id, on)));
+handle('review:noteDelete', (id) => wpCall(() => wpself.noteDelete(cfg, id)));
+handle('review:summary', async () => (isSelf() && wpIsConnected() ? (reviewOn() ? { supported: true, ...await wpCall(() => wpself.reviewSummary(cfg)) } : { supported: false, pending: [], returned: [], activity: [] }) : null));
+handle('review:changes', (id, type) => (isSelf() ? wpCall(() => wpself.postChanges(cfg, id, type)) : null));
 handle('post:modified', (id, type) => (isSelf() ? wpCall(() => wpself.postModified(cfg, id, type)) : null));
 handle('helper:stats', (days) => wpself.helperStats(cfg, days));
 handle('helper:settings', () => wpself.helperSettings(cfg));

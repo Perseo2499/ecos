@@ -127,6 +127,7 @@
           <button id="ed-pull" class="btn text" data-i18n-title title="Comprobar en WordPress si la entrada se ha publicado o cambiado allí y traer los cambios"><span class="ms">sync</span><span data-i18n>Actualizar</span></button>
           <button id="ed-import" class="btn text" data-i18n-title title="Importar una entrada o página exportada de WordPress (.xml) o un archivo .html"><span class="ms">upload_file</span><span data-i18n>Importar</span></button>
           <button id="ed-history" class="btn text hidden" data-i18n-title title="Ver y recuperar versiones anteriores de esta entrada"><span class="ms">history</span><span data-i18n>Historial</span></button>
+          <button id="ed-notes-btn" class="btn text hidden" aria-pressed="false" aria-controls="ed-notes" data-i18n-title title="Notas internas de revisión: solo las ve tu equipo"><span class="ms">forum</span><span data-i18n>Notas</span></button>
           <button id="ed-layers-btn" class="btn text" aria-pressed="false" aria-controls="ed-layers" data-i18n-title title="Capas de la entrada"><span class="ms">account_tree</span><span data-i18n>Capas</span></button>
           <button id="ed-find" class="btn text icon-only" data-i18n-title title="Buscar y reemplazar"><span class="ms">find_replace</span></button>
           <button id="ed-undo" class="btn text icon-only" data-i18n-title title="Deshacer"><span class="ms">undo</span></button>
@@ -136,6 +137,8 @@
         </div>
         <div id="send-prog" class="send-prog hidden" role="status" aria-live="polite"><span id="send-prog-text"></span><progress id="send-prog-bar" max="100" value="0"></progress></div>
         <div id="ed-lock" class="ed-lock hidden" role="alert"></div>
+        <div id="ed-changed" class="ed-changed hidden" role="status"></div>
+        <div id="ed-review" class="ed-review hidden"></div>
         <div class="ed-body">
           <!-- Bandeja de fotos y vídeos: se arrastran al lienzo -->
           <div class="ed-media">
@@ -706,6 +709,7 @@
           <div class="card-head"><span class="ms fill ic">notifications</span><h2 data-i18n>Avisos</h2></div>
           <label class="switch"><input type="checkbox" id="s-check-new"><span data-i18n>Publicaciones nuevas sin pasar al blog</span></label>
           <label class="switch"><input type="checkbox" id="s-check-token"><span data-i18n>La conexión con Meta va a caducar</span></label>
+          <label class="switch"><input type="checkbox" id="s-review-notify"><span data-i18n>Entradas pendientes de revisión y devueltas (aviso del sistema)</span></label>
           <label class="switch"><input type="checkbox" id="s-auto-drafts"><span data-i18n>Crear borradores automáticamente con las publicaciones nuevas</span></label>
           <div id="s-auto-sub" class="hidden">
             <p class="hint" data-i18n>Ecos prepara un borrador en WordPress por cada publicación nueva de tus redes (hasta 5 cada vez). Nunca publica nada.</p>
@@ -1131,6 +1135,7 @@
 <script src="unify.js"></script>
 <script src="homelogic.js"></script>
 <script src="multiuser.js"></script>
+<script src="editorial.js"></script>
 <script src="pagebg.js"></script>
 <script src="findreplace.js"></script>
 <script src="linkutil.js"></script>
@@ -1195,6 +1200,7 @@
 <script src="app/editor-astra.js"></script>
 <script src="app/editor-history.js"></script>
 <script src="app/editor-multi.js"></script>
+<script src="app/review-ui.js"></script>
 <script src="app/editor-find.js"></script>
 <script src="app/editor-spectra.js"></script>
 <script src="app/pagebg-ui.js"></script>

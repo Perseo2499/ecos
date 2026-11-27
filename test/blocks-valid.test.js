@@ -218,6 +218,40 @@ const MORE_NAMES = { tabs: ['core/group', 'core/heading'], tabsPill: ['core/grou
   hotspots: ['core/image'], compare: ['core/image'], faq: ['core/details'], faqMany: ['core/details'] };
 for (const [k, mk] of Object.entries(MORE)) check('más bloques: ' + k, [mk()], MORE_NAMES[k] || ['core/group']);
 
+// --- Anclas de las notas de revisión (clase ecos-a-<id>): cada tipo de bloque sigue siendo válido para WordPress y el ancla vuelve al reabrir ---------
+{
+  const anc = (b, k) => ({ ...b, anc: 'rv' + k + n++ });
+  const COLA = (children) => ({ width: '50%', children });
+  const withAnc = [
+    P('Con ancla'), P('Con estilo', { align: 'center', size: '24px', color: '#aa0000', bg: '#ffeecc', shadow: true }), P('Capitular', { dropCap: true }),
+    { id: 'ah1', type: 'heading', level: 2, html: 'Título' }, { id: 'ah2', type: 'heading', level: 3, html: 'Otro', align: 'center', font: 'serif' },
+    { id: 'al1', type: 'list', items: ['Uno', 'Dos'] }, { id: 'al2', type: 'list', ordered: true, items: ['Uno'] }, { id: 'al3', type: 'list', items: ['Uno'], icons: [DK.ICONS[0]] },
+    { id: 'aq1', type: 'quote', html: 'Cita', cite: 'X' }, { id: 'aq2', type: 'quote', pull: true, html: 'Destacada', cite: 'Y' },
+    { id: 'ai1', type: 'image', img: IMG, caption: 'Pie' }, { id: 'ai2', type: 'image', img: IMG, align: 'left', width: 50 }, { id: 'ai3', type: 'image', img: IMG3, frame: 'rounded', ratio: '1' },
+    { id: 'ag1', type: 'gallery', images: [IMG, IMG2, IMG3], columns: 3 }, { id: 'ag2', type: 'gallery', images: [IMG], columns: 1 },
+    { id: 'amt', type: 'mediatext', img: IMG, html: 'Texto', right: true, mediaWidth: 40 },
+    { id: 'abt', type: 'buttons', html: 'Pulsa', url: 'https://x.org', align: 'center', variant: 'outline' },
+    { id: 'asp', type: 'separator' }, { id: 'asc', type: 'spacer', height: 40 },
+    { id: 'agr', type: 'group', bg: '#f5f1ea', pad: 'm', children: [P('Dentro')] },
+    { id: 'aco', type: 'columns', cols: [COLA([P('A')]), COLA([P('B')])] },
+    { id: 'acv', type: 'cover', img: IMG, dim: 30, children: [P('Portada')] },
+    { id: 'ade', type: 'details', summary: 'Pregunta', html: 'Respuesta' },
+  ].map((b, k) => anc(b, k));
+  for (const b of withAnc) check('ancla de revisión en ' + b.type + (b.align ? ' ' + b.align : ''), [b], []);
+  for (const [k, mk] of Object.entries(MORE)) check('ancla de revisión en más bloques: ' + k, [anc(mk(), k)], MORE_NAMES[k] || ['core/group']);
+  test('ancla de revisión: se escribe como clase y vuelve igual al reabrir', () => {
+    const { parseBlocks } = require('../src/parseblocks');
+    const blocks = withAnc.filter((b) => !['gallery'].includes(b.type) || b.images.length > 1);
+    const html = T.composeBlocks(blocks);
+    for (const b of blocks) assert.match(html, new RegExp('ecos-a-' + b.anc + '\\b'), b.type);
+    const back = []; (function walk(l) { for (const b of l) { if (b.anc) back.push(b.anc); for (const k of ['children', 'cols']) if (Array.isArray(b[k])) walk(b[k].flatMap((x) => x.children || [x])); } })(parseBlocks(html));
+    for (const b of blocks) assert.ok(back.includes(b.anc), `se pierde el ancla de ${b.type} ${b.anc}`);
+    // reenviar lo leído da el mismo HTML con las mismas anclas
+    const again = T.composeBlocks(parseBlocks(html));
+    for (const b of blocks) assert.match(again, new RegExp('ecos-a-' + b.anc + '\\b'), 'segunda vuelta ' + b.type);
+  });
+}
+
 test('el validador detecta de verdad un bloque mal formado', () => {
   const { found } = problems('<!-- wp:embed {"url":"https://a.b/x","type":"rich","providerNameSlug":"instagram"} -->\n<figure class="wp-block-embed is-type-rich is-provider-instagram"><div class="wp-block-embed__wrapper">\nhttps://a.b/x\n</div></figure>\n<!-- /wp:embed -->');
   assert.ok(found.length >= 1, 'a un embed sin su clase wp-block-embed-* debe invalidarlo');

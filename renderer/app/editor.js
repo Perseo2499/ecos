@@ -217,6 +217,7 @@ function openEditor() {
   updateHistoryBtn();
   renderSpectraNote();
   multiOnOpen();
+  ReviewUI.onOpen();
 }
 // Modo página: sin categorías ni etiquetas, con «Página superior»; la barra dice «Página»
 const isPageDraft = () => draft?.type === 'page';

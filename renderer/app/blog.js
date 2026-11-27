@@ -278,6 +278,7 @@ function renderBlog(items) {
     const doStatus = async (st, msg) => { exported = await window.api.blogSetStatus(it.id, st, it.type); toast(msg); loadBlog(); renderFeed(); };
     // A la vista: la acción principal (Editar en Ecos) y «Ver» si está publicada; el resto, en el menú «⋯»
     // (cualquier entrada se puede editar en Ecos: el HTML antiguo se convierte en bloques)
+    if (it.status === 'pending' && window.Editorial.canReview(CFG.wpMode === 'selfhosted' ? CFG.wpMe : null)) btn(t('Revisar'), () => openFromWp(it.id, null, kind), 'filled');
     if (!trashed) btn(t('Editar'), () => openFromWp(it.id, null, kind), 'tonal');
     else btn(t('Restaurar como borrador'), () => doStatus('draft', t('Restaurada como borrador')), 'tonal');
     if (it.status === 'publish') btn(t('Ver'), async () => window.api.open(it.url));
