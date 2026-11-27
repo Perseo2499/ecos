@@ -8,6 +8,13 @@
 
   const ENTRIES = [
     {
+      version: '3.5.3', date: '2026-11-27',
+      title: c('Cuadrícula o detalle en Publicaciones', 'Grid or details in Posts'),
+      improved: [
+        c('Botón «Detalle / Cuadrícula» con texto en Publicaciones: la cuadrícula vuelve a ser la de antes, con todas las publicaciones seguidas, y el detalle las agrupa por fechas con la línea temporal.', '"Details / Grid" button with text in Posts: the grid is back to how it was, with all posts together, and details groups them by date with the timeline.'),
+      ],
+    },
+    {
       version: '3.5.2', date: '2026-11-27',
       title: c('Detalles visuales', 'Visual details'),
       fixed: [

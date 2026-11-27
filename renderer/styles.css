@@ -3235,3 +3235,7 @@ details.cl-hist[open] > summary .cl-chev { transform: rotate(180deg); }
 details.cl-hist[open] { padding-bottom: 12px; }
 details.cl-hist > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 12px; }
 @media (prefers-reduced-motion: reduce) { details.cl-hist > summary .cl-chev { transition: none; } }
+
+/* Publicaciones: conmutador Detalle / Cuadrícula con texto */
+#f-layout.seg-labels .chip { display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; width: auto; }
+#f-layout.seg-labels .chip .ms { font-size: 18px; }

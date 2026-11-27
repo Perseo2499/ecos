@@ -137,8 +137,9 @@ function renderFeed() {
   for (const g of groups) for (const d of g.days) for (const p of d.items) flat.push({ p, g, d });
   let lastG = null, lastD = null;
   for (const { p, g, d } of flat) {
-    if (g !== lastG) { feed.appendChild(dlMonthHeader(g)); lastG = g; lastD = null; }
-    if (g.showDays && d !== lastD) { feed.appendChild(dlDayHeader(d)); lastD = d; }
+    // Cuadrícula: la de siempre, seguida y sin encabezados ni línea temporal; Detalle: por meses y días con línea temporal
+    if (detail && g !== lastG) { feed.appendChild(dlMonthHeader(g)); lastG = g; lastD = null; }
+    if (detail && g.showDays && d !== lastD) { feed.appendChild(dlDayHeader(d)); lastD = d; }
     const key = keyOf(p);
     const ex = exportOf(p);
     const card = document.createElement('div');
@@ -175,7 +176,7 @@ function renderFeed() {
     } else feed.appendChild(card);
   }
   if (detail) { pdWatch(feed); requestAnimationFrame(() => pdMeasure(feed)); }
-  postsLaneUpdate(groups);
+  postsLaneUpdate(detail ? groups : []);
 }
 // Rejilla / Detalle (recordado)
 function syncLayoutChips() {
@@ -187,7 +188,7 @@ $$('#f-layout [data-l]').forEach((b) => (b.onclick = () => {
   syncLayoutChips(); renderFeed();
 }));
 $('#f-layout').setAttribute('aria-label', t('Vista de las publicaciones'));
-$$('#f-layout [data-l]').forEach((b) => b.setAttribute('aria-label', t(b.dataset.l === 'grid' ? 'Rejilla' : 'Detalle')));
+$$('#f-layout [data-l]').forEach((b) => b.setAttribute('aria-label', t(b.dataset.l === 'grid' ? 'Cuadrícula' : 'Detalle')));
 syncLayoutChips();
 $('#f-order').value = dlOrder('posts');
 $('#f-order').onchange = (e) => { dlSetOrder('posts', e.target.value); renderFeed(); };

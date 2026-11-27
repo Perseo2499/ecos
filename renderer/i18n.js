@@ -321,6 +321,8 @@
     'Esto ha cambiado desde la última versión que usaste ({n} versiones).': 'This is what has changed since the last version you used ({n} versions).',
     'Ver todo el historial': 'See the full history',
     // 1.2 (editor completo)
+    'Detalle: por fechas, con línea temporal, texto y fotos junto a cada tarjeta': 'Details: by date, with timeline, text and photos next to each card',
+    'Cuadrícula: todas las publicaciones seguidas, como antes': 'Grid: all posts together, as before',
     'Ver el historial de versiones': 'Show the version history',
     '{n} versiones anteriores': '{n} earlier versions',
     'Vista de las publicaciones': 'Posts view', 'Detalle': 'Detail', 'Rejilla': 'Grid',
