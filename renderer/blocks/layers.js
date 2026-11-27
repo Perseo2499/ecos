@@ -117,14 +117,14 @@
           const a = e.target.closest('[data-a]')?.dataset.a;
           if (!a) return;
           ({ up: () => this.selMove(-1), down: () => this.selMove(1), dup: () => this.selDup(), group: () => this.selGroup(), copy: () => this.selCopy(), cut: () => this.selCut(),
-            paste: () => this.selPaste(), del: () => this.selDel(), clear: () => this.setSel([]) })[a]?.();
+            paste: () => this.selPaste(), sync: () => this.selSaveSynced?.(), del: () => this.selDel(), clear: () => this.setSel([]) })[a]?.();
         });
       }
       const btn = (a, icon, title, extra = '') => `<button data-a="${a}" title="${esc(title)}" aria-label="${esc(title)}" ${extra}><span class="ms">${icon}</span></button>`;
       bar.classList.remove('hidden');
       bar.innerHTML = `<span class="sel-n">${esc(t('{n} seleccionados', { n: this.topIds(this.sel).length }))}</span><i></i>`
         + btn('up', 'arrow_upward', t('Mover arriba')) + btn('down', 'arrow_downward', t('Mover abajo')) + btn('dup', 'content_copy', t('Duplicar'))
-        + btn('group', 'web_asset', t('Agrupar en sección'), this.canGroup() ? '' : 'class="dim"') + '<i></i>'
+        + btn('group', 'web_asset', t('Agrupar en sección'), this.canGroup() ? '' : 'class="dim"') + btn('sync', 'sync', t('Guardar como bloque sincronizado…'), this.canGroup() ? '' : 'class="dim"') + '<i></i>'
         + btn('copy', 'file_copy', t('Copiar')) + btn('cut', 'content_cut', t('Cortar')) + (this.clip.length ? btn('paste', 'content_paste', t('Pegar')) : '') + '<i></i>'
         + btn('del', 'delete', t('Eliminar bloque')) + btn('clear', 'close', t('Deseleccionar (Esc)'));
     },

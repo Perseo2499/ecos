@@ -20,6 +20,7 @@
     group: { icon: 'web_asset', name: t('Sección') }, columns: { icon: 'view_column', name: t('Columnas') }, cover: { icon: 'wallpaper', name: t('Portada') },
     map: { icon: 'map', name: t('Mapa') },
     raw: { icon: 'code_blocks', name: t('De WordPress') },
+    synced: { icon: 'sync', name: t('Sincronizado') },
   });
   const TEXT_TYPES = ['paragraph', 'heading', 'quote', 'list'];
   const MT_SIZES = [25, 33, 50, 66]; // tamaños de la foto en «Imagen y texto» (% del ancho)

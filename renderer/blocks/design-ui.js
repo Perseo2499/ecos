@@ -195,6 +195,7 @@
       el.innerHTML = `<button class="dz-item" data-a="copy"><span class="ms">content_copy</span>${t('Copiar estilo')}</button>`
         + `<button class="dz-item" data-a="paste" ${canPaste ? '' : 'disabled'}><span class="ms">content_paste</span>${t('Pegar estilo')}</button>`
         + `<button class="dz-item" data-a="save"><span class="ms">bookmark_add</span>${t('Guardar como estilo…')}</button>`
+        + `<button class="dz-item" data-a="synced"><span class="ms">sync</span>${t('Guardar como bloque sincronizado…')}</button>`
         + `<div class="dz-save hidden"><input class="dz-name" maxlength="40" placeholder="${t('Nombre del estilo')}"><button class="sp-chip on" data-a="ok">${t('Guardar')}</button></div>`;
       el.classList.remove('hidden');
       const r = btn.getBoundingClientRect();
@@ -210,6 +211,7 @@
       };
       $('[data-a="copy"]', el).onclick = () => { this.copyStyle(b); this.closeDz(); };
       $('[data-a="paste"]', el).onclick = () => { this.closeDz(); this.pasteStyle(b); };
+      $('[data-a="synced"]', el).onclick = () => { this.closeDz(); this.saveAsSynced?.(this.sel?.length > 1 && this.sel.includes(b.id) ? this.sel : [b.id]); };
       $('[data-a="save"]', el).onclick = () => { $('.dz-save', el).classList.remove('hidden'); name.focus(); };
       $('[data-a="ok"]', el).onclick = ok;
       name.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); ok(); } };
@@ -217,7 +219,7 @@
 
     // --- Lo que se añade a cada bloque al dibujarlo: botones «Estilo» y «⋯», diseño y ocultos por dispositivo -----------------------
     decorateBlock(el, b, extra) {
-      if (b.type === 'raw') return;
+      if (b.type === 'raw' || b.type === 'synced') return;
       if (!$('[data-sty]', extra)) this.styleBtn(extra, b, extra.children.length > 0);
       extra.insertAdjacentHTML('beforeend', `<button class="lv" data-dz="1" title="${t('Más opciones de estilo')}"><span class="ms">more_horiz</span></button>`);
       $('[data-dz]', extra).onclick = (e) => this.openDz(e.currentTarget, b);

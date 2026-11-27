@@ -366,6 +366,8 @@ function toBlockCore(t, n, d) {
       Object.assign(b, marginFrom(a.style?.spacing));
       return b;
     }
+    // Bloque sincronizado: <!-- wp:block {"ref":ID} /-->
+    case 'block': return Number.isInteger(a.ref) && a.ref > 0 && onlyKeys(a, ['ref']) ? { id: bid(), type: 'synced', ref: a.ref } : raw();
     default: return raw();
   }
 }

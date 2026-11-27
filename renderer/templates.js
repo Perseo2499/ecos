@@ -106,9 +106,64 @@
     return out;
   }
 
-  // Plantilla propia lista para guardar (sin el título del borrador)
-  function makeUserTemplate(name, blocks, type) {
-    return { name: String(name || '').trim().slice(0, 60), type: type === 'page' ? 'page' : 'post', blocks: blocksToTemplate(blocks) };
+  // Solo la estructura: vacía los textos y deja como indicación (ph) lo que decían. No toca el original.
+  const plainText = (h) => String(h || '').replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim();
+  const hint = (h) => { const x = plainText(h); return x.length > 80 ? x.slice(0, 77).trimEnd() + '…' : x; };
+  function emptyTexts(blocks) {
+    return (blocks || []).map((src) => {
+      const b = JSON.parse(JSON.stringify(src));
+      if (['paragraph', 'heading', 'quote', 'mediatext'].includes(b.type)) { const h = hint(b.html); b.html = ''; if (h) b.ph = h; else delete b.ph; if (b.type === 'quote') b.cite = ''; }
+      else if (b.type === 'list') { const h = hint((b.items || [])[0]); b.items = (b.items || ['']).map(() => ''); if (!b.items.length) b.items = ['']; if (h) b.ph = h; if (b.icons) b.icons = b.icons.map(() => ''); }
+      else if (b.type === 'details') { const h = hint(b.summary); b.summary = ''; b.html = ''; if (h) b.ph = h; }
+      else if (b.type === 'buttons') { b.url = ''; } // el texto del botón se conserva: es una indicación en sí
+      else if (b.type === 'table' && Array.isArray(b.rows)) b.rows = b.rows.map((r) => r.map(() => ''));
+      else if (b.type === 'map') b.address = '';
+      else if (b.type === 'embed') { b.url = ''; b.provider = ''; b.caption = ''; }
+      if (Array.isArray(b.children)) b.children = emptyTexts(b.children);
+      if (Array.isArray(b.cols)) b.cols = b.cols.map((c) => ({ ...c, children: emptyTexts(c.children) }));
+      return b;
+    });
+  }
+
+  // Plantilla propia lista para guardar (sin el título del borrador).
+  // opts.texts === false → solo la estructura (textos vacíos con indicaciones) · opts.desc = descripción
+  function makeUserTemplate(name, blocks, type, opts = {}) {
+    let list = blocksToTemplate(blocks);
+    if (opts.texts === false) list = emptyTexts(list);
+    const tp = { name: String(name || '').trim().slice(0, 60), type: type === 'page' ? 'page' : 'post', blocks: list };
+    const desc = String(opts.desc || '').trim().slice(0, 140);
+    if (desc) tp.desc = desc;
+    if (opts.texts === false) tp.structureOnly = true;
+    return tp;
+  }
+
+  // --- Pasar plantillas propias a otro ordenador (archivo .json) ---------------------------------------------------------
+  const FILE_TAG = 'ecos-plantillas';
+  function exportTemplates(list) {
+    const templates = (list || []).filter(isValid).map((tp) => JSON.parse(JSON.stringify(tp)));
+    return JSON.stringify({ ecos: FILE_TAG, version: 1, templates }, null, 2);
+  }
+  function isValid(tp) {
+    return !!tp && typeof tp === 'object' && typeof tp.name === 'string' && tp.name.trim() && Array.isArray(tp.blocks) && tp.blocks.every((b) => b && typeof b === 'object' && typeof b.type === 'string');
+  }
+  // Lee un archivo exportado: devuelve { templates, skipped } o lanza un error legible. Los nombres repetidos se renombran («… (2)»)
+  function parseImport(text, existing = []) {
+    let data;
+    try { data = JSON.parse(String(text)); } catch { throw new Error('El archivo no es un archivo de plantillas de Ecos (no se puede leer).'); }
+    const list = data && data.ecos === FILE_TAG ? data.templates : null;
+    if (!Array.isArray(list)) throw new Error('El archivo no es un archivo de plantillas de Ecos.');
+    const names = new Set((existing || []).map((x) => x.name));
+    const templates = []; let skipped = 0;
+    for (const raw of list) {
+      if (!isValid(raw)) { skipped++; continue; }
+      const tp = { name: raw.name.trim().slice(0, 60), type: raw.type === 'page' ? 'page' : 'post', blocks: blocksToTemplate(raw.blocks) };
+      if (typeof raw.desc === 'string' && raw.desc.trim()) tp.desc = raw.desc.trim().slice(0, 140);
+      if (raw.structureOnly) tp.structureOnly = true;
+      let n = 2, base = tp.name;
+      while (names.has(tp.name)) tp.name = `${base.slice(0, 54)} (${n++})`;
+      names.add(tp.name); templates.push(tp);
+    }
+    return { templates, skipped };
   }
 
   // Plantillas que se ofrecen para un tipo: las incluidas y después las propias
@@ -133,6 +188,6 @@
     return rows.slice(0, 14);
   }
 
-  const api = { BUILTIN, blocksToTemplate, makeUserTemplate, forType, sketch };
+  const api = { BUILTIN, blocksToTemplate, emptyTexts, makeUserTemplate, exportTemplates, parseImport, forType, sketch };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ContentTemplates = api;
 })(typeof window !== 'undefined' ? window : globalThis);
