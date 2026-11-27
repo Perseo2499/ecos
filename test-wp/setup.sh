@@ -36,10 +36,13 @@ docker compose up -d || exit 1
 echo "== Esperando a WordPress"
 ready=0
 for _ in $(seq 1 40); do
-  if wp config path >/dev/null 2>&1 && wp db check >/dev/null 2>&1; then ready=1; break; fi
+  # la web responde (el instalador da 200) y wp-config.php ya existe; no se usa «wp db check»: su cliente MySQL exige TLS
+  # verificado y el certificado de la imagen de MySQL es autofirmado, así que fallaba siempre aunque todo estuviera bien
+  code=$(curl -s -o /dev/null -w '%{http_code}' "$SITE/wp-admin/install.php" || true)
+  if [ "$code" = 200 ] && wp config path >/dev/null 2>&1; then ready=1; break; fi
   sleep 5
 done
-[ "$ready" = 1 ] || { echo "WordPress/MySQL no arrancaron" >&2; docker compose logs --tail=60 >&2; exit 1; }
+[ "$ready" = 1 ] || { echo "WordPress/MySQL no arrancaron (última respuesta: ${code:-ninguna})" >&2; wp config path >&2 || true; docker compose logs --tail=60 >&2; exit 1; }
 
 echo "== Instalando WordPress"
 wp core install --url="$SITE" --title="Ecos pruebas" --admin_user=admin --admin_password="$(openssl rand -hex 12)" --admin_email=admin@example.org --skip-email || exit 1
