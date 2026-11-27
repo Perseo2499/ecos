@@ -206,6 +206,7 @@ window.api.onConfigChanged((c) => { CFG = { ...CFG, ...c }; renderStatus(); });
   if (CFG.wpConnected) { loadCategories(); refreshExported(true); }
   checkTokenExpiry();
   if (typeof checkEmergency === "function") checkEmergency(); // aviso si la última copia de emergencia es antigua
+  if (typeof checkBackupFailure === "function") checkBackupFailure(); // aviso persistente si la última copia programada falló
   if (CFG.metaConnected) {
     try { renderPages(await window.api.metaAccounts()); checkNewSocial(); } catch (e) { toastError(e); }
   }

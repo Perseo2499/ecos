@@ -736,6 +736,44 @@
               <button id="em-open-visual" class="btn tonal small"><span class="ms">web</span><span data-i18n>Abrir la copia visual</span></button></div>
             <div class="em-list" id="em-list"></div>
           </div>
+
+          <div class="bw" id="bks">
+            <h3><span class="ms">event_repeat</span><span data-i18n>Copias programadas</span></h3>
+            <p class="hint" data-i18n>Ecos hace la copia solo, en segundo plano, a la hora que elijas. Si estaba cerrado a esa hora, la hace al abrirlo. Es incremental: solo baja lo que ha cambiado desde la última vez, así que las siguientes son mucho más rápidas.</p>
+            <p class="hint" id="bks-note"></p>
+            <label class="switch"><input type="checkbox" id="bks-on"><span data-i18n>Hacer copias automáticas</span></label>
+            <div class="bks-form" id="bks-form">
+              <div class="em-sets">
+                <label class="em-set"><span data-i18n>Qué copia</span><select id="bks-kind"><option value="web" data-i18n>Copia de la web</option><option value="emergency" data-i18n>Copia de emergencia</option></select></label>
+                <label class="em-set"><span data-i18n>Frecuencia</span><select id="bks-freq"><option value="daily" data-i18n>Cada día</option><option value="weekly" data-i18n>Cada semana</option><option value="monthly" data-i18n>Cada mes</option></select></label>
+                <label class="em-set" id="bks-wd-w"><span data-i18n>El</span><select id="bks-weekday"></select></label>
+                <label class="em-set hidden" id="bks-md-w"><span data-i18n>El día</span><input id="bks-monthday" type="number" min="1" max="31" inputmode="numeric"></label>
+                <label class="em-set"><span data-i18n>A las</span><input id="bks-time" type="time"></label>
+                <label class="em-set"><span data-i18n>Conservar las últimas</span><input id="bks-keep" type="number" min="1" max="60" inputmode="numeric"></label>
+              </div>
+              <label class="switch"><input type="checkbox" id="bks-plugged"><span data-i18n>Solo si el ordenador está enchufado</span></label>
+              <label class="switch"><input type="checkbox" id="bks-net"><span data-i18n>Solo si hay conexión a internet</span></label>
+              <label class="switch" id="bks-photos-w"><input type="checkbox" id="bks-photos"><span data-i18n>Incluir las fotos (la copia de la web)</span></label>
+              <div class="em-dir"><span class="ms">folder</span><code id="bks-dir"></code><button id="bks-pick" class="btn text small" data-i18n>Cambiar carpeta</button><button id="bks-reset" class="btn text small hidden" data-i18n>Usar la predeterminada</button></div>
+              <p class="hint" data-i18n>Solo se borran las copias automáticas antiguas de esta carpeta; las que haces a mano nunca se tocan.</p>
+              <div class="section-label" data-i18n>Destino adicional</div>
+              <div class="em-sets">
+                <label class="em-set"><span data-i18n>Subir también a</span><select id="bks-cloud"><option value="none" data-i18n>Solo este ordenador</option><option value="drive" data-i18n>Google Drive (carpeta «Ecos · Copias»)</option></select></label>
+                <button id="bks-drive" class="btn tonal small"><span class="ms">add_to_drive</span><span id="bks-drive-t" data-i18n>Conectar Google Drive</span></button>
+              </div>
+              <p class="hint" id="bks-cloud-note"></p>
+              <p class="hint" data-i18n>Alternativa sin conectar nada: elige como carpeta de destino una carpeta de Google Drive para escritorio, OneDrive o Dropbox, y la copia se sincronizará sola.</p>
+            </div>
+            <div class="bks-next" id="bks-next"></div>
+            <div class="card-actions wrap">
+              <button id="bks-run" class="btn filled"><span class="ms">play_arrow</span><span data-i18n>Hacer una copia ahora</span></button>
+              <button id="bks-folder" class="btn text"><span class="ms">folder_open</span><span data-i18n>Abrir carpeta</span></button>
+              <button id="bks-clear" class="btn text hidden"><span class="ms">cleaning_services</span><span data-i18n>Vaciar la caché de copias</span></button>
+            </div>
+            <p class="hint" id="bks-cache"></p>
+            <div class="section-label" data-i18n>Historial de copias</div>
+            <div class="bk-list" id="bk-list"></div>
+          </div>
         </div>
 
         <div class="card restore-card" id="set-restore">
@@ -1046,6 +1084,7 @@
   </div>
 </div>
 <div id="toast"></div>
+<div id="bk-chip" class="bk-chip hidden" role="status" aria-live="polite"><span class="ms">backup</span><div class="bk-chip-b"><span id="bk-chip-t"></span><div class="bw-bar"><i></i></div></div><button id="bk-chip-x" class="btn text small" data-i18n>Cancelar</button></div>
 <script src="i18n.js"></script>
 <script src="errors.js"></script>
 <script src="changelog.js"></script>
@@ -1134,6 +1173,7 @@
 <script src="app/restore.js"></script>
 <script src="app/webbackup.js"></script>
 <script src="app/emergency.js"></script>
+<script src="app/bkschedule.js"></script>
 <script src="app/home.js"></script>
 <script src="app/autodrafts.js"></script>
 <script src="app/search.js"></script>

@@ -706,6 +706,7 @@ async function runEmergency(deps, opts) {
     await zip.add('LEEME.html', Buffer.from(guide, 'utf8'), date, { deflate: true });
     await zip.add('copia.json', Buffer.from(JSON.stringify({ ecos: deps.ecosVersion || '', creada: date.toISOString(), web: origin, entradas: c.posts, paginas: c.pages, fotos: c.files, paginasVisuales: v.pages, recursosVisuales: v.assets, avisos: cfgData.notes }, null, 2), 'utf8'), date, { deflate: true });
     onProgress({ phase: 'guardar', step: 'guardar' });
+    await require('./backupverify').addManifest(zip, { kind: 'emergency', site: origin, ecos: deps.ecosVersion, counts: { posts: c.posts, pages: c.pages, photos: c.files, visualPages: v.pages, visualAssets: v.assets }, incremental: deps.incrementalStats || null });
     await zip.finish();
     fs.renameSync(partial, final);
     result.bytes = fs.statSync(final).size;

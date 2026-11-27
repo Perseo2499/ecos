@@ -151,7 +151,7 @@ const STATUSES = 'publish,future,draft,pending,private';
 // deps = { listAll(ruta) → [] (todas las páginas de la API), media: [] (biblioteca), download(url) → Buffer|null, siteName, siteUrl }
 // opts = { file, photos, onProgress(p), cancelled() → bool }
 // zip/prefix: para escribir dentro de un ZIP ya abierto (la copia de emergencia) en la carpeta «prefix»; entonces no lo cierra
-async function createBackup(deps, { file, photos = true, onProgress = () => {}, cancelled = () => false, zip: extZip = null, prefix = '' } = {}) {
+async function createBackup(deps, { file, photos = true, onProgress = () => {}, cancelled = () => false, zip: extZip = null, prefix = '', beforeFinish = null } = {}) {
   const stop = () => { if (cancelled()) throw new Error('Cancelado'); };
   onProgress({ step: 'entradas' });
   const [posts, pages, cats, tags] = [
@@ -192,7 +192,7 @@ async function createBackup(deps, { file, photos = true, onProgress = () => {}, 
         onProgress({ step: 'fotos', done: ++done, total, file: batch[k].rel });
       }
     }
-    if (!extZip) { onProgress({ step: 'guardar' }); await zip.finish(); }
+    if (!extZip) { onProgress({ step: 'guardar' }); if (beforeFinish) await beforeFinish(zip, result); await zip.finish(); }
   } catch (e) {
     if (!extZip) { try { zip.out.destroy(); fs.unlinkSync(file); } catch { /* ya no está */ } }
     throw e;
