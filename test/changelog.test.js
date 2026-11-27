@@ -47,7 +47,7 @@ test('comparar versiones', () => {
 
 test('cambios desde la versión X, también con saltos', () => {
   assert.deepStrictEqual(C.changesSince('3.4.0', '3.4.1').map((e) => e.version), ['3.4.1']);
-  assert.deepStrictEqual(C.changesSince('3.2.0', '3.5.0').map((e) => e.version), ['3.5.0', '3.4.1', '3.4.0', '3.3.0']);
+  assert.deepStrictEqual(C.changesSince('3.2.0', '3.5.0').map((e) => e.version), ['3.5.0', '3.4.2', '3.4.1', '3.4.0', '3.3.0']);
   assert.deepStrictEqual(C.changesSince('3.5.0', '3.5.0'), []);
   assert.deepStrictEqual(C.changesSince('3.4.5', '3.5.0').map((e) => e.version), ['3.5.0']);
   const m = C.merge(C.changesSince('3.2.0', '3.5.0'));

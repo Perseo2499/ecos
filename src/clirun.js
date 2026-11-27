@@ -80,6 +80,14 @@ async function ask(cfg, parts, schema, log = () => {}) {
     }
   }
 }
+// Respuesta en texto normal (sin JSON): p. ej. describir una foto. Si vuelve vacía, se repite una vez.
+async function askText(cfg, parts, log = () => {}) {
+  const out = String(await askOnce(cfg, parts, null, log) || '').trim();
+  if (out) return out;
+  log('CLI: respuesta vacía; se repite la petición una vez');
+  return String(await askOnce(cfg, parts, null, log) || '').trim();
+}
+
 async function askOnce({ tool, model, web = false }, parts, schema, log = () => {}) {
   const T = TOOLS[tool];
   if (!T) throw new Error('Elige una CLI (Claude Code, Codex o Gemini CLI)');
@@ -189,4 +197,4 @@ async function search({ tool, model }, prompt, log = () => {}) {
   }
 }
 
-module.exports = { extractJson, ask, search, TOOLS, MODELS, extractJson };
+module.exports = { extractJson, ask, askText, search, TOOLS, MODELS };

@@ -17,6 +17,13 @@
       ],
     },
     {
+      version: '3.4.2', date: '2026-11-27',
+      title: c('Describir fotos con la IA por línea de comandos', 'Describing photos with the command-line AI'),
+      fixed: [
+        c('«Describir con IA» y «Describir fotos» vuelven a funcionar con Claude Code, Codex y Gemini CLI (antes ponían siempre una descripción básica o daban error).', '"Describe with AI" and "Describe photos" work again with Claude Code, Codex and Gemini CLI (before, they always set a basic description or failed).'),
+      ],
+    },
+    {
       version: '3.4.1', date: '2026-11-27',
       title: c('Descripciones con IA más claras', 'Clearer AI descriptions'),
       improved: [
