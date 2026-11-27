@@ -315,18 +315,21 @@ function renderBlog(items) {
 }
 $$('#b-type button').forEach((b) => b.onclick = async () => {
   if (blog.type === 'structure' && b.dataset.type !== 'structure' && window.SiteStructure.dirty() && !await ask(t('Tienes cambios de estructura sin guardar. ¿Salir sin guardarlos?'))) return;
+  if (blog.type === 'menus' && b.dataset.type !== 'menus' && window.MenusUI.dirty() && !await ask(t('Tienes cambios de menús o widgets sin guardar. ¿Salir sin guardarlos?'))) return;
   $$('#b-type button').forEach((x) => x.classList.toggle('active', x === b));
   if (b.dataset.type !== 'post') blog.problem = null;
-  const st = b.dataset.type === 'structure', cal = b.dataset.type === 'calendar', med = b.dataset.type === 'media';
+  const st = b.dataset.type === 'structure', cal = b.dataset.type === 'calendar', med = b.dataset.type === 'media', mnu = b.dataset.type === 'menus';
   // Estructura y Calendario: en lugar de la lista
-  $$('#tab-blog .b-filters, #b-status, #tab-blog .field.search, #b-refresh, #b-new-wrap, #b-list, #b-health, #b-health-btn, #b-bulk, #b-listhead, #b-range, #tab-blog .pager').forEach((x) => x.classList.toggle('hidden', st || cal || med));
+  $$('#tab-blog .b-filters, #b-status, #tab-blog .field.search, #b-refresh, #b-new-wrap, #b-list, #b-health, #b-health-btn, #b-bulk, #b-listhead, #b-range, #tab-blog .pager').forEach((x) => x.classList.toggle('hidden', st || cal || med || mnu));
   $('#b-structure').classList.toggle('hidden', !st);
   $('#b-calendar').classList.toggle('hidden', !cal);
   $('#b-media').classList.toggle('hidden', !med);
+  $('#b-menus').classList.toggle('hidden', !mnu);
   blog.type = b.dataset.type;
   syncFindBtn();
   bsel.clear();
   if (st) return window.SiteStructure.open();
+  if (mnu) return window.MenusUI.open();
   if (cal) return renderCalendar();
   if (med) return renderMediaLib();
   blog.page = 1; loadBlog();
@@ -531,7 +534,7 @@ function bulkUndoFor(kind, cat, snap) {
 
 // ---------------------------------------------------------------- Buscar y reemplazar en todo el blog (WordPress propio)
 const bfr = { results: [], query: '', type: 'post' };
-function syncFindBtn() { $('#b-find').classList.toggle('hidden', CFG.wpMode !== 'selfhosted' || blog.type === 'structure' || blog.type === 'calendar' || blog.type === 'media'); }
+function syncFindBtn() { $('#b-find').classList.toggle('hidden', CFG.wpMode !== 'selfhosted' || blog.type === 'structure' || blog.type === 'calendar' || blog.type === 'media' || blog.type === 'menus'); }
 const bfrOpts = () => ({ caseSensitive: $('#bfr-case').checked, wholeWord: $('#bfr-word').checked });
 function bfrOpen() {
   $('#bfr-scope [value="sel"]').disabled = !bsel.size;

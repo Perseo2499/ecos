@@ -53,13 +53,18 @@ function renderShare() {
       ${seoSugg.title ? `<div class="seo-sg-row"><div><small>${t('Título')} · ${Seo.clean(seoSugg.title).length}</small><div>${escHtml(seoSugg.title)}</div></div><button class="btn tonal small" data-seo="use-title">${t('Usar')}</button></div>` : ''}
       ${seoSugg.description ? `<div class="seo-sg-row"><div><small>${t('Descripción')} · ${Seo.clean(seoSugg.description).length}</small><div>${escHtml(seoSugg.description)}</div></div><button class="btn tonal small" data-seo="use-desc">${t('Usar')}</button></div>` : ''}
       <button class="btn text small" data-seo="discard">${t('Descartar')}</button></div>` : '';
+  const xf = window.SeoPanel?.fields() || {};
+  const soc = SeoMeta.social({ host, title, desc, featured: img?.url || '', ...xf });
   const canShare = wpSt === 'publish' && CFG.metaConnected && wpUrl && CFG.shareFacebook === true;
   box.innerHTML = `<div class="section-label">${t('Cómo se verá')}</div>
-    <div class="seo-tabs" role="tablist"><button role="tab" class="${shareTab === 'google' ? 'on' : ''}" data-seo="tab-google">Google</button><button role="tab" class="${shareTab === 'social' ? 'on' : ''}" data-seo="tab-social">${t('Redes')}</button></div>
+    <div class="seo-tabs" role="tablist"><button role="tab" class="${shareTab === 'google' ? 'on' : ''}" data-seo="tab-google">Google</button><button role="tab" class="${shareTab === 'social' ? 'on' : ''}" data-seo="tab-social">Facebook</button><button role="tab" class="${shareTab === 'x' ? 'on' : ''}" data-seo="tab-x">X</button></div>
     ${shareTab === 'google'
-    ? `<div class="sc-google"><div class="sc-g-url">${escHtml(host)} › ${escHtml(slug)}</div><div class="sc-g-title">${escHtml(Seo.cut(shownTitle, 60))}</div><div class="sc-g-desc">${escHtml(Seo.cut(desc, 155))}</div></div>`
-    : `<div class="sc-card">${img ? `<img src="${escHtml(img.url)}" alt="">` : '<div class="sc-noimg"><span class="ms">image</span></div>'}
-      <div class="sc-body"><div class="sc-host">${escHtml(host.toUpperCase())}</div><div class="sc-title">${escHtml(shownTitle)}</div><div class="sc-desc">${escHtml(Seo.cut(desc, 160))}</div></div></div>`}
+    ? `<div class="sc-google"><div class="sc-g-url">${escHtml(SeoMeta.googleUrl(host, slug, xf.canonical))}</div><div class="sc-g-title">${escHtml(Seo.cut(shownTitle, 60))}</div><div class="sc-g-desc">${escHtml(Seo.cut(desc, 155))}</div></div>`
+    : shareTab === 'x'
+      ? `<div class="sc-x">${soc.x.image ? `<img src="${escHtml(soc.x.image)}" alt="">` : '<div class="sc-noimg"><span class="ms">image</span></div>'}
+      <div class="sc-body"><div class="sc-title">${escHtml(soc.x.title || shownTitle)}</div><div class="sc-desc">${escHtml(soc.x.desc)}</div><div class="sc-host">${escHtml(soc.x.host)}</div></div></div>`
+      : `<div class="sc-card">${soc.fb.image ? `<img src="${escHtml(soc.fb.image)}" alt="">` : '<div class="sc-noimg"><span class="ms">image</span></div>'}
+      <div class="sc-body"><div class="sc-host">${escHtml(soc.fb.host)}</div><div class="sc-title">${escHtml(soc.fb.title || shownTitle)}</div><div class="sc-desc">${escHtml(soc.fb.desc)}</div></div></div>`}
     <div class="seo-counts"><span>${t('Título')} ${cnt(tl, Seo.titleLevel(title), 60)}</span><span>${t('Descripción')} ${cnt(dl, Seo.descLevel(real), 155)}</span></div>
     <div class="hint seo-help">${escHtml(help)}</div>
     ${warn.length ? `<ul class="seo-warns">${warn.map((x) => `<li><span class="ms">warning</span>${escHtml(x)}</li>`).join('')}</ul>` : `<div class="seo-ok"><span class="ms">check_circle</span>${t('Todo en orden para buscadores.')}</div>`}
@@ -68,11 +73,12 @@ function renderShare() {
       ${CFG.aiConfigured ? `<button class="btn tonal small" data-seo="ai"><span class="ms">auto_awesome</span>${t('Sugerir con IA')}</button>` : ''}
       ${canShare ? `<button class="btn tonal small" data-seo="fb"><span class="ms">share</span>${t('Compartir en Facebook')}</button>` : ''}
     </div>`;
+  window.SeoPanel?.refresh();
 }
 $('#d-share').addEventListener('click', (e) => {
   const b = e.target.closest('[data-seo]'); if (!b) return;
   const act = b.dataset.seo;
-  if (act === 'tab-google' || act === 'tab-social') { shareTab = act.slice(4); return renderShare(); }
+  if (act === 'tab-google' || act === 'tab-social' || act === 'tab-x') { shareTab = act.slice(4); return renderShare(); }
   if (act === 'discard') { seoSugg = null; return renderShare(); }
   if (act === 'use-title') { $('#d-title').value = seoSugg.title; autoTitle(); seoSugg.title = ''; autosaveSoon(); }
   if (act === 'use-desc') { seoField().value = seoSugg.description; seoSugg.description = ''; autosaveSoon(); }
