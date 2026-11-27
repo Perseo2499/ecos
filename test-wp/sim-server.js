@@ -37,7 +37,7 @@ function start({ user = 'ecostest', pass = 'abcdEFGHijklMNOPqrstUVWX', port = 0 
     _embedded: { 'wp:term': [p.categories.map((id) => ({ ...cats.find((c) => c.id === id), taxonomy: 'category' }))] },
   });
   const mediaObj = (m) => ({ id: m.id, date: m.date, source_url: m.url, mime_type: m.mime, media_type: 'image', alt_text: m.alt, title: { rendered: m.file }, media_details: { width: 96, height: 64, sizes: {} }, post: 0 });
-  const blockObj = (b) => ({ id: b.id, status: 'publish', title: { raw: b.title, rendered: b.title }, content: { raw: b.content, rendered: renderContent(b.content), protected: false }, wp_pattern_sync_status: b.sync });
+  const blockObj = (b) => ({ id: b.id, status: 'publish', title: { raw: b.title, rendered: b.title }, content: { raw: b.content, rendered: renderContent(b.content), protected: false }, meta: { wp_pattern_sync_status: b.sync } }); // como WordPress 6.3+: es un campo meta
 
   const server = http.createServer((req, res) => {
     const chunks = [];
@@ -124,7 +124,7 @@ function start({ user = 'ecostest', pass = 'abcdEFGHijklMNOPqrstUVWX', port = 0 
       }
 
       if (route === '/wp/v2/blocks' && req.method === 'GET') return send(200, [...blocks.values()].map(blockObj), { 'X-WP-TotalPages': '1' });
-      if (route === '/wp/v2/blocks' && req.method === 'POST') { const b = { id: next++, title: json.title, content: json.content, sync: json.wp_pattern_sync_status || '' }; blocks.set(b.id, b); return send(201, blockObj(b)); }
+      if (route === '/wp/v2/blocks' && req.method === 'POST') { const b = { id: next++, title: json.title, content: json.content, sync: json.meta?.wp_pattern_sync_status || '' }; blocks.set(b.id, b); return send(201, blockObj(b)); }
       if ((r = m(/^\/wp\/v2\/blocks\/(\d+)$/))) {
         const b = blocks.get(+r[1]);
         if (!b) return err(404, 'rest_post_invalid_id', 'ID no válido.');

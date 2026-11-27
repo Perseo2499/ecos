@@ -29,7 +29,7 @@
     for (const b of Array.isArray(list) ? list : []) {
       if (!b || !Number.isInteger(b.id)) continue;
       const content = str(b.content);
-      const sync = b.wp_pattern_sync_status === 'unsynced' ? 'unsynced' : '';
+      const sync = (b.meta?.wp_pattern_sync_status ?? b.wp_pattern_sync_status) === 'unsynced' ? 'unsynced' : '';
       out.push({ id: b.id, title: plain(str(b.title)) || '(sin título)', content, sync, status: b.status || 'publish' });
     }
     return out;
@@ -54,7 +54,7 @@
 
   // Cuerpo para crear un bloque reutilizable en WordPress (POST /wp/v2/blocks)
   function syncedPayload(title, content, sync) {
-    return { title: String(title || '').trim().slice(0, 120) || 'Bloque', content: String(content || ''), status: 'publish', wp_pattern_sync_status: sync === 'unsynced' ? 'unsynced' : '' };
+    return { title: String(title || '').trim().slice(0, 120) || 'Bloque', content: String(content || ''), status: 'publish', meta: { wp_pattern_sync_status: sync === 'unsynced' ? 'unsynced' : '' } };
   }
   // El bloque de Ecos que hace de referencia
   const syncedRef = (id, title) => ({ type: 'synced', ref: Number(id), ...(title ? { title: String(title) } : {}) });

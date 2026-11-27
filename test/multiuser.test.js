@@ -138,9 +138,9 @@ test('wpself: bloqueo (POST/DELETE ecos/v1/lock) y fecha de modificación', asyn
 
 test('complemento 1.2: versión, rutas de bloqueo y PHP válido', () => {
   const dir = path.join(__dirname, '..', 'wp-plugin', 'ecos');
-  assert.equal(W.helperBundledVersion(), '1.7.0');
+  assert.equal(W.helperBundledVersion(), '1.7.1');
   const php = fs.readFileSync(path.join(dir, 'ecos.php'), 'utf8');
-  assert.match(php, /define\( 'ECOS_WP_VERSION', '1\.7\.0' \)/);
+  assert.match(php, /define\( 'ECOS_WP_VERSION', '1\.7\.1' \)/);
   assert.match(php, /'\/lock'/); assert.match(php, /wp_check_post_lock/); assert.match(php, /wp_set_post_lock/); assert.match(php, /'DELETE'/);
   try { execFileSync('php', ['-v'], { stdio: 'ignore' }); } catch { return; }
   execFileSync('php', ['-l', path.join(dir, 'ecos.php')], { stdio: 'pipe' });

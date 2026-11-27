@@ -294,7 +294,8 @@ test('editor de WordPress: la dirección de un solo uso funciona una vez y la se
   // primera vez: redirige al editor y entrega las cookies de sesión
   const first = await fetch(r.url, { redirect: 'manual' });
   assert.ok([301, 302, 303, 307].includes(first.status), 'redirige (HTTP ' + first.status + ')');
-  assert.match(first.headers.get('location') || '', /wp-admin\/post\.php\?post=\d+&action=edit/);
+  // (Spectra recién instalado puede desviar al administrador a su asistente: basta con que lleve a wp-admin)
+  assert.match(first.headers.get('location') || '', /wp-admin\/(post\.php\?post=\d+&action=edit|admin\.php\?page=spectra)/);
   const cookie = cookiesOf(first);
   assert.match(cookie, /wordpress_logged_in_/, 'inicia sesión con cookies');
 

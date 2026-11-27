@@ -107,6 +107,15 @@ async function diagnose(cfg, original) {
   if (info && !available) {
     return Object.assign(new AuthError('Tu web tiene desactivadas las contraseñas de aplicación. Suele hacerlo un plugin de seguridad (Wordfence, iThemes/Solid Security, All-In-One Security…) o el hosting. Actívalas en los ajustes de ese plugin y vuelve a pulsar «Conectar».'), { code: 'app_passwords_disabled' });
   }
+  // ¿Llega la cabecera Authorization? Se prueba con un usuario inventado: si WordPress lo rechaza por usuario o
+  // contraseña, la cabecera llega y lo que falla son los datos escritos (no el servidor).
+  try {
+    const probe = await fetch(`${base(cfg)}/wp-json/wp/v2/users/me`, { headers: { Authorization: 'Basic ' + Buffer.from('ecos-comprobacion-' + Date.now() + ':abcd efgh ijkl mnop qrst uvwx').toString('base64') } });
+    const pj = await probe.json().catch(() => null);
+    if (['invalid_username', 'incorrect_password', 'invalid_email'].includes(pj?.code)) {
+      return Object.assign(new AuthError('WordPress no acepta el usuario o la contraseña de aplicación. Comprueba que el usuario es el tuyo de wp-admin y que la contraseña de aplicación está bien copiada (o crea otra en wp-admin → Usuarios → Perfil → Contraseñas de aplicación).'), { code: 'bad_credentials' });
+    }
+  } catch { /* sin respuesta: se sigue con el diagnóstico de la cabecera */ }
   return Object.assign(new AuthError('Tu servidor no deja pasar la autorización de Ecos (la cabecera «Authorization» se pierde por el camino). Se arregla añadiendo al principio del archivo .htaccess de tu web, en el hosting:\n\nSetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1\n\nSi no sabes cómo, el soporte de tu hosting lo puede hacer en un minuto («activar la cabecera Authorization para la API REST de WordPress»).'), { code: 'auth_header_stripped', original: original.message });
 }
 

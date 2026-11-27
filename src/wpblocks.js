@@ -31,7 +31,7 @@ async function getSynced(cfg, id) {
 // Crea (sin id) o actualiza un wp_block. `content` ya viene compuesto (composeBlocks).
 async function saveSynced(cfg, { id, title, content, sync }) {
   const body = P.syncedPayload(title, content, sync);
-  if (id) { delete body.wp_pattern_sync_status; delete body.status; }
+  if (id) { delete body.meta; delete body.status; }
   const r = await request(cfg, id ? `/wp/v2/blocks/${Number(id)}` : '/wp/v2/blocks', { method: 'POST', json: body });
   return { id: r.id, title: P.plain(typeof r.title === 'object' ? r.title.raw || r.title.rendered : r.title) || body.title };
 }

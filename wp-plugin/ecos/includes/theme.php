@@ -84,6 +84,21 @@ function ecos_wp_astra_settings() {
 			}
 		}
 	}
+	// Astra recién instalado (sin pasar por el personalizador): la paleta guardada no existe todavía y se usa la suya por defecto
+	if ( ! $palette && function_exists( 'astra_get_palette_colors' ) ) {
+		$all = astra_get_palette_colors();
+		$cur = isset( $all['currentPalette'] ) ? $all['currentPalette'] : 'palette_1';
+		$def = isset( $all['palettes'][ $cur ] ) && is_array( $all['palettes'][ $cur ] ) ? $all['palettes'][ $cur ] : array();
+		foreach ( array_values( $def ) as $i => $c ) {
+			if ( is_string( $c ) && '' !== $c ) {
+				$palette[] = array(
+					'slug'  => 'ast-global-color-' . $i,
+					'name'  => sprintf( 'Color %d', $i + 1 ),
+					'color' => $c,
+				);
+			}
+		}
+	}
 	$font = function ( $key ) use ( $opts ) {
 		$v = isset( $opts[ $key ] ) && is_string( $opts[ $key ] ) ? trim( $opts[ $key ] ) : '';
 		return '' === $v ? 'inherit' : $v;
