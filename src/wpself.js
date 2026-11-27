@@ -187,6 +187,15 @@ async function findMediaByUrl(cfg, url) {
   const m = (list || []).find((x) => same(x.source_url) || Object.values(x.media_details?.sizes || {}).some((s) => same(s.source_url)));
   return m ? m.id : null;
 }
+// Busca en la biblioteca un medio por el nombre del archivo y su tamaño en bytes (si se conoce): evita subir dos veces lo mismo
+async function findMediaByName(cfg, name, size) {
+  const stem = (n) => decodeURIComponent(String(n || '')).replace(/\.[^.]*$/, '').replace(/-\d+x\d+$/, '').replace(/-scaled$/, '').replace(/-\d+$/, '').toLowerCase();
+  const want = stem(name);
+  if (!want || !size) return null; // sin tamaño no hay certeza: se sube
+  const list = await req(cfg, `/wp/v2/media?search=${encodeURIComponent(want)}&per_page=30&_fields=id,source_url,media_details`);
+  const m = (list || []).find((x) => stem((x.source_url || '').split('?')[0].split('/').pop()) === want && Number(x.media_details?.filesize) === Number(size));
+  return m ? { id: m.id, url: m.source_url } : null;
+}
 // Añade o quita una categoría de una entrada (sin tocar nada más)
 async function changeCategory(cfg, id, name, add = true) {
   const [cid] = await categoryIds(cfg, [name], false);
@@ -780,7 +789,7 @@ async function helperRender(cfg, payload) {
 }
 const themeStyles = (cfg, helperVersion) => TS.fetchTheme((route) => req(cfg, route), helperVersion);
 
-module.exports = { helperHasRender, helperRender, themeStyles, getJson, helperHasExport, helperExport, helperHasLock, me, parseMe, postModified, helperLock, helperUnlock, parseHelperLock, helperStats, parseHelperStats, helperSettings, helperSaveSettings, parseHelperSettings, helperStatus, helperPurge, parseHelperStatus, helperBundledVersion, detectSeo, seoInfo, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, listDates, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText };
+module.exports = { helperHasRender, helperRender, themeStyles, getJson, helperHasExport, helperExport, helperHasLock, me, parseMe, postModified, helperLock, helperUnlock, parseHelperLock, helperStats, parseHelperStats, helperSettings, helperSaveSettings, parseHelperSettings, helperStatus, helperPurge, parseHelperStatus, helperBundledVersion, detectSeo, seoInfo, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, findMediaByName, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, listDates, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText };
 
 // Para módulos propios que hablan con la API (src/wpblocks.js)
 module.exports.request = req;

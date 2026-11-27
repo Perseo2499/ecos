@@ -135,6 +135,15 @@ a { color: var(--primary); }
 .q-main { flex: 1 1 100%; min-width: 0; }
 .q-main > * { display: block; }
 .q-item .btn.small, .q-head .btn.small { flex: 0 0 auto; width: auto; margin: 0; height: 34px; padding: 0 12px; white-space: nowrap; }
+.off-ind { background: var(--surface-c-high); color: var(--on-surface-var); max-width: min(46vw, 460px); }
+.off-ind::before { display: none; }
+.off-ind .ms { font-size: 16px; flex: none; }
+.off-ind #off-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 900px) { .off-ind #off-text { display: none; } }
+.cache-note { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; padding: 6px 12px; border-radius: var(--r-m, 12px); background: var(--surface-c-low); color: var(--on-surface-var); }
+.cache-note .ms { font-size: 16px; }
+.send-prog { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; padding: 6px 14px; border-radius: var(--r-full); background: var(--primary-container); color: var(--on-primary-container); font-size: 12.5px; }
+.send-prog progress { flex: 0 0 120px; height: 6px; accent-color: var(--primary); }
 .q-main b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 
 main { padding: 8px 24px 40px; }

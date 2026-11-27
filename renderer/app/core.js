@@ -141,7 +141,7 @@ try {
 } catch { /* sin observador */ }
 // 2,5–6 s según la longitud del texto (los errores se quedan algo más)
 function toastDuration(msg, isError) { const base = Math.min(6000, Math.max(2500, 1800 + String(msg).length * 45)); return isError ? Math.min(9000, base + 2000) : base; }
-function toastError(e, opts) { const f = friendlyError(e); return toast(f.text, true, { detail: f.detail, ...opts }); }
+function toastError(e, opts) { if (window.Net?.swallow(e)) return; const f = friendlyError(e); return toast(f.text, true, { detail: f.detail, ...opts }); }
 async function busy(btn, fn) {
   const label = btn.innerHTML; btn.disabled = true; btn.textContent = t('Trabajando…');
   // en tareas largas (IA), los segundos que lleva: así se ve que sigue trabajando

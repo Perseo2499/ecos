@@ -285,6 +285,7 @@ async function purgeAfterSend(post) {
 }
 
 // Envuelve llamadas a WordPress: si rechaza el permiso, se desconecta y se avisa
+const SQ_ = () => require('./src/sendqueue');
 const wpCall = async (fn) => { try { return await fn(); } catch (e) { throw e instanceof wp.AuthError ? wpAuthFailed(e) : e; } };
 
 // Copia local antes de cada envío (src/sendbackup.js): lo que hay ahora en WordPress y lo que se va a enviar.
@@ -479,7 +480,7 @@ async function downloadToFile(url, file) {
 async function uploadVideoFile(file, { name, keepIfSmall = null } = {}) {
   const pr = await vq().processVideo(file, { name });
   try {
-    let up = keepIfSmall && !pr.transcoded ? keepIfSmall : await wpCall(() => WP().uploadFile(cfg, pr.file));
+    let up = keepIfSmall && !pr.transcoded ? keepIfSmall : await SS.withRetry(() => wpCall(() => WP().uploadFile(cfg, pr.file)), { tries: 4, base: 2000 });
     if (pr.transcoded) log('Vídeo comprimido a', pr.width + '×' + pr.height);
     const out = { id: up.id, url: up.url };
     if (pr.width && pr.height) { out.width = pr.width; out.height = pr.height; }
@@ -712,13 +713,25 @@ handle('post:revisions', async (postId, type) => {
 });
 // Actualizar desde WordPress: estado, fechas, título, extracto, destacada y contenido (ya en bloques de Ecos)
 handle('post:pull', async (id, type) => {
-  const p = await wpCall(() => WP().getPost(cfg, id, type));
+  let p;
+  try { p = await wpCall(() => WP().getPost(cfg, id, type)); } catch (e) {
+    if (!SQ_().isNetworkError(e)) throw e;
+    const c = offCache.getPost(type, id); if (!c) throw e;
+    return { ...c.value, cached: { at: c.at } };
+  }
   const sent = cfg.sentContent?.[id];
   const norm = (s) => String(s || '').replace(/ecos-[cm]-[a-z0-9]+/g, '').replace(/\s+/g, ' ').trim();
   // estado al día en las publicaciones exportadas
   for (const e of Object.values(cfg.exported || {})) if (e.postId === id) e.status = p.status;
   store.save(cfg);
-  return { ...p, contentChanged: sent !== undefined ? norm(sent) !== norm(p.content) : null, blocks: require('./src/parseblocks').parseBlocks(p.content), pageBg: require('./renderer/pagebg').parse(p.content), exported: cfg.exported };
+  const out = { ...p, contentChanged: sent !== undefined ? norm(sent) !== norm(p.content) : null, blocks: require('./src/parseblocks').parseBlocks(p.content), pageBg: require('./renderer/pagebg').parse(p.content), exported: cfg.exported };
+  offCache.putPost(type, id, out);
+  return out;
+});
+// ¿Hay conexión de verdad? Pide la portada de la web (o un servidor público si aún no hay web)
+handle('net:ping', async () => {
+  const base = (() => { try { return WP().publicBase(cfg) || ''; } catch { return ''; } })() || 'https://www.wordpress.org';
+  try { await fetch(base, { method: 'HEAD', redirect: 'follow', signal: AbortSignal.timeout(6000) }); return true; } catch { return false; }
 });
 
 // Bandeja del editor: subir fotos o vídeos del ordenador a la biblioteca de WordPress
@@ -919,48 +932,72 @@ async function resolveFeatured(d) {
     return null;
   }
 }
-async function doPublish(d) { require('./src/pagelinks').forget();
+// Progreso por pasos de los envíos (src/sendsteps.js): lo ya subido y la entrada ya creada sobreviven a un corte
+const SS = require('./src/sendsteps');
+const sendProg = SS.makeProgress(path.join(app.getPath('userData'), 'send-progress.json'));
+const sendEmit = (p) => { try { mainWin?.webContents.send('send:progress', { ...p, ...(sendProg.brief(p.key) || {}) }); } catch { /* ventana cerrada */ } };
+// Tamaño de un medio remoto (para no subir dos veces lo mismo)
+async function probeRemote(url) {
+  try {
+    const r = await fetch(url, { method: 'HEAD', redirect: 'follow', signal: AbortSignal.timeout(8000) });
+    const size = Number(r.headers.get('content-length')) || 0;
+    let name = ''; try { name = decodeURIComponent(new URL(url).pathname.split('/').pop() || ''); } catch { /* sin nombre */ }
+    return size && name ? { name, size } : null;
+  } catch { return null; }
+}
+async function doPublish(d, opts = {}) { require('./src/pagelinks').forget();
   // Texto alternativo: se guarda también en la biblioteca de medios
   for (const img of d.blocks ? blockImages(d.blocks) : d.sections.flatMap((x) => x.images)) {
     if (img.alt && Number(img.id) > 0) await wpCall(() => WP().updateMedia(cfg, img.id, { alt: img.alt })).catch((e) => log('No se pudo guardar el alt', img.id, e.message));
   }
   if (d.status === 'future' && (!d.scheduleAt || new Date(d.scheduleAt) <= new Date())) throw new Error('Elige una fecha y hora futuras para programar la entrada.');
-  // Si ya se guardó como borrador para la vista previa, se actualiza esa misma entrada
-  await externalizeMedia(d.blocks || d.sections || []).catch((e) => log('Medios externos al enviar:', e.message)); // los de Meta caducan
-  d.featuredImageId = await resolveFeatured(d);
-  await refreshHelper();
-  const fields = postFields(d, d.status || 'draft');
-  await backupBeforeSend(d, fields);
+  // Si ya se guardó como borrador para la vista previa, se actualiza esa misma entrada.
   // WordPress pone como «fecha de modificación» la de la entrada solo cuando se crea; cada vez que se
   // actualiza pasa a ser la de ese momento (y muchos temas muestran esa). Por eso el borrador que se guardó
   // para la vista previa se borra y la entrada se crea de nuevo, de una sola vez.
-  let post;
-  if (d.postId && d.recreate && WP().deletePost) {
-    await wpCall(() => WP().deletePost(cfg, d.postId, d.type)).catch((e) => log('No se pudo borrar el borrador de la vista previa', d.postId, e.message));
-    post = await wpCall(() => WP().createPost(cfg, fields));
-  } else {
-    post = await wpCall(() => (d.postId ? WP().updatePost(cfg, d.postId, fields) : WP().createPost(cfg, fields)));
-  }
-  cfg.sentContent = cfg.sentContent || {};
-  cfg.sentContent[post.ID] = fields.content;
-  const ids = Object.keys(cfg.sentContent); if (ids.length > 200) delete cfg.sentContent[ids[0]];
-  const editUrl = editUrlFor(post.ID, d.type);
-  const url = WP().publicUrl(cfg, post.URL);
-  cfg.exported = cfg.exported || {};
-  for (const k of d.keys || []) cfg.exported[k] = { postId: post.ID, url, editUrl, title: d.title, status: post.status, at: new Date().toISOString() };
-  store.save(cfg);
-  const cacheNote = await purgeAfterSend(post);
-  return { postId: post.ID, url, editUrl, status: post.status, date: post.date, modified: post.modified || null, exported: cfg.exported, cacheNote };
+  return SS.runSend(d, {
+    wp: WP(), cfg, prog: sendProg, emit: sendEmit, log, isAuth: (e) => e instanceof wp.AuthError || e?.name === 'AuthError', isSelf: isSelf(),
+    noRetry: !!(opts.fromQueue || d.offline),
+    collectUrls: (x) => VQ().collectExpiring(x.blocks || x.sections || []),
+    replaceUrls: (x, map) => VQ().replaceUrls(x.blocks || x.sections || [], map),
+    uploadUrl: async (u) => uploadMetaUrl(u),
+    probeFor: probeRemote,
+    resolveFeatured: (x) => resolveFeatured(x),
+    buildFields: (x) => postFields(x, x.status || 'draft'),
+    beforePost: async (x, fields) => { await refreshHelper(); await backupBeforeSend(x, fields); },
+    deletePost: (x) => wpCall(() => WP().deletePost(cfg, x.postId, x.type)).catch((e) => log('No se pudo borrar el borrador de la vista previa', x.postId, e.message)),
+    afterPost: async (post, x, fields) => {
+      cfg.sentContent = cfg.sentContent || {};
+      cfg.sentContent[post.ID] = fields.content;
+      const ids = Object.keys(cfg.sentContent); if (ids.length > 200) delete cfg.sentContent[ids[0]];
+      const editUrl = editUrlFor(post.ID, x.type);
+      const url = WP().publicUrl(cfg, post.URL);
+      cfg.exported = cfg.exported || {};
+      for (const k of x.keys || []) cfg.exported[k] = { postId: post.ID, url, editUrl, title: x.title, status: post.status, at: new Date().toISOString() };
+      store.save(cfg);
+      const cacheNote = await purgeAfterSend(post);
+      return { postId: post.ID, url, editUrl, status: post.status, date: post.date, modified: post.modified || null, exported: cfg.exported, cacheNote };
+    },
+  });
 }
-// Si falla por red o servidor (5xx), el envío queda en cola (userData/send-queue.json) y se reintenta solo
-handle('draft:publish', async (d) => {
+// Si falla por red o servidor (5xx), el envío queda en cola (userData/send-queue.json) y se reintenta solo.
+// Si la entrada cambió en WordPress mientras tanto, queda en espera hasta que la persona decida.
+async function publishOrQueue(d) {
   try { return await doPublish(d); } catch (e) {
+    if (SS.isConflict(e)) {
+      queueAdd(d, e.message);
+      const it = sendQueue.find((q) => q.key === SQ.keyOf(d));
+      if (it) sendQueue = SQ.hold(sendQueue, it.id, 'conflict', { conflictAt: e.modified || null });
+      queueSave();
+      return { queued: true, conflict: true, pending: sendQueue.length, exported: cfg.exported };
+    }
     if (!require('./src/sendqueue').isNetworkError(e)) throw e;
     log('Envío en cola por falta de conexión:', e.message);
     queueAdd(d, e.message);
-    return { queued: true, pending: sendQueue.length, exported: cfg.exported };
+    return { queued: true, pending: sendQueue.length, exported: cfg.exported, progress: sendProg.brief(SQ.keyOf(d)) };
   }
-});
+}
+handle('draft:publish', (d) => publishOrQueue(d));
 
 // --- IA ---
 const sendToast = (msg) => { try { mainWin?.webContents.send('toast', msg); } catch { /* ventana cerrada */ } };
@@ -1098,7 +1135,15 @@ handle('posts:merge', async (list) => {
 handle('exported:forget', (keys) => { for (const k of keys) delete cfg.exported?.[k]; store.save(cfg); return cfg.exported || {}; });
 
 // --- Pestaña «Blog»: gestión de entradas y páginas ---
-handle('blog:list', (opts) => wpCall(() => WP().listPosts(cfg, opts)));
+// Caché local (src/offlinecache.js): sin conexión, el Blog, Inicio y las entradas abiertas antes se leen de aquí
+const offCache = require('./src/offlinecache').make(path.join(app.getPath('userData'), 'offline-cache.json'));
+handle('blog:list', async (opts) => {
+  try { const r = await wpCall(() => WP().listPosts(cfg, opts)); offCache.putList(opts, r); return r; } catch (e) {
+    if (!SQ_().isNetworkError(e)) throw e;
+    const c = offCache.getList(opts); if (!c) throw e;
+    return { ...c.value, cached: { at: c.at } };
+  }
+});
 handle('blog:dates', (opts) => wpCall(() => WP().listDates(cfg, opts)));
 // Mantiene al día el estado guardado de las publicaciones exportadas que apuntan a esa entrada
 function markExported(postId, status) {
@@ -2077,9 +2122,20 @@ const queueFile = () => path.join(app.getPath('userData'), 'send-queue.json');
 let sendQueue = [];
 let queueTimer = null, queueRunning = false;
 try { const j = JSON.parse(fs.readFileSync(queueFile(), 'utf8')); if (Array.isArray(j)) sendQueue = j; } catch { /* sin cola */ }
+const queueView = () => SQ.view(sendQueue).map((it) => ({ ...it, progress: sendProg.brief(it.key) }));
+// Envíos que se quedaron a medias al cerrar Ecos: en espera hasta que la persona pulse «Continuar»
+try {
+  sendProg.prune();
+  for (const r of sendProg.all()) {
+    if (!r.running) continue;
+    if (!sendQueue.some((q) => q.key === r.key) && r.payload) sendQueue = SQ.enqueue(sendQueue, r.payload, Date.now(), 'Ecos se cerró a mitad del envío');
+    sendQueue = sendQueue.map((q) => (q.key === r.key ? { ...q, hold: 'interrupted' } : q));
+    sendProg.stop(r.key);
+  }
+} catch (e) { log('Envíos a medias:', e.message); }
 function queueSave() {
-  try { fs.writeFileSync(queueFile(), JSON.stringify(sendQueue)); } catch (e) { log('No se pudo guardar la cola de envíos', e.message); }
-  try { if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('queue:update', SQ.view(sendQueue)); } catch { /* ventana cerrada */ }
+  try { SS.atomicWrite(queueFile(), JSON.stringify(sendQueue)); } catch (e) { log('No se pudo guardar la cola de envíos', e.message); }
+  try { if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('queue:update', queueView()); } catch { /* ventana cerrada */ }
   clearTimeout(queueTimer);
   const wake = SQ.nextWake(sendQueue);
   if (wake) queueTimer = setTimeout(queueRun, Math.max(1000, wake - Date.now()));
@@ -2093,24 +2149,33 @@ async function queueRun() {
     for (const it of SQ.due(sendQueue, Date.now())) {
       if (!sendQueue.some((x) => x.id === it.id)) continue; // descartado o sustituido mientras tanto
       try {
-        const r = await doPublish(it.payload);
+        const r = await doPublish(it.payload, { fromQueue: true });
         sendQueue = SQ.remove(sendQueue, it.id);
         log('Envío en cola completado', it.title);
         sendToast(`El envío en cola «${it.title}» se ha hecho.`);
         queueNotify('Ecos', `«${it.title}» se ha enviado a WordPress.`);
         try { mainWin?.webContents.send('queue:done', { title: it.title, url: r.url, exported: r.exported }); } catch { /* nada */ }
       } catch (e) {
-        if (SQ.isNetworkError(e)) sendQueue = SQ.failed(sendQueue, it.id, Date.now(), e.message);
-        else { sendQueue = SQ.remove(sendQueue, it.id); log('Envío en cola descartado', it.title, e.message); sendToast(`No se pudo completar el envío en cola «${it.title}»: ${e.message}`, true); }
+        if (SS.isConflict(e)) { sendQueue = SQ.hold(sendQueue, it.id, 'conflict', { conflictAt: e.modified || null, lastError: e.message }); sendToast(`«${it.title}» ha cambiado en WordPress: decide qué hacer con tu versión.`, true); }
+        else if (SQ.isNetworkError(e)) sendQueue = SQ.failed(sendQueue, it.id, Date.now(), e.message);
+        else { sendProg.remove(it.key); sendQueue = SQ.remove(sendQueue, it.id); log('Envío en cola descartado', it.title, e.message); sendToast(`No se pudo completar el envío en cola «${it.title}»: ${e.message}`, true); }
       }
       queueSave();
     }
   } finally { queueRunning = false; queueSave(); }
 }
-handle('queue:list', () => SQ.view(sendQueue));
-handle('queue:retry', (id) => { sendQueue = SQ.retryNow(sendQueue, id || null, Date.now()); queueSave(); queueRun(); return SQ.view(sendQueue); });
-handle('queue:discard', (id) => { sendQueue = SQ.remove(sendQueue, id); queueSave(); return SQ.view(sendQueue); });
-handle('queue:online', () => { if (sendQueue.length) { sendQueue = SQ.retryNow(sendQueue, null, Date.now()); queueSave(); queueRun(); } return SQ.view(sendQueue); });
+handle('queue:list', () => queueView());
+handle('queue:retry', (id) => { sendQueue = SQ.retryNow(sendQueue, id || null, Date.now()); queueSave(); queueRun(); return queueView(); });
+handle('queue:discard', (id) => { const it = sendQueue.find((q) => q.id === id); if (it) sendProg.remove(it.key); sendQueue = SQ.remove(sendQueue, id); queueSave(); return queueView(); });
+handle('queue:online', () => { if (sendQueue.length) { sendQueue = SQ.retryNow(sendQueue, null, Date.now()); queueSave(); queueRun(); } return queueView(); });
+// Entrada cambiada en WordPress mientras estabas sin conexión: 'overwrite' (sobrescribir) o 'copy' (guardar como copia nueva)
+handle('queue:resolve', (id, how) => {
+  const it = sendQueue.find((q) => q.id === id); if (!it) return queueView();
+  if (how === 'overwrite') { it.payload = { ...it.payload, overwrite: true }; }
+  else if (how === 'copy') { sendProg.remove(it.key); it.payload = { ...it.payload, postId: null, recreate: false, baseModified: null, title: `${it.payload.title} (copia)`, slug: '', keys: [] }; it.key = SQ.keyOf(it.payload); it.title = it.payload.title; }
+  else throw new Error('Opción no válida');
+  sendQueue = SQ.retryNow(sendQueue, id, Date.now()); queueSave(); queueRun(); return queueView();
+});
 handle('app:repair', async () => installPublished());
 
 handle('update:check', () => { updater.check(true); return updater.current(); });

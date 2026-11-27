@@ -14,7 +14,7 @@ const draftPayload = (status) => ({
   featuredImageId: draft.featuredImageId, featuredImageUrl: featuredUrl(), keepDate: draft.isNew ? false : $('#d-keepdate').checked, date: draft.date, keys: draftKeys,
   slug: slugify($('#d-slug').value),
   ...(seoInfo.writable ? { seoKey: seoInfo.key, seoDesc: $('#d-seodesc').value.trim() } : {}),
-  recreate: !!draft.previewOnly,
+  recreate: !!draft.previewOnly, baseModified: draft.postId && !draft.isNew ? (draft.wpModified || null) : null, offline: !!window.Net?.offline,
   pageBg: PageBg.normalize(draft.pageBg),
   ...(draft.astra && typeof astraAvailable === 'function' && astraAvailable() ? { astra: draft.astra } : {}), // diseño de la página de Astra (metas)
 });
@@ -76,7 +76,13 @@ $('#send').onclick = (e) => busy(e.target, async () => {
   }
   if (!await multiPreSend()) return;
   const res = await window.api.publish(draftPayload(MU.sendStatus(when, currentMe())));
-  if (res.queued) { exported = res.exported || exported; toast(t('Sin conexión: el envío queda en cola y se hará solo')); return; }
+  if (res.queued) {
+    exported = res.exported || exported; window.Net?.sendDone();
+    if (res.conflict) { toast(t('Esta entrada ha cambiado en WordPress. Tu envío espera en «Envíos pendientes»: compara, sobrescribe o guarda una copia.'), true); $('#q-ind').click(); }
+    else toast(window.Net?.offline ? t('Sin conexión: tu envío queda en la cola y se enviará solo cuando vuelva la conexión.') : t('No se ha podido enviar ahora: queda en la cola y se reintentará solo.'));
+    draftDirty = false; return;
+  }
+  window.Net?.sendDone();
   exported = res.exported; lastSent = res; draft.postId = res.postId || draft.postId; draft.wpModified = res.modified || draft.wpModified; draft.previewOnly = false; window.api.autosaveClear().catch(() => {}); draftDirty = false; renderWpState(res.status, res.url);
   const pg = isPageDraft();
   $('#sent-text').textContent = res.status === 'publish' ? (pg ? t('¡Página publicada!') : t('¡Entrada publicada!'))

@@ -78,6 +78,7 @@ async function openFromWp(postId, keys, type = 'post', opts = {}) {
   toast(type === 'page' ? t('Abriendo la página de WordPress…') : t('Abriendo la entrada de WordPress…'));
   const r = (await window.api.pullPost(postId, type)) || {};
   r.blocks = Array.isArray(r.blocks) ? r.blocks : [];
+  if (r.cached) toast(t('Sin conexión: se abre la última versión guardada ({w}). Al enviar se avisará si ha cambiado en WordPress.', { w: Net.cacheNote(r.cached.at) }));
   exported = r.exported || exported;
   const imgs = window.BlockEditor.flat(r.blocks).flatMap((b) => (b.img ? [b.img] : b.images || []));
   const vids = window.BlockEditor.flat(r.blocks).filter((b) => b.type === 'video' && b.video?.id).map((b) => ({ ...b.video, type: 'video' }));

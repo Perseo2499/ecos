@@ -25,10 +25,12 @@ function enqueue(queue, d, now = Date.now(), errMsg = '') {
 }
 const failed = (queue, id, now, errMsg) => queue.map((q) => (q.id === id ? { ...q, attempts: q.attempts + 1, nextAt: now + backoff(q.attempts + 1), lastError: String(errMsg || '').slice(0, 300) } : q));
 const remove = (queue, id) => queue.filter((q) => q.id !== id);
-const due = (queue, now) => queue.filter((q) => q.nextAt <= now);
-const retryNow = (queue, id, now) => queue.map((q) => (!id || q.id === id ? { ...q, nextAt: now } : q));
-const nextWake = (queue) => (queue.length ? Math.min(...queue.map((q) => q.nextAt)) : 0);
+// hold: 'interrupted' (Ecos se cerró a mitad) o 'conflict' (cambió en WordPress): no se procesa solo hasta que la persona decida
+const due = (queue, now) => queue.filter((q) => q.nextAt <= now && !q.hold);
+const hold = (queue, id, why, extra = {}) => queue.map((q) => (q.id === id ? { ...q, hold: why, ...extra } : q));
+const retryNow = (queue, id, now) => queue.map((q) => (id ? (q.id === id ? { ...q, nextAt: now, hold: '' } : q) : (q.hold ? q : { ...q, nextAt: now })));
+const nextWake = (queue) => { const l = queue.filter((q) => !q.hold); return l.length ? Math.min(...l.map((q) => q.nextAt)) : 0; };
 // Lo que ve la ventana (sin el contenido)
 const view = (queue) => queue.map(({ payload, ...rest }) => rest);
 
-module.exports = { isNetworkError, backoff, keyOf, enqueue, failed, remove, due, retryNow, nextWake, view, BACKOFF_MS };
+module.exports = { isNetworkError, backoff, keyOf, enqueue, failed, remove, due, hold, retryNow, nextWake, view, BACKOFF_MS };

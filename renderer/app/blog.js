@@ -166,6 +166,7 @@ async function loadBlog() {
     const r = await window.api.blogList({ ...blogFilters(), page: blog.page, number: blog.per, order: blog.order });
     blog.loaded = true; blog.found = r.found; syncRange(); syncFindBtn();
     renderBlog(r.items); bhSync();
+    if (r.cached) list.insertAdjacentHTML('afterbegin', `<p class="hint pad cache-note"><span class="ms">history</span> ${escHtml(Net.cacheNote(r.cached.at))}</p>`);
     loadBlogDates(r.found); blogLane.bind();
   } catch (e) { errBox(list, e, loadBlog); }
 }

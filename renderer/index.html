@@ -22,6 +22,7 @@
   </nav>
   <button id="gs-open" class="btn text icon-only gs-open" data-i18n-title title="Buscar en todo (Ctrl+K)"><span class="ms">search</span></button>
   <div class="status">
+    <span id="off-ind" class="pill off-ind hidden" role="status" aria-live="polite"><span class="ms">cloud_off</span><span id="off-text"></span></span>
     <span class="q-wrap"><button id="q-ind" class="pill q-ind hidden" type="button" aria-haspopup="true" aria-expanded="false"><span class="ms">cloud_off</span><span id="q-count">0</span></button>
       <div id="q-panel" class="q-panel hidden" role="dialog" aria-label="Envíos pendientes">
         <div class="q-head"><b data-i18n>Envíos pendientes</b><button id="q-retry-all" class="btn text small" data-i18n>Reintentar todo</button></div>
@@ -131,6 +132,7 @@
           <button id="preview" class="btn outlined"><span class="ms">preview</span><span data-i18n>Vista previa</span></button>
           <button id="send" class="btn filled"><span class="ms">send</span><span data-i18n>Enviar a WordPress</span></button>
         </div>
+        <div id="send-prog" class="send-prog hidden" role="status" aria-live="polite"><span id="send-prog-text"></span><progress id="send-prog-bar" max="100" value="0"></progress></div>
         <div id="ed-lock" class="ed-lock hidden" role="alert"></div>
         <div class="ed-body">
           <!-- Bandeja de fotos y vídeos: se arrastran al lienzo -->
@@ -1139,6 +1141,7 @@
 <script src="app/search.js"></script>
 <script src="app/devcli.js"></script>
 <script src="app/sendqueue-ui.js"></script>
+<script src="app/offline.js"></script>
 <script src="app/boot.js"></script>
 </body>
 </html>
