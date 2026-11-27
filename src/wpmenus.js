@@ -105,6 +105,18 @@ async function saveWidgets(cfg, d) {
   let calls = 0;
   for (const id of d.del || []) await run(`Quitar ${id}`, async () => { calls++; await req(cfg, `/wp/v2/widgets/${id}?force=true`, { method: 'DELETE' }); });
   for (const a of d.add || []) await run('Nuevo widget', async () => { calls++; const r = await req(cfg, '/wp/v2/widgets', { method: 'POST', json: { id_base: a.idBase, sidebar: a.sidebar, instance: { raw: a.raw } } }); ids.set(a.tmp, r.id); });
+  // WordPress a veces deja un widget recién creado en «inactivos»: se comprueba dónde ha quedado y se coloca donde se pidió
+  const placed = {};
+  for (const a of d.add || []) if (ids.has(a.tmp)) (placed[a.sidebar] = placed[a.sidebar] || []).push(ids.get(a.tmp));
+  for (const [zone, news] of Object.entries(placed)) {
+    await run(`Zona ${zone}`, async () => {
+      calls++;
+      const z = await req(cfg, `/wp/v2/sidebars/${zone}?context=edit`);
+      const have = (z.widgets || []).map((x) => String(typeof x === 'object' ? x.id : x));
+      const missing = news.filter((id) => !have.includes(id));
+      if (missing.length) { calls++; await req(cfg, `/wp/v2/sidebars/${zone}`, { method: 'POST', json: { widgets: [...have, ...missing] } }); }
+    });
+  }
   for (const u of d.upd || []) await run(`Widget ${u.id}`, async () => { calls++; await req(cfg, `/wp/v2/widgets/${u.id}`, { method: 'POST', json: { instance: { raw: u.raw } } }); });
   for (const o of d.order || []) await run(`Zona ${o.sidebar}`, async () => { calls++; await req(cfg, `/wp/v2/sidebars/${o.sidebar}`, { method: 'POST', json: { widgets: o.widgets.map(real) } }); });
   return { errors, calls, ids: Object.fromEntries(ids) };

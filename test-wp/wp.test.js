@@ -236,7 +236,7 @@ test('SEO completo (complemento): escribir y leer canónica, indexación, palabr
   assert.equal(g0.plugin, 'yoast');
   assert.ok(g0.fields && g0.fields.noindex === false, 'se lee de vuelta el estado inicial');
   const canon = W.publicBase(cfg).replace(/\/$/, '') + '/canonica-' + TAG.replace(/\s+/g, '-').toLowerCase() + '/';
-  const want = { focusKw: 'palabra clave de prueba', canonical: canon, noindex: true, nofollow: false, ogTitle: 'OG ' + TAG, ogDesc: 'Descripción para Facebook', ogImage: S.img.url, ogImageId: S.img.id, twTitle: 'X ' + TAG, twDesc: 'Descripción para X', twImage: S.img.url, twImageId: S.img.id };
+  const want = { focusKw: 'palabra clave de prueba', canonical: canon, noindex: false, nofollow: false, ogTitle: 'OG ' + TAG, ogDesc: 'Descripción para Facebook', ogImage: S.img.url, ogImageId: S.img.id, twTitle: 'X ' + TAG, twDesc: 'Descripción para X', twImage: S.img.url, twImageId: S.img.id };
   const saved = await W.seoSave(cfg, S.postId, want);
   assert.deepEqual(SM.diff(want, saved.fields), {}, 'lo guardado vuelve igual');
   const again = await W.seoGet(cfg, S.postId);
@@ -248,12 +248,21 @@ test('SEO completo (complemento): escribir y leer canónica, indexación, palabr
   assert.match(html, /<meta property="og:description" content="Descripción para Facebook"/);
   assert.match(html, /<meta property="og:image" content="[^"]+/);
   assert.equal(tag(/<link rel="canonical" href="([^"]*)"/), canon, 'canonical');
-  assert.match(tag(/<meta name="robots" content="([^"]*)"/), /noindex/, 'robots noindex');
   assert.equal(tag(/<meta name="twitter:title" content="([^"]*)"/), 'X ' + TAG, 'twitter:title');
-  // quitar noindex y canónica: la web los quita
-  await W.seoSave(cfg, S.postId, SM.diff(saved.fields, { ...saved.fields, noindex: false, canonical: '' }));
+  assert.doesNotMatch(tag(/<meta name="robots" content="([^"]*)"/) || '', /noindex/, 'indexable por defecto');
+  // noindex: Yoast pone «noindex» en robots y, a propósito, deja de escribir la canónica en las páginas noindex
+  await W.seoSave(cfg, S.postId, { noindex: true });
+  assert.equal((await W.seoGet(cfg, S.postId)).fields.noindex, true, 'noindex se lee de vuelta');
+  html = await fetchPublic(S.postUrl);
+  assert.match(tag(/<meta name="robots" content="([^"]*)"/), /noindex/, 'robots noindex');
+  // quitar noindex: vuelve la canónica
+  await W.seoSave(cfg, S.postId, { noindex: false });
   html = await fetchPublic(S.postUrl);
   assert.doesNotMatch(tag(/<meta name="robots" content="([^"]*)"/) || '', /noindex/, 'sin noindex');
+  assert.equal(tag(/<link rel="canonical" href="([^"]*)"/), canon, 'la canónica vuelve');
+  // quitar la canónica: la web usa la propia
+  await W.seoSave(cfg, S.postId, { canonical: '' });
+  html = await fetchPublic(S.postUrl);
   assert.notEqual(tag(/<link rel="canonical" href="([^"]*)"/), canon, 'ya no usa la canónica antigua');
   // un campo fuera de la lista blanca no se puede colar
   await W.request(cfg, `/ecos/v1/seo/${S.postId}`, { method: 'POST', json: { fields: { evil: 'x', '_edit_lock': '1' } } });
