@@ -894,6 +894,9 @@ function mixedGalleryBlock(b, cols) {
   return `<!-- wp:html -->\n<div class="ecos-galeria" id="${id}" data-cols="${cols}" style="display:grid;grid-template-columns:repeat(${cols},minmax(0,1fr));gap:8px;margin:2em 0"><style>${css}</style>${figs}</div>\n<!-- /wp:html -->`;
 }
 
+// Bloque sincronizado (patrón sincronizado de WordPress): solo la referencia; WordPress pone el contenido al mostrarlo
+const syncedBlock = (ref) => `<!-- wp:block {"ref":${Math.floor(Number(ref))}} /-->`;
+
 function composeBlocks(blocks, opts = {}) {
   const all = flatBlocks(blocks);
   const ctx = { anchors: headingAnchors(all), all, fx: new Set() };
@@ -996,11 +999,12 @@ function composeList(blocks, opts, ctx) {
       case 'video': if (b.video) out.push(videoBlock(b.video, b.caption, { align: b.align, width: b.width, ratio: b.ratio, frame: b.frame, fx: b.fx }, ctx.fx)); break;
       case 'embed': if (b.url) out.push(b.provider === 'instagram' || b.provider === 'facebook' || !b.provider ? embedBlock(b.url, b.provider || 'instagram') : embedFull(b)); break;
       case 'raw': if (b.markup) out.push(b.markup); break; // bloque de WordPress que Ecos conserva sin tocar
+      case 'synced': if (Number(b.ref) > 0) out.push(syncedBlock(b.ref)); break; // bloque sincronizado: solo la referencia al wp_block
       case 'separator': out.push('<!-- wp:separator -->\n<hr class="wp-block-separator has-alpha-channel-opacity"/>\n<!-- /wp:separator -->'); break;
       default: break;
     }
     // diseño universal (espaciado, bordes, fondo, dispositivos, animación, tipografía): sobre el bloque ya escrito
-    if (b.type !== 'raw' && Design.hasDesign(b)) for (let k = first; k < out.length; k++) out[k] = Design.decorate(out[k], b, (key) => ctx.fx.add(key));
+    if (b.type !== 'raw' && b.type !== 'synced' && Design.hasDesign(b)) for (let k = first; k < out.length; k++) out[k] = Design.decorate(out[k], b, (key) => ctx.fx.add(key));
   }
   if (floating) out.push(CLEAR_BLOCK);
   return out.join('\n\n');

@@ -37,6 +37,11 @@ contextBridge.exposeInMainWorld('api', {
   publish: (d) => call('draft:publish', d),
   previewDraft: (d) => call('draft:preview', d),
   composeDraft: (blocks) => call('draft:compose', blocks),
+  blockPatterns: () => call('blocks:patterns'),
+  syncedList: () => call('blocks:synced'),
+  syncedGet: (id) => call('blocks:syncedGet', id),
+  syncedSave: (o) => call('blocks:syncedSave', o),
+  parseBlocks: (content) => call('blocks:parse', content),
   peekCss: () => call('draft:peekCss'),
   convertSpectra: (blocks) => call('spectra:convert', blocks),
   pullPost: (id, type) => call('post:pull', id, type),
@@ -191,6 +196,8 @@ contextBridge.exposeInMainWorld('api', {
 
   // Ajustes
   exportConfig: (withSecrets) => call('config:export', withSecrets),
+  templatesExport: (json) => call('templates:export', json),
+  templatesImport: () => call('templates:import'),
   importConfig: () => call('config:import'),
   appInfo: () => call('app:info'),
   openData: () => call('app:openData'),

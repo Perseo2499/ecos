@@ -208,6 +208,8 @@ check('sección, columnas y botón con colores del tema', [
   { id: 'tb1', type: 'buttons', html: 'Pulsa', url: 'https://x.org', bg: '#e04400', color: '#ffffff', ...TH({ bg: ['accent', '#e04400'], color: ['base', '#ffffff'] }) },
   { id: 'tb2', type: 'buttons', html: 'Contorno', url: 'https://x.org', variant: 'outline', color: '#e04400', ...TH({ color: ['accent', '#e04400'] }) }], ['core/group', 'core/columns', 'core/button']);
 
+check('bloque sincronizado (wp:block con ref, bloque dinámico)', [P('Antes'), { id: 'sy1', type: 'synced', ref: 42, title: 'Aviso' }], ['core/paragraph', 'core/block']);
+
 test('el validador detecta de verdad un bloque mal formado', () => {
   const { found } = problems('<!-- wp:embed {"url":"https://a.b/x","type":"rich","providerNameSlug":"instagram"} -->\n<figure class="wp-block-embed is-type-rich is-provider-instagram"><div class="wp-block-embed__wrapper">\nhttps://a.b/x\n</div></figure>\n<!-- /wp:embed -->');
   assert.ok(found.length >= 1, 'a un embed sin su clase wp-block-embed-* debe invalidarlo');

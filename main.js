@@ -612,6 +612,13 @@ handle('draft:preview', async (d) => {
   return { postId: post.ID, previewUrl: `${base}/?p=${post.ID}&preview=true` };
 });
 handle('draft:compose', (blocks) => composeBlocks(blocks));
+// Patrones de la web y bloques sincronizados (wp_block)
+const needBlocks = () => { if (!isSelf()) throw new Error('Los patrones y bloques sincronizados solo están disponibles con «Mi web (wp-admin)» en Conexiones → WordPress.'); };
+handle('blocks:patterns', async () => { needBlocks(); return wpCall(() => require('./src/wpblocks').listPatterns(cfg)); });
+handle('blocks:synced', async () => { needBlocks(); return wpCall(() => require('./src/wpblocks').listSynced(cfg)); });
+handle('blocks:syncedGet', async (id) => { needBlocks(); return wpCall(() => require('./src/wpblocks').getSynced(cfg, id)); });
+handle('blocks:syncedSave', async (o) => { needBlocks(); return wpCall(() => require('./src/wpblocks').saveSynced(cfg, { id: o.id, title: o.title, sync: o.sync, content: composeBlocks(o.blocks || []) })); });
+handle('blocks:parse', (content) => require('./src/parseblocks').parseBlocks(String(content || '')));
 // Estilos de la web (paleta, tamaños y fuentes del tema), en caché en cfg.themeStyles; se renuevan cada 12 horas o con force
 const TSM = () => require('./src/themestyles');
 const themeFresh = (c) => c && c.site === cfg.wpUrl && Date.now() - (c.at || 0) < 12 * 3600e3;
@@ -984,6 +991,20 @@ handle('config:export', async (withSecrets) => {
   if (!withSecrets && out.ai?.providers) for (const p of Object.values(out.ai.providers)) delete p.key;
   fs.writeFileSync(r.filePath, JSON.stringify(out, null, 2));
   return r.filePath;
+});
+// Plantillas de contenido propias: pasar a otro ordenador (archivo .json; la validación está en renderer/templates.js)
+handle('templates:export', async (json) => {
+  const r = await dialog.showSaveDialog(mainWin, { title: 'Guardar mis plantillas', defaultPath: `ecos-plantillas-${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] });
+  if (r.canceled) return false;
+  fs.writeFileSync(r.filePath, String(json));
+  return r.filePath;
+});
+handle('templates:import', async () => {
+  const r = await dialog.showOpenDialog(mainWin, { title: 'Abrir plantillas', filters: [{ name: 'JSON', extensions: ['json'] }], properties: ['openFile'] });
+  if (r.canceled) return null;
+  const st = fs.statSync(r.filePaths[0]);
+  if (st.size > 20 * 1024 * 1024) throw new Error('El archivo es demasiado grande para ser un archivo de plantillas.');
+  return fs.readFileSync(r.filePaths[0], 'utf8');
 });
 handle('config:import', async () => {
   const r = await dialog.showOpenDialog(mainWin, { title: 'Abrir copia de la configuración', filters: [{ name: 'JSON', extensions: ['json'] }], properties: ['openFile'] });
