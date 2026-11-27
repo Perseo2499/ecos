@@ -5,7 +5,6 @@ const clLabel = (s) => ({ new: t('Nuevo'), improved: t('Mejorado'), fixed: t('Co
 const clLang = () => (window.I18N.lang === 'en' ? 'en' : 'es');
 let clInstalledVer = null;
 const clFilter = new Set(); // secciones activas (vacío = todas)
-let clOpenAll = false;
 
 // «hace 3 días» / «3 days ago» y fecha completa
 function clDates(iso) {
@@ -58,14 +57,16 @@ function clRenderList() {
     const full = body || clSectionsHtml(e);
     const { abs, rel } = clDates(e.date);
     const cur = clInstalledVer && Changelog.compareVersions(e.version, clInstalledVer) === 0;
+    if (cur && !q && !clFilter.size) continue; // la instalada ya se ve arriba, en «Novedades de esta versión»
     const d = document.createElement('details');
     d.className = 'cl-item' + (cur ? ' cur' : ''); d.dataset.v = e.version;
-    d.open = clOpenAll || !!q || clFilter.size > 0 || (!first && openNow.has(e.version));
+    d.open = !!q || clFilter.size > 0 || (!first && openNow.has(e.version));
     d.innerHTML = `<summary><span class="cl-ver">${escHtml(Changelog.label(e))}</span>${cur ? `<span class="cl-badge">${escHtml(t('Instalada'))}</span>` : ''}<span class="cl-title">${escHtml(Changelog.pick(e.title, lang))}</span><span class="cl-date" title="${escHtml(abs)}">${escHtml(rel)} · ${escHtml(abs)}</span><span class="ms cl-chev" aria-hidden="true">expand_more</span></summary><div class="cl-body">${full}</div>`;
     box.appendChild(d);
   }
   $('#cl-empty').classList.toggle('hidden', shown > 0);
-  $('#cl-toggle').textContent = clOpenAll ? t('Plegar todo') : t('Desplegar todo');
+  const n = Changelog.ENTRIES.filter((e) => !clInstalledVer || Changelog.compareVersions(e.version, clInstalledVer) !== 0).length;
+  $('#cl-hist-n').textContent = t('{n} versiones anteriores', { n });
 }
 
 function clRenderNow() {
@@ -112,7 +113,6 @@ async function initChangelogUi() {
   await clInstalled();
   clRenderFilters(); clRenderNow(); clRenderList();
   $('#cl-q').oninput = clRenderList;
-  $('#cl-toggle').onclick = () => { clOpenAll = !clOpenAll; $$('#cl-list details').forEach((d) => (d.open = clOpenAll)); $('#cl-toggle').textContent = clOpenAll ? t('Plegar todo') : t('Desplegar todo'); };
 }
 function clRefreshTexts() { if (!clInstalledVer) return; clRenderFilters(); clRenderNow(); clRenderList(); }
 
@@ -143,7 +143,7 @@ function showWhatsNew(list, cur) {
   };
   document.addEventListener('keydown', key, true);
   $('#cl-close', d).onclick = close;
-  $('#cl-all', d).onclick = () => { close(); document.querySelector('[data-tab="settings"]')?.click(); setTimeout(() => $('#cl-hist-h')?.scrollIntoView({ block: 'start' }), 80); };
+  $('#cl-all', d).onclick = () => { close(); document.querySelector('[data-tab="settings"]')?.click(); setTimeout(() => { const h = $('#cl-hist'); if (h) h.open = true; $('#cl-hist-h')?.scrollIntoView({ block: 'start' }); }, 80); };
   d.addEventListener('mousedown', (e) => { if (e.target === d) close(); });
   document.body.appendChild(d); $('#cl-close', d).focus();
 }

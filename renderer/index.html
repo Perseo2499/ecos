@@ -743,7 +743,8 @@
 
         <div class="card" id="set-updates">
           <div class="card-head"><span class="ms fill ic">system_update</span><h2 data-i18n>Actualizaciones</h2></div>
-          <div class="version-row"><span class="version" id="app-version">–</span><span id="update-detail" class="hint"></span></div>
+          <div class="version-row"><span class="version" id="app-version">–</span><span id="update-detail" class="hint"></span>
+            <span class="cl-top-actions"><button id="open-releases" class="btn text" data-i18n>Novedades en GitHub</button><button id="update-check" class="btn tonal"><span class="ms">refresh</span><span data-i18n>Buscar actualizaciones</span></button></span></div>
           <div class="set-row"><span data-i18n>Canal</span><b id="update-channel">–</b></div>
           <p class="hint" id="update-next"></p>
           <div id="cl-incoming" class="cl-box cl-incoming hidden" aria-live="polite"></div>
@@ -751,20 +752,15 @@
             <h3 id="cl-now-h" class="cl-h"><span class="ms fill">auto_awesome</span><span data-i18n>Novedades de esta versión</span></h3>
             <div id="cl-now"></div>
           </section>
-          <section class="cl-hist" aria-labelledby="cl-hist-h">
-            <h3 id="cl-hist-h" class="cl-h"><span class="ms fill">history</span><span data-i18n>Historial de versiones</span></h3>
+          <details class="cl-hist" id="cl-hist">
+            <summary id="cl-hist-h" class="cl-h cl-hist-sum"><span class="ms fill" aria-hidden="true">history</span><span data-i18n>Ver el historial de versiones</span><span class="cl-hist-n" id="cl-hist-n"></span><span class="ms cl-chev" aria-hidden="true">expand_more</span></summary>
             <div class="cl-tools">
               <input type="search" id="cl-q" class="cl-q" data-i18n-ph placeholder="Buscar en el historial" aria-label="Buscar en el historial">
               <div class="cl-filters" role="group" aria-label="Filtrar por tipo" id="cl-filters"></div>
-              <button type="button" class="btn text" id="cl-toggle">Desplegar todo</button>
             </div>
             <div id="cl-list" class="cl-list"></div>
             <p class="hint hidden" id="cl-empty" data-i18n>Ninguna versión coincide.</p>
-          </section>
-          <div class="card-actions">
-            <button id="open-releases" class="btn text" data-i18n>Novedades en GitHub</button>
-            <button id="update-check" class="btn tonal"><span class="ms">refresh</span><span data-i18n>Buscar actualizaciones</span></button>
-          </div>
+          </details>
         </div>
 
         <div class="card" id="set-advanced">
@@ -1050,14 +1046,13 @@
 <script src="i18n.js"></script>
 <script src="errors.js"></script>
 <script src="changelog.js"></script>
-<script src="changelog.js"></script>
 <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
-<script src="postfmt.js"></script>
 <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
 <script src="carousel.js"></script>
 <script src="normalize.js"></script>
 <script src="blogcheck.js"></script>
 <script src="datelane.js"></script>
+<script src="postfmt.js"></script>
 <script src="newposts.js"></script>
 <script src="autodrafts.js"></script>
 <script src="unify.js"></script>

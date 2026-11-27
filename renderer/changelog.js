@@ -8,6 +8,17 @@
 
   const ENTRIES = [
     {
+      version: '3.5.1', date: '2026-11-27',
+      title: c('Publicaciones con todo su detalle', 'Posts with all their details'),
+      new: [
+        c('En Publicaciones, cada publicación ocupa una fila: junto a la tarjeta se ven la fecha y la hora, la red con enlace a la original, la descripción completa y todas sus fotos y vídeos.', 'In Posts, each post takes a full row: next to the card you see the date and time, the network with a link to the original, the full description and all its photos and videos.'),
+        c('Conmutador «Detalle / Rejilla» para volver a la rejilla de antes.', '"Details / Grid" switch to go back to the previous grid.'),
+      ],
+      improved: [
+        c('Ajustes → Actualizaciones: «Buscar actualizaciones» está arriba, junto a la versión, y el historial queda plegado tras «Ver el historial de versiones».', 'Settings → Updates: "Check for updates" is at the top, next to the version, and the history is folded behind "Show the version history".'),
+      ],
+    },
+    {
       version: '3.5.0', date: '2026-11-27',
       title: c('Línea temporal e historial de versiones', 'Timeline and version history'),
       new: [
