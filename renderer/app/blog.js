@@ -125,16 +125,48 @@ function renderCalendar() {
 }
 
 // ---------------------------------------------------------------- Pestaña Blog
-const blog = { loaded: false, type: 'post', page: 1, per: 20, found: 0, problem: null }; // problem: { kind, ids } = filtro de la «Revisión»
+const blog = { loaded: false, type: 'post', page: 1, per: 20, found: 0, problem: null, order: dlOrder('blog'), dates: null, datesSig: '' }; // problem: { kind, ids } = filtro de la «Revisión»
+// Línea temporal lateral: los meses salen de las fechas de TODAS las entradas que cumplen los filtros (una petición ligera, aparte de la página que se ve);
+// al elegir un mes se calcula en qué página cae, se pide esa página a WordPress y se baja hasta su encabezado.
+const blogLane = createDateLane({
+  name: 'blog', label: t('Línea temporal del blog'), liveDrag: false,
+  isActive: () => $('#tab-blog').classList.contains('active') && ['post', 'page'].includes(blog.type) && !$('#b-list').classList.contains('hidden') && !document.body.classList.contains('editing'),
+  stickyEl: () => $('#tab-blog .b-head'), padEl: () => $$('#b-list, #b-listhead, #b-bulk, #b-health'), list: () => $('#b-list'),
+  watch: () => [$('#b-list')],
+  async jump(key, o) {
+    const page = DateLane.pageOfMonth(blogLane.counts(), key, blog.per);
+    const sticky = () => $('#tab-blog .b-head');
+    if (page !== blog.page || !$(`#b-list [data-dl="${key}"]`)) { blog.page = page; await loadBlog(); dlScrollTo($('#b-list'), key, sticky, false); return; }
+    dlScrollTo($('#b-list'), key, sticky, o.smooth);
+  },
+});
+function blogLaneUpdate() {
+  const counts = DateLane.countsByMonth(blog.dates || [], blog.order);
+  blogLane.update(counts, { order: blog.order });
+}
+// Pide las fechas de todas las entradas del filtro actual (solo si cambió el filtro o el total)
+function loadBlogDates(found) {
+  const f = blogFilters();
+  const sig = JSON.stringify(f);
+  if (sig === blog.datesSig && (blog.datesFound === found || blog.datesBusy)) return;
+  blog.datesSig = sig; blog.datesBusy = true; blog.datesFound = found;
+  Promise.resolve(window.api.blogDates?.(f)).then((r) => {
+    if (blog.datesSig !== sig) return; // se cambió el filtro mientras llegaban
+    blog.datesBusy = false;
+    blog.dates = Array.isArray(r) ? r : null;
+    blogLaneUpdate();
+  }).catch(() => { if (blog.datesSig === sig) { blog.datesBusy = false; blog.dates = null; blogLaneUpdate(); } });
+}
 const STATUS = () => ({ publish: t('Publicada'), draft: t('Borrador'), future: t('Programada'), pending: t('Pendiente'), private: t('Privada'), trash: t('Papelera') });
 async function loadBlog() {
   syncMine();
   const list = $('#b-list');
   list.innerHTML = `<p class="hint pad">${t('Cargando…')}</p>`;
   try {
-    const r = await window.api.blogList({ ...blogFilters(), page: blog.page, number: blog.per });
+    const r = await window.api.blogList({ ...blogFilters(), page: blog.page, number: blog.per, order: blog.order });
     blog.loaded = true; blog.found = r.found; syncRange(); syncFindBtn();
     renderBlog(r.items); bhSync();
+    loadBlogDates(r.found); blogLane.bind();
   } catch (e) { errBox(list, e, loadBlog); }
 }
 // Menú emergente «⋯» (accesible con teclado: flechas, Inicio/Fin, Esc; se cierra al pulsar fuera)
@@ -195,9 +227,17 @@ function renderBlog(items) {
   $('#b-goto').max = pages; $('#b-goto').placeholder = String(blog.page);
   if (!items.length) { bItems = []; renderBulk(); list.innerHTML = `<div class="empty"><span class="ms">inbox</span><span>${t('No hay nada con estos filtros.')}</span></div>`; return; }
   list.innerHTML = '';
+  // Orden por fecha y encabezados por mes y, si hay varias en el mes, por día
+  const groups = DateLane.groupByMonth(items, (x) => x.date, blog.order);
+  const flat = [];
+  for (const g of groups) for (const d of g.days) for (const x of d.items) flat.push({ it: x, g, d });
+  items = flat.map((x) => x.it);
   bItems = items; bLast = -1;
   renderBulk();
-  for (const it of items) {
+  let lastG = null, lastD = null;
+  for (const { it, g, d } of flat) {
+    if (g !== lastG) { list.appendChild(dlMonthHeader(g)); lastG = g; lastD = null; }
+    if (g.showDays && d !== lastD) { list.appendChild(dlDayHeader(d)); lastD = d; }
     const row = document.createElement('div');
     row.className = 'b-row';
     // Fecha de la entrada (también en borradores); la de última modificación queda en el texto emergente
@@ -291,6 +331,8 @@ $$('#b-type button').forEach((b) => b.onclick = async () => {
   blog.page = 1; loadBlog();
 });
 $('#b-status').onchange = () => { blog.page = 1; loadBlog(); };
+$('#b-order').value = blog.order;
+$('#b-order').onchange = (e) => { blog.order = e.target.value === 'asc' ? 'asc' : 'desc'; dlSetOrder('blog', blog.order); blog.page = 1; loadBlog(); blogLaneUpdate(); };
 // «Solo las mías»: solo con web propia y sabiendo quién eres; se recuerda en este ordenador
 const mineOn = () => { try { return localStorage.getItem('ecos-only-mine') === '1' && !!CFG.wpMe?.id && CFG.wpMode === 'selfhosted'; } catch { return false; } };
 function syncMine() {
@@ -300,7 +342,7 @@ function syncMine() {
 }
 $('#b-mine').onchange = (e) => { try { localStorage.setItem('ecos-only-mine', e.target.checked ? '1' : '0'); } catch { /* sin almacenamiento */ } blog.page = 1; loadBlog(); };
 let bTimer; $('#b-search').oninput = () => { clearTimeout(bTimer); bTimer = setTimeout(() => { blog.page = 1; loadBlog(); }, 400); };
-$('#b-refresh').onclick = loadBlog;
+$('#b-refresh').onclick = () => { blog.datesFound = -1; loadBlog(); };
 $('#b-prev').onclick = () => { blog.page--; loadBlog(); };
 $('#b-next').onclick = () => { blog.page++; loadBlog(); };
 // «Nueva»: en Entradas, un menú (entrada o página en Ecos, o WordPress); en Páginas, una página nueva directamente

@@ -86,6 +86,10 @@
         <option value="pending" data-i18n>Sin pasar al blog</option>
         <option value="done" data-i18n>Ya en el blog</option>
       </select>
+      <select id="f-order" data-i18n-title title="Orden por fecha" aria-label="Orden por fecha">
+        <option value="desc" data-i18n>Más recientes</option>
+        <option value="asc" data-i18n>Más antiguas</option>
+      </select>
       <label class="switch" data-i18n-title title="Juntar la misma publicación de Instagram y Facebook"><input type="checkbox" id="f-merge" checked><span data-i18n>Juntar duplicados</span></label>
       <span class="f-view chips" id="f-view"><button class="chip active" data-v="list" data-i18n-title title="Lista"><span class="ms">grid_view</span></button><button class="chip" data-v="cal" data-i18n-title title="Calendario"><span class="ms">calendar_month</span></button></span>
       <button id="summary" class="btn text"><span class="ms">date_range</span><span data-i18n>Resumen</span></button>
@@ -347,6 +351,10 @@
         </span>
         <button id="b-range-clear" class="btn text icon-only hidden" data-i18n-title title="Quitar el filtro de fechas"><span class="ms">close</span></button>
       </div>
+      <select id="b-order" data-i18n-title title="Orden por fecha" aria-label="Orden por fecha">
+        <option value="desc" data-i18n>Más recientes</option>
+        <option value="asc" data-i18n>Más antiguas</option>
+      </select>
       <button id="b-health-btn" class="btn tonal b-health-btn hidden" aria-expanded="false" aria-controls="b-health"><span class="ms">fact_check</span><span data-i18n>Revisión</span><span id="b-health-badge" class="b-badge hidden"></span></button>
       <button id="b-find" class="btn text icon-only hidden" data-i18n-title title="Buscar y reemplazar"><span class="ms">find_replace</span></button>
       <button id="b-refresh" class="btn text icon-only" data-i18n-title title="Actualizar"><span class="ms">refresh</span></button>
@@ -1030,6 +1038,7 @@
 <script src="carousel.js"></script>
 <script src="normalize.js"></script>
 <script src="blogcheck.js"></script>
+<script src="datelane.js"></script>
 <script src="newposts.js"></script>
 <script src="autodrafts.js"></script>
 <script src="unify.js"></script>
@@ -1077,6 +1086,7 @@
 <script src="app/core.js"></script>
 <script src="app/connections.js"></script>
 <script src="app/calview.js"></script>
+<script src="app/datelane-ui.js"></script>
 <script src="app/posts.js"></script>
 <script src="app/seo.js"></script>
 <script src="app/editor.js"></script>

@@ -1086,6 +1086,7 @@ handle('exported:forget', (keys) => { for (const k of keys) delete cfg.exported?
 
 // --- Pestaña «Blog»: gestión de entradas y páginas ---
 handle('blog:list', (opts) => wpCall(() => WP().listPosts(cfg, opts)));
+handle('blog:dates', (opts) => wpCall(() => WP().listDates(cfg, opts)));
 // Mantiene al día el estado guardado de las publicaciones exportadas que apuntan a esa entrada
 function markExported(postId, status) {
   let changed = false;

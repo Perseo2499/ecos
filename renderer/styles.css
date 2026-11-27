@@ -3073,3 +3073,53 @@ form.dlg .field input, form.dlg .field label { width: 100%; box-sizing: border-b
 .raw-acts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
 .raw-acts .hint { font-size: 12.5px; }
 .a11y-all { padding: 4px 12px 8px; }
+
+/* ---------------------------------------------------------------- Línea temporal lateral (Redes y Blog) */
+.dl-h { grid-column: 1 / -1; margin: 22px 0 4px; font-size: 21px; font-weight: 500; letter-spacing: -.1px; color: var(--on-surface); }
+.dl-h:first-child { margin-top: 2px; }
+.dl-d { grid-column: 1 / -1; margin: 8px 0 -4px; font-size: 13px; font-weight: 600; color: var(--on-surface-var); text-transform: capitalize; }
+.blog-list .dl-d { margin: 6px 0 -2px; }
+.dl-pad { margin-right: 60px; }
+.dl { position: fixed; right: 6px; top: 150px; bottom: 16px; width: 52px; z-index: 12; display: flex; flex-direction: column; align-items: stretch; outline: none; user-select: none; -webkit-user-select: none; }
+.dl[hidden] { display: none; }
+.dl-track { position: relative; flex: 1; min-height: 40px; cursor: pointer; touch-action: none; }
+.dl-track::before { content: ''; position: absolute; right: 9px; top: 0; bottom: 0; width: 2px; border-radius: 2px; background: var(--outline-var); transition: background .2s, width .2s var(--ease), right .2s var(--ease); }
+.dl:hover .dl-track::before, .dl.drag .dl-track::before { background: color-mix(in srgb, var(--primary) 45%, var(--outline-var)); width: 4px; right: 8px; }
+.dl:focus-visible .dl-track::before { background: var(--primary); width: 4px; right: 8px; }
+.dl:focus-visible .dl-now::after { box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px color-mix(in srgb, var(--primary) 45%, transparent); }
+.dl-marks { position: absolute; inset: 0; pointer-events: none; }
+.dl-dot { position: absolute; right: 7px; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--outline); opacity: .55; }
+.dl-y { position: absolute; right: 20px; transform: translateY(-1px); font-size: 11.5px; font-weight: 600; line-height: 1; color: var(--on-surface-var); font-variant-numeric: tabular-nums; }
+.dl:hover .dl-y, .dl.drag .dl-y { color: var(--on-surface); }
+.dl-now, .dl-hover { position: absolute; right: 0; pointer-events: none; opacity: 0; transition: opacity .18s var(--ease); }
+.dl-now { width: 100%; height: 0; transition: opacity .18s var(--ease), top .09s linear; }
+.dl.drag .dl-now { transition: opacity .18s var(--ease); }
+.dl-now::after { content: ''; position: absolute; right: 5px; top: -9px; width: 10px; height: 18px; border-radius: 6px; background: var(--primary); box-shadow: 0 0 0 3px var(--surface); }
+.dl-now span { position: absolute; right: 22px; top: 0; transform: translateY(-50%); padding: 5px 11px; border-radius: var(--r-full); white-space: nowrap; font-size: 12.5px; font-weight: 600; line-height: 1;
+  background: var(--primary-container); color: var(--on-primary-container); box-shadow: var(--e2); transition: opacity .15s; }
+.dl.show .dl-now { opacity: 1; }
+.dl.hov .dl-now span { opacity: 0; }
+.dl-hover { right: 22px; transform: translateY(-50%); padding: 6px 12px; border-radius: var(--r-full); white-space: nowrap; font-size: 12.5px; font-weight: 600; line-height: 1;
+  background: var(--surface-c-highest); color: var(--on-surface); box-shadow: var(--e3); }
+.dl.hov .dl-hover { opacity: 1; }
+.dl-more { flex: none; align-self: flex-end; width: 28px; height: 28px; margin: 4px 0 0; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  background: var(--surface-c-high); color: var(--on-surface-var); transition: background .2s, color .2s; }
+.dl-more:hover { background: var(--primary-container); color: var(--on-primary-container); }
+.dl-more:disabled { opacity: .5; cursor: progress; }
+.dl-more .ms { font-size: 20px; }
+body.editing .dl { display: none; }
+:root[data-theme="dark"] .dl-now::after { box-shadow: 0 0 0 3px var(--surface); }
+:root[data-vinyl="on"] .dl-h { font-family: 'Doto', monospace; font-weight: 700; font-size: 17px; letter-spacing: 1px; text-transform: uppercase; }
+:root[data-vinyl="on"] .dl-d { font-family: 'Doto', monospace; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+:root[data-vinyl="on"] .dl-track::before { background: #2a2a2a; }
+:root[data-vinyl="on"] .dl:hover .dl-track::before, :root[data-vinyl="on"] .dl.drag .dl-track::before { background: var(--vinyl); }
+:root[data-vinyl="on"] .dl-dot { background: #6a6a6a; }
+:root[data-vinyl="on"] .dl-y { font-family: 'Doto', monospace; font-weight: 700; color: #bdbdbd; }
+:root[data-vinyl="on"] .dl-now::after { background: var(--vinyl); box-shadow: 0 0 0 3px #000; }
+:root[data-vinyl="on"] .dl-now span { background: #000; color: #fff; border: 1px solid var(--vinyl); font-family: 'Doto', monospace; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; }
+:root[data-vinyl="on"] .dl-hover { background: #000; color: #fff; border: 1px solid #3a3a3a; font-family: 'Doto', monospace; font-weight: 700; text-transform: uppercase; }
+:root[data-vinyl="on"] .dl-more { background: #1c1c1c; color: #fff; }
+/* Ventanas estrechas: la franja queda mínima (sin años) y, en las muy estrechas, se oculta */
+@media (max-width: 760px) { .dl { width: 24px; right: 2px; } .dl-y { display: none; } .dl-pad { margin-right: 28px; } .dl-now span { right: 24px; } .dl-hover { right: 24px; } }
+@media (max-width: 480px) { .dl { display: none; } .dl-pad { margin-right: 0; } }
+@media (prefers-reduced-motion: reduce) { .dl-now, .dl-track::before { transition: none !important; } }
