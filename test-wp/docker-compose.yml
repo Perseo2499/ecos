@@ -1,0 +1,53 @@
+# WordPress + MySQL para las pruebas de test-wp/ (CI y local). Uso: bash test-wp/setup.sh
+# Puerto: WP_PORT (8080 por defecto). Versión de WordPress: WP_IMAGE (wordpress:latest por defecto).
+name: ecos-wp-test
+
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wp
+      MYSQL_PASSWORD: wp
+      MYSQL_ROOT_PASSWORD: root
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  wordpress:
+    image: ${WP_IMAGE:-wordpress:latest}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${WP_PORT:-8080}:80"
+    environment: &wpenv
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wp
+      WORDPRESS_DB_PASSWORD: wp
+      WORDPRESS_DB_NAME: wordpress
+      # Sin esto WordPress no ofrece «contraseñas de aplicación» por http (solo por https)
+      WORDPRESS_CONFIG_EXTRA: |
+        define( 'WP_ENVIRONMENT_TYPE', 'local' );
+        define( 'FS_METHOD', 'direct' );
+    volumes:
+      - wpdata:/var/www/html
+      - ../build:/ecos-build:ro
+
+  wpcli:
+    image: wordpress:cli
+    user: "33:33"
+    depends_on:
+      - wordpress
+    environment: *wpenv
+    volumes:
+      - wpdata:/var/www/html
+      - ../build:/ecos-build:ro
+    profiles: ["tools"]
+
+volumes:
+  wpdata:
