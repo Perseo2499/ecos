@@ -88,8 +88,9 @@ $('#d-media-add').onclick = (e) => busy(e.target, async () => {
 
 function renderCats(checkedNames) {
   const box = $('#d-cats');
-  if (!categories.length) { box.innerHTML = `<span class="hint">${t('No se han podido cargar las categorías del blog.')}</span>`; return; }
-  box.innerHTML = categories.map((c) => `<label class="chip"><input type="checkbox" value="${escHtml(c.name)}" ${checkedNames.includes(c.name.toLowerCase()) ? 'checked' : ''}>${escHtml(c.name)}</label>`).join('');
+  const cats = draft?.cptCats || categories;
+  if (!cats.length) { box.innerHTML = `<span class="hint">${t('No se han podido cargar las categorías del blog.')}</span>`; return; }
+  box.innerHTML = cats.map((c) => `<label class="chip"><input type="checkbox" value="${escHtml(c.name)}" ${checkedNames.includes(c.name.toLowerCase()) ? 'checked' : ''}>${escHtml(c.name)}</label>`).join('');
 }
 
 // Plantillas

@@ -51,12 +51,12 @@ test('Inicio: barras de visitas', () => {
 });
 
 test('complemento 1.1: versión, PHP válido y zip con los archivos nuevos', () => {
-  assert.equal(W.helperBundledVersion(), '1.7.1');
+  assert.equal(W.helperBundledVersion(), '1.8.0');
   const dir = path.join(__dirname, '..', 'wp-plugin', 'ecos');
   const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ecos-zip-')), 'p.zip');
   const r = B.build(out);
-  for (const n of ['ecos/ecos.php', 'ecos/uninstall.php', 'ecos/includes/seo.php', 'ecos/includes/stats.php', 'ecos/assets/ecos-hit.js']) assert.ok(r.files.includes(n), n);
+  for (const n of ['ecos/ecos.php', 'ecos/uninstall.php', 'ecos/includes/seo.php', 'ecos/includes/stats.php', 'ecos/includes/fields.php', 'ecos/includes/lang.php', 'ecos/assets/ecos-hit.js']) assert.ok(r.files.includes(n), n);
   assert.ok(fs.readFileSync(out).includes(Buffer.from('includes/stats.php')));
   try { execFileSync('php', ['-v'], { stdio: 'ignore' }); } catch { return; }
-  for (const f of ['ecos.php', 'uninstall.php', 'includes/seo.php', 'includes/stats.php']) execFileSync('php', ['-l', path.join(dir, f)], { stdio: 'pipe' });
+  for (const f of ['ecos.php', 'uninstall.php', 'includes/seo.php', 'includes/stats.php', 'includes/fields.php', 'includes/lang.php']) execFileSync('php', ['-l', path.join(dir, f)], { stdio: 'pipe' });
 });

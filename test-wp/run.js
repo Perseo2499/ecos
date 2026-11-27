@@ -10,7 +10,7 @@ async function main() {
   let sim = null;
   if (args.includes('--sim')) {
     sim = await require('./sim-server').start();
-    Object.assign(process.env, { WP_URL: sim.url, WP_USER: sim.user, WP_APP_PASSWORD: sim.pass });
+    Object.assign(process.env, { WP_URL: sim.url, WP_USER: sim.user, WP_APP_PASSWORD: sim.pass, WP_EXPECT_CPT: '1', WP_EXPECT_LANG: '1' });
     console.log('Usando el servidor simulado en ' + sim.url);
   }
   const missing = ['WP_URL', 'WP_USER', 'WP_APP_PASSWORD'].filter((k) => !process.env[k]);

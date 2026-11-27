@@ -85,7 +85,7 @@ async function openFromWp(postId, keys, type = 'post', opts = {}) {
   draft = {
     title: r.title, excerpt: r.excerpt || '', slug: r.slug || '', tags: r.tags || [], categories: r.categories || [], blocks: r.blocks,
     featuredImageId: r.featured || null, keepFeaturedInBody: true, date: r.date, wpModified: r.modified || null, postId, previewOnly: false, wpStatus: r.status, sections: [], sourceText: '',
-    type: type === 'page' ? 'page' : 'post', parent: r.parent || 0, seoDesc: r.seoDesc || '', pageBg: r.pageBg || null, astra: r.astra || undefined,
+    type: type === 'page' ? 'page' : type || 'post', parent: r.parent || 0, lang: r.lang || '', cfPreset: undefined, seoDesc: r.seoDesc || '', pageBg: r.pageBg || null, astra: r.astra || undefined,
     extraMedia: [...(r.featuredImg ? [{ ...r.featuredImg, type: 'image' }] : []), ...imgs.map((i) => ({ ...i, type: i.type || 'image' })), ...vids],
   };
   draftKeys = keys || Object.entries(exported).filter(([, v]) => v.postId === postId).map(([k]) => k);
@@ -115,7 +115,7 @@ function startDraft({ type = 'post', title = '', categories: preCats = [], paren
   draft = {
     title, excerpt: '', slug: '', tags: [], categories: cats,
     blocks, featuredImageId: null, keepFeaturedInBody: true, date: null, postId: null,
-    previewOnly: false, wpStatus: null, sections: [], sourceText: '', extraMedia: [], type: page ? 'page' : 'post', parent: Number(parent) || 0, isNew: true,
+    previewOnly: false, wpStatus: null, sections: [], sourceText: '', extraMedia: [], type: page ? 'page' : type || 'post', parent: Number(parent) || 0, isNew: true,
   };
   draftKeys = [];
   renderWpState(null);
@@ -162,7 +162,7 @@ function openEditor() {
   $('#d-seodesc').value = draft.seoDesc || ''; $('#d-kw').value = draft.focusKw || '';
   loadSeoInfo();
   renderPageBg();
-  renderAstra(); loadWebStyles();
+  renderAstra(); loadWebStyles(); loadCptPanels();
   $('#d-tags').value = draft.tags.join(', ');
   const f = CFG.format || {};
   const defCats = (f.categories || '').split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
@@ -222,6 +222,7 @@ const isPageDraft = () => draft?.type === 'page';
 function applyDraftType() {
   const page = isPageDraft();
   ['#d-tags-field', '#d-cats-label', '#d-cats'].forEach((s) => $(s).classList.toggle('hidden', page));
+  cptApplyType();
   $('#d-parent-field').classList.toggle('hidden', !page);
   $('#ed-bar-title').textContent = page ? t('Página') : t('Entrada');
   // En una página el lienzo es más ancho para ver el diseño a lo ancho

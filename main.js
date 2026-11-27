@@ -295,7 +295,7 @@ const wpCall = async (fn) => { try { return await fn(); } catch (e) { throw e in
 // Nunca impide el envío: si algo falla, se anota en el registro y se sigue.
 async function backupBeforeSend(d, fields) {
   if (!d.postId) return;
-  const type = d.type === 'page' ? 'page' : 'post';
+  const type = d.type || 'post';
   let current = null, error = '';
   try { current = await WP().getPost(cfg, d.postId, type); } catch (e) { error = e.message; log('Copia antes de enviar: no se pudo leer la entrada', d.postId, e.message); }
   const name = require('./src/sendbackup').save(app.getPath('userData'), type, d.postId, { current, sending: fields, error });
@@ -608,8 +608,11 @@ function editUrlFor(id, type = 'post') {
 function postFields(d, status) {
   const scheduled = status === 'future' && d.scheduleAt;
   return {
-    ...(d.type === 'page' ? { type: 'page', parent: Number(d.parent) || 0 } : {}),
-    title: d.title, content: d.blocks ? composeBlocks(d.blocks, { spectra: isSelf(), helper: helperOn(), pageBg: d.pageBg || null }) : composeContent(d.sections), status: scheduled ? 'future' : status,
+    ...(d.type === 'page' ? { type: 'page', parent: Number(d.parent) || 0 } : d.type && d.type !== 'post' ? { type: String(d.type), ...(d.parent ? { parent: Number(d.parent) || 0 } : {}) } : {}),
+    // campos personalizados (ACF vía `acf` y metas registradas vía `meta`; lo demás va por el complemento tras guardar) e idioma
+    ...(d.fields?.post?.acf ? { acf: d.fields.post.acf } : {}), ...(d.fields?.post?.meta ? { meta: d.fields.post.meta } : {}),
+    ...(d.lang && !helperOn() ? { lang: String(d.lang) } : {}),
+    title: d.title, ...(d.noEditor ? {} : { content: d.blocks ? composeBlocks(d.blocks, { spectra: isSelf(), helper: helperOn(), pageBg: d.pageBg || null }) : composeContent(d.sections) }), status: scheduled ? 'future' : status,
     ...(d.astra && astraOn() ? { astraMeta: require('./src/themestyles').astraToMeta(d.astra) } : {}),
     tags: (d.tags || []).join(','), categories: (d.categories || []).join(','),
     excerpt: d.excerpt || '',
@@ -949,6 +952,21 @@ async function probeRemote(url) {
     return size && name ? { name, size } : null;
   } catch { return null; }
 }
+// Tras guardar: campos que solo acepta el complemento (ACF sin REST, Meta Box) e idioma/traducción (Polylang, WPML). Un fallo aquí no tira el envío.
+async function afterSendExtras(post, x) {
+  const out = {};
+  if (!isSelf()) return out;
+  const hv = helperOn() ? cfg.ecosHelper.version : '';
+  if (x.fields?.helper && wpself.helperHasFields(hv)) {
+    try { await wpCall(() => wpself.fieldsSave(cfg, post.ID, x.fields.helper)); } catch (e) { log('No se pudieron guardar los campos personalizados', post.ID, e.message); out.fieldsError = e.message; }
+  }
+  if (x.lang && wpself.helperHasFields(hv)) {
+    try { await wpCall(() => wpself.langSet(cfg, { postId: post.ID, lang: x.lang, translationOf: x.translationOf || 0, type: x.type || 'post', helper: true })); } catch (e) { log('No se pudo fijar el idioma', post.ID, e.message); out.langError = e.message; }
+  } else if (x.lang && x.translationOf) {
+    try { await wpCall(() => wpself.langSet(cfg, { postId: post.ID, lang: x.lang, translationOf: x.translationOf, type: x.type || 'post', helper: false })); } catch (e) { log('No se pudo enlazar la traducción', post.ID, e.message); out.langError = e.message; }
+  }
+  return out;
+}
 async function doPublish(d, opts = {}) { require('./src/pagelinks').forget();
   // Texto alternativo: se guarda también en la biblioteca de medios
   for (const img of d.blocks ? blockImages(d.blocks) : d.sections.flatMap((x) => x.images)) {
@@ -979,8 +997,9 @@ async function doPublish(d, opts = {}) { require('./src/pagelinks').forget();
       cfg.exported = cfg.exported || {};
       for (const k of x.keys || []) cfg.exported[k] = { postId: post.ID, url, editUrl, title: x.title, status: post.status, at: new Date().toISOString() };
       store.save(cfg);
+      const extra = await afterSendExtras(post, x);
       const cacheNote = await purgeAfterSend(post);
-      return { postId: post.ID, url, editUrl, status: post.status, date: post.date, modified: post.modified || null, exported: cfg.exported, cacheNote };
+      return { ...extra, postId: post.ID, url, editUrl, status: post.status, date: post.date, modified: post.modified || null, exported: cfg.exported, cacheNote };
     },
   });
 }
@@ -1149,6 +1168,19 @@ handle('blog:list', async (opts) => {
   }
 });
 handle('blog:dates', (opts) => wpCall(() => WP().listDates(cfg, opts)));
+// Tipos de contenido propios, campos personalizados e idiomas (solo «Mi web (wp-admin)»; con el complemento 1.8.0 hay más datos)
+const fieldsHelper = () => helperOn() && wpself.helperHasFields(cfg.ecosHelper.version);
+handle('cpt:types', async () => (isSelf() ? wpCall(() => wpself.cptTypes(cfg)) : []));
+handle('cpt:terms', async (type) => { needSelf(); return wpCall(() => wpself.cptTerms(cfg, type)); });
+handle('cpt:fields', async (o) => { needSelf(); await refreshHelper(); return wpCall(() => wpself.fieldsLoad(cfg, { type: String(o?.type || 'post'), postId: Number(o?.postId) || 0, helper: fieldsHelper() })); });
+handle('lang:info', async (o) => {
+  if (!isSelf()) return { plugin: null, languages: [], default: '', post: null };
+  await refreshHelper();
+  return wpCall(() => wpself.langInfo(cfg, { helper: fieldsHelper(), postId: Number(o?.postId) || 0 }));
+});
+handle('lang:batch', async (ids) => (fieldsHelper() ? wpCall(() => wpself.langBatch(cfg, ids)) : {}));
+handle('lang:set', async (o) => { needSelf(); return wpCall(() => wpself.langSet(cfg, { postId: Number(o.postId), lang: String(o.lang), translationOf: Number(o.translationOf) || 0, type: o.type || 'post', helper: fieldsHelper() })); });
+handle('ai:translate', async (input) => ai.translate(cfg.ai, { ...input, extra: cfg.aiInstructions || '' }));
 // Mantiene al día el estado guardado de las publicaciones exportadas que apuntan a esa entrada
 function markExported(postId, status) {
   let changed = false;

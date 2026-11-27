@@ -1,6 +1,7 @@
 // Pruebas contra un WordPress REAL con los propios módulos de Ecos. Se lanzan con `npm run test:wp` (test-wp/run.js).
 // Variables: WP_URL, WP_USER, WP_APP_PASSWORD. Opcionales: WP_EXPECT_SPECTRA=1 (comprueba que Spectra está activo),
-// WP_EXPECT_YOAST=0 (si la web no tiene Yoast SEO, se omiten sus comprobaciones).
+// WP_EXPECT_YOAST=0 (si la web no tiene Yoast SEO, se omiten sus comprobaciones), WP_EXPECT_CPT=1 (la web tiene el tipo «evento» con campos de ACF),
+// WP_EXPECT_LANG=1 (Polylang con los idiomas es y en).
 // Todo lo que se crea se borra al final (entradas, fotos, bloques sincronizados y categoría de prueba).
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -10,6 +11,7 @@ const path = require('path');
 const W = require('../src/wpself');
 const T = require('../src/transform');
 const PB = require('../src/parseblocks');
+const CPT = require('../renderer/cpt');
 const WB = require('../src/wpblocks');
 const ED = require('../src/wpeditor');
 const { buildSamples } = require('./samples');
@@ -20,7 +22,7 @@ const EXPECT_YOAST = process.env.WP_EXPECT_YOAST !== '0';
 const TAG = 'Ecos CI ' + Date.now().toString(36);
 const CAT = TAG + ' categoría';
 
-const created = { posts: [], media: [], blocks: [], cats: [] };
+const created = { posts: [], media: [], blocks: [], cats: [], cpt: [] }; // cpt: [{ id, type }]
 const S = {}; // estado compartido entre pruebas (van en orden)
 
 // Lo que el HTML trae al azar al volver a leerlo (identificadores de mosaico y carrusel) no cuenta como diferencia
@@ -53,6 +55,7 @@ test.before(() => {
 test.after(async () => {
   // limpieza: nunca lanza (se intenta todo y se avisa de lo que no se pudo borrar)
   const failed = [];
+  for (const x of created.cpt) await W.deletePost(cfg, x.id, x.type).catch((e) => failed.push(x.type + ' ' + x.id + ': ' + e.message));
   for (const id of created.posts) await W.deletePost(cfg, id, 'post').catch((e) => failed.push('entrada ' + id + ': ' + e.message));
   for (const id of created.blocks) await W.request(cfg, `/wp/v2/blocks/${id}?force=true`, { method: 'DELETE' }).catch((e) => failed.push('bloque ' + id + ': ' + e.message));
   for (const id of created.media) await W.deleteMedia(cfg, id).catch((e) => failed.push('foto ' + id + ': ' + e.message));
@@ -324,6 +327,78 @@ test('listados y calendario: Ecos ve la entrada creada', async () => {
   assert.ok(l.items.some((x) => x.id === S.postId), 'aparece en el listado del blog');
   const d = await W.listDates(cfg, { status: 'any', search: TAG });
   assert.ok(d.length >= 1);
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Tipos de contenido propios y campos personalizados (setup.sh escribe un mu-plugin con el tipo «evento», un meta y un grupo de ACF)
+const EXPECT_CPT = process.env.WP_EXPECT_CPT === '1';
+const EXPECT_LANG = process.env.WP_EXPECT_LANG === '1';
+let helperFields = false;
+
+test('tipos de contenido: Ecos lista los propios y deja fuera los internos', { skip: !EXPECT_CPT && 'WP_EXPECT_CPT no activado' }, async () => {
+  const types = await W.cptTypes(cfg, { force: true });
+  const ev = types.find((x) => x.slug === 'evento');
+  assert.ok(ev, 'aparece «evento»: ' + types.map((x) => x.slug).join(', '));
+  assert.equal(ev.restBase, 'eventos'); assert.equal(ev.editor, true);
+  for (const bad of ['post', 'page', 'attachment', 'wp_block', 'wp_template', 'wp_navigation', 'nav_menu_item', 'wp_global_styles', 'product']) assert.ok(!types.some((x) => x.slug === bad), bad + ' no debe ofrecerse');
+  const tax = await W.cptTaxonomies(cfg, 'evento');
+  assert.equal(tax.category?.restBase, 'temas', 'su categoría es la taxonomía «tema»');
+  const st = await W.helperStatus(cfg, { force: true });
+  helperFields = st.installed && W.helperHasFields(st.version);
+  assert.ok(helperFields, 'el complemento trae campos (1.8.0): ' + st.version);
+});
+
+test('campos: crear un evento con campos de ACF y metas, y leerlos de vuelta', { skip: !EXPECT_CPT && 'WP_EXPECT_CPT no activado' }, async () => {
+  const def = await W.fieldsLoad(cfg, { type: 'evento', helper: helperFields });
+  const by = Object.fromEntries(def.fields.map((f) => [f.id, f]));
+  for (const id of ['acf:lugar', 'acf:fecha', 'acf:gratis', 'meta:aforo_max']) assert.ok(by[id], 'campo ' + id + ' en ' + Object.keys(by).join(', '));
+  assert.equal(by['acf:lugar'].kind, 'text'); assert.equal(by['acf:fecha'].kind, 'date'); assert.equal(by['acf:gratis'].kind, 'bool'); assert.equal(by['meta:aforo_max'].kind, 'number');
+  const values = { 'acf:lugar': 'Sala ' + TAG, 'acf:fecha': '2026-03-04', 'acf:gratis': true, 'meta:aforo_max': '40' };
+  const built = CPT.buildFieldsPost(def.fields, values, {}, { acfRest: def.acfRest });
+  assert.ok(!built.empty);
+  const r = await W.createPost(cfg, { type: 'evento', title: TAG + ' evento', content: '<!-- wp:paragraph --><p>Hola</p><!-- /wp:paragraph -->', excerpt: 'Un evento', status: 'draft', categories: CAT + ' tema', createCategories: true, ...built.post });
+  created.cpt.push({ id: r.ID, type: 'evento' });
+  S.eventoId = r.ID;
+  if (built.helper.acf || built.helper.metabox) await W.fieldsSave(cfg, r.ID, built.helper);
+  // al abrirlo se leen sus valores (ida y vuelta)
+  const back = await W.fieldsLoad(cfg, { type: 'evento', postId: r.ID, helper: helperFields });
+  const got = Object.fromEntries(back.fields.map((f) => [f.id, CPT.toInput(f, back.values[f.id])]));
+  assert.equal(got['acf:lugar'], 'Sala ' + TAG); assert.equal(got['acf:fecha'], '2026-03-04'); assert.equal(got['acf:gratis'], true); assert.equal(Number(got['meta:aforo_max']), 40);
+  const p = await W.getPost(cfg, r.ID, 'evento');
+  assert.equal(p.type, 'evento'); assert.equal(p.title, TAG + ' evento'); assert.ok(p.categories.includes(CAT + ' tema'), 'categoría del tipo: ' + p.categories);
+  assert.match(p.content, /Hola/);
+  const l = await W.listPosts(cfg, { type: 'evento', status: 'any', search: TAG, number: 20 });
+  assert.ok(l.items.some((x) => x.id === r.ID && x.type === 'evento'), 'aparece en el listado del tipo');
+  // un cambio posterior solo envía lo modificado
+  const again = CPT.buildFieldsPost(def.fields, { ...values, 'acf:lugar': 'Plaza' }, values, { acfRest: def.acfRest });
+  assert.deepEqual(Object.keys({ ...again.post.acf, ...again.helper.acf }), ['lugar']);
+  await W.updatePost(cfg, r.ID, { type: 'evento', title: TAG + ' evento', content: p.content, status: 'draft', ...again.post });
+  if (again.helper.acf) await W.fieldsSave(cfg, r.ID, again.helper);
+  const back2 = await W.fieldsLoad(cfg, { type: 'evento', postId: r.ID, helper: helperFields });
+  assert.equal(back2.values['acf:lugar'], 'Plaza');
+});
+
+test('idiomas: Polylang se detecta y se crea una traducción enlazada', { skip: !EXPECT_LANG && 'WP_EXPECT_LANG no activado' }, async () => {
+  const info = await W.langInfo(cfg, { helper: helperFields });
+  assert.equal(info.plugin, 'polylang');
+  const codes = info.languages.map((l) => l.code);
+  assert.ok(codes.includes('es') && codes.includes('en'), 'idiomas: ' + codes);
+  const orig = await W.createPost(cfg, { type: 'post', title: TAG + ' idioma', content: '<!-- wp:paragraph --><p>Hola</p><!-- /wp:paragraph -->', status: 'draft' });
+  created.posts.push(orig.ID);
+  await W.langSet(cfg, { postId: orig.ID, lang: 'es', type: 'post', helper: helperFields });
+  const draft = CPT.translationDraft({ id: orig.ID, type: 'post', title: TAG + ' idioma', content: '<!-- wp:paragraph --><p>Hello</p><!-- /wp:paragraph -->' }, 'en');
+  const tr = await W.createPost(cfg, { ...draft, lang: undefined });
+  created.posts.push(tr.ID);
+  await W.langSet(cfg, { postId: tr.ID, lang: 'en', translationOf: orig.ID, type: 'post', helper: helperFields });
+  const after = await W.langInfo(cfg, { helper: helperFields, postId: orig.ID });
+  if (helperFields) { assert.equal(after.post.lang, 'es'); assert.equal(after.post.translations.en, tr.ID); }
+  const back = await W.langInfo(cfg, { helper: helperFields, postId: tr.ID });
+  if (helperFields) { assert.equal(back.post.lang, 'en'); assert.equal(back.post.translations.es, orig.ID); }
+  const p = await W.getPost(cfg, tr.ID, 'post');
+  assert.equal(p.status, 'draft'); assert.equal(p.lang, 'en');
+  const en = await W.listPosts(cfg, { type: 'post', status: 'any', search: TAG, lang: 'en', number: 20 });
+  assert.ok(en.items.some((x) => x.id === tr.ID) && !en.items.some((x) => x.id === orig.ID), 'el filtro por idioma separa original y traducción');
+  if (helperFields) assert.equal((await W.langBatch(cfg, [orig.ID, tr.ID]))[tr.ID], 'en');
 });
 
 test('borrar todo lo creado: no queda nada', async () => {

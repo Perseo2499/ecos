@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Levanta WordPress + MySQL con Docker y lo deja listo para `npm run test:wp`:
-# tema Astra, plugins Spectra y Yoast SEO, el Complemento de Ecos (build/ecos-wordpress.zip), un usuario administrador y su contraseña de aplicación.
+# tema Astra, plugins Spectra, Yoast SEO, ACF y Polylang (con un tipo «evento», un grupo de campos y los idiomas es/en), el Complemento de Ecos (build/ecos-wordpress.zip), un usuario administrador y su contraseña de aplicación.
 #
 # Antes: `npm run plugin` (genera build/ecos-wordpress.zip). Después: `npm run test:wp` con las variables que se muestran (en GitHub se exportan solas).
 # Códigos de salida: 0 listo · 10 no se pudo descargar algo de internet (imágenes de Docker, wordpress.org: se avisa, no es un fallo de Ecos) · otro: fallo real.
@@ -52,6 +52,47 @@ echo "== Tema y plugins (wordpress.org)"
 need_external "instalar el tema Astra" wp theme install astra --activate
 need_external "instalar Spectra y Yoast SEO" wp plugin install ultimate-addons-for-gutenberg wordpress-seo --activate
 
+echo "== ACF y Polylang (campos personalizados e idiomas)"
+need_external "instalar ACF y Polylang" wp plugin install advanced-custom-fields polylang --activate
+# mu-plugin de pruebas: tipo «evento» (show_in_rest), un meta registrado, un grupo de ACF con «Mostrar en REST» y Polylang para entradas y eventos
+MU_B64="$(base64 -w0 <<'PHP'
+<?php
+add_action( 'init', function () {
+	register_taxonomy( 'tema', 'evento', array( 'label' => 'Temas', 'hierarchical' => true, 'show_in_rest' => true, 'rest_base' => 'temas' ) );
+	register_post_type( 'evento', array(
+		'label' => 'Eventos', 'labels' => array( 'singular_name' => 'Evento' ), 'public' => true, 'show_in_rest' => true, 'rest_base' => 'eventos',
+		'supports' => array( 'title', 'editor', 'excerpt', 'thumbnail', 'custom-fields' ), 'taxonomies' => array( 'tema' ),
+	) );
+	register_post_meta( 'evento', 'aforo_max', array( 'type' => 'integer', 'single' => true, 'show_in_rest' => true, 'description' => 'Plazas' ) );
+} );
+add_action( 'acf/init', function () {
+	if ( ! function_exists( 'acf_add_local_field_group' ) ) {
+		return;
+	}
+	acf_add_local_field_group( array(
+		'key' => 'group_evento', 'title' => 'Datos del evento', 'show_in_rest' => 1,
+		'location' => array( array( array( 'param' => 'post_type', 'operator' => '==', 'value' => 'evento' ) ) ),
+		'fields' => array(
+			array( 'key' => 'field_lugar', 'name' => 'lugar', 'label' => 'Lugar', 'type' => 'text', 'required' => 1, 'instructions' => 'Dónde se celebra' ),
+			array( 'key' => 'field_fecha', 'name' => 'fecha', 'label' => 'Fecha', 'type' => 'date_picker', 'display_format' => 'd/m/Y', 'return_format' => 'Ymd' ),
+			array( 'key' => 'field_gratis', 'name' => 'gratis', 'label' => 'Entrada gratuita', 'type' => 'true_false' ),
+		),
+	) );
+} );
+add_filter( 'pll_get_post_types', function ( $types ) {
+	$types['evento'] = 'evento';
+	return $types;
+}, 10, 1 );
+PHP
+)"
+wp eval "wp_mkdir_p( WPMU_PLUGIN_DIR ); file_put_contents( WPMU_PLUGIN_DIR . '/ecos-pruebas.php', base64_decode( '${MU_B64}' ) );" || exit 1
+LANG_OK=0
+if wp pll lang create Español es es_ES --no_default_cat >/dev/null 2>&1 && wp pll lang create English en en_US --no_default_cat >/dev/null 2>&1; then
+  LANG_OK=1
+else
+  echo "::warning::No se pudieron crear los idiomas de Polylang (¿sin «wp pll» o sin red para los paquetes de idioma?): se omiten las pruebas de idiomas" >&2
+fi
+
 echo "== Complemento de Ecos"
 wp plugin install /ecos-build/ecos-wordpress.zip --activate --force || exit 1
 
@@ -62,11 +103,11 @@ APP_PASS="$(wp user application-password create "$USER_NAME" ecos-ci --porcelain
 
 echo "::add-mask::$APP_PASS"
 if [ -n "${GITHUB_ENV:-}" ]; then
-  { echo "WP_URL=$SITE"; echo "WP_USER=$USER_NAME"; echo "WP_APP_PASSWORD=$APP_PASS"; echo "WP_EXPECT_SPECTRA=1"; } >> "$GITHUB_ENV"
+  { echo "WP_URL=$SITE"; echo "WP_USER=$USER_NAME"; echo "WP_APP_PASSWORD=$APP_PASS"; echo "WP_EXPECT_SPECTRA=1"; echo "WP_EXPECT_CPT=1"; [ "$LANG_OK" = 1 ] && echo "WP_EXPECT_LANG=1"; } >> "$GITHUB_ENV"
 else
   echo
   echo "Listo. Ejecuta:"
-  echo "  export WP_URL=$SITE WP_USER=$USER_NAME WP_APP_PASSWORD='$APP_PASS' WP_EXPECT_SPECTRA=1"
+  echo "  export WP_URL=$SITE WP_USER=$USER_NAME WP_APP_PASSWORD='$APP_PASS' WP_EXPECT_SPECTRA=1 WP_EXPECT_CPT=1$([ \"$LANG_OK\" = 1 ] && echo ' WP_EXPECT_LANG=1')"
   echo "  npm run test:wp"
   echo "Para apagarlo: docker compose -f test-wp/docker-compose.yml down -v"
 fi

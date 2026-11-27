@@ -272,6 +272,15 @@
               <label class="switch small"><input type="checkbox" data-astra-flag="hideHeader"><span data-i18n>Ocultar la cabecera</span></label>
               <label class="switch small"><input type="checkbox" data-astra-flag="hideFooter"><span data-i18n>Ocultar el pie</span></label>
             </details>
+            <details class="ai-opts hidden" id="d-lang">
+              <summary><span class="ms">translate</span><span data-i18n>Idioma y traducciones</span><span class="ai-opts-sum" id="lang-sum"></span></summary>
+              <div class="ai-opt"><label for="d-lang-sel" data-i18n>Idioma de esta entrada</label><select id="d-lang-sel"></select></div>
+              <div class="ai-opt"><label data-i18n>Traducciones</label><div id="d-lang-list" class="lang-list"></div></div>
+            </details>
+            <details class="ai-opts hidden" id="d-fields">
+              <summary><span class="ms">dataset</span><span data-i18n>Campos</span><span class="ai-opts-sum" id="fields-sum"></span></summary>
+              <div id="d-fields-body" class="cf-body"></div>
+            </details>
             <details class="ai-opts" id="ai-opts">
               <summary><span class="ms">tune</span><span data-i18n>Cómo convertir en artículo</span><span class="ai-opts-sum" id="ai-opts-sum"></span></summary>
               <div class="ai-opt"><label data-i18n>Extensión</label>
@@ -341,6 +350,8 @@
         <option value="private" data-i18n>Privadas</option>
         <option value="trash" data-i18n>Papelera</option>
       </select>
+      <select id="b-ptype" class="hidden" data-i18n-title title="Tipo de contenido" aria-label="Tipo de contenido"></select>
+      <select id="b-lang" class="hidden" data-i18n-title title="Idioma" aria-label="Idioma"></select>
       <label class="chip b-mine hidden" id="b-mine-wrap" data-i18n-title title="Solo las entradas de las que eres autor"><input type="checkbox" id="b-mine"><span data-i18n>Solo las mías</span></label>
       <div class="field search"><span class="ms">search</span><input id="b-search" type="search" data-i18n-ph placeholder="Buscar…"></div>
       <div id="b-range" class="b-range">
@@ -1120,6 +1131,7 @@
 <script src="carousel.js"></script>
 <script src="normalize.js"></script>
 <script src="blogcheck.js"></script>
+<script src="cpt.js"></script>
 <script src="datelane.js"></script>
 <script src="postfmt.js"></script>
 <script src="newposts.js"></script>
@@ -1183,6 +1195,7 @@
 <script src="app/synced.js"></script>
 <script src="app/editor-viewer.js"></script>
 <script src="app/editor-astra.js"></script>
+<script src="app/editor-cpt.js"></script>
 <script src="app/editor-history.js"></script>
 <script src="app/editor-multi.js"></script>
 <script src="app/editor-find.js"></script>
