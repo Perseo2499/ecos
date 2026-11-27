@@ -3072,3 +3072,4 @@ form.dlg .field input, form.dlg .field label { width: 100%; box-sizing: border-b
 /* Editor de WordPress dentro de Ecos: acciones del bloque «De WordPress» */
 .raw-acts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
 .raw-acts .hint { font-size: 12.5px; }
+.a11y-all { padding: 4px 12px 8px; }

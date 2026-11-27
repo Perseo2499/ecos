@@ -312,6 +312,9 @@
     'Canal de pruebas activado: Ecos instalará las versiones nuevas en cuanto salgan.': 'Test channel on: Ecos will install new versions as soon as they are out.',
     'Canal estable: Ecos esperará 24 horas antes de instalar una versión nueva.': 'Stable channel: Ecos will wait 24 hours before installing a new version.',
     // 1.2 (editor completo)
+    'Describiendo…': 'Describing…',
+    'La IA no ha devuelto ninguna descripción. Escríbela debajo de la foto.': 'The AI returned no description. Write it below the photo.',
+    'Describir con IA las {n} fotos sin descripción': 'Describe the {n} photos without description with AI',
     // Editor de WordPress integrado
     'Editor de WordPress · entrada completa': 'WordPress editor · full post',
     'Editor de WordPress · bloque nuevo': 'WordPress editor · new block',

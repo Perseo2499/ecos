@@ -46,11 +46,18 @@
     if (f.kind === 'alt') {
       if (typeof window.api?.aiAlt === 'function') {
         const im = f.idx >= 0 ? (loc.b.images || [])[f.idx] : loc.b.img;
-        let text = '';
+        let text = '', err = null;
+        const label = btn.innerHTML;
         btn.disabled = true;
-        try { text = await window.api.aiAlt(im.url, document.getElementById('d-title')?.value?.trim() || ''); } catch { /* sin IA: se abre el campo */ }
-        btn.disabled = false;
-        if (text) { ed.changeBlock(issue.blockId, () => A.applyFix(ed.locate(issue.blockId).b, { ...f, text })); window.toast?.(t('Foto descrita con IA. Revisa el texto debajo de la foto.')); return; }
+        btn.innerHTML = `<span class="spin" aria-hidden="true"></span><span>${esc(t('Describiendo…'))}</span>`;
+        try { text = String(await window.api.aiAlt(im?.url, document.getElementById('d-title')?.value?.trim() || '') || '').trim(); } catch (e) { err = e; }
+        btn.disabled = false; btn.innerHTML = label;
+        if (text) { ed.changeBlock(issue.blockId, () => A.applyFix(ed.locate(issue.blockId).b, { ...f, text })); window.toast?.(t('Foto descrita con IA. Revisa el texto debajo de la foto.')); window.FormatBar?.review(); return; }
+        // la IA ha fallado: se dice por qué (sin IA configurada, sin conexión…) y se abre el campo para escribirla a mano
+        goto(issue.blockId, { alt: f.idx });
+        if (err && typeof window.toastError === 'function') window.toastError(err);
+        else window.toast?.(t('La IA no ha devuelto ninguna descripción. Escríbela debajo de la foto.'), true);
+        return;
       }
       goto(issue.blockId, { alt: f.idx });
       window.toast?.(t('Escribe aquí qué se ve en la foto.'));
@@ -61,6 +68,8 @@
     window.FormatBar?.review();
   }
 
+  const altCount = (r) => r.issues.filter((i) => i.fix?.kind === 'alt').length;
+
   function html(r) {
     const o = open === null ? r.counts.error > 0 : open;
     const cls = r.score >= 90 ? 'good' : r.score >= 70 ? 'mid' : 'bad';
@@ -69,6 +78,7 @@
         <div class="a11y-t"><b><span class="a11y-lv">${esc(t(i.info ? 'Información' : LV[i.level]))}</span> ${esc(t(i.title, i.vars))}</b><span>${esc(t(i.why, i.vars))}</span>
           <div class="a11y-b">${i.blockId ? `<button class="btn text small" data-go="${k}"><span class="ms">my_location</span><span>${esc(t('Ir al bloque'))}</span></button>` : ''}${i.fix ? `<button class="btn tonal small" data-fix="${k}"><span class="ms">auto_fix_high</span><span>${esc(i.fix.kind === 'alt' && typeof window.api?.aiAlt === 'function' ? t('Describir con IA') : t(i.fix.label || 'Arreglar'))}</span></button>` : ''}</div></div></li>`).join('');
     return `<details class="a11y" ${o ? 'open' : ''}><summary class="a11y-sum ${cls}"><span class="a11y-score" aria-hidden="true">${r.score}</span><span class="a11y-st"><b>${esc(t('Accesibilidad'))}</b><span>${esc(r.issues.length ? summary(r).replace(/^[^·]*· ?/, '') : t('Sin problemas a la vista'))}</span></span><span class="ms a11y-chev" aria-hidden="true">expand_more</span></summary>
+      ${altCount(r) > 1 && document.getElementById('ai-alts') ? `<div class="a11y-all"><button class="btn tonal small" data-allalt><span class="ms">auto_awesome</span><span>${esc(t('Describir con IA las {n} fotos sin descripción', { n: altCount(r) }))}</span></button></div>` : ''}
       <ul class="a11y-list">${items || `<li class="a11y-ok"><span class="ms fill">check_circle</span>${esc(t('Todo en orden: contraste, títulos, fotos y enlaces.'))}</li>`}</ul>
       <p class="hint a11y-note">${esc(t('Es una revisión automática: ayuda, pero no sustituye a probar la página con un lector de pantalla.'))}</p></details>`;
   }
@@ -84,6 +94,8 @@
     const det = host.querySelector('details');
     det.addEventListener('toggle', () => { open = det.open; });
     host.querySelectorAll('[data-go]').forEach((b) => (b.onclick = () => { const i = r.issues[+b.dataset.go]; goto(i.blockId, i.fix?.kind === 'alt' ? { alt: i.fix.idx } : {}); }));
+    const all = host.querySelector('[data-allalt]');
+    if (all) all.onclick = () => document.getElementById('ai-alts')?.click();
     host.querySelectorAll('[data-fix]').forEach((b) => (b.onclick = () => fix(r.issues[+b.dataset.fix], b)));
     return r;
   }
