@@ -319,6 +319,37 @@ test('editor de WordPress: la dirección de un solo uso funciona una vez y la se
   await assert.rejects(() => W.request(cfg, '/ecos/v1/editor-session', { method: 'POST', json: { target: 'plugins.php' } }), /Solo se puede abrir|WordPress/);
 });
 
+test('bloques de Spectra, Kadence y GenerateBlocks: Ecos los edita y la web conserva clases y estilos del plugin', async () => {
+  const TP = require('../renderer/thirdparty');
+  const SM = require('../test/thirdparty-samples');
+  const act = await W.request(cfg, '/wp/v2/plugins?status=active').then((l) => l.map((p) => p.plugin), () => []);
+  const has = (n) => act.some((p) => p.startsWith(n));
+  if (process.env.WP_EXPECT_SPECTRA === '1') { assert.ok(has('kadence-blocks'), 'Kadence Blocks debería estar activo'); assert.ok(has('generateblocks'), 'GenerateBlocks debería estar activo'); }
+  const want = [['spectra', ['heading', 'buttons', 'container', 'info', 'image'], has('ultimate-addons-for-gutenberg')], ['kadence', ['kHeading', 'kBtns', 'kRow', 'kInfo', 'kList'], has('kadence-blocks')], ['gb', ['gHead', 'gCont'], has('generateblocks')]];
+  const keys = want.filter((w) => w[2]).flatMap((w) => w[1]);
+  const content = keys.map((k) => SM[k]).join('\n\n');
+  const post = await W.createPost(cfg, { title: TAG + ' · bloques de terceros', content, status: 'publish' });
+  created.posts.push(post.ID);
+  const back = await W.getPost(cfg, post.ID, 'post');
+  const blocks = PB.parseBlocks(back.content);
+  assert.equal(blocks.length, keys.length);
+  assert.ok(blocks.every((b) => b.type === 'third'), 'Ecos los reconoce como editables al leerlos con context=edit');
+  assert.equal(T.composeBlocks(blocks, { helper: true, spectra: true }), back.content, 'sin cambios vuelve idéntico a lo leído');
+  // un cambio de texto: se reenvía y el HTML público sigue llevando las clases del plugin
+  const h = blocks.find((b) => b.name === 'uagb/advanced-heading') || blocks.find((b) => b.name === 'kadence/advancedheading') || blocks[0];
+  const oldText = TP.texts(h)[0].v;
+  TP.setText(h, TP.texts(h)[0].k, 'Título cambiado desde Ecos');
+  const next = T.composeBlocks(blocks, { helper: true, spectra: true });
+  await W.request(cfg, '/wp/v2/posts/' + post.ID, { method: 'POST', json: { content: next } });
+  const again = await W.getPost(cfg, post.ID, 'post');
+  assert.equal(again.content, back.content.replace('>' + oldText + '<', '>Título cambiado desde Ecos<'), 'solo cambia el texto');
+  const html = await fetchPublic(post.URL);
+  if (has('ultimate-addons-for-gutenberg')) assert.match(html, /uagb-heading-text/, 'Spectra conserva sus clases');
+  if (has('kadence-blocks')) assert.match(html, /kt-adv-heading|wp-block-kadence/, 'Kadence conserva sus clases');
+  if (has('generateblocks')) assert.match(html, /gb-headline|gb-container/, 'GenerateBlocks conserva sus clases');
+  assert.match(html, /Título cambiado desde Ecos/);
+});
+
 test('listados y calendario: Ecos ve la entrada creada', async () => {
   const l = await W.listPosts(cfg, { status: 'any', search: TAG, number: 20 });
   assert.ok(l.items.some((x) => x.id === S.postId), 'aparece en el listado del blog');

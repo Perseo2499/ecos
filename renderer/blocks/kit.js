@@ -26,6 +26,7 @@
     pdf: { icon: 'picture_as_pdf', name: t('PDF') }, hotspots: { icon: 'ads_click', name: t('Imagen con puntos') }, compare: { icon: 'compare', name: t('Antes y después') },
     faq: { icon: 'quiz', name: t('Preguntas frecuentes') },
     raw: { icon: 'code_blocks', name: t('De WordPress') },
+    third: { icon: 'extension', name: t('Bloque de otro plugin') },
     synced: { icon: 'sync', name: t('Sincronizado') },
   });
   const TEXT_TYPES = ['paragraph', 'heading', 'quote', 'list'];

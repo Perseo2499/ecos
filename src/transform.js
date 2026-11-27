@@ -335,6 +335,7 @@ const Design = require('../renderer/design');
 Object.assign(FX_CSS, Design.CSS);
 // «Más bloques» (pestañas, cifras, testimonios…): lógica en renderer/moreblocks.js, guion en renderer/morefx.js
 const More = require('../renderer/moreblocks');
+const Third = require('../renderer/thirdparty');
 Object.assign(FX_CSS, More.CSS);
 const FX_MARK = 'ecos-fx';
 function fxBlock(set, helper = false) {
@@ -1014,6 +1015,7 @@ function composeList(blocks, opts, ctx) {
       case 'video': if (b.video) out.push(videoBlock(b.video, b.caption, { align: b.align, width: b.width, ratio: b.ratio, frame: b.frame, fx: b.fx }, ctx.fx)); break;
       case 'embed': if (b.url) out.push(b.provider === 'instagram' || b.provider === 'facebook' || !b.provider ? embedBlock(b.url, b.provider || 'instagram') : embedFull(b)); break;
       case 'raw': if (b.markup) out.push(b.markup); break; // bloque de WordPress que Ecos conserva sin tocar
+      case 'third': { const m = Third.compose(b, { composeList: (l) => composeList(l, opts, ctx) }); if (m) out.push(m); break; } // Spectra, Kadence, GenerateBlocks: el bloque original con lo editado
       case 'synced': if (Number(b.ref) > 0) out.push(syncedBlock(b.ref)); break; // bloque sincronizado: solo la referencia al wp_block
       case 'separator': out.push('<!-- wp:separator -->\n<hr class="wp-block-separator has-alpha-channel-opacity"/>\n<!-- /wp:separator -->'); break;
       // «Más bloques»: cada uno sale como bloques estándar de WordPress con clases ecos-* (renderer/moreblocks.js)
@@ -1026,7 +1028,7 @@ function composeList(blocks, opts, ctx) {
       default: break;
     }
     // diseño universal (espaciado, bordes, fondo, dispositivos, animación, tipografía): sobre el bloque ya escrito
-    if (b.type !== 'raw' && b.type !== 'synced' && Design.hasDesign(b)) for (let k = first; k < out.length; k++) out[k] = Design.decorate(out[k], b, (key) => ctx.fx.add(key));
+    if (b.type !== 'raw' && b.type !== 'synced' && b.type !== 'third' && Design.hasDesign(b)) for (let k = first; k < out.length; k++) out[k] = Design.decorate(out[k], b, (key) => ctx.fx.add(key));
   }
   if (floating) out.push(CLEAR_BLOCK);
   return out.join('\n\n');

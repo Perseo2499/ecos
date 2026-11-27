@@ -205,9 +205,11 @@ function convertSpectra(blocks) {
   function walk(list) {
     const out = [];
     for (const b of list || []) {
-      if (b.type === 'raw' && SPECTRA.test(b.markup || '')) {
-        const ts = tokenize(b.markup).filter((t) => t.name !== 'freeform');
-        if (ts.length === 1 && ts[0].raw.trim() === b.markup.trim()) {
+      // los bloques de Spectra editables (type «third») se convierten igual: se parte de su comentario completo
+      const mk = b.type === 'raw' ? b.markup : b.type === 'third' && b.plugin === 'spectra' ? require('./transform').composeBlocks([b]) : '';
+      if (SPECTRA.test(mk || '')) {
+        const ts = tokenize(mk).filter((t) => t.name !== 'freeform');
+        if (ts.length === 1 && ts[0].raw.trim() === mk.trim()) {
           const r = tok(ts[0]);
           // si no se pudo convertir se conserva el mismo bloque (con su id)
           if (r.length === 1 && r[0].type === 'raw' && r[0].markup === ts[0].raw) out.push(b); else out.push(...r);
@@ -462,6 +464,7 @@ function countSpectra(blocks) {
   const visit = (list) => {
     for (const b of list || []) {
       if (b.type === 'raw' && SPECTRA.test(b.markup || '')) n += (b.markup.match(/<!--\s+wp:uagb\/[a-z0-9-]+(?=[\s{/])/g) || []).length;
+      if (b.type === 'third' && b.plugin === 'spectra') n++;
       if (Array.isArray(b.children)) visit(b.children);
       if (Array.isArray(b.cols)) b.cols.forEach((c) => visit(c.children));
     }

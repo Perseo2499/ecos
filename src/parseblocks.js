@@ -7,6 +7,7 @@ const DK = require('../renderer/sections');
 const TS = require('./themestyles');
 const Design = require('../renderer/design');
 const More = require('../renderer/moreblocks');
+const Third = require('../renderer/thirdparty');
 
 const FONT_KEY = Object.fromEntries(Object.entries(FONTS).map(([k, v]) => [v, k]));
 let seq = 0;
@@ -372,7 +373,7 @@ function toBlockCore(t, n, d) {
     }
     // Bloque sincronizado: <!-- wp:block {"ref":ID} /-->
     case 'block': return Number.isInteger(a.ref) && a.ref > 0 && onlyKeys(a, ['ref']) ? { id: bid(), type: 'synced', ref: a.ref } : raw();
-    default: return raw();
+    default: return Third.read(t, THIRD_ENV) || raw();
   }
 }
 
@@ -562,5 +563,8 @@ function parseBlocks(content) {
   BGI = Design.parseBgiRules((String(content || '').match(new RegExp(`<style class="${FX_MARK}">[\\s\\S]*?</style>`, 'g')) || []).join(''));
   return parseList(content, false);
 }
+
+// Bloques de Spectra, Kadence y GenerateBlocks editables (renderer/thirdparty.js)
+const THIRD_ENV = { bid, tokenize, toBlock: (k) => toBlock(k) };
 
 module.exports = { parseBlocks, tokenize, classicBlocks, toBlock };

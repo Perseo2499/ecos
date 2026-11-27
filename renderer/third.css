@@ -1,0 +1,20 @@
+/* Bloques de Spectra, Kadence y GenerateBlocks en el editor (renderer/blocks/third.js). Usa los colores del tema de la app. */
+.tp-box { position: relative; padding: 22px 14px 12px; border-radius: var(--r-m); border: 1px dashed var(--outline-var); background: var(--surface-c-low); color: var(--on-surface); }
+.tp-tag { position: absolute; top: 4px; left: 12px; font: 600 11px/1 system-ui, sans-serif; letter-spacing: .04em; text-transform: uppercase; color: var(--on-primary-container); background: var(--primary-container); padding: 3px 8px; border-radius: var(--r-full); }
+.tp-box.tp-cont { padding-bottom: 8px; }
+.tp-box.tp-cont > .blocks { margin: 0; }
+.tp-pv { overflow-wrap: anywhere; line-height: 1.5; background: #fff; color: #1b1c1c; padding: 12px 14px; border-radius: var(--r-s); }
+.tp-pv h1, .tp-pv h2, .tp-pv h3, .tp-pv h4, .tp-pv h5, .tp-pv h6, .tp-pv p { margin: 0 0 .4em; }
+.tp-pv h1 { font-size: 2em; } .tp-pv h2 { font-size: 1.6em; } .tp-pv h3 { font-size: 1.3em; } .tp-pv h4 { font-size: 1.1em; }
+.tp-pv img { max-width: 100%; height: auto; border-radius: var(--r-xs); }
+.tp-pv figure { margin: 0; } .tp-pv figcaption { font-size: .85em; color: var(--on-surface-var); }
+.tp-pv svg { width: 1.2em; height: 1.2em; fill: currentColor; vertical-align: middle; }
+.tp-pv a { color: var(--primary); text-decoration: none; cursor: default; }
+.tp-pv [class*="button"] a, .tp-pv a[class*="button"], .tp-pv a[role="button"], .tp-pv .wp-block-button__link, .tp-pv .kt-btn, .tp-pv .gb-button { display: inline-block; padding: .55em 1.1em; border-radius: var(--r-full); background: var(--primary); color: var(--on-primary); }
+.tp-pv .uagb-button__link { display: inline; }
+.tp-pv ul { margin: 0; padding-left: 1.2em; } .tp-pv .kt-svg-icon-list-single { display: none; }
+.tp-btn { display: inline-block; padding: .55em 1.2em; border-radius: var(--r-full); background: var(--primary); color: var(--on-primary); min-width: 4em; }
+.tp-btn:empty::before, .tp-ed:empty::before { content: attr(data-ph); opacity: .6; }
+.tp-ed { outline: none; border-radius: 4px; }
+.tp-ed:focus { box-shadow: 0 0 0 2px var(--primary); }
+.sp-custom-row .tp-url, .sp-custom-row .tp-alt { width: 100%; min-width: 220px; padding: 8px 10px; border-radius: var(--r-xs); border: 1px solid var(--outline-var); background: var(--surface-c-lowest); color: var(--on-surface); font: inherit; }

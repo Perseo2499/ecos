@@ -347,6 +347,8 @@
     'Envío a medias: pulsa Continuar': 'Half-finished send: press Continue',
     'Ha cambiado en WordPress': 'Changed in WordPress',
     // 1.2 (editor completo)
+    'Subtítulo': 'Subtitle', 'Antetítulo': 'Pre-title', 'Pie de foto': 'Caption', 'Título sobre la imagen': 'Title over the image', 'Enlace «saber más»': '«Read more» link',
+    'Bloque de otro plugin': 'Block from another plugin', 'Bloque de {n}: se conserva tal cual y se edita lo seguro': '{n} block: kept as is, only the safe parts are editable', 'Contenedor': 'Container', 'Título avanzado': 'Advanced heading', 'Botones': 'Buttons', 'Botón': 'Button', 'Caja de información': 'Info box', 'Lista con iconos': 'Icon list', 'Elemento de lista': 'List item', 'Fila': 'Row', 'Columna': 'Column', 'Cuadrícula': 'Grid', 'Elemento': 'Element', 'Texto': 'Text', 'Dirección del enlace': 'Link address', 'Escribe una dirección que empiece por https://': 'Type an address starting with https://', 'Al pulsar': 'On click', 'Misma pestaña': 'Same tab', 'Nueva pestaña': 'New tab', 'Nivel del título': 'Heading level', 'Como está': 'As is', 'Justificada': 'Justified', 'Color del título': 'Title color', 'Color del texto': 'Text color', 'Color del botón': 'Button color', 'Cambiar imagen…': 'Change image…', 'Editar con el editor de WordPress': 'Edit with the WordPress editor', 'Bloque actualizado con el editor de WordPress.': 'Block updated with the WordPress editor.',
     // Diagnóstico de conexión, informes de errores y entorno de la web
     "No se ha podido leer el certificado.": "The certificate could not be read.",
     "Comprueba que la web responde por HTTPS.": "Check that the website answers over HTTPS.",

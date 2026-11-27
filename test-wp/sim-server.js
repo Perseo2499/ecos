@@ -73,7 +73,7 @@ function start({ user = 'ecostest', pass = 'abcdEFGHijklMNOPqrstUVWX', port = 0 
       let r;
       if (route === '/') return send(200, { name: 'Sim WP', home: origin, namespaces: ['wp/v2', 'ecos/v1', 'yoast/v1'] });
       if (route === '/wp/v2/users/me') return send(200, { id: 1, name: 'Admin', slug: 'admin', roles: ['administrator'], capabilities: { edit_posts: true, publish_posts: true, upload_files: true }, avatar_urls: {} });
-      if (route === '/wp/v2/plugins') return send(200, [{ plugin: 'ultimate-addons-for-gutenberg/ultimate-addons-for-gutenberg', status: 'active' }]);
+      if (route === '/wp/v2/plugins') return send(200, [{ plugin: 'ultimate-addons-for-gutenberg/ultimate-addons-for-gutenberg', status: 'active' }, { plugin: 'kadence-blocks/kadence-blocks', status: 'active' }, { plugin: 'generateblocks/plugin', status: 'active' }]);
       if (route === '/wp/v2/settings') return send(200, { title: 'Sim WP', show_on_front: 'posts', page_on_front: 0, page_for_posts: 0 });
       if (route === '/wp/v2/pages' || route === '/wp/v2/tags') return send(200, [], { 'X-WP-TotalPages': '1', 'X-WP-Total': '0' });
       if (/^\/wp\/v2\/(menus|navigation|menu-locations)/.test(route)) return err(404, 'rest_no_route', 'No route');

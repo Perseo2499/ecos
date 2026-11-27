@@ -15,6 +15,11 @@ function spectraCount() {
   return BE.flat(draft.blocks || []).filter((b) => b.type === 'raw' && /^\s*<!--\s+wp:uagb\//.test(b.markup || ''))
     .reduce((n, b) => n + (b.markup.match(/<!--\s+wp:uagb\/[a-z0-9-]+(?=[\s{/])/g) || []).length, 0);
 }
+// Bloques de Spectra que Ecos ya edita (tipo «third»): «Convertir en página de Ecos» también los pasa a bloques normales
+function spectraThird() {
+  const BE = window.BlockEditor;
+  return !!(draft && BE && BE.flat(draft.blocks || []).some((b) => b.type === 'third' && b.plugin === 'spectra'));
+}
 function renderSpectraNote() {
   const box = $('#d-spectra');
   if (!box) return;

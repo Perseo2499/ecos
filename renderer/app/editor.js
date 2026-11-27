@@ -93,7 +93,7 @@ async function openFromWp(postId, keys, type = 'post', opts = {}) {
   renderWpState(r.status, r.url);
   // «Convertir en página de Ecos» desde el Blog o la pantalla Estructura: se abre y se convierte de una vez
   if (opts.convert) {
-    if (spectraCount()) await convertSpectraDraft();
+    if (spectraCount() || spectraThird()) await convertSpectraDraft();
     else toast(type === 'page' ? t('Esta página no tiene bloques de Spectra: se ha abierto tal cual.') : t('Esta entrada no tiene bloques de Spectra: se ha abierto tal cual.'));
   }
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Levanta WordPress + MySQL con Docker y lo deja listo para `npm run test:wp`:
-# tema Astra, plugins Spectra y Yoast SEO, el Complemento de Ecos (build/ecos-wordpress.zip), un usuario administrador y su contraseña de aplicación.
+# tema Astra, plugins Spectra, Kadence Blocks, GenerateBlocks y Yoast SEO, el Complemento de Ecos (build/ecos-wordpress.zip), un usuario administrador y su contraseña de aplicación.
 #
 # Antes: `npm run plugin` (genera build/ecos-wordpress.zip). Después: `npm run test:wp` con las variables que se muestran (en GitHub se exportan solas).
 # Códigos de salida: 0 listo · 10 no se pudo descargar algo de internet (imágenes de Docker, wordpress.org: se avisa, no es un fallo de Ecos) · otro: fallo real.
@@ -50,7 +50,7 @@ wp rewrite structure '/%postname%/' --hard || exit 1   # sin enlaces permanentes
 
 echo "== Tema y plugins (wordpress.org)"
 need_external "instalar el tema Astra" wp theme install astra --activate
-need_external "instalar Spectra y Yoast SEO" wp plugin install ultimate-addons-for-gutenberg wordpress-seo --activate
+need_external "instalar Spectra, Kadence Blocks, GenerateBlocks y Yoast SEO" wp plugin install ultimate-addons-for-gutenberg kadence-blocks generateblocks wordpress-seo --activate
 
 echo "== Complemento de Ecos"
 wp plugin install /ecos-build/ecos-wordpress.zip --activate --force || exit 1
