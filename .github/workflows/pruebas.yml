@@ -1,0 +1,83 @@
+name: Pruebas (interfaz y WordPress real)
+
+# Se ejecuta en cada push y en cada pull request, en paralelo al flujo de Windows (build.yml) y sin depender de él:
+# un fallo aquí no impide publicar, pero deja la marca roja en la entrada.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pruebas-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  interfaz:
+    name: Interfaz (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Dependencias (sin descargar Electron, la interfaz se prueba en Chromium)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Chromium para Playwright
+        run: npx playwright install --with-deps chromium
+      - name: Pruebas de interfaz
+        env:
+          ECOS_UI_SHOTS: ${{ runner.temp }}/ui-shots
+        run: npm run test:ui
+      - name: Capturas de las pruebas fallidas
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capturas-interfaz
+          path: ${{ runner.temp }}/ui-shots
+          retention-days: 7
+          if-no-files-found: ignore
+
+  wordpress:
+    name: WordPress real (Docker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Los módulos de Ecos cargan «electron» (solo su ruta, no hace falta el programa)
+        run: echo -n electron > node_modules/electron/path.txt
+      - name: Construir el Complemento de Ecos
+        run: npm run plugin
+      - name: Levantar WordPress + MySQL (Docker) con Astra, Spectra, Yoast SEO y el complemento
+        id: wp
+        run: |
+          set +e
+          bash test-wp/setup.sh
+          code=$?
+          if [ "$code" -eq 10 ]; then
+            echo "::warning::Un servicio externo (Docker Hub o wordpress.org) no respondió tras varios reintentos: se omiten las pruebas contra WordPress real."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$code" -ne 0 ]; then exit "$code"; fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+      - name: Pruebas contra WordPress real
+        if: steps.wp.outputs.ready == 'true'
+        run: |
+          set +e
+          npm run test:wp -- --unreachable-ok
+          code=$?
+          if [ "$code" -eq 3 ]; then echo "::warning::WordPress no respondió: pruebas omitidas."; exit 0; fi
+          exit "$code"
+      - name: Registros de WordPress (si algo falló)
+        if: failure()
+        run: docker compose -f test-wp/docker-compose.yml logs --tail=120 wordpress db || true
