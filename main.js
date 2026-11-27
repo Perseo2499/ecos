@@ -1039,6 +1039,19 @@ handle('ai:alts', (urls, context) => ai.altTexts(cfg.ai, urls, context));
 handle('ai:alt', (url, context) => ai.altText(cfg.ai, url, context));
 handle('ai:seo', (input) => ai.seoSuggest(cfg.ai, { ...input, extra: cfg.aiInstructions || '' }));
 handle('wp:seoInfo', async () => (isSelf() ? WP().seoInfo(cfg) : { plugin: null, key: null, writable: false }));
+handle('wp:seoGet', async (id) => (isSelf() ? wpCall(() => WP().seoGet(cfg, id)) : { helper: false, plugin: null, premium: null, fields: null }));
+handle('wp:seoSave', async (id, fields) => { needSelf(); return wpCall(() => WP().seoSave(cfg, id, fields)); });
+// Menús (clásicos y de bloques) y widgets: solo WordPress propio, con permiso de administrador
+const MN = () => require('./src/wpmenus');
+handle('menus:load', async () => { needSelf(); return wpCall(() => MN().loadMenus(cfg)); });
+handle('menus:search', async (q) => { needSelf(); return wpCall(() => MN().searchContent(cfg, q)); });
+handle('menus:save', async (menuId, d) => { needSelf(); return wpCall(() => MN().saveMenu(cfg, menuId, d || {})); });
+handle('menus:create', async (name) => { needSelf(); return wpCall(() => MN().createMenu(cfg, name)); });
+handle('menus:delete', async (id) => { needSelf(); return wpCall(() => MN().deleteMenu(cfg, id)); });
+handle('menus:locations', async (list) => { needSelf(); return wpCall(() => MN().setLocations(cfg, list || [])); });
+handle('menus:navSave', async (o) => { needSelf(); return wpCall(() => MN().saveNavigation(cfg, o || {})); });
+handle('widgets:load', async () => { needSelf(); return wpCall(() => MN().loadWidgets(cfg)); });
+handle('widgets:save', async (d) => { needSelf(); return wpCall(() => MN().saveWidgets(cfg, d || {})); });
 handle('ai:rewrite', (input) => ai.rewrite(cfg.ai, { ...input, extra: cfg.aiInstructions || '' }));
 
 // Selector de IA: cada proveedor guarda su clave, URL personalizada y modelo

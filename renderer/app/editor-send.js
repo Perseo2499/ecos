@@ -84,6 +84,7 @@ $('#send').onclick = (e) => busy(e.target, async () => {
   }
   window.Net?.sendDone();
   exported = res.exported; lastSent = res; draft.postId = res.postId || draft.postId; draft.wpModified = res.modified || draft.wpModified; draft.previewOnly = false; window.api.autosaveClear().catch(() => {}); draftDirty = false; renderWpState(res.status, res.url);
+  await window.SeoPanel?.afterSend(res.postId || draft.postId);
   const pg = isPageDraft();
   $('#sent-text').textContent = res.status === 'publish' ? (pg ? t('¡Página publicada!') : t('¡Entrada publicada!'))
     : res.status === 'pending' ? (pg ? t('Página enviada a revisión.') : t('Entrada enviada a revisión: alguien con permiso la publicará.'))

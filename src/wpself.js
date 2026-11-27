@@ -369,6 +369,21 @@ async function seoInfo(cfg) {
   seoCache = { site: cfg.wpUrl, at: Date.now(), info };
   return info;
 }
+// SEO completo (complemento ≥ 1.8.0): palabra clave, canónica, indexación y redes sociales de Yoast SEO / Rank Math.
+// Sin el complemento esos metas no se pueden leer ni escribir: se devuelve { helper: false } y la pantalla lo explica.
+const SEO2_MIN = '1.8.0';
+async function seoGet(cfg, id) {
+  const info = await seoInfo(cfg).catch(() => ({ plugin: null }));
+  const st = await helperStatus(cfg).catch(() => ({ installed: false }));
+  const helper = !!st.installed && !versionLess(st.version, SEO2_MIN);
+  const base = { helper, plugin: info.plugin || null, premium: null, fields: null };
+  if (!helper || !info.plugin || !Number(id)) return base;
+  try { const r = await req(cfg, `/ecos/v1/seo/${Number(id)}`); return { ...base, plugin: r.plugin || base.plugin, premium: !!r.premium, fields: r.fields || null }; } catch (e) { return { ...base, error: e.message }; }
+}
+async function seoSave(cfg, id, fields) {
+  const r = await req(cfg, `/ecos/v1/seo/${Number(id)}`, { method: 'POST', json: { fields: fields || {} } });
+  return { plugin: r.plugin, premium: !!r.premium, fields: r.fields || null };
+}
 const fromRest = (p) => ({ ID: p.id, URL: p.link, status: p.status, date: p.date_gmt ? p.date_gmt + 'Z' : p.date, modified: p.modified_gmt ? p.modified_gmt + 'Z' : null });
 // Guarda la entrada y comprueba que WordPress se ha quedado con la fecha pedida. En los borradores,
 // WordPress puede dejar la fecha «sin fijar» y entonces, al publicarlos desde wp-admin, les pone la de ese
@@ -811,7 +826,7 @@ async function helperRender(cfg, payload) {
 }
 const themeStyles = (cfg, helperVersion) => TS.fetchTheme((route) => req(cfg, route), helperVersion);
 
-module.exports = { setUploadGuard, findMediaByName, helperHasRender, helperRender, themeStyles, getJson, helperHasExport, helperExport, helperHasLock, me, parseMe, postModified, helperLock, helperUnlock, parseHelperLock, helperStats, parseHelperStats, helperSettings, helperSaveSettings, parseHelperSettings, helperStatus, helperPurge, parseHelperStatus, helperBundledVersion, detectSeo, seoInfo, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, listDates, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText };
+module.exports = { setUploadGuard, findMediaByName, helperHasRender, helperRender, themeStyles, getJson, helperHasExport, helperExport, helperHasLock, me, parseMe, postModified, helperLock, helperUnlock, parseHelperLock, helperStats, parseHelperStats, helperSettings, helperSaveSettings, parseHelperSettings, helperStatus, helperPurge, parseHelperStatus, helperBundledVersion, detectSeo, seoInfo, seoGet, seoSave, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, listDates, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText };
 
 // Para módulos propios que hablan con la API (src/wpblocks.js)
 module.exports.request = req;

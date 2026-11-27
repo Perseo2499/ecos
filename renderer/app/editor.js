@@ -161,6 +161,7 @@ function openEditor() {
   $('#d-slug').value = draft.slug || '';
   $('#d-seodesc').value = draft.seoDesc || ''; $('#d-kw').value = draft.focusKw || '';
   loadSeoInfo();
+  window.SeoPanel?.load();
   renderPageBg();
   renderAstra(); loadWebStyles();
   $('#d-tags').value = draft.tags.join(', ');

@@ -12,6 +12,10 @@ const T = require('../src/transform');
 const PB = require('../src/parseblocks');
 const WB = require('../src/wpblocks');
 const ED = require('../src/wpeditor');
+const WM = require('../src/wpmenus');
+const MT = require('../renderer/menutree');
+const WL = require('../renderer/widgetlogic');
+const SM = require('../renderer/app/seo-meta');
 const { buildSamples } = require('./samples');
 const { makePng } = require('./png');
 
@@ -20,7 +24,7 @@ const EXPECT_YOAST = process.env.WP_EXPECT_YOAST !== '0';
 const TAG = 'Ecos CI ' + Date.now().toString(36);
 const CAT = TAG + ' categoría';
 
-const created = { posts: [], media: [], blocks: [], cats: [] };
+const created = { posts: [], media: [], blocks: [], cats: [], menus: [], widgets: [] };
 const S = {}; // estado compartido entre pruebas (van en orden)
 
 // Lo que el HTML trae al azar al volver a leerlo (identificadores de mosaico y carrusel) no cuenta como diferencia
@@ -56,6 +60,8 @@ test.after(async () => {
   for (const id of created.posts) await W.deletePost(cfg, id, 'post').catch((e) => failed.push('entrada ' + id + ': ' + e.message));
   for (const id of created.blocks) await W.request(cfg, `/wp/v2/blocks/${id}?force=true`, { method: 'DELETE' }).catch((e) => failed.push('bloque ' + id + ': ' + e.message));
   for (const id of created.media) await W.deleteMedia(cfg, id).catch((e) => failed.push('foto ' + id + ': ' + e.message));
+  for (const id of created.menus) await WM.deleteMenu(cfg, id).catch((e) => failed.push('menú ' + id + ': ' + e.message));
+  for (const id of created.widgets) await W.request(cfg, `/wp/v2/widgets/${id}?force=true`, { method: 'DELETE' }).catch((e) => failed.push('widget ' + id + ': ' + e.message));
   for (const id of created.cats) await W.deleteCategory(cfg, id).catch((e) => failed.push('categoría ' + id + ': ' + e.message));
   if (failed.length) console.warn('No se pudo borrar:\n - ' + failed.join('\n - '));
 });
@@ -222,6 +228,111 @@ test('web pública: clases ecos-*, bloque ecos-fx, scripts y estilos del complem
 test('Yoast SEO: la web pública lleva la descripción y el título', { skip: !EXPECT_YOAST && 'WP_EXPECT_YOAST=0' }, async () => {
   assert.match(S.html, /<meta name="description" content="Descripción SEO de prueba enviada por Ecos"/);
   assert.match(S.html, new RegExp('<title>[^<]*' + TAG));
+});
+
+test('SEO completo (complemento): escribir y leer canónica, indexación, palabra clave, Open Graph y X, y verlos en la web', { skip: !EXPECT_YOAST && 'WP_EXPECT_YOAST=0' }, async () => {
+  const g0 = await W.seoGet(cfg, S.postId);
+  assert.equal(g0.helper, true, 'el complemento es ≥ 1.8.0');
+  assert.equal(g0.plugin, 'yoast');
+  assert.ok(g0.fields && g0.fields.noindex === false, 'se lee de vuelta el estado inicial');
+  const canon = W.publicBase(cfg).replace(/\/$/, '') + '/canonica-' + TAG.replace(/\s+/g, '-').toLowerCase() + '/';
+  const want = { focusKw: 'palabra clave de prueba', canonical: canon, noindex: true, nofollow: false, ogTitle: 'OG ' + TAG, ogDesc: 'Descripción para Facebook', ogImage: S.img.url, ogImageId: S.img.id, twTitle: 'X ' + TAG, twDesc: 'Descripción para X', twImage: S.img.url, twImageId: S.img.id };
+  const saved = await W.seoSave(cfg, S.postId, want);
+  assert.deepEqual(SM.diff(want, saved.fields), {}, 'lo guardado vuelve igual');
+  const again = await W.seoGet(cfg, S.postId);
+  assert.deepEqual(SM.diff(want, again.fields), {}, 'y se lee igual al abrir (ida y vuelta)');
+  // la web pública lleva las etiquetas
+  let html = await fetchPublic(S.postUrl);
+  const tag = (re) => (re.exec(html) || [])[1];
+  assert.equal(tag(/<meta property="og:title" content="([^"]*)"/), 'OG ' + TAG, 'og:title');
+  assert.match(html, /<meta property="og:description" content="Descripción para Facebook"/);
+  assert.match(html, /<meta property="og:image" content="[^"]+/);
+  assert.equal(tag(/<link rel="canonical" href="([^"]*)"/), canon, 'canonical');
+  assert.match(tag(/<meta name="robots" content="([^"]*)"/), /noindex/, 'robots noindex');
+  assert.equal(tag(/<meta name="twitter:title" content="([^"]*)"/), 'X ' + TAG, 'twitter:title');
+  // quitar noindex y canónica: la web los quita
+  await W.seoSave(cfg, S.postId, SM.diff(saved.fields, { ...saved.fields, noindex: false, canonical: '' }));
+  html = await fetchPublic(S.postUrl);
+  assert.doesNotMatch(tag(/<meta name="robots" content="([^"]*)"/) || '', /noindex/, 'sin noindex');
+  assert.notEqual(tag(/<link rel="canonical" href="([^"]*)"/), canon, 'ya no usa la canónica antigua');
+  // un campo fuera de la lista blanca no se puede colar
+  await W.request(cfg, `/ecos/v1/seo/${S.postId}`, { method: 'POST', json: { fields: { evil: 'x', '_edit_lock': '1' } } });
+  const post = await W.request(cfg, `/wp/v2/posts/${S.postId}?context=edit&_fields=id,meta`);
+  assert.ok(!('evil' in (post.meta || {})));
+});
+
+test('menús: crear uno con 3 elementos anidados, asignarlo a la ubicación primary de Astra y verlo en la web', async () => {
+  const before = await WM.loadMenus(cfg);
+  assert.equal(before.blockTheme, false, 'Astra es un tema clásico: tiene ubicaciones');
+  const loc = before.locations.find((l) => l.slug === 'primary');
+  assert.ok(loc, 'Astra tiene la ubicación primary');
+  const menu = await WM.createMenu(cfg, TAG + ' menú');
+  created.menus.push(menu.id);
+  const site = W.publicBase(cfg).replace(/\/$/, '');
+  let tree = [];
+  tree = MT.add(tree, MT.newItem('t1', 'custom', { title: 'Nivel uno ' + TAG, url: site + '/#uno' })).tree;
+  tree = MT.add(tree, MT.newItem('t2', 'custom', { title: 'Nivel dos ' + TAG, url: site + '/#dos' }), 't1').tree;
+  tree = MT.add(tree, MT.newItem('t3', 'custom', { title: 'Nivel tres ' + TAG, url: site + '/#tres' }), 't2').tree;
+  const d = MT.diff([], MT.flatten(tree));
+  assert.equal(d.add.length, 3);
+  const r = await WM.saveMenu(cfg, menu.id, d);
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.calls, 3, 'solo 3 peticiones');
+  assert.deepEqual((await WM.setLocations(cfg, MT.locationsDiff([{ id: menu.id, locations: [] }], MT.assign([{ id: menu.id, locations: [] }], menu.id, 'primary')))).errors, []);
+
+  // se lee de vuelta con la misma estructura
+  const back = (await WM.loadMenus(cfg)).menus.find((m) => m.id === menu.id);
+  assert.deepEqual(back.locations, ['primary']);
+  const t = MT.nest(back.items);
+  assert.equal(MT.depth(t), 3);
+  assert.deepEqual([t[0].title, t[0].children[0].title, t[0].children[0].children[0].title], ['Nivel uno ' + TAG, 'Nivel dos ' + TAG, 'Nivel tres ' + TAG]);
+  assert.equal(MT.diff(back.items, MT.flatten(t)).count, 0, 'sin tocar nada no hay nada que guardar');
+
+  // la web pública lo muestra anidado
+  const html = await fetchPublic(site + '/');
+  for (const n of ['Nivel uno', 'Nivel dos', 'Nivel tres']) assert.ok(html.includes(n + ' ' + TAG), n + ' en el menú de la web');
+  assert.ok(html.indexOf('Nivel uno') < html.indexOf('Nivel dos') && html.indexOf('Nivel dos') < html.indexOf('Nivel tres'), 'en orden');
+  assert.match(html, /sub-menu/, 'con submenús');
+
+  // renombrar uno y reordenar: solo las peticiones necesarias
+  const upd = MT.diff(back.items, MT.flatten(MT.rename(t, back.items.find((i) => i.title.startsWith('Nivel dos')).id, { title: 'Dos renombrado ' + TAG })));
+  assert.equal(upd.count, 1);
+  assert.deepEqual((await WM.saveMenu(cfg, menu.id, upd)).errors, []);
+  const after = (await WM.loadMenus(cfg)).menus.find((m) => m.id === menu.id);
+  assert.ok(after.items.some((i) => i.title === 'Dos renombrado ' + TAG));
+});
+
+test('widgets: añadir un widget de bloque a la barra lateral de Astra y verlo en la web', async () => {
+  const w0 = await WM.loadWidgets(cfg);
+  assert.ok(w0.sidebars.some((x) => x.id === 'sidebar-1'), 'Astra tiene sidebar-1');
+  const zones = WL.normalize(w0.sidebars, w0.widgets);
+  const content = '<!-- wp:paragraph -->\n<p>Widget de prueba ' + TAG + '</p>\n<!-- /wp:paragraph -->';
+  const added = WL.addBlock(zones, 'sidebar-1', content, 'new-1');
+  const d = WL.diff(zones, added.zones);
+  assert.equal(d.add.length, 1);
+  const r = await WM.saveWidgets(cfg, d);
+  assert.deepEqual(r.errors, []);
+  const id = r.ids['new-1'];
+  assert.match(id, /^block-\d+$/);
+  created.widgets.push(id);
+  const w1 = await WM.loadWidgets(cfg);
+  const z1 = WL.normalize(w1.sidebars, w1.widgets);
+  const mine = WL.locate(z1, id);
+  assert.equal(mine.zone.id, 'sidebar-1');
+  assert.equal(mine.widget.raw.content.includes('Widget de prueba ' + TAG), true, 'su contenido vuelve igual (instance.raw.content)');
+  // en la web (Astra pinta la barra lateral en la portada de entradas y en cada entrada)
+  const site = W.publicBase(cfg).replace(/\/$/, '');
+  const pages = [await fetchPublic(site + '/'), await fetchPublic(S.postUrl)];
+  assert.ok(pages.some((h) => h.includes('Widget de prueba ' + TAG)), 'el widget aparece en la web');
+  // cambiar su texto: una sola petición
+  const edit = WL.diff(z1, WL.setRaw(z1, id, { content: content.replace('prueba', 'cambiado') }));
+  assert.equal(edit.count, 1);
+  assert.deepEqual((await WM.saveWidgets(cfg, edit)).errors, []);
+  // moverlo al pie y devolverlo
+  const moved = WL.diff(z1, WL.move(z1, id, z1.find((z) => z.id !== 'sidebar-1' && !z.inactive).id).zones);
+  assert.deepEqual((await WM.saveWidgets(cfg, moved)).errors, []);
+  const z2 = WL.normalize((await WM.loadWidgets(cfg)).sidebars, (await WM.loadWidgets(cfg)).widgets);
+  assert.equal(WL.locate(z2, id).zone.id !== 'sidebar-1', true, 'ya no está en la barra lateral');
 });
 
 test('vista previa exacta del complemento (render) con el tema real', async () => {

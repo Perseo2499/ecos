@@ -8,12 +8,17 @@ const path = require('path');
 
 const ECOS_VERSION = (/^\s*\*\s*Version:\s*([\d.]+)/m.exec(fs.readFileSync(path.join(__dirname, '..', 'wp-plugin', 'ecos', 'ecos.php'), 'utf8')) || [])[1] || '0';
 const DESC = '_yoast_wpseo_metadesc';
+const SeoMeta = require('../renderer/app/seo-meta');
 
 function start({ user = 'ecostest', pass = 'abcdEFGHijklMNOPqrstUVWX', port = 0 } = {}) {
   let next = 10;
   const posts = new Map(), media = new Map(), blocks = new Map(), tokens = new Set();
   const cats = [{ id: 1, name: 'Sin categoría', slug: 'sin-categoria', count: 0, parent: 0 }];
   let origin = '';
+  // menús, widgets y registro de peticiones de escritura (para contar las que hacen falta)
+  const menus = new Map(), menuItems = new Map(), widgetsMap = new Map(), reqs = [];
+  const locations = { primary: { name: 'primary', description: 'Primary Menu', menu: 0 }, footer: { name: 'footer', description: 'Footer Menu', menu: 0 } };
+  const sidebarsMap = new Map([['sidebar-1', { id: 'sidebar-1', name: 'Barra lateral', description: 'Barra lateral principal', widgets: [] }], ['footer-1', { id: 'footer-1', name: 'Pie 1', description: '', widgets: [] }], ['wp_inactive_widgets', { id: 'wp_inactive_widgets', name: 'Widgets inactivos', description: '', widgets: [] }]]);
   posts.set(1, { id: 1, title: '¡Hola, mundo!', content: '<!-- wp:paragraph --><p>Bienvenido</p><!-- /wp:paragraph -->', status: 'publish', excerpt: '', slug: 'hola-mundo', categories: [1], meta: {}, date_gmt: '2026-01-01T00:00:00', modified_gmt: '2026-01-01T00:00:00' });
   const plain = (s) => String(s || '').replace(/<[^>]+>/g, '');
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -27,7 +32,22 @@ function start({ user = 'ecostest', pass = 'abcdEFGHijklMNOPqrstUVWX', port = 0 
         (/ecos-(?:tabs|cifras|donar|evento|puntos|compare|faq-uno)/.test(c) ? `<script src="${origin}/wp-content/plugins/ecos/assets/ecos-more.js" defer></script>` : '')
       : '';
     const d = p.meta[DESC] ? `<meta name="description" content="${esc(p.meta[DESC])}">` : '';
-    return `<!doctype html><html><head><title>${esc(p.title)} - Sim</title>${d}${assets}</head><body class="ast-theme"><main>${renderContent(c)}${/wp:uagb/.test(c) ? "<div class=\"uagb-image-gallery\"></div>" : ""}</main></body></html>`;
+    const sf = SeoMeta.fromMeta('yoast', p.meta);
+    const seo = (sf.canonical ? `<link rel="canonical" href="${esc(sf.canonical)}">` : `<link rel="canonical" href="${origin}/?p=${p.id}">`)
+      + `<meta name="robots" content="${sf.noindex ? 'noindex' : 'index'}, ${sf.nofollow ? 'nofollow' : 'follow'}">`
+      + `<meta property="og:title" content="${esc(sf.ogTitle || p.title)}">` + (sf.ogDesc ? `<meta property="og:description" content="${esc(sf.ogDesc)}">` : '') + (sf.ogImage ? `<meta property="og:image" content="${esc(sf.ogImage)}">` : '')
+      + (sf.twTitle ? `<meta name="twitter:title" content="${esc(sf.twTitle)}">` : '') + (sf.twDesc ? `<meta name="twitter:description" content="${esc(sf.twDesc)}">` : '') + (sf.twImage ? `<meta name="twitter:image" content="${esc(sf.twImage)}">` : '') + '<meta name="twitter:card" content="summary_large_image">';
+    return `<!doctype html><html><head><title>${esc(p.title)} - Sim</title>${d}${seo}${assets}</head><body class="ast-theme"><main>${renderContent(c)}${/wp:uagb/.test(c) ? "<div class=\"uagb-image-gallery\"></div>" : ""}</main></body></html>`;
+  };
+  const menuHtml = (id) => {
+    const its = [...menuItems.values()].filter((i) => i.menu === id).sort((a, b) => a.menu_order - b.menu_order);
+    const ul = (pid) => { const k = its.filter((i) => i.parent === pid); return k.length ? `<ul class="${pid ? 'sub-menu' : 'main-header-menu'}">${k.map((i) => `<li class="menu-item"><a href="${esc(i.url || '#')}">${esc(i.title)}</a>${ul(i.id)}</li>`).join('')}</ul>` : ''; };
+    return ul(0);
+  };
+  const homeHtml = () => {
+    const prim = locations.primary.menu;
+    const side = (id) => (sidebarsMap.get(id)?.widgets || []).map((w) => `<section id="${w}" class="widget widget_${widgetsMap.get(w)?.id_base}">${renderContent(widgetsMap.get(w)?.instance?.raw?.content || widgetsMap.get(w)?.instance?.raw?.text || '')}</section>`).join('');
+    return `<!doctype html><html><head><title>Sim</title></head><body class="ast-theme"><header><nav class="main-navigation" id="site-navigation">${prim ? menuHtml(prim) : ''}</nav></header><main>Inicio</main><aside id="secondary" class="widget-area">${side('sidebar-1')}</aside><footer>${locations.footer.menu ? menuHtml(locations.footer.menu) : ''}${side('footer-1')}</footer></body></html>`;
   };
   const postObj = (p) => ({
     id: p.id, link: `${origin}/?p=${p.id}`, status: p.status, date_gmt: p.date_gmt, modified_gmt: p.modified_gmt, slug: p.slug, type: 'post', parent: 0,
@@ -53,6 +73,7 @@ function start({ user = 'ecostest', pass = 'abcdEFGHijklMNOPqrstUVWX', port = 0 
 
       // --- web pública y editor de un solo uso ---
       if (!url.pathname.startsWith('/wp-json')) {
+        if (url.pathname === '/' && !q.get('p')) return send(200, homeHtml());
         if (url.pathname === '/' && q.get('p')) { const p = posts.get(Number(q.get('p'))); return p ? send(200, pageHtml(p)) : send(404, 'No encontrado'); }
         if (url.pathname === '/wp-admin/admin-post.php' && q.get('action') === 'ecos_editor') {
           const t = q.get('t') || '', ok = tokens.has(t);
@@ -76,7 +97,71 @@ function start({ user = 'ecostest', pass = 'abcdEFGHijklMNOPqrstUVWX', port = 0 
       if (route === '/wp/v2/plugins') return send(200, [{ plugin: 'ultimate-addons-for-gutenberg/ultimate-addons-for-gutenberg', status: 'active' }, { plugin: 'kadence-blocks/kadence-blocks', status: 'active' }, { plugin: 'generateblocks/plugin', status: 'active' }]);
       if (route === '/wp/v2/settings') return send(200, { title: 'Sim WP', show_on_front: 'posts', page_on_front: 0, page_for_posts: 0 });
       if (route === '/wp/v2/pages' || route === '/wp/v2/tags') return send(200, [], { 'X-WP-TotalPages': '1', 'X-WP-Total': '0' });
-      if (/^\/wp\/v2\/(menus|navigation|menu-locations)/.test(route)) return err(404, 'rest_no_route', 'No route');
+      if (route === '/wp/v2/navigation') return send(200, [], { 'X-WP-TotalPages': '1' });
+      if (req.method !== 'GET') reqs.push(req.method + ' ' + route);
+      const menuObj = (mm) => ({ id: mm.id, name: mm.name, slug: mm.slug, locations: Object.keys(locations).filter((l) => locations[l].menu === mm.id) });
+      if (route === '/wp/v2/menu-locations') return send(200, locations);
+      if (route === '/wp/v2/menus') {
+        if (req.method === 'POST') { const mm = { id: next++, name: json.name, slug: String(json.name).toLowerCase().replace(/\W+/g, '-') }; menus.set(mm.id, mm); return send(201, menuObj(mm)); }
+        return send(200, [...menus.values()].map(menuObj), { 'X-WP-TotalPages': '1' });
+      }
+      if ((r = m(/^\/wp\/v2\/menus\/(\d+)$/))) {
+        const mm = menus.get(+r[1]);
+        if (!mm) return err(404, 'rest_term_invalid', 'No existe');
+        if (req.method === 'DELETE') { menus.delete(mm.id); for (const l of Object.values(locations)) if (l.menu === mm.id) l.menu = 0; for (const [k, i] of menuItems) if (i.menu === mm.id) menuItems.delete(k); return send(200, { deleted: true }); }
+        if (req.method === 'POST' && Array.isArray(json.locations)) { for (const l of Object.values(locations)) if (l.menu === mm.id) l.menu = 0; for (const l of json.locations) if (locations[l]) locations[l].menu = mm.id; }
+        return send(200, menuObj(mm));
+      }
+      const itemObj = (i) => ({ id: i.id, title: { raw: i.title, rendered: esc(i.title) }, url: i.url, menu_order: i.menu_order, parent: i.parent, type: i.type, object: i.object, object_id: i.object_id, menus: i.menu, status: 'publish' });
+      if (route === '/wp/v2/menu-items') {
+        if (req.method === 'POST') {
+          if (!menus.has(+json.menus)) return err(400, 'rest_invalid_param', 'Parámetro no válido: menus');
+          const i = { id: next++, title: json.title || '', url: json.url || (json.object_id ? `${origin}/?p=${json.object_id}` : ''), menu_order: json.menu_order || 1, parent: json.parent || 0, type: json.type, object: json.object, object_id: json.object_id || 0, menu: +json.menus };
+          menuItems.set(i.id, i); return send(201, itemObj(i));
+        }
+        const only = q.get('menus'); const l = [...menuItems.values()].filter((i) => !only || i.menu === +only);
+        return send(200, l.map(itemObj), { 'X-WP-TotalPages': '1' });
+      }
+      if ((r = m(/^\/wp\/v2\/menu-items\/(\d+)$/))) {
+        const i = menuItems.get(+r[1]);
+        if (!i) return err(404, 'rest_post_invalid_id', 'ID no válido.');
+        if (req.method === 'DELETE') { menuItems.delete(i.id); return send(200, { deleted: true }); }
+        if (req.method === 'POST') { if (json.parent !== undefined) i.parent = json.parent; if (json.menu_order !== undefined) i.menu_order = json.menu_order; if (json.title !== undefined) i.title = json.title; if (json.url !== undefined) i.url = json.url; }
+        return send(200, itemObj(i));
+      }
+      // widgets y zonas
+      const widObj = (w) => ({ id: w.id, id_base: w.id_base, sidebar: w.sidebar, name: w.id_base, rendered: '', instance: { encoded: '', hash: '', raw: w.instance.raw } });
+      const sideObj = (z) => ({ id: z.id, name: z.name, description: z.description, status: z.id === 'wp_inactive_widgets' ? 'inactive' : 'active', widgets: z.widgets });
+      if (route === '/wp/v2/sidebars') return send(200, [...sidebarsMap.values()].map(sideObj));
+      if ((r = m(/^\/wp\/v2\/sidebars\/([\w-]+)$/))) {
+        const z = sidebarsMap.get(r[1]); if (!z) return err(404, 'rest_sidebar_not_found', 'No existe');
+        if (req.method === 'POST' && Array.isArray(json.widgets)) {
+          for (const o of sidebarsMap.values()) { if (o !== z) o.widgets = o.widgets.filter((id) => !json.widgets.includes(id)); }
+          for (const id of z.widgets) if (!json.widgets.includes(id)) sidebarsMap.get('wp_inactive_widgets').widgets.push(id);
+          z.widgets = json.widgets.slice(); for (const id of z.widgets) if (widgetsMap.has(id)) widgetsMap.get(id).sidebar = z.id;
+        }
+        return send(200, sideObj(z));
+      }
+      if (route === '/wp/v2/widgets') {
+        if (req.method === 'POST') {
+          const n = next++, w = { id: `${json.id_base}-${n}`, id_base: json.id_base, sidebar: json.sidebar || 'wp_inactive_widgets', instance: { raw: json.instance?.raw || {} } };
+          widgetsMap.set(w.id, w); sidebarsMap.get(w.sidebar)?.widgets.push(w.id); return send(201, widObj(w));
+        }
+        return send(200, [...widgetsMap.values()].map(widObj), { 'X-WP-TotalPages': '1' });
+      }
+      if ((r = m(/^\/wp\/v2\/widgets\/([\w-]+)$/))) {
+        const w = widgetsMap.get(r[1]); if (!w) return err(404, 'rest_widget_not_found', 'No existe');
+        if (req.method === 'DELETE') { widgetsMap.delete(w.id); for (const z of sidebarsMap.values()) z.widgets = z.widgets.filter((id) => id !== w.id); return send(200, { deleted: true }); }
+        if (req.method === 'POST' && json.instance?.raw) w.instance.raw = json.instance.raw;
+        return send(200, widObj(w));
+      }
+      if (route === '/wp/v2/search') return send(200, []);
+      // SEO completo (complemento 1.8.0): solo Yoast en el simulador
+      if ((r = m(/^\/ecos\/v1\/seo\/(\d+)$/))) {
+        const p = posts.get(+r[1]); if (!p) return err(404, 'rest_post_invalid_id', 'ID no válido.');
+        if (req.method === 'POST') { const meta = SeoMeta.toMeta('yoast', json.fields || {}, { premium: false }); p.meta = { ...p.meta, ...meta }; }
+        return send(200, { plugin: 'yoast', premium: false, version: ECOS_VERSION, writable: true, fields: SeoMeta.fromMeta('yoast', p.meta) });
+      }
       if (/^\/wp\/v2\/block-patterns\//.test(route)) return send(200, []);
 
       if (route === '/wp/v2/categories') {
@@ -150,7 +235,7 @@ function start({ user = 'ecostest', pass = 'abcdEFGHijklMNOPqrstUVWX', port = 0 
   });
   return new Promise((resolve) => server.listen(port, '127.0.0.1', () => {
     origin = `http://127.0.0.1:${server.address().port}`;
-    resolve({ url: origin, user, pass, close: () => new Promise((r) => server.close(r)), state: { posts, media, blocks, cats } });
+    resolve({ url: origin, user, pass, close: () => new Promise((r) => server.close(r)), state: { posts, media, blocks, cats, menus, menuItems, locations, widgets: widgetsMap, sidebars: sidebarsMap, reqs } });
   }));
 }
 

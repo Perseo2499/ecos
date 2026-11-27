@@ -231,6 +231,7 @@
             <div class="field hidden" id="seo-desc-field"><label data-i18n>Descripción para buscadores</label><textarea id="d-seodesc" rows="3" data-i18n-ph placeholder="Lo que se ve bajo el título en Google"></textarea></div>
             <div class="field"><label data-i18n>Palabra clave</label><input id="d-kw" data-i18n-ph placeholder="Opcional: la búsqueda que quieres cubrir" autocomplete="off"></div>
             <div class="share-card" id="d-share" title=""></div>
+            <div class="share-card seo2" id="d-seo2"></div>
             <details class="ai-opts pagebg" id="d-bg">
               <summary><span class="ms">wallpaper</span><span data-i18n>Fondo de la página</span><span class="ai-opts-sum" id="bg-sum"></span></summary>
               <div class="bg-prev" id="bg-prev"><div class="bg-prev-head"></div><div class="bg-prev-card"><i></i><i></i><i class="s"></i></div></div>
@@ -330,6 +331,7 @@
         <button data-type="calendar"><span class="ms">calendar_month</span><span data-i18n>Calendario</span></button>
         <button data-type="media"><span class="ms">photo_library</span><span data-i18n>Medios</span></button>
         <button data-type="structure"><span class="ms">account_tree</span><span data-i18n>Estructura</span></button>
+        <button data-type="menus"><span class="ms">menu_open</span><span data-i18n>Menús y widgets</span></button>
       </div>
     </div>
     <div class="row b-filters">
@@ -389,6 +391,7 @@
     </div>
     <div id="b-list" class="blog-list"></div>
     <div id="b-structure" class="st-wrap hidden"></div>
+    <div id="b-menus" class="mn-wrap hidden"></div>
     <div id="b-calendar" class="cal hidden"></div>
     <div id="b-media" class="mg hidden"></div>
     <div class="pager">
@@ -1166,6 +1169,8 @@
 <script src="blocks/third.js"></script>
 <script src="format.js"></script>
 <script src="sitemap.js"></script>
+<script src="menutree.js"></script>
+<script src="widgetlogic.js"></script>
 <script src="structure.js"></script>
 <script src="vinyl.js"></script>
 <script src="navbar.js"></script>
@@ -1175,8 +1180,10 @@
 <script src="app/datelane-ui.js"></script>
 <script src="app/posts.js"></script>
 <script src="app/seo.js"></script>
+<script src="app/seo-meta.js"></script>
 <script src="app/editor.js"></script>
 <script src="app/editor-share.js"></script>
+<script src="app/seo-panel.js"></script>
 <script src="app/editor-save.js"></script>
 <script src="app/editor-ai.js"></script>
 <script src="app/editor-import.js"></script>
@@ -1194,6 +1201,8 @@
 <script src="app/tplpicker.js"></script>
 <script src="app/sections-ui.js"></script>
 <script src="app/cropper.js"></script>
+<script src="app/menus-ui.js"></script>
+<script src="app/widget-edit.js"></script>
 <script src="app/blog.js"></script>
 <script src="app/links.js"></script>
 <script src="app/media.js"></script>
