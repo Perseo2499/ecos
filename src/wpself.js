@@ -373,11 +373,11 @@ const createPost = (cfg, f) => savePost(cfg, `/wp/v2/${f.type === 'page' ? 'page
 const updatePost = (cfg, id, f) => savePost(cfg, `/wp/v2/${f.type === 'page' ? 'pages' : 'posts'}/${id}`, f);
 
 // author: id de una persona de WordPress (para «Solo las mías»)
-async function listPosts(cfg, { type = 'post', status = 'any', search = '', page = 1, number = 20, after, before, orderby = 'date', include, author } = {}) {
+async function listPosts(cfg, { type = 'post', status = 'any', search = '', page = 1, number = 20, after, before, orderby = 'date', include, author, order = 'desc' } = {}) {
   const coll = type === 'page' ? 'pages' : 'posts';
   const q = new URLSearchParams({
     status: status === 'any' ? 'publish,future,draft,pending,private' : status, per_page: String(number), page: String(page),
-    orderby: orderby === 'modified' ? 'modified' : 'date', order: 'desc', context: 'edit', _embed: 'wp:featuredmedia,author',
+    orderby: orderby === 'modified' ? 'modified' : 'date', order: order === 'asc' ? 'asc' : 'desc', context: 'edit', _embed: 'wp:featuredmedia,author',
     ...(Number(author) > 0 ? { author: String(Number(author)) } : {}),
     ...(search ? { search } : {}), ...(after ? { after } : {}), ...(before ? { before } : {}),
     ...(include?.length ? { include: include.join(',') } : {}),
@@ -395,6 +395,24 @@ async function listPosts(cfg, { type = 'post', status = 'any', search = '', page
       author: postAuthor(p),
     })),
   };
+}
+// Solo las fechas (ligero) de todas las entradas que cumplen los filtros: alimenta la línea temporal del Blog.
+async function listDates(cfg, { type = 'post', status = 'any', search = '', after, before, include, author, max = 5000 } = {}) {
+  const coll = type === 'page' ? 'pages' : 'posts';
+  const out = [];
+  for (let page = 1; out.length < max; page++) {
+    const q = new URLSearchParams({
+      status: status === 'any' ? 'publish,future,draft,pending,private' : status, per_page: '100', page: String(page),
+      orderby: 'date', order: 'desc', _fields: 'id,date_gmt,date',
+      ...(Number(author) > 0 ? { author: String(Number(author)) } : {}),
+      ...(search ? { search } : {}), ...(after ? { after } : {}), ...(before ? { before } : {}),
+      ...(include?.length ? { include: include.join(',') } : {}),
+    });
+    const { data, res } = await req(cfg, `/wp/v2/${coll}?${q}`, { raw: true });
+    for (const p of data) out.push(p.date_gmt ? p.date_gmt + 'Z' : p.date);
+    if (data.length < 100 || out.length >= Number(res.headers.get('x-wp-total') || 0)) break;
+  }
+  return out;
 }
 // Autor de una entrada de la lista (con _embed=author): { id, name, avatar }
 function postAuthor(p) {
@@ -762,7 +780,7 @@ async function helperRender(cfg, payload) {
 }
 const themeStyles = (cfg, helperVersion) => TS.fetchTheme((route) => req(cfg, route), helperVersion);
 
-module.exports = { helperHasRender, helperRender, themeStyles, getJson, helperHasExport, helperExport, helperHasLock, me, parseMe, postModified, helperLock, helperUnlock, parseHelperLock, helperStats, parseHelperStats, helperSettings, helperSaveSettings, parseHelperSettings, helperStatus, helperPurge, parseHelperStatus, helperBundledVersion, detectSeo, seoInfo, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText };
+module.exports = { helperHasRender, helperRender, themeStyles, getJson, helperHasExport, helperExport, helperHasLock, me, parseMe, postModified, helperLock, helperUnlock, parseHelperLock, helperStats, parseHelperStats, helperSettings, helperSaveSettings, parseHelperSettings, helperStatus, helperPurge, parseHelperStatus, helperBundledVersion, detectSeo, seoInfo, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, listDates, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText };
 
 // Para módulos propios que hablan con la API (src/wpblocks.js)
 module.exports.request = req;

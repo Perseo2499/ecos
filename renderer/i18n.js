@@ -321,6 +321,12 @@
     'Esto ha cambiado desde la última versión que usaste ({n} versiones).': 'This is what has changed since the last version you used ({n} versions).',
     'Ver todo el historial': 'See the full history',
     // 1.2 (editor completo)
+    'Orden por fecha': 'Sort by date',
+    'Más recientes': 'Newest first',
+    'Más antiguas': 'Oldest first',
+    'Línea temporal de las publicaciones': 'Posts timeline',
+    'Línea temporal del blog': 'Blog timeline',
+    'Cargar publicaciones más antiguas': 'Load older posts',
     'Describiendo…': 'Describing…',
     'La IA no ha devuelto ninguna descripción. Escríbela debajo de la foto.': 'The AI returned no description. Write it below the photo.',
     'Describir con IA las {n} fotos sin descripción': 'Describe the {n} photos without description with AI',

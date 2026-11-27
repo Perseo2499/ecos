@@ -141,9 +141,9 @@ const updateContent = (cfg, id, content) => call(cfg, `/posts/${id}`, { content 
 
 // --- Gestión del blog (pestaña «Blog») ------------------------------------------
 // type: 'post' | 'page'; status: 'any' | 'publish' | 'draft' | 'pending' | 'future' | 'private' | 'trash'
-async function listPosts(cfg, { type = 'post', status = 'any', search = '', page = 1, number = 20, after, before } = {}) {
+async function listPosts(cfg, { type = 'post', status = 'any', search = '', page = 1, number = 20, after, before, order = 'desc' } = {}) {
   const q = new URLSearchParams({
-    type, status, number: String(number), page: String(page), order_by: 'date', order: 'DESC',
+    type, status, number: String(number), page: String(page), order_by: 'date', order: order === 'asc' ? 'ASC' : 'DESC',
     fields: 'ID,title,status,date,modified,URL,type,featured_image,categories,excerpt',
     ...(search ? { search } : {}), ...(after ? { after } : {}), ...(before ? { before } : {}),
   });
@@ -156,6 +156,18 @@ async function listPosts(cfg, { type = 'post', status = 'any', search = '', page
       excerpt: (p.excerpt || '').replace(/<[^>]+>/g, '').replace(/&[#\w]+;/g, ' ').trim().slice(0, 160),
     })),
   };
+}
+// Solo las fechas de todas las entradas que cumplen los filtros (para la línea temporal del Blog)
+async function listDates(cfg, { type = 'post', status = 'any', search = '', after, before, max = 5000 } = {}) {
+  const out = [];
+  for (let page = 1; out.length < max; page++) {
+    const q = new URLSearchParams({ type, status, number: '100', page: String(page), order_by: 'date', order: 'DESC', fields: 'ID,date',
+      ...(search ? { search } : {}), ...(after ? { after } : {}), ...(before ? { before } : {}) });
+    const json = await call(cfg, '/posts/?' + q);
+    for (const p of json.posts) out.push(p.date);
+    if (json.posts.length < 100 || out.length >= json.found) break;
+  }
+  return out;
 }
 async function getPost(cfg, id) {
   const p = await call(cfg, `/posts/${id}?context=edit`);
@@ -178,4 +190,4 @@ const trashPost = (cfg, id) => call(cfg, `/posts/${id}/delete`, {});
 // En WordPress.com, borrar una entrada que ya está en la papelera la elimina para siempre
 const deletePost = async (cfg, id) => { const p = await call(cfg, `/posts/${id}?fields=status`); if (p.status !== 'trash') await trashPost(cfg, id); return trashPost(cfg, id); };
 
-module.exports = { updateContent, deletePost, getPost, findExisting, uploadNamed, postStatuses, REDIRECT, AuthError, login, siteInfo, publicUrl, publicBase, updatePost, categories, uploadFromUrls, uploadFile, createPost, updateMedia, listPosts, setPostStatus, trashPost };
+module.exports = { updateContent, deletePost, getPost, findExisting, uploadNamed, postStatuses, REDIRECT, AuthError, login, siteInfo, publicUrl, publicBase, updatePost, categories, uploadFromUrls, uploadFile, createPost, updateMedia, listPosts, listDates, setPostStatus, trashPost };

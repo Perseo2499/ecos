@@ -17,14 +17,36 @@ function mediaCount(p) {
   const part = (n, icon, one, many) => (n ? `<span class="mc" title="${t(n === 1 ? one : many, { n })}"><span class="ms">${icon}</span>${n}</span>` : '');
   return ph || vi ? `<span class="mcount">${part(ph, 'photo', '{n} foto', '{n} fotos')}${part(vi, 'videocam', '{n} vídeo', '{n} vídeos')}</span>` : '';
 }
+// Línea temporal lateral de Redes: meses conocidos de lo cargado; si Meta tiene más, un botón «…» al final carga más
+const postsMoreAvailable = () => !!(CFG.metaConnected && cursors && (cursors.facebook || cursors.instagram));
+const postsLane = createDateLane({
+  name: 'posts', label: t('Línea temporal de las publicaciones'), liveDrag: true,
+  isActive: () => $('#tab-posts').classList.contains('active') && !feedCal.on && $('#editor').classList.contains('hidden') && !document.body.classList.contains('editing'),
+  stickyEl: () => $('#tab-posts .row.filters'), padEl: () => $('#tab-posts .feed-col'), list: () => $('#feed'),
+  watch: () => [$('#editor'), $('#feed-cal')],
+  jump: async (key, o) => { dlScrollTo($('#feed'), key, () => $('#tab-posts .row.filters'), o.smooth); },
+});
+function postsLaneUpdate(groups) {
+  postsLane.update(groups.map((g) => ({ key: g.key, count: g.count })).filter((g) => g.key !== DateLane.NOKEY), {
+    order: dlOrder('posts'),
+    more: postsMoreAvailable() ? { label: t('Cargar publicaciones más antiguas'), run: async () => { await loadMore(); } } : null,
+  });
+}
 function renderFeed() {
   const list = visiblePosts();
   const feed = $('#feed');
   feed.classList.toggle('selecting', selected.size > 0);
-  if (!rawPosts.length) { feed.innerHTML = `<div class="empty"><span class="ms fill">photo_library</span><b>${t('Aún no hay publicaciones')}</b><span>${t('Elige un origen arriba o arrastra archivos aquí.')}</span></div>`; return; }
-  if (!list.length) { feed.innerHTML = `<div class="empty"><span class="ms">filter_alt_off</span><span>${t('Ninguna publicación coincide con el filtro.')}</span></div>`; return; }
+  if (!rawPosts.length) { postsLaneUpdate([]); feed.innerHTML = `<div class="empty"><span class="ms fill">photo_library</span><b>${t('Aún no hay publicaciones')}</b><span>${t('Elige un origen arriba o arrastra archivos aquí.')}</span></div>`; return; }
+  if (!list.length) { postsLaneUpdate([]); feed.innerHTML = `<div class="empty"><span class="ms">filter_alt_off</span><span>${t('Ninguna publicación coincide con el filtro.')}</span></div>`; return; }
   feed.innerHTML = '';
-  for (const p of list) {
+  // Orden por fecha (recordado) y encabezados por mes y, si hay varias en el mes, por día
+  const groups = DateLane.groupByMonth(list, (p) => p.date, dlOrder('posts'));
+  const flat = [];
+  for (const g of groups) for (const d of g.days) for (const p of d.items) flat.push({ p, g, d });
+  let lastG = null, lastD = null;
+  for (const { p, g, d } of flat) {
+    if (g !== lastG) { feed.appendChild(dlMonthHeader(g)); lastG = g; lastD = null; }
+    if (g.showDays && d !== lastD) { feed.appendChild(dlDayHeader(d)); lastD = d; }
     const key = keyOf(p);
     const ex = exportOf(p);
     const card = document.createElement('div');
@@ -55,7 +77,10 @@ function renderFeed() {
     card.onkeydown = (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(); } };
     feed.appendChild(card);
   }
+  postsLaneUpdate(groups);
 }
+$('#f-order').value = dlOrder('posts');
+$('#f-order').onchange = (e) => { dlSetOrder('posts', e.target.value); renderFeed(); };
 // ---------------------------------------------------------------- Publicaciones: calendario
 const feedCal = { month: new Date(new Date().getFullYear(), new Date().getMonth(), 1), mode: 'month', on: false };
 function renderFeedCal() {
