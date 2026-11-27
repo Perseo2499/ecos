@@ -25,7 +25,10 @@ const logFile = () => path.join(app.getPath('userData'), 'logs', 'ecos.log');
 let _logger = null;
 const logger = () => _logger || (_logger = require('./src/logger').createLogger({ file: logFile() }));
 function log(...args) { try { logger().warn(...args); } catch { /* sin registro */ } }
-function logError(...args) { try { logger().error(...args); } catch { /* sin registro */ } }
+// Cada ERROR también queda como informe local saneado (src/crashreport.js); solo se ofrece enviarlo si la persona lo activa en Ajustes → Avanzado
+let _crash = null;
+const crash = () => _crash || (_crash = require('./src/diagipc').createCrash({ file: path.join(app.getPath('userData'), 'crash-reports.json'), version: app.getVersion(), notify: (r) => { try { mainWin?.webContents.send('crash:new', { id: r.id, message: r.message }); } catch { /* sin ventana */ } } }));
+function logError(...args) { try { logger().error(...args); } catch { /* sin registro */ } try { crash().capture(args); } catch { /* sin informe */ } }
 // Modo seguro: userData/startup.json {pending, failures, version} (src/startup.js)
 const startupFile = () => path.join(app.getPath('userData'), 'startup.json');
 let startupState = null;
@@ -419,6 +422,7 @@ handle('wp:login', async () => {
     cfg.wpSelfOk = true; cfg.wpMe = r.me; store.save(cfg);
     log(`WordPress propio: conectado como ${r.userName} (${r.me?.role || '?'}) a ${r.siteName}`);
     await refreshHelper(true);
+    diagIpc.refreshEnv(true).catch(() => {});
     return r.siteName;
   }
   let r;
@@ -1977,6 +1981,14 @@ handle('app:openData', () => shell.openPath(app.getPath('userData')));
 // Registro de errores (Ajustes → Avanzado): últimas líneas, vaciar y abrir su carpeta
 handle('log:tail', (n) => ({ text: logger().tail(Math.max(1, Math.min(2000, Number(n) || 200))), file: logFile() }));
 handle('log:clear', () => { logger().clear(); log('Registro vaciado por el usuario'); return true; });
+// Diagnóstico de conexión, informes de errores y entorno de la web (src/diagipc.js)
+const diagIpc = require('./src/diagipc').register({
+  handle, getCfg: () => cfg, saveCfg: () => store.save(cfg), shell, session: () => require('electron').session.defaultSession, isSelf, crash,
+  send: (ch, v) => { try { mainWin?.webContents.send(ch, v); } catch { /* sin ventana */ } }, appVersion: () => app.getVersion(),
+  aiConfigured: () => { if (!ai) ai = require('./src/ai'); aiReady(); return true; },
+  aiTest: async () => { const c = await ai.testConnection(cfg.ai); return c.tool ? require('./src/clirun').TOOLS[c.tool].name : `${ai.PROVIDERS[c.id].name} · ${c.model}`; },
+  metaCheck: async () => { await meta.listAccounts(cfg); },
+});
 handle('log:openFolder', async () => { fs.mkdirSync(path.dirname(logFile()), { recursive: true }); return shell.openPath(path.dirname(logFile())); });
 handle('app:resetAll', () => {
   log('El usuario borra todos los datos de Ecos');

@@ -1,0 +1,51 @@
+/* Ecos · Diagnóstico de conexión, tarjeta «Tu web» e informes de errores */
+:root { --dg-ok: #2e7d32; --dg-warn: #b26a00; --dg-fail: var(--error); }
+:root[data-theme="dark"] { --dg-ok: #7bd389; --dg-warn: #f0b95a; }
+
+.dg-steps { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.dg-step { display: grid; grid-template-columns: 28px 1fr auto; gap: 4px 10px; padding: 9px 10px; border-radius: 12px; align-items: start; }
+.dg-step + .dg-step { border-top: 1px solid var(--outline-var); border-radius: 0; }
+.dg-ic { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 15px; font-weight: 800; line-height: 1; color: var(--on-surface-var); background: var(--surface-c); }
+.dg-step.ok .dg-ic { background: color-mix(in srgb, var(--dg-ok) 18%, transparent); color: var(--dg-ok); }
+.dg-step.warn .dg-ic { background: color-mix(in srgb, var(--dg-warn) 20%, transparent); color: var(--dg-warn); }
+.dg-step.fail .dg-ic { background: color-mix(in srgb, var(--dg-fail) 18%, transparent); color: var(--dg-fail); }
+.dg-step.running .dg-ic::before { content: ''; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--primary); border-right-color: transparent; animation: dg-spin .8s linear infinite; }
+.dg-step.pending { opacity: .5; }
+.dg-step.skip .dg-t { color: var(--on-surface-var); }
+.dg-t { font-weight: 600; font-size: 14px; }
+.dg-d { font-size: 13px; color: var(--on-surface-var); margin-top: 1px; }
+.dg-a { font-size: 13px; margin-top: 4px; padding: 6px 10px; border-radius: 10px; background: var(--surface-c); color: var(--on-surface); }
+.dg-step.fail .dg-a { background: color-mix(in srgb, var(--dg-fail) 10%, var(--surface-c)); }
+.dg-step.warn .dg-a { background: color-mix(in srgb, var(--dg-warn) 12%, var(--surface-c)); }
+.dg-raw { display: block; margin-top: 4px; font-size: 11.5px; opacity: .75; word-break: break-all; }
+.dg-ms { font-size: 11.5px; color: var(--on-surface-var); font-variant-numeric: tabular-nums; }
+.dg-sum { display: flex; align-items: center; gap: 8px; margin: 6px 0 10px; font-weight: 600; font-size: 14px; min-height: 22px; }
+.dg-sum.ok { color: var(--dg-ok); } .dg-sum.warn { color: var(--dg-warn); } .dg-sum.fail { color: var(--dg-fail); }
+.dg-opt { margin: 4px 0 0; }
+@keyframes dg-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .dg-step.running .dg-ic::before { animation: none; } }
+
+/* Tu web */
+.env-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; margin: 8px 0; }
+.env-item { padding: 10px 12px; border-radius: 14px; background: var(--surface-c); min-width: 0; }
+.env-item small { display: block; font-size: 11.5px; color: var(--on-surface-var); letter-spacing: .02em; }
+.env-item b { display: block; font-size: 14px; margin-top: 2px; overflow-wrap: anywhere; }
+.env-warns { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 4px; }
+.env-warn { display: grid; grid-template-columns: 24px 1fr; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--surface-c); border-left: 4px solid var(--dg-warn); }
+.env-warn.error { border-left-color: var(--dg-fail); background: color-mix(in srgb, var(--dg-fail) 8%, var(--surface-c)); }
+.env-warn.info { border-left-color: var(--outline); }
+.env-warn .ms { font-size: 20px; color: var(--dg-warn); }
+.env-warn.error .ms { color: var(--dg-fail); } .env-warn.info .ms { color: var(--on-surface-var); }
+.env-warn b { font-size: 14px; } .env-warn p { margin: 2px 0 0; font-size: 13px; color: var(--on-surface-var); }
+
+/* Informes de errores */
+.crash-box { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--outline-var); }
+.crash-box h3 { display: flex; align-items: center; gap: 8px; font-size: 15px; margin: 0 0 6px; }
+.crash-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.crash-item { padding: 8px 10px; border-radius: 12px; background: var(--surface-c); }
+.crash-item .crash-row { display: flex; align-items: center; gap: 8px; }
+.crash-item .crash-msg { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crash-item .crash-meta { font-size: 11.5px; color: var(--on-surface-var); }
+.crash-item pre { margin: 6px 0 0; padding: 8px; max-height: 200px; overflow: auto; border-radius: 8px; background: var(--surface-c-lowest); font-size: 11.5px; white-space: pre-wrap; word-break: break-word; }
+.crash-item .btn { padding: 4px 8px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

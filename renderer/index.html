@@ -8,6 +8,7 @@
 <script src="boot-splash.js"></script>
 <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="diagnose.css">
 </head>
 <body>
 <div id="boot-splash" role="status" aria-label="Abriendo Ecos"><img class="bs-logo" src="assets/logo-mark.svg" alt=""><span class="bs-name">Ecos</span><span class="bs-bar" aria-hidden="true"></span></div>
@@ -480,6 +481,16 @@
         </div>
       </form>
 
+      <div class="card hidden" id="env-card">
+        <div class="card-head"><span class="ms fill ic wp">dns</span><h2 data-i18n>Tu web</h2><span class="hint" id="env-when"></span></div>
+        <div class="env-grid" id="env-grid"></div>
+        <div class="env-warns" id="env-warns"></div>
+        <div class="card-actions wrap">
+          <button type="button" id="env-refresh" class="btn text"><span class="ms">refresh</span><span data-i18n>Comprobar de nuevo</span></button>
+          <button type="button" id="env-diag" class="btn filled" data-diag><span class="ms">network_check</span><span data-i18n>Diagnosticar la conexión</span></button>
+        </div>
+      </div>
+
       <div class="card" id="helper-card">
         <div class="card-head"><span class="ms fill ic wp">extension</span><h2 data-i18n>Complemento de Ecos</h2><span class="hint" data-i18n>Opcional · Mi web (wp-admin)</span></div>
         <p class="hint" id="helper-state"></p>
@@ -781,6 +792,18 @@
           <label class="switch"><input type="checkbox" id="s-devmode"><span data-i18n>Modo desarrollador (terminal y Claude Code en «Conexiones»)</span></label>
           <div class="set-row"><span data-i18n>Modo de arranque</span><b id="mode-name">–</b></div>
           <p class="hint" id="mode-hint"></p>
+          <div class="card-actions wrap">
+            <button type="button" class="btn outlined" data-diag><span class="ms">network_check</span><span data-i18n>Diagnóstico de conexión</span></button>
+          </div>
+          <div class="crash-box" id="crash-box">
+            <h3><span class="ms">report</span><span data-i18n>Informes de errores</span></h3>
+            <label class="switch"><input type="checkbox" id="s-crash"><span data-i18n>Ofrecerme enviar un informe cuando Ecos tenga un fallo</span></label>
+            <p class="hint" data-i18n>Desactivado por defecto. Ecos guarda en este ordenador un informe de cada fallo, sin tu nombre de usuario, contraseñas, direcciones con claves, correos ni el contenido de tus entradas. Si lo activas, te avisará con «Enviar informe», que abre una incidencia de GitHub ya rellenada: tú la revisas y decides si la envías. Ecos no envía nada por sí solo ni tiene servidor propio.</p>
+            <ul class="crash-list" id="crash-list"></ul>
+            <div class="card-actions wrap">
+              <button type="button" id="crash-clear" class="btn outlined danger"><span class="ms">delete_sweep</span><span data-i18n>Borrar todos</span></button>
+            </div>
+          </div>
           <div class="log-box" id="log-box">
             <h3><span class="ms">bug_report</span><span data-i18n>Registro de errores</span></h3>
             <p class="hint" data-i18n>Aquí quedan los errores y avisos de Ecos, sin contraseñas ni claves. Si algo falla, copia este texto y envíalo para que lo revisen. Se muestran las últimas 200 líneas.</p>
@@ -1050,6 +1073,8 @@
 <div id="toast"></div>
 <script src="i18n.js"></script>
 <script src="errors.js"></script>
+<script src="diagnose.js"></script>
+<script src="webenv.js"></script>
 <script src="changelog.js"></script>
 <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
 <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
@@ -1142,6 +1167,7 @@
 <script src="app/devcli.js"></script>
 <script src="app/sendqueue-ui.js"></script>
 <script src="app/offline.js"></script>
+<script src="app/diagnose-ui.js"></script>
 <script src="app/boot.js"></script>
 </body>
 </html>

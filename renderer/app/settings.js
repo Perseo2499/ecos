@@ -28,6 +28,7 @@ function applyPrefs() {
   $('#s-share-fb').checked = CFG.shareFacebook === true;
   $('#s-fmt-fixed').checked = !!p.fmtFixed;
   $('#s-a11y-warn').checked = p.a11yWarn !== false;
+  window.syncCrashUi?.();
   if (window.I18N.lang !== p.lang) { window.I18N.setLang(p.lang); refreshTexts(); }
 }
 matchMedia('(prefers-color-scheme: dark)').onchange = applyPrefs;

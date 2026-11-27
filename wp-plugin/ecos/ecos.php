@@ -3,7 +3,7 @@
  * Plugin Name:       Ecos para WordPress
  * Plugin URI:        https://github.com/Perseo2499/ecos
  * Description:       Complemento de Ecos: carga una sola vez el carrusel de fotos, los vídeos y los estilos de Ecos, añade la vista previa al compartir y los datos para Google, cuenta visitas sin cookies, vacía la caché de la entrada cuando la envías desde Ecos y avisa si otra persona la está editando, exporta la configuración para la copia de emergencia de Ecos, ofrece al editor los colores, tamaños y fuentes de tu tema, la vista previa exacta con el tema y los ajustes de página de Astra, y abre el editor de WordPress dentro de Ecos para editar bloques de otros plugins.
- * Version:           1.6.0
+ * Version:           1.7.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Perseo2499
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'ECOS_WP_VERSION', '1.6.0' );
+define( 'ECOS_WP_VERSION', '1.7.0' );
 define( 'ECOS_WP_URL', plugin_dir_url( __FILE__ ) );
 define( 'ECOS_WP_DIR', plugin_dir_path( __FILE__ ) );
 
@@ -326,8 +326,60 @@ function ecos_wp_rest_status() {
 			'render'  => true,
 			'editor'  => true,
 			'astra'   => ecos_wp_is_astra(),
+			'env'     => ecos_wp_env_info(),
 		)
 	);
+}
+
+/**
+ * Datos del entorno de la web (1.7.0): versiones, límites de subida, tema y, para administradores, plugins activos.
+ * Solo se leen; Ecos los enseña en Conexiones → «Tu web» y avisa de incompatibilidades.
+ */
+function ecos_wp_env_info() {
+	global $wp_version;
+	$theme = wp_get_theme();
+	$env   = array(
+		'wp_version'  => isset( $wp_version ) ? (string) $wp_version : '',
+		'php_version' => PHP_VERSION,
+		'theme'       => array(
+			'name'    => (string) $theme->get( 'Name' ),
+			'version' => (string) $theme->get( 'Version' ),
+		),
+		'limits'      => array(
+			'upload_max_filesize' => (string) ini_get( 'upload_max_filesize' ),
+			'post_max_size'       => (string) ini_get( 'post_max_size' ),
+			'memory_limit'        => (string) ini_get( 'memory_limit' ),
+			'wp_max_upload'       => (int) wp_max_upload_size(),
+		),
+		'rest'        => array(
+			'enabled'       => true,
+			'app_passwords' => function_exists( 'wp_is_application_passwords_available' ) ? (bool) wp_is_application_passwords_available() : false,
+		),
+		'multisite'   => is_multisite(),
+	);
+	// La lista de plugins solo la ven quienes pueden gestionarlos.
+	if ( current_user_can( 'activate_plugins' ) ) {
+		if ( ! function_exists( 'get_plugins' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
+		$all    = get_plugins();
+		$active = (array) get_option( 'active_plugins', array() );
+		if ( is_multisite() ) {
+			$active = array_merge( $active, array_keys( (array) get_site_option( 'active_sitewide_plugins', array() ) ) );
+		}
+		$list = array();
+		foreach ( array_unique( $active ) as $file ) {
+			if ( isset( $all[ $file ] ) ) {
+				$list[] = array(
+					'slug'    => strpos( $file, '/' ) !== false ? dirname( $file ) : basename( $file, '.php' ),
+					'name'    => (string) $all[ $file ]['Name'],
+					'version' => (string) $all[ $file ]['Version'],
+				);
+			}
+		}
+		$env['plugins'] = $list;
+	}
+	return $env;
 }
 
 function ecos_wp_rest_purge( WP_REST_Request $request ) {
