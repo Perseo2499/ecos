@@ -13,6 +13,22 @@ const base = (cfg) => {
 };
 const authHeader = (cfg) => 'Basic ' + Buffer.from(`${(cfg.wpUser || '').trim()}:${(cfg.wpAppPassword || '').replace(/\s+/g, '')}`).toString('base64');
 
+// «fetch failed» no dice nada: la causa real (DNS, conexión rechazada, certificado…) viene en e.cause
+const NET_CAUSES = {
+  ENOTFOUND: 'no se encuentra la dirección (DNS)', EAI_AGAIN: 'no se encuentra la dirección (DNS)',
+  ECONNREFUSED: 'el servidor rechaza la conexión', ECONNRESET: 'la conexión se cortó (cortafuegos, antivirus o bloqueo del servidor)',
+  ETIMEDOUT: 'el servidor no responde', UND_ERR_CONNECT_TIMEOUT: 'el servidor no responde',
+  EHOSTUNREACH: 'no hay ruta hasta el servidor', ENETUNREACH: 'no hay red',
+};
+function netCause(e) {
+  const c = e?.cause;
+  if (!c) return '';
+  const code = c.code || '';
+  if (/CERT|SSL|TLS|SELF_SIGNED/i.test(code + ' ' + (c.message || ''))) return ` (problema con el certificado de seguridad: ${code || c.message})`;
+  const txt = NET_CAUSES[code];
+  return txt ? ` (${txt}; ${code})` : (code || c.message) ? ` (${code || c.message})` : '';
+}
+
 async function req(cfg, route, { method = 'GET', json, body, headers = {}, raw = false } = {}) {
   const url = `${base(cfg)}/wp-json${route}`;
   let res;
@@ -23,7 +39,7 @@ async function req(cfg, route, { method = 'GET', json, body, headers = {}, raw =
       body: json ? JSON.stringify(json) : body,
     });
   } catch (e) {
-    throw new Error(`No se puede conectar con ${base(cfg)}: ${e.message}`);
+    throw new Error(`No se puede conectar con ${base(cfg)}: ${e.message}${netCause(e)}`);
   }
   const data = await res.json().catch(() => null);
   if (!res.ok) {
