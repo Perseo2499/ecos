@@ -24,6 +24,7 @@ function applyPrefs() {
   $('.custom-color').classList.toggle('active', !preset);
   $('#s-accent-custom').value = p.accent;
   if ($('#ai-providers').children.length) renderAi(); // logos claros/oscuros
+  $('#s-review-notify').checked = p.reviewNotify === true;
   $('#s-check-new').checked = p.checkNew; $('#s-check-token').checked = p.checkToken;
   $('#s-share-fb').checked = CFG.shareFacebook === true;
   $('#s-fmt-fixed').checked = !!p.fmtFixed;

@@ -232,7 +232,7 @@
       if (b.hm) el.classList.add('hid-m'); if (b.ht) el.classList.add('hid-t'); if (b.hd) el.classList.add('hid-d');
       if (b.hm || b.ht || b.hd) { body.dataset.hidM = t('Oculto en móvil'); body.dataset.hidT = t('Oculto en tableta'); body.dataset.hidD = t('Oculto en escritorio'); }
       if (!c) return;
-      for (const k of [...c.classList]) if (/^ecos-(d|font)-/.test(k)) c.classList.remove(k);
+      for (const k of [...c.classList]) if (/^ecos-(d|font|a)-/.test(k)) c.classList.remove(k);
       if (!D.hasDesign(b)) return;
       const pv = D.preview(b);
       c.classList.add(...pv.cls);

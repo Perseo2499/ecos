@@ -11,6 +11,15 @@ const DESC = '_yoast_wpseo_metadesc';
 
 function start({ user = 'ecostest', pass = 'abcdEFGHijklMNOPqrstUVWX', port = 0 } = {}) {
   let next = 10;
+  // Varias personas (revisión entre varias personas): administrador, colaborador (no publica) y editor (revisa lo de otras personas)
+  const USERS = {
+    [user]: { id: 1, name: 'Admin', slug: 'admin', pass, role: 'administrator', publish: true, others: true },
+    ecoscontrib: { id: 2, name: 'Luis Colaborador', slug: 'ecoscontrib', pass: 'abcdEFGHijklMNOPqrstUVW1', role: 'contributor', publish: false, others: false },
+    ecoseditor: { id: 3, name: 'Marta Editora', slug: 'ecoseditor', pass: 'abcdEFGHijklMNOPqrstUVW2', role: 'editor', publish: true, others: true },
+  };
+  const notes = [], returned = new Map();
+  let me = USERS[user];
+  const person = (id) => { const u = Object.values(USERS).find((x) => x.id === id); return { id: u?.id || 0, name: u?.name || '', avatar: '' }; };
   const posts = new Map(), media = new Map(), blocks = new Map(), tokens = new Set();
   const cats = [{ id: 1, name: 'Sin categoría', slug: 'sin-categoria', count: 0, parent: 0 }];
   let origin = '';
@@ -32,7 +41,7 @@ function start({ user = 'ecostest', pass = 'abcdEFGHijklMNOPqrstUVWX', port = 0 
   const postObj = (p) => ({
     id: p.id, link: `${origin}/?p=${p.id}`, status: p.status, date_gmt: p.date_gmt, modified_gmt: p.modified_gmt, slug: p.slug, type: 'post', parent: 0,
     title: { raw: p.title, rendered: esc(p.title) }, content: { raw: p.content, rendered: renderContent(p.content) }, excerpt: { raw: p.excerpt, rendered: esc(p.excerpt) },
-    featured_media: p.featured_media || 0, categories: p.categories, tags: [], meta: { [DESC]: p.meta[DESC] || '' },
+    author: p.author || 1, featured_media: p.featured_media || 0, categories: p.categories, tags: [], meta: { [DESC]: p.meta[DESC] || '' },
     yoast_head_json: { title: p.title + ' - Sim', description: p.meta[DESC] || '' },
     _embedded: { 'wp:term': [p.categories.map((id) => ({ ...cats.find((c) => c.id === id), taxonomy: 'category' }))] },
   });
@@ -66,13 +75,17 @@ function start({ user = 'ecostest', pass = 'abcdEFGHijklMNOPqrstUVWX', port = 0 
 
       const route = url.pathname.replace(/^\/wp-json/, '') || '/';
       if (route === '/' && !req.headers.authorization) return send(200, { name: 'Sim WP', home: origin, namespaces: ['wp/v2', 'ecos/v1', 'yoast/v1'] });
+      // los comentarios públicos de WordPress: sin sesión y sin notas internas
+      if (route === '/wp/v2/comments' && req.method === 'GET') return send(200, [], { 'X-WP-Total': '0', 'X-WP-TotalPages': '1' });
       const auth = req.headers.authorization || '';
-      if (auth !== 'Basic ' + Buffer.from(`${user}:${pass}`).toString('base64')) return err(401, 'rest_not_logged_in', 'No has iniciado sesión.');
+      const who = Object.entries(USERS).find(([n, u]) => auth === 'Basic ' + Buffer.from(`${n}:${u.pass}`).toString('base64'));
+      if (!who) return err(401, 'rest_not_logged_in', 'No has iniciado sesión.');
+      me = who[1];
 
       const m = (re) => re.exec(route);
       let r;
       if (route === '/') return send(200, { name: 'Sim WP', home: origin, namespaces: ['wp/v2', 'ecos/v1', 'yoast/v1'] });
-      if (route === '/wp/v2/users/me') return send(200, { id: 1, name: 'Admin', slug: 'admin', roles: ['administrator'], capabilities: { edit_posts: true, publish_posts: true, upload_files: true }, avatar_urls: {} });
+      if (route === '/wp/v2/users/me') return send(200, { id: me.id, name: me.name, slug: me.slug, roles: [me.role], capabilities: { edit_posts: true, publish_posts: me.publish, upload_files: me.publish, edit_others_posts: me.others }, avatar_urls: {} });
       if (route === '/wp/v2/plugins') return send(200, [{ plugin: 'ultimate-addons-for-gutenberg/ultimate-addons-for-gutenberg', status: 'active' }]);
       if (route === '/wp/v2/settings') return send(200, { title: 'Sim WP', show_on_front: 'posts', page_on_front: 0, page_for_posts: 0 });
       if (route === '/wp/v2/pages' || route === '/wp/v2/tags') return send(200, [], { 'X-WP-TotalPages': '1', 'X-WP-Total': '0' });
@@ -86,26 +99,36 @@ function start({ user = 'ecostest', pass = 'abcdEFGHijklMNOPqrstUVWX', port = 0 
       if ((r = m(/^\/wp\/v2\/categories\/(\d+)$/)) && req.method === 'DELETE') { const i = cats.findIndex((c) => c.id === +r[1]); if (i < 0) return err(404, 'rest_term_invalid', 'No existe'); cats.splice(i, 1); return send(200, { deleted: true }); }
 
       if (route === '/wp/v2/posts' && req.method === 'GET') {
-        let l = [...posts.values()]; const s = q.get('search'); if (s) l = l.filter((p) => (p.title + p.content).includes(s));
+        let l = [...posts.values()].filter((p) => me.others || (p.author || 1) === me.id || p.status === 'publish'); const s = q.get('search');
+        const stf = (q.get('status') || '').split(','); if (q.get('status') && !stf.includes('any')) l = l.filter((p) => stf.includes(p.status)); if (s) l = l.filter((p) => (p.title + p.content).includes(s));
         const per = +(q.get('per_page') || 10), page = +(q.get('page') || 1);
         return send(200, l.slice((page - 1) * per, page * per).map(postObj), { 'X-WP-Total': String(l.length), 'X-WP-TotalPages': String(Math.max(1, Math.ceil(l.length / per))) });
       }
+      const canEdit = (p) => me.others || (p && (p.author || 1) === me.id && p.status !== 'publish');
       const save = (p) => {
         for (const k of ['title', 'content', 'status', 'excerpt', 'slug', 'featured_media', 'categories', 'date_gmt']) if (json[k] !== undefined) p[k] = json[k];
         if (json.meta) p.meta = { ...p.meta, ...json.meta };
         p.modified_gmt = new Date().toISOString().slice(0, 19);
+        p.editor = me.id;
         return p;
       };
       if (route === '/wp/v2/posts' && req.method === 'POST') {
         const id = next++, now = new Date().toISOString().slice(0, 19);
-        const p = save({ id, title: '', content: '', status: 'draft', excerpt: '', slug: 'p' + id, categories: [1], meta: {}, date_gmt: now });
+        if (!me.publish && ['publish', 'future'].includes(json.status)) return err(403, 'rest_cannot_publish', 'Lo siento, no tienes permiso para publicar entradas.');
+        const p = save({ author: me.id, id, title: '', content: '', status: 'draft', excerpt: '', slug: 'p' + id, categories: [1], meta: {}, date_gmt: now });
         posts.set(id, p); return send(201, postObj(p));
       }
       if ((r = m(/^\/wp\/v2\/posts\/(\d+)$/))) {
         const p = posts.get(+r[1]);
         if (!p) return err(404, 'rest_post_invalid_id', 'ID de entrada no válido.');
         if (req.method === 'DELETE') { posts.delete(p.id); return send(200, { deleted: true, previous: postObj(p) }); }
-        if (req.method === 'POST') save(p);
+        if (req.method === 'POST') {
+          if (!canEdit(p)) return err(403, 'rest_cannot_edit', 'Lo siento, no tienes permiso para editar esta entrada.');
+          if (!me.publish && ['publish', 'future'].includes(json.status)) return err(403, 'rest_cannot_publish', 'Lo siento, no tienes permiso para publicar entradas.');
+          save(p);
+          if (['pending', 'publish', 'future'].includes(p.status)) returned.delete(p.id);
+        }
+        if (req.method === 'GET' && !canEdit(p) && p.status !== 'publish') return err(403, 'rest_forbidden', 'No tienes permiso para ver esto.');
         return send(200, postObj(p));
       }
 
@@ -137,6 +160,40 @@ function start({ user = 'ecostest', pass = 'abcdEFGHijklMNOPqrstUVWX', port = 0 
       if (route === '/ecos/v1/status') return send(200, { plugin: 'ecos', version: ECOS_VERSION, caches: [], seo: 'Yoast SEO', stats: true, lock: true, export: true, theme: true, render: true, editor: true, astra: true });
       if (route === '/ecos/v1/theme') return send(200, { plugin: 'ecos', version: ECOS_VERSION, theme: { name: 'Astra', stylesheet: 'astra', template: 'astra', isAstra: true, isBlock: false }, settings: { color: { palette: { theme: [{ slug: 'ast-global-color-0', name: 'Color 1', color: '#046bd2' }] } } }, astra: {} });
       if (route === '/ecos/v1/export') return send(200, { plugin: 'ecos', version: ECOS_VERSION });
+      if (route === '/ecos/v1/notes' || /^\/ecos\/v1\/notes\/\d+$/.test(route)) {
+        const nid = Number(route.split('/')[4] || 0);
+        const noteOut = (n) => ({ id: n.id, post: n.post, parent: n.parent, author: person(n.user), date: n.date, text: n.text, anchor: n.anchor, block: n.block, kind: n.kind, resolved: n.resolved, canDelete: n.user === me.id || me.others });
+        const target = nid ? notes.find((n) => n.id === nid) : null;
+        const postId = nid ? target?.post : Number(q.get('post') || json.post || 0);
+        const pp = posts.get(postId);
+        if (!pp) return err(404, 'ecos_not_found', 'No existe esa entrada.');
+        if (!canEdit(pp)) return err(403, 'rest_forbidden', 'No puedes editar esa entrada.');
+        if (req.method === 'GET') return send(200, { plugin: 'ecos', post: postId, notes: notes.filter((n) => n.post === postId).map(noteOut) });
+        if (req.method === 'POST') {
+          const text = String(json.text || '').trim();
+          if (!text) return err(400, 'ecos_empty', 'Escribe el texto de la nota.');
+          if (json.kind === 'return' && !me.others) return err(403, 'ecos_forbidden', 'No puedes devolver entradas con comentarios.');
+          const n = { id: next++, post: postId, parent: Number(json.parent) || 0, user: me.id, date: new Date().toISOString().slice(0, 19) + 'Z', text, anchor: json.parent ? '' : String(json.anchor || ''), block: json.parent ? '' : String(json.block || ''), kind: json.kind === 'return' ? 'return' : 'note', resolved: false };
+          notes.push(n);
+          if (n.kind === 'return') returned.set(postId, { by: me.id, at: n.date, note: n.id });
+          return send(200, { note: noteOut(n) });
+        }
+        if (req.method === 'PATCH') { if (json.resolved !== undefined) target.resolved = !!json.resolved; return send(200, { note: noteOut(target) }); }
+        if (req.method === 'DELETE') {
+          if (target.user !== me.id && !me.others) return err(403, 'ecos_forbidden', 'Solo puede borrar la nota quien la escribió o quien edita entradas ajenas.');
+          const gone = notes.filter((n) => n.id === nid || n.parent === nid).map((n) => n.id);
+          for (const id of gone) notes.splice(notes.findIndex((n) => n.id === id), 1);
+          return send(200, { deleted: gone });
+        }
+      }
+      if (route === '/ecos/v1/review') {
+        const brief = (p) => ({ id: p.id, type: 'post', title: p.title, status: p.status, date: p.date_gmt + 'Z', modified: p.modified_gmt + 'Z', author: person(p.author || 1), editor: person(p.editor || p.author || 1), openNotes: notes.filter((n) => n.post === p.id && !n.parent && !n.resolved).length });
+        const all = [...posts.values()];
+        const out = { plugin: 'ecos', pending: me.others ? all.filter((p) => p.status === 'pending').map(brief) : [], returned: [], activity: all.filter((p) => me.others || (p.author || 1) === me.id).slice(-12).map(brief) };
+        for (const p of all) if (returned.has(p.id) && p.status === 'draft' && (p.author || 1) === me.id) { const r = returned.get(p.id); out.returned.push({ ...brief(p), returnedBy: person(r.by), returnedAt: r.at, returnedText: notes.find((n) => n.id === r.note)?.text || '' }); }
+        return send(200, out);
+      }
+      if (route === '/ecos/v1/changes') { const p = posts.get(Number(q.get('id'))); return p ? send(200, { id: p.id, status: p.status, modified: p.modified_gmt + 'Z', by: person(p.editor || p.author || 1) }) : err(404, 'ecos_not_found', 'No existe esa entrada.'); }
       if (route === '/ecos/v1/lock') return send(200, req.method === 'DELETE' ? { released: true } : { locked: false, user: null });
       if (route === '/ecos/v1/render') return send(200, { plugin: 'ecos', version: ECOS_VERSION, html: `<html><body><h1>${esc(json.title)}</h1>${renderContent(json.content)}</body></html>` });
       if (route === '/ecos/v1/editor-session') {
@@ -150,7 +207,7 @@ function start({ user = 'ecostest', pass = 'abcdEFGHijklMNOPqrstUVWX', port = 0 
   });
   return new Promise((resolve) => server.listen(port, '127.0.0.1', () => {
     origin = `http://127.0.0.1:${server.address().port}`;
-    resolve({ url: origin, user, pass, close: () => new Promise((r) => server.close(r)), state: { posts, media, blocks, cats } });
+    resolve({ url: origin, user, pass, contrib: { user: 'ecoscontrib', pass: USERS.ecoscontrib.pass }, editor: { user: 'ecoseditor', pass: USERS.ecoseditor.pass }, close: () => new Promise((r) => server.close(r)), state: { posts, media, blocks, cats } });
   }));
 }
 

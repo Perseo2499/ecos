@@ -359,7 +359,7 @@ const Home = (() => {
     const box = $('#home');
     if (!box) return;
     const sc = $$('.hc-track', box).map((x) => x.scrollLeft), wsc = $('.wk-cal', box)?.scrollLeft || 0;
-    box.innerHTML = `${hero()}${newBlock()}<div class="home-grid">${socialCard()}${draftsCard()}${reviewCard()}${freeCard()}${weekCard()}${viewsCard()}${quickCard()}</div>`;
+    box.innerHTML = `${hero()}${newBlock()}<div class="home-grid">${window.ReviewUI?.homeCards() || ''}${socialCard()}${draftsCard()}${reviewCard()}${freeCard()}${weekCard()}${viewsCard()}${quickCard()}</div>`;
     $$('.hc-track', box).forEach((x, i) => { x.scrollLeft = sc[i] || 0; });
     const w = $('.wk-cal', box); if (w) w.scrollLeft = wsc;
     $$('.hc', box).forEach(hcSync);
@@ -457,6 +457,7 @@ const Home = (() => {
       viewsLoad(force),
     ];
     jobs.forEach((j) => j.then(draw));
+    jobs.push(window.ReviewUI?.loadHome(draw));
     if (self()) {
       jobs.push((bh.data ? Promise.resolve(bh.data) : window.api.blogHealth(false)).then(async (r) => {
         hs.health = { noCat: r?.noCat || [], noImg: r?.noImg || [] }; hs.errHealth = null;

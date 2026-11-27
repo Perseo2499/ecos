@@ -87,7 +87,7 @@ function parseMe(d) {
   return {
     id: Number(d?.id) || 0, name: String(d?.name || d?.slug || ''), slug: String(d?.slug || ''),
     role: roles[0] || '', roles,
-    canPublish: !!caps.publish_posts, canUpload: !!caps.upload_files,
+    canPublish: !!caps.publish_posts, canUpload: !!caps.upload_files, canEditOthers: !!caps.edit_others_posts,
     avatar: String(av['48'] || av['96'] || av['24'] || ''),
   };
 }
@@ -793,6 +793,63 @@ async function helperUnlock(cfg, id) {
   return !!r?.released;
 }
 
+// Revisión entre varias personas (complemento ≥ 1.8.0): notas internas de una entrada (comentarios de tipo «ecos_note», nunca públicos),
+// resumen de pendientes / devueltas / actividad y quién cambió por última vez una entrada
+const helperHasReview = (version) => !!version && !versionLess(version, '1.8.0');
+const noteBlank = { id: 0, post: 0, parent: 0, author: { id: 0, name: '', avatar: '' }, date: null, text: '', anchor: '', block: '', kind: 'note', resolved: false, canDelete: false };
+function parseNote(d) {
+  if (!d || typeof d !== 'object') return null;
+  const a = d.author || {};
+  return {
+    ...noteBlank, id: Number(d.id) || 0, post: Number(d.post) || 0, parent: Number(d.parent) || 0,
+    author: { id: Number(a.id) || 0, name: String(a.name || ''), avatar: String(a.avatar || '') },
+    date: d.date ? String(d.date) : null, text: String(d.text || ''), anchor: String(d.anchor || ''), block: String(d.block || ''),
+    kind: d.kind === 'return' ? 'return' : 'note', resolved: !!d.resolved, canDelete: !!d.canDelete,
+  };
+}
+const parseNotes = (d) => (Array.isArray(d?.notes) ? d.notes.map(parseNote).filter((n) => n && n.id) : []);
+const notesList = async (cfg, postId) => parseNotes(await req(cfg, `/ecos/v1/notes?post=${Number(postId)}`));
+async function noteAdd(cfg, { post, text, anchor, block, parent, kind }) {
+  const r = await req(cfg, '/ecos/v1/notes', { method: 'POST', json: { post: Number(post), text: String(text || ''), ...(anchor ? { anchor, block: block || '' } : {}), ...(parent ? { parent: Number(parent) } : {}), ...(kind === 'return' ? { kind: 'return' } : {}) } });
+  return parseNote(r?.note);
+}
+async function noteResolve(cfg, id, resolved) {
+  const r = await req(cfg, `/ecos/v1/notes/${Number(id)}`, { method: 'PATCH', json: { resolved: !!resolved } });
+  return parseNote(r?.note);
+}
+const noteDelete = (cfg, id) => req(cfg, `/ecos/v1/notes/${Number(id)}`, { method: 'DELETE' }).then((r) => (Array.isArray(r?.deleted) ? r.deleted.map(Number) : []));
+const briefPerson = (a) => ({ id: Number(a?.id) || 0, name: String(a?.name || ''), avatar: String(a?.avatar || '') });
+function parseBrief(p) {
+  return {
+    id: Number(p?.id) || 0, type: p?.type === 'page' ? 'page' : 'post', title: String(p?.title || ''), status: String(p?.status || ''),
+    date: p?.date || null, modified: p?.modified || null, author: briefPerson(p?.author), editor: briefPerson(p?.editor), openNotes: Number(p?.openNotes) || 0,
+    ...(p?.returnedBy ? { returnedBy: briefPerson(p.returnedBy), returnedAt: p.returnedAt || null, returnedText: String(p.returnedText || '') } : {}),
+    ...(p?.returned ? { returned: true } : {}),
+  };
+}
+function parseReview(d) {
+  const l = (x) => (Array.isArray(x) ? x.map(parseBrief).filter((p) => p.id) : []);
+  return { pending: l(d?.pending), returned: l(d?.returned), activity: l(d?.activity) };
+}
+const reviewSummary = async (cfg) => parseReview(await req(cfg, '/ecos/v1/review'));
+// Quién y cuándo cambió por última vez una entrada: con el complemento, su ruta; sin él, la última revisión de WordPress
+async function postChanges(cfg, id, type) {
+  const ver = cfg.ecosHelper?.version;
+  if (helperHasReview(ver)) {
+    const d = await req(cfg, `/ecos/v1/changes?id=${Number(id)}`);
+    return { id: Number(d.id) || Number(id), status: String(d.status || ''), modified: d.modified || null, by: briefPerson(d.by) };
+  }
+  const c = type === 'page' ? 'pages' : 'posts';
+  const p = await req(cfg, `/wp/v2/${c}/${Number(id)}?context=edit&_fields=id,modified_gmt,status,author`);
+  let by = null;
+  try {
+    const r = await req(cfg, `/wp/v2/${c}/${Number(id)}/revisions?per_page=1&orderby=date&order=desc&_fields=id,author`);
+    const uid = Number(r?.[0]?.author) || 0;
+    if (uid) { const u = await req(cfg, `/wp/v2/users/${uid}?_fields=id,name,avatar_urls`); by = { id: uid, name: decode(u.name || ''), avatar: String(u.avatar_urls?.['48'] || '') }; }
+  } catch { /* sin permiso para ver las revisiones o a la autora */ }
+  return { id: p.id, status: p.status, modified: p.modified_gmt ? p.modified_gmt + 'Z' : null, by: by || briefPerson(null) };
+}
+
 // Copia de emergencia: lectura suelta de la API (null si no existe o no hay permiso) y exportación del complemento (≥ 1.3.0)
 async function getJson(cfg, route) { return req(cfg, route); }
 const helperHasExport = (version) => !!version && !versionLess(version, '1.3.0');
@@ -811,7 +868,7 @@ async function helperRender(cfg, payload) {
 }
 const themeStyles = (cfg, helperVersion) => TS.fetchTheme((route) => req(cfg, route), helperVersion);
 
-module.exports = { setUploadGuard, findMediaByName, helperHasRender, helperRender, themeStyles, getJson, helperHasExport, helperExport, helperHasLock, me, parseMe, postModified, helperLock, helperUnlock, parseHelperLock, helperStats, parseHelperStats, helperSettings, helperSaveSettings, parseHelperSettings, helperStatus, helperPurge, parseHelperStatus, helperBundledVersion, detectSeo, seoInfo, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, listDates, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText };
+module.exports = { helperHasReview, parseNote, parseNotes, notesList, noteAdd, noteResolve, noteDelete, parseReview, reviewSummary, postChanges, setUploadGuard, findMediaByName, helperHasRender, helperRender, themeStyles, getJson, helperHasExport, helperExport, helperHasLock, me, parseMe, postModified, helperLock, helperUnlock, parseHelperLock, helperStats, parseHelperStats, helperSettings, helperSaveSettings, parseHelperSettings, helperStatus, helperPurge, parseHelperStatus, helperBundledVersion, detectSeo, seoInfo, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, listDates, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText };
 
 // Para módulos propios que hablan con la API (src/wpblocks.js)
 module.exports.request = req;

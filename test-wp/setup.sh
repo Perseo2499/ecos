@@ -60,13 +60,23 @@ wp user create "$USER_NAME" ecostest@example.org --role=administrator --user_pas
 APP_PASS="$(wp user application-password create "$USER_NAME" ecos-ci --porcelain | tr -d '\r\n')"
 [ -n "$APP_PASS" ] || { echo "No se pudo crear la contraseña de aplicación" >&2; exit 1; }
 
+echo "== Colaborador y editor (revisión entre varias personas)"
+wp user create ecoscontrib ecoscontrib@example.org --role=contributor --display_name="Luis Colaborador" --user_pass="$(openssl rand -hex 12)" || exit 1
+wp user create ecoseditor ecoseditor@example.org --role=editor --display_name="Marta Editora" --user_pass="$(openssl rand -hex 12)" || exit 1
+CONTRIB_PASS="$(wp user application-password create ecoscontrib ecos-ci --porcelain | tr -d '\r\n')"
+EDITOR_PASS="$(wp user application-password create ecoseditor ecos-ci --porcelain | tr -d '\r\n')"
+[ -n "$CONTRIB_PASS" ] && [ -n "$EDITOR_PASS" ] || { echo "No se pudieron crear las contraseñas de aplicación del colaborador y del editor" >&2; exit 1; }
+
 echo "::add-mask::$APP_PASS"
+echo "::add-mask::$CONTRIB_PASS"
+echo "::add-mask::$EDITOR_PASS"
 if [ -n "${GITHUB_ENV:-}" ]; then
-  { echo "WP_URL=$SITE"; echo "WP_USER=$USER_NAME"; echo "WP_APP_PASSWORD=$APP_PASS"; echo "WP_EXPECT_SPECTRA=1"; } >> "$GITHUB_ENV"
+  { echo "WP_URL=$SITE"; echo "WP_USER=$USER_NAME"; echo "WP_APP_PASSWORD=$APP_PASS"; echo "WP_EXPECT_SPECTRA=1"; echo "WP_CONTRIB_USER=ecoscontrib"; echo "WP_CONTRIB_APP_PASSWORD=$CONTRIB_PASS"; echo "WP_EDITOR_USER=ecoseditor"; echo "WP_EDITOR_APP_PASSWORD=$EDITOR_PASS"; } >> "$GITHUB_ENV"
 else
   echo
   echo "Listo. Ejecuta:"
   echo "  export WP_URL=$SITE WP_USER=$USER_NAME WP_APP_PASSWORD='$APP_PASS' WP_EXPECT_SPECTRA=1"
+  echo "  export WP_CONTRIB_USER=ecoscontrib WP_CONTRIB_APP_PASSWORD='$CONTRIB_PASS' WP_EDITOR_USER=ecoseditor WP_EDITOR_APP_PASSWORD='$EDITOR_PASS'"
   echo "  npm run test:wp"
   echo "Para apagarlo: docker compose -f test-wp/docker-compose.yml down -v"
 fi

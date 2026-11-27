@@ -319,6 +319,113 @@ test('editor de WordPress: la dirección de un solo uso funciona una vez y la se
   await assert.rejects(() => W.request(cfg, '/ecos/v1/editor-session', { method: 'POST', json: { target: 'plugins.php' } }), /Solo se puede abrir|WordPress/);
 });
 
+// --- Revisión entre varias personas: colaborador, editor, notas internas ancladas a bloques (complemento 1.8.0) ---------------------------
+const cfgOf = (u, p) => ({ wpUrl: process.env.WP_URL, wpUser: process.env.WP_USER && u, wpAppPassword: p });
+const cfgContrib = cfgOf(process.env.WP_CONTRIB_USER, process.env.WP_CONTRIB_APP_PASSWORD);
+const cfgEditor = cfgOf(process.env.WP_EDITOR_USER, process.env.WP_EDITOR_APP_PASSWORD);
+const SKIP_PEOPLE = !(process.env.WP_CONTRIB_USER && process.env.WP_EDITOR_USER) && 'faltan WP_CONTRIB_USER / WP_EDITOR_USER (los crea test-wp/setup.sh)';
+const RV = {};
+
+test('revisión: el colaborador no puede publicar y el editor sí puede revisar (capacidades de /users/me)', { skip: SKIP_PEOPLE }, async () => {
+  const st = await W.helperStatus(cfg, { force: true });
+  assert.ok(W.helperHasReview(st.version), 'el complemento trae la revisión (≥ 1.8.0): ' + st.version);
+  cfgContrib.ecosHelper = cfgEditor.ecosHelper = { installed: true, version: st.version };
+  const c = await W.me(cfgContrib), e = await W.me(cfgEditor);
+  assert.equal(c.canPublish, false, 'colaborador: no publica'); assert.equal(c.canEditOthers, false);
+  assert.equal(e.canPublish, true); assert.equal(e.canEditOthers, true, 'editor: revisa lo de otras personas');
+  RV.contrib = c; RV.editor = e;
+});
+
+test('revisión: el colaborador envía a revisión (pending) y no puede publicar', { skip: SKIP_PEOPLE }, async () => {
+  const anc = 'rv' + Date.now().toString(36).slice(-6);
+  RV.anc = anc;
+  const blocks = [{ id: 'rvp1', type: 'paragraph', html: 'Primer párrafo de ' + TAG }, { id: 'rvp2', type: 'paragraph', html: 'Segundo párrafo con ancla', anc }];
+  RV.content = T.composeBlocks(blocks);
+  const post = await W.request(cfgContrib, '/wp/v2/posts', { method: 'POST', json: { title: TAG + ' revisión', content: RV.content, status: 'pending' } });
+  created.posts.push(post.id); RV.id = post.id;
+  assert.equal(post.status, 'pending', 'queda pendiente de revisión');
+  await assert.rejects(() => W.request(cfgContrib, `/wp/v2/posts/${post.id}`, { method: 'POST', json: { status: 'publish' } }), /permiso|publicar|cannot/i);
+  assert.equal((await W.getPost(cfgEditor, post.id, 'post')).status, 'pending', 'sigue pendiente');
+  assert.match((await W.getPost(cfgEditor, post.id, 'post')).content, new RegExp('ecos-a-' + anc), 'el ancla llega a WordPress y vuelve');
+});
+
+test('revisión: el editor ve la entrada pendiente, añade una nota anclada y la devuelve', { skip: SKIP_PEOPLE }, async () => {
+  const sum = await W.reviewSummary(cfgEditor);
+  const mine = sum.pending.find((p) => p.id === RV.id);
+  assert.ok(mine, 'aparece en «Pendientes de revisión»'); assert.equal(mine.author.id, RV.contrib.id);
+  const note = await W.noteAdd(cfgEditor, { post: RV.id, text: 'Falta la fecha en este párrafo (' + TAG + ')', anchor: RV.anc, block: 'rvp2' });
+  RV.note = note;
+  assert.equal(note.anchor, RV.anc); assert.equal(note.author.id, RV.editor.id); assert.equal(note.resolved, false);
+  assert.ok(note.author.name, 'la nota trae el nombre de quien la escribió');
+  // devolver con comentarios: nota «return» y la entrada vuelve a borrador
+  RV.ret = await W.noteAdd(cfgEditor, { post: RV.id, text: 'Devuelta: arregla la fecha y vuelve a enviarla.', kind: 'return' });
+  assert.equal(RV.ret.kind, 'return');
+  await W.request(cfgEditor, `/wp/v2/posts/${RV.id}`, { method: 'POST', json: { status: 'draft' } });
+  // el colaborador no puede devolver (solo quien edita entradas ajenas)
+  await assert.rejects(() => W.noteAdd(cfgContrib, { post: RV.id, text: 'x', kind: 'return' }), /permiso|devolver|WordPress/i);
+});
+
+test('revisión: el colaborador lee la nota, ve que se la devolvieron y responde', { skip: SKIP_PEOPLE }, async () => {
+  const notes = await W.notesList(cfgContrib, RV.id);
+  const root = notes.find((n) => n.id === RV.note.id);
+  assert.ok(root, 'lee la nota del editor'); assert.equal(root.anchor, RV.anc);
+  const sum = await W.reviewSummary(cfgContrib);
+  const back = sum.returned.find((p) => p.id === RV.id);
+  assert.ok(back, 'aparece en «Te han devuelto»'); assert.match(back.returnedText, /Devuelta/); assert.equal(back.returnedBy.id, RV.editor.id);
+  const reply = await W.noteAdd(cfgContrib, { post: RV.id, text: 'Hecho, ya lleva la fecha.', parent: root.id });
+  RV.reply = reply;
+  assert.equal(reply.parent, root.id);
+  const th = require('../renderer/editorial').buildThreads(await W.notesList(cfgEditor, RV.id));
+  const t = th.threads.find((x) => x.id === root.id);
+  assert.deepEqual(t.replies.map((r) => r.id), [reply.id], 'el editor ve la respuesta en el mismo hilo');
+  // la autora puede borrar lo suyo; no lo de otra persona
+  await assert.rejects(() => W.noteDelete(cfgContrib, root.id), /permiso|WordPress/i);
+  // vuelve a enviarla: pendiente otra vez, y la marca de «devuelta» desaparece
+  const p = await W.request(cfgContrib, `/wp/v2/posts/${RV.id}`, { method: 'POST', json: { status: 'pending' } });
+  assert.equal(p.status, 'pending');
+  assert.equal((await W.reviewSummary(cfgContrib)).returned.some((x) => x.id === RV.id), false);
+});
+
+test('revisión: el editor resuelve el hilo, aprueba y publica; quién la cambió', { skip: SKIP_PEOPLE }, async () => {
+  const r = await W.noteResolve(cfgEditor, RV.note.id, true);
+  assert.equal(r.resolved, true);
+  assert.equal((await W.notesList(cfgContrib, RV.id)).find((n) => n.id === RV.note.id).resolved, true, 'se ve resuelto para todas las personas');
+  const ch = await W.postChanges(cfgEditor, RV.id, 'post');
+  assert.equal(ch.by.id, RV.contrib.id, 'la última persona que la cambió fue el colaborador');
+  const pub = await W.request(cfgEditor, `/wp/v2/posts/${RV.id}`, { method: 'POST', json: { status: 'publish' } });
+  assert.equal(pub.status, 'publish');
+  assert.equal((await W.reviewSummary(cfgEditor)).pending.some((p) => p.id === RV.id), false, 'ya no está pendiente');
+  assert.ok((await W.reviewSummary(cfgEditor)).activity.some((p) => p.id === RV.id), 'sale en la actividad reciente');
+});
+
+test('revisión: las notas no aparecen en la web pública ni en los comentarios públicos', { skip: SKIP_PEOPLE }, async () => {
+  const post = await W.getPost(cfgEditor, RV.id, 'post');
+  const html = await fetchPublic(post.url);
+  assert.ok(!html.includes('Falta la fecha en este párrafo'), 'la web pública no lleva el texto de la nota');
+  assert.ok(!html.includes('Hecho, ya lleva la fecha'), 'ni sus respuestas');
+  const base = cfg.wpUrl.replace(/\/+$/, '');
+  for (const route of [`/wp-json/wp/v2/comments?post=${RV.id}`, '/wp-json/wp/v2/comments?per_page=100', `/wp-json/wp/v2/comments?post=${RV.id}&type=ecos_note`, `/?feed=comments-rss2&p=${RV.id}`]) {
+    const res = await fetch(base + route);
+    const txt = await res.text();
+    assert.ok(!/Falta la fecha|Hecho, ya lleva|Devuelta: arregla/.test(txt), 'sin notas en ' + route);
+  }
+  // sin sesión no hay acceso a las rutas de notas
+  const anon = await fetch(`${base}/wp-json/ecos/v1/notes?post=${RV.id}`);
+  assert.ok([401, 403].includes(anon.status), 'las notas piden sesión: ' + anon.status);
+  // ni en el recuento de comentarios de la entrada
+  const pub = await (await fetch(`${base}/wp-json/wp/v2/posts/${RV.id}`)).json().catch(() => null);
+  if (pub?.id) assert.ok(!JSON.stringify(pub).includes('Falta la fecha'));
+});
+
+test('revisión: borrar notas (la autora o quien edita entradas ajenas) y limpiar', { skip: SKIP_PEOPLE }, async () => {
+  const gone = await W.noteDelete(cfgEditor, RV.note.id);
+  assert.ok(gone.includes(RV.note.id) && gone.includes(RV.reply.id), 'borrar un hilo borra también sus respuestas');
+  const left = await W.notesList(cfgEditor, RV.id);
+  assert.ok(!left.some((n) => n.id === RV.note.id || n.id === RV.reply.id));
+  for (const n of left) await W.noteDelete(cfgEditor, n.id);
+  assert.equal((await W.notesList(cfgEditor, RV.id)).length, 0);
+});
+
 test('listados y calendario: Ecos ve la entrada creada', async () => {
   const l = await W.listPosts(cfg, { status: 'any', search: TAG, number: 20 });
   assert.ok(l.items.some((x) => x.id === S.postId), 'aparece en el listado del blog');
