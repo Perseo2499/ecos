@@ -303,7 +303,9 @@ test('editor de WordPress: la dirección de un solo uso funciona una vez y la se
   assert.match(cookie, /wordpress_logged_in_/, 'inicia sesión con cookies');
 
   // las cookies sirven para abrir el editor
-  const editor = await fetch(new URL(first.headers.get('location'), site), { headers: { Cookie: cookie }, redirect: 'manual' });
+  let editor = await fetch(new URL(first.headers.get('location'), site), { headers: { Cookie: cookie }, redirect: 'manual' });
+  // (Spectra recién activado lleva una sola vez a su asistente: se vuelve a pedir)
+  if (editor.status === 302 && /spectra|onboarding/i.test(editor.headers.get('location') || '')) editor = await fetch(new URL(first.headers.get('location'), site), { headers: { Cookie: cookie }, redirect: 'manual' });
   assert.equal(editor.status, 200, 'el editor se abre con esa sesión');
   assert.match(await editor.text(), /post-php|wp-admin|editor/i);
 

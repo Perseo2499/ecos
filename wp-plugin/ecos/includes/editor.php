@@ -163,6 +163,28 @@ function ecos_wp_register_editor_route() {
 add_action( 'rest_api_init', 'ecos_wp_register_editor_route' );
 
 /**
+ * GET ecos/v1/auth-check (pública): indica solo si al servidor le llega la cabecera Authorization. WordPress responde
+ * igual («no has iniciado sesión») a una contraseña mal escrita y a un servidor que pierde la cabecera; así Ecos sabe cuál es.
+ */
+add_action(
+	'rest_api_init',
+	function () {
+		register_rest_route(
+			'ecos/v1',
+			'/auth-check',
+			array(
+				'methods'             => 'GET',
+				'permission_callback' => '__return_true',
+				'callback'            => function () {
+					$got = ! empty( $_SERVER['PHP_AUTH_USER'] ) || ! empty( $_SERVER['HTTP_AUTHORIZATION'] ) || ! empty( $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] );
+					return rest_ensure_response( array( 'received' => $got ) );
+				},
+			)
+		);
+	}
+);
+
+/**
  * admin-post.php?action=ecos_editor&t=TOKEN: valida y borra el token, inicia sesión y redirige al editor.
  */
 function ecos_wp_editor_landing() {
