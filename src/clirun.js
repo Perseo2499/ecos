@@ -88,6 +88,26 @@ async function askText(cfg, parts, log = () => {}) {
   return String(await askOnce(cfg, parts, null, log) || '').trim();
 }
 
+// Mensaje de usuario en formato stream-json de Claude Code: primero las fotos (en orden) y luego el texto
+function streamMessage(text, imgs, rules) {
+  const content = [];
+  imgs.forEach((im, i) => {
+    content.push({ type: 'text', text: `Imagen ${i}:` });
+    content.push({ type: 'image', source: { type: 'base64', media_type: im.mediaType, data: im.base64 } });
+  });
+  content.push({ type: 'text', text: text + rules });
+  return JSON.stringify({ type: 'user', message: { role: 'user', content } }) + '\n';
+}
+// La última línea «result» de la salida stream-json
+function lastResult(out) {
+  let r = null;
+  for (const line of String(out || '').split(/\r?\n/)) {
+    if (!line.trim().startsWith('{')) continue;
+    try { const j = JSON.parse(line); if (j && j.type === 'result') r = j; } catch { /* línea parcial */ }
+  }
+  return r;
+}
+
 async function askOnce({ tool, model, web = false }, parts, schema, log = () => {}) {
   const T = TOOLS[tool];
   if (!T) throw new Error('Elige una CLI (Claude Code, Codex o Gemini CLI)');
@@ -95,7 +115,7 @@ async function askOnce({ tool, model, web = false }, parts, schema, log = () => 
   const started = Date.now();
   try {
     // Imágenes a archivos de la carpeta temporal (se citan por su nombre relativo)
-    const images = [];
+    const images = [], imgData = []; // imgData: { mediaType, base64 } para mandarlas directamente a Claude Code
     let text = '';
     for (const p of parts) {
       if (p.type === 'text') { text += p.text + '\n'; continue; }
@@ -105,6 +125,7 @@ async function askOnce({ tool, model, web = false }, parts, schema, log = () => 
       const name = `imagen-${images.length}.${ext}`;
       fs.writeFileSync(path.join(dir, name), buf);
       images.push(name);
+      imgData.push({ mediaType: { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp' }[ext] || 'image/jpeg', base64: buf.toString('base64') });
       text += `[${name}]\n`;
     }
     const schemaText = schema ? JSON.stringify(schema) : '';
@@ -114,7 +135,18 @@ async function askOnce({ tool, model, web = false }, parts, schema, log = () => 
     const imgNote = images.length ? `\n\nLas imágenes de la petición son los archivos ${images.join(', ')} de la carpeta actual; ábrelas para verlas.` : '';
     let res, data;
 
-    if (tool === 'claude') {
+    if (tool === 'claude' && images.length) {
+      // Con fotos: se mandan dentro del propio mensaje (stream-json), sin herramientas. Así Claude Code no tiene que abrir
+      // archivos (en Windows, con tildes en la carpeta del usuario, pedía permiso para leer la foto y no la veía)
+      const tools = web ? 'WebSearch' : '';
+      const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose',
+        '--tools', tools, ...(web ? ['--allowedTools', 'WebSearch'] : []),
+        '--strict-mcp-config', '--no-session-persistence', ...(model ? ['--model', model] : [])];
+      res = await run(T.bin, args, { cwd: dir, input: streamMessage(text.replace(/\[imagen-\d+\.\w+\]\n/g, ''), imgData, rules), ...(web ? { timeout: 300000 } : {}) });
+      const j = lastResult(res.out);
+      if (res.code !== 0 || !j || j.is_error) throw new Error(`Claude Code: ${(j?.result || res.err || res.out || 'error').toString().trim().slice(0, 300)}.${loginHint(tool, res.err + res.out)}`);
+      data = !schema ? String(j.result || '').trim() : j.structured_output || extractJson(j.result);
+    } else if (tool === 'claude') {
       // Solo la herramienta de lectura (para ver las imágenes); sin MCP ni sesiones guardadas
       // la lectura, solo dentro de la carpeta temporal de la petición (un texto malicioso no puede pedirle leer otros archivos)
       const tools = [...(images.length ? ['Read'] : []), ...(web ? ['WebSearch'] : [])].join(',');
@@ -197,4 +229,4 @@ async function search({ tool, model }, prompt, log = () => {}) {
   }
 }
 
-module.exports = { extractJson, ask, askText, search, TOOLS, MODELS };
+module.exports = { extractJson, ask, askText, search, TOOLS, MODELS, streamMessage, lastResult };

@@ -8,6 +8,13 @@
 
   const ENTRIES = [
     {
+      version: '3.8.1', date: '2026-11-28',
+      title: c('Describir fotos con Claude Code', 'Describing photos with Claude Code'),
+      fixed: [
+        c('«Describir con IA» y «Describir fotos» con Claude Code ya no piden permiso para leer la foto (pasaba en Windows con tildes en el nombre de usuario): la foto se envía directamente a la IA.', '"Describe with AI" and "Describe photos" with Claude Code no longer ask for permission to read the photo (it happened on Windows with accents in the user name): the photo is sent directly to the AI.'),
+      ],
+    },
+    {
       version: '3.8.0', date: '2026-11-28',
       title: c('Más rápida y al día', 'Faster and up to date'),
       improved: [
