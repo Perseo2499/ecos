@@ -86,6 +86,32 @@ add_filter( 'pll_get_post_types', function ( $types ) {
 PHP
 )"
 wp eval "wp_mkdir_p( WPMU_PLUGIN_DIR ); file_put_contents( WPMU_PLUGIN_DIR . '/ecos-pruebas.php', base64_decode( '${MU_B64}' ) );" || exit 1
+
+# DEBUG-TEMP
+DBG_B64="$(base64 -w0 <<'PHP'
+<?php
+add_action( 'rest_api_init', function () {
+	register_rest_route( 'ecosdbg/v1', '/q', array( 'methods' => 'GET', 'permission_callback' => '__return_true', 'callback' => function ( $r ) {
+		global $wpdb;
+		$id = (int) $r['id'];
+		$o = array( 'ver' => defined( 'WPSEO_VERSION' ) ? WPSEO_VERSION : null );
+		$o['meta'] = get_post_meta( $id, '_yoast_wpseo_meta-robots-noindex', false );
+		$o['ind'] = $wpdb->get_results( $wpdb->prepare( "SELECT id,object_id,object_type,is_robots_noindex,is_robots_nofollow,canonical,version FROM {$wpdb->prefix}yoast_indexable WHERE object_id=%d", $id ), ARRAY_A );
+		try {
+			$b = YoastSEO()->classes->get( 'Yoast\\WP\\SEO\\Builders\\Indexable_Builder' );
+			$x = $b->build_for_id_and_type( $id, 'post' );
+			$o['built'] = $x ? array( 'noindex' => $x->is_robots_noindex, 'cls' => get_class( $x ) ) : null;
+		} catch ( \Throwable $e ) { $o['err'] = get_class( $e ) . ': ' . $e->getMessage(); }
+		$o['ind2'] = $wpdb->get_results( $wpdb->prepare( "SELECT id,is_robots_noindex,version FROM {$wpdb->prefix}yoast_indexable WHERE object_id=%d", $id ), ARRAY_A );
+		$o['astra'] = get_option( 'astra-settings' ) ? array_intersect_key( get_option( 'astra-settings' ), array_flip( array( 'site-sidebar-layout', 'single-post-sidebar-layout', 'archive-post-sidebar-layout' ) ) ) : null;
+		$o['sidebars'] = wp_get_sidebars_widgets();
+		return $o;
+	} ) );
+} );
+PHP
+)"
+wp eval "file_put_contents( WPMU_PLUGIN_DIR . '/ecos-dbg.php', base64_decode( '${DBG_B64}' ) );" || exit 1
+# /DEBUG-TEMP
 LANG_OK=0
 if wp pll lang create Español es es_ES --no_default_cat >/dev/null 2>&1 && wp pll lang create English en en_US --no_default_cat >/dev/null 2>&1; then
   LANG_OK=1

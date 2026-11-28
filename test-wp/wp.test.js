@@ -257,6 +257,8 @@ test('SEO completo (complemento): escribir y leer canónica, indexación, palabr
   await W.seoSave(cfg, S.postId, { noindex: true });
   assert.equal((await W.seoGet(cfg, S.postId)).fields.noindex, true, 'noindex se lee de vuelta');
   html = await fetchPublic(S.postUrl);
+  // DEBUG-TEMP
+  console.error('DBG seo robots=', (html.match(/<meta name="robots"[^>]*>/) || [])[0], JSON.stringify(await (await fetch(W.publicBase(cfg).replace(/\/$/, '') + '/wp-json/ecosdbg/v1/q?id=' + S.postId)).json()));
   assert.match(tag(/<meta name="robots" content="([^"]*)"/), /noindex/, 'robots noindex');
   // quitar noindex: vuelve la canónica
   await W.seoSave(cfg, S.postId, { noindex: false });
@@ -335,6 +337,8 @@ test('widgets: añadir un widget de bloque a la barra lateral de Astra y verlo e
   // en la web (Astra pinta la barra lateral en la portada de entradas y en cada entrada)
   const site = W.publicBase(cfg).replace(/\/$/, '');
   const pages = [await fetchPublic(site + '/'), await fetchPublic(S.postUrl)];
+  // DEBUG-TEMP
+  console.error('DBG widget', JSON.stringify(await (await fetch(site + '/wp-json/ecosdbg/v1/q?id=' + S.postId)).json()), 'aside=', pages.map((h) => (h.match(/<aside[^>]*>/g) || []).join('|') + ' body=' + (h.match(/<body[^>]*class="([^"]*)"/) || [])[1]));
   assert.ok(pages.some((h) => h.includes('Widget de prueba ' + TAG)), 'el widget aparece en la web');
   // cambiar su texto: una sola petición
   const edit = WL.diff(z1, WL.setRaw(z1, id, { content: content.replace('prueba', 'cambiado') }));
@@ -549,6 +553,8 @@ test('revisión: el editor resuelve el hilo, aprueba y publica; quién la cambi�
   const pub = await W.request(cfgEditor, `/wp/v2/posts/${RV.id}`, { method: 'POST', json: { status: 'publish' } });
   assert.equal(pub.status, 'publish');
   assert.equal((await W.reviewSummary(cfgEditor)).pending.some((p) => p.id === RV.id), false, 'ya no está pendiente');
+  // DEBUG-TEMP
+  console.error('DBG review', RV.id, JSON.stringify((await W.reviewSummary(cfgEditor)).activity.map((p) => [p.id, p.status, p.modified])));
   assert.ok((await W.reviewSummary(cfgEditor)).activity.some((p) => p.id === RV.id), 'sale en la actividad reciente');
 });
 
