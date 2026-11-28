@@ -8,6 +8,22 @@
 
   const ENTRIES = [
     {
+      version: '3.7.0', date: '2026-11-28', plugin: '1.8.0',
+      title: c('Más compatible con WordPress', 'More compatible with WordPress'),
+      new: [
+        c('Los bloques más usados de Spectra, Kadence y GenerateBlocks se editan dentro de Ecos (textos, enlaces, imágenes, nivel de título, alineación y colores sencillos), conservando su diseño.', 'The most used Spectra, Kadence and GenerateBlocks blocks can be edited inside Ecos (texts, links, images, heading level, alignment and simple colours), keeping their design.'),
+        c('Tipos de contenido propios (eventos, proyectos…) en el Blog y en el editor, con sus categorías.', 'Custom post types (events, projects…) in the Blog and in the editor, with their categories.'),
+        c('Panel «Campos» con los campos personalizados de ACF, Meta Box y los metas de WordPress.', '"Fields" panel with ACF, Meta Box and WordPress meta custom fields.'),
+        c('Idiomas con Polylang y WPML: idioma de cada entrada, sus traducciones y «Crear traducción», con traducción por IA opcional.', 'Languages with Polylang and WPML: each post language, its translations and "Create translation", with optional AI translation.'),
+        c('SEO completo con Yoast y Rank Math: palabras clave, URL canónica, no indexar, datos para Facebook y X con vista previa, y análisis con consejos.', 'Full SEO with Yoast and Rank Math: keyphrases, canonical URL, noindex, Facebook and X data with preview, and analysis with tips.'),
+        c('Editor de menús y widgets de tu web (Blog → Menús y widgets), con copia previa para deshacer.', 'Menu and widget editor for your site (Blog → Menus and widgets), with a backup to undo.'),
+        c('Revisión entre varias personas: «Enviar a revisión», barra para aprobar o devolver con comentarios, notas internas ancladas a bloques, avisos cuando otra persona cambia una entrada y «Actividad reciente» en Inicio.', 'Team review: "Submit for review", a bar to approve or send back with comments, internal notes anchored to blocks, notices when someone else changes a post and "Recent activity" on Home.'),
+      ],
+      web: [
+        c('Actualiza el Complemento de Ecos a la 1.8.0: hace falta para los campos, los idiomas, el SEO completo y las notas de revisión.', 'Update the Ecos plugin to 1.8.0: it is needed for fields, languages, full SEO and review notes.'),
+      ],
+    },
+    {
       version: '3.6.1', date: '2026-11-27', plugin: '1.7.1',
       title: c('Arreglos hallados al probar con un WordPress real', 'Fixes found by testing against a real WordPress'),
       fixed: [
