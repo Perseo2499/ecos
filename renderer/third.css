@@ -1,5 +1,5 @@
 /* Bloques de Spectra, Kadence y GenerateBlocks en el editor (renderer/blocks/third.js). Usa los colores del tema de la app. */
-.tp-box { position: relative; padding: 22px 14px 12px; border-radius: var(--r-m); border: 1px dashed var(--outline-var); background: var(--surface-c-low); color: var(--on-surface); }
+.tp-box { position: relative; padding: 22px 14px 12px; border-radius: var(--r-m); border: var(--bw) dashed var(--outline-var); background: var(--surface-c-low); color: var(--on-surface); }
 .tp-tag { position: absolute; top: 4px; left: 12px; font: 600 11px/1 system-ui, sans-serif; letter-spacing: .04em; text-transform: uppercase; color: var(--on-primary-container); background: var(--primary-container); padding: 3px 8px; border-radius: var(--r-full); }
 .tp-box.tp-cont { padding-bottom: 8px; }
 .tp-box.tp-cont > .blocks { margin: 0; }
@@ -17,4 +17,4 @@
 .tp-btn:empty::before, .tp-ed:empty::before { content: attr(data-ph); opacity: .6; }
 .tp-ed { outline: none; border-radius: 4px; }
 .tp-ed:focus { box-shadow: 0 0 0 2px var(--primary); }
-.sp-custom-row .tp-url, .sp-custom-row .tp-alt { width: 100%; min-width: 220px; padding: 8px 10px; border-radius: var(--r-xs); border: 1px solid var(--outline-var); background: var(--surface-c-lowest); color: var(--on-surface); font: inherit; }
+.sp-custom-row .tp-url, .sp-custom-row .tp-alt { width: 100%; min-width: 220px; padding: 8px 10px; border-radius: var(--r-xs); border: var(--bw) solid var(--outline-var); background: var(--surface-c-lowest); color: var(--on-surface); font: inherit; }

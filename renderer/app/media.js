@@ -63,30 +63,30 @@ function mediaGrid(host, o = {}) {
   const yearOpts = (() => { const y = new Date().getFullYear(); let h = ''; for (let k = y; k >= 2005; k--) h += `<option value="y${k}">${k}</option>`; return h; })();
   host.innerHTML = `<div class="mg-tools">
       <div class="seg mg-type">
-        <button data-t="all" class="${st.type === 'all' ? 'active' : ''}">${t('Todo')}</button>
-        <button data-t="image" class="${st.type === 'image' ? 'active' : ''}"><span class="ms">image</span>${t('Fotos')}</button>
-        <button data-t="video" class="${st.type === 'video' ? 'active' : ''}"><span class="ms">movie</span>${t('Vídeos')}</button>
+        <button data-t="all" class="${st.type === 'all' ? 'active' : ''}"><span>${t('Todo')}</span></button>
+        <button data-t="image" class="${st.type === 'image' ? 'active' : ''}"><span class="ms">image</span><span>${t('Fotos')}</span></button>
+        <button data-t="video" class="${st.type === 'video' ? 'active' : ''}"><span class="ms">movie</span><span>${t('Vídeos')}</span></button>
       </div>
-      <div class="seg mg-view" role="group" aria-label="${escHtml(t('Vista'))}">
-        <button data-v="fav" aria-pressed="${st.view === 'fav'}" class="${st.view === 'fav' ? 'active' : ''}"><span class="ms fill">star</span>${t('Destacadas')}</button>
-        <button data-v="feat" aria-pressed="${st.view === 'feat'}" class="${st.view === 'feat' ? 'active' : ''}" title="${escHtml(t('Fotos que son la imagen destacada de alguna entrada o página'))}"><span class="ms">article</span>${t('De entradas')}</button>
+      <div class="seg mg-view" data-prio="3" role="group" aria-label="${escHtml(t('Vista'))}">
+        <button data-v="fav" aria-pressed="${st.view === 'fav'}" class="${st.view === 'fav' ? 'active' : ''}"><span class="ms fill">star</span><span>${t('Destacadas')}</span></button>
+        <button data-v="feat" aria-pressed="${st.view === 'feat'}" class="${st.view === 'feat' ? 'active' : ''}" title="${escHtml(t('Fotos que son la imagen destacada de alguna entrada o página'))}"><span class="ms">article</span><span>${t('De entradas')}</span></button>
       </div>
       <div class="field search"><span class="ms">search</span><input type="search" class="mg-search" placeholder="${escHtml(t('Buscar por nombre…'))}"></div>
-      ${o.usage ? `<label class="switch mg-unused"><input type="checkbox"><span>${t('Sin usar')}</span></label>` : ''}
-      <button class="btn text icon-only mg-refresh" title="${escHtml(t('Actualizar'))}"><span class="ms">refresh</span></button>
+      ${o.usage ? `<label class="switch mg-unused" data-prio="4"><input type="checkbox"><span>${t('Sin usar')}</span></label>` : ''}
+      <button class="btn text icon-only mg-refresh" data-prio="5" data-label="${escHtml(t('Actualizar'))}" title="${escHtml(t('Actualizar'))}"><span class="ms">refresh</span></button>
       <span class="spacer"></span>
-      <span class="hint mg-count"></span>
+      <span class="hint mg-count" data-prio="1" data-ov="drop"></span>
     </div>
     <div class="b-range mg-range">
       <span class="ms">date_range</span>
-      <select class="mg-preset" title="${escHtml(t(o.usage ? 'Fecha de la entrada donde se usa (o de subida si no se usa)' : 'Fecha de subida'))}">
+      <select class="mg-preset" data-prio="3" title="${escHtml(t(o.usage ? 'Fecha de la entrada donde se usa (o de subida si no se usa)' : 'Fecha de subida'))}">
         <option value="all">${t('Todas las fechas')}</option><option value="month">${t('Este mes')}</option><option value="year">${t('Este año')}</option>
         ${yearOpts}<option value="custom">${t('De una fecha a otra…')}</option>
       </select>
-      <label class="b-date"><span>${t('Desde')}</span><input type="date" class="mg-from"></label>
-      <label class="b-date"><span>${t('Hasta')}</span><input type="date" class="mg-to"></label>
-      <button class="btn text icon-only mg-range-clear hidden" title="${escHtml(t('Quitar el filtro de fechas'))}"><span class="ms">close</span></button>
-      ${o.usage ? `<span class="spacer"></span><button class="btn tonal mg-selall"><span class="ms">select_all</span><span class="mg-selall-l"></span></button>` : ''}
+      <label class="b-date" data-prio="2"><span>${t('Desde')}</span><input type="date" class="mg-from"></label>
+      <label class="b-date" data-prio="2"><span>${t('Hasta')}</span><input type="date" class="mg-to"></label>
+      <button class="btn text icon-only mg-range-clear hidden" data-prio="4" data-label="${escHtml(t('Quitar el filtro de fechas'))}" title="${escHtml(t('Quitar el filtro de fechas'))}"><span class="ms">close</span></button>
+      ${o.usage ? `<span class="spacer"></span><button class="btn tonal mg-selall" data-prio="6"><span class="ms">select_all</span><span class="mg-selall-l"></span></button>` : ''}
     </div>
     ${o.shelves ? '<div class="mg-shelves"></div>' : ''}
     <div class="mg-slot"></div>
@@ -317,6 +317,7 @@ function mediaGrid(host, o = {}) {
   const refilter = () => { if (st.view) { st.page = 1; return load(); }
     st.page = 1; return (o.usage && !st.usage && (st.unused || st.from || st.to)) ? usageReady().then(load) : load(); };
 
+  if (window.OverflowBar) { OverflowBar.attach(q('.mg-tools')); OverflowBar.attach(q('.mg-range')); }
   q('.mg-view').onclick = (e) => { const b = e.target.closest('button'); if (b) setView(b.dataset.v); };
   q('.mg-type').onclick = (e) => {
     const b = e.target.closest('button'); if (!b) return;

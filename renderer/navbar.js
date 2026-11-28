@@ -9,8 +9,15 @@
   const root = document.documentElement;
   const TABS = ['home', 'posts', 'blog', 'connections', 'settings'];
   const n = TABS.length;
-  const STEP = 72, PILL = 250, PAD = 5; // hueco de cada icono, ancho de la píldora, relleno de la pista
-  const INNER = (n - 1) * STEP + PILL;
+  // hueco de cada icono, ancho de la píldora, relleno de la pista. Con la ventana estrecha («compacta») la píldora
+  // se queda en un icono, sin la etiqueta en letra de puntos, para que la barra no desborde la cabecera.
+  let STEP = 72, PILL = 250, INNER = (n - 1) * STEP + PILL, compact = false;
+  const PAD = 5;
+  function measure() {
+    compact = window.innerWidth < 1300;
+    STEP = compact ? 52 : 72; PILL = compact ? 44 : 250; INNER = (n - 1) * STEP + PILL;
+    if (bar) { bar.style.width = INNER + PAD * 2 + 'px'; pill.style.width = PILL + 'px'; bar.classList.toggle('compact', compact); }
+  }
   const DUR = 400;
   // Iconos de puntos (pares x,y de 0 a 1): rombo, triángulo, cruz y aspa
   const STARS = {
@@ -38,12 +45,11 @@
   function build() {
     bar = document.createElement('nav');
     bar.className = 'vnav';
-    bar.style.width = INNER + PAD * 2 + 'px';
     bar.innerHTML = `<div class="vnav-pill"></div>` + TABS.map((k) => `<div class="vnav-item" data-tab="${k}"><span class="vnav-ic">${dotIcon(k)}</span><span class="vnav-lbl"><span></span></span></div>`).join('');
     $('.appbar nav.tabs').insertAdjacentElement('beforebegin', bar);
     pill = $('.vnav-pill', bar);
-    pill.style.width = PILL + 'px';
     items = $$('.vnav-item', bar);
+    measure();
     labels();
     gestures();
   }
@@ -63,8 +69,9 @@
       const cx = rest + (center - rest) * a;
       const lbl = $('.vnav-lbl', it);
       if (!Number(it.dataset.w)) it.dataset.w = $('span', lbl).scrollWidth;
-      lbl.style.width = Number(it.dataset.w) * a + 'px';
-      lbl.style.opacity = a;
+      lbl.style.width = compact ? '0px' : Number(it.dataset.w) * a + 'px';
+      lbl.style.opacity = compact ? 0 : a;
+      it.title = $('.vnav-lbl span', it).textContent;
       const ic = $('.vnav-ic', it);
       ic.style.transform = `scale(${0.7 + 0.3 * a})`;
       ic.style.opacity = 0.55 + 0.45 * a; // sobre la franja gris clara, los iconos sin elegir siguen viéndose
@@ -163,6 +170,7 @@
     if (on && !bar) build();
     if (bar) { labels(); sync(); paint(); }
   }
+  window.addEventListener('resize', () => { if (bar) { measure(); paint(); } });
   const mo = new MutationObserver(sync);
   TABS.forEach((k) => { const el = document.getElementById('tab-' + k); if (el) mo.observe(el, { attributes: true, attributeFilter: ['class'] }); });
   window.VinylNav = { apply, go: (k) => go(TABS.indexOf(k)) };

@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="diagnose.css">
 <link rel="stylesheet" href="third.css">
+<link rel="stylesheet" href="adaptive.css">
 </head>
 <body>
 <div id="boot-splash" role="status" aria-label="Abriendo Ecos"><img class="bs-logo" src="assets/logo-mark.svg" alt=""><span class="bs-name">Ecos</span><span class="bs-bar" aria-hidden="true"></span></div>
@@ -44,13 +45,13 @@
   <!-- ============================ PUBLICACIONES ============================ -->
   <section id="tab-posts" class="tab">
     <div class="surface toolbar-card">
-      <div class="sources chips">
-        <button data-src="api" class="chip active"><span class="ms">link</span><span data-i18n>Conectar con Meta</span></button>
-        <button data-src="zip" class="chip"><span class="ms">folder_zip</span><span data-i18n>ZIP de Meta</span></button>
-        <button data-src="shots" class="chip"><span class="ms">screenshot_monitor</span><span data-i18n>Capturas (IA)</span></button>
-        <button data-src="manual" class="chip"><span class="ms">edit_note</span><span data-i18n>Manual</span></button>
+      <div class="sources chips" id="src-bar">
+        <button data-src="api" class="chip active"><span class="ms">link</span><span data-i18n data-short="Meta">Conectar con Meta</span></button>
+        <button data-src="zip" data-prio="4" class="chip"><span class="ms">folder_zip</span><span data-i18n data-short="ZIP">ZIP de Meta</span></button>
+        <button data-src="shots" data-prio="3" class="chip"><span class="ms">screenshot_monitor</span><span data-i18n data-short="Capturas">Capturas (IA)</span></button>
+        <button data-src="manual" data-prio="2" class="chip"><span class="ms">edit_note</span><span data-i18n>Manual</span></button>
         <span class="spacer"></span>
-        <span class="hint subtle"><span class="ms">drag_pan</span><span data-i18n>Arrastra archivos aquí</span></span>
+        <span class="hint subtle" data-prio="1" data-ov="drop"><span class="ms">drag_pan</span><span data-i18n>Arrastra archivos aquí</span></span>
       </div>
 
       <div class="row src-panel" id="src-api">
@@ -85,22 +86,22 @@
       </div>
     </div>
 
-    <div class="row filters">
+    <div class="row filters" id="f-bar">
       <div class="field search"><span class="ms">search</span><input id="f-search" type="search" data-i18n-ph placeholder="Buscar…"></div>
-      <select id="f-show">
+      <select id="f-show" data-prio="6">
         <option value="all" data-i18n>Todas</option>
         <option value="pending" data-i18n>Sin pasar al blog</option>
         <option value="done" data-i18n>Ya en el blog</option>
       </select>
-      <select id="f-order" data-i18n-title title="Orden por fecha" aria-label="Orden por fecha">
+      <select id="f-order" data-prio="5" data-i18n-title title="Orden por fecha" aria-label="Orden por fecha">
         <option value="desc" data-i18n>Más recientes</option>
         <option value="asc" data-i18n>Más antiguas</option>
       </select>
-      <label class="switch" data-i18n-title title="Juntar la misma publicación de Instagram y Facebook"><input type="checkbox" id="f-merge" checked><span data-i18n>Juntar duplicados</span></label>
-      <span class="f-view chips" id="f-view"><button class="chip active" data-v="list" data-i18n-title title="Lista"><span class="ms">grid_view</span></button><button class="chip" data-v="cal" data-i18n-title title="Calendario"><span class="ms">calendar_month</span></button></span>
-      <span class="f-view chips seg-labels" id="f-layout" role="group"><button class="chip" data-l="detail" data-i18n-title title="Detalle: por fechas, con línea temporal, texto y fotos junto a cada tarjeta"><span class="ms">view_agenda</span><span data-i18n>Detalle</span></button><button class="chip" data-l="grid" data-i18n-title title="Cuadrícula: todas las publicaciones seguidas, como antes"><span class="ms">grid_view</span><span data-i18n>Cuadrícula</span></button></span>
-      <button id="summary" class="btn text"><span class="ms">date_range</span><span data-i18n>Resumen</span></button>
-      <button id="clear" class="btn text icon-only" data-i18n-title title="Vaciar lista"><span class="ms">delete_sweep</span></button>
+      <label class="switch" data-prio="3" data-i18n-title title="Juntar la misma publicación de Instagram y Facebook"><input type="checkbox" id="f-merge" checked><span data-i18n data-short="Duplicados">Juntar duplicados</span></label>
+      <span class="f-view chips" id="f-view" data-prio="4"><button class="chip active" data-v="list" data-i18n-title title="Lista"><span class="ms">grid_view</span></button><button class="chip" data-v="cal" data-i18n-title title="Calendario"><span class="ms">calendar_month</span></button></span>
+      <span class="f-view chips seg-labels" id="f-layout" data-prio="2" role="group"><button class="chip" data-l="detail" data-i18n-title title="Detalle: por fechas, con línea temporal, texto y fotos junto a cada tarjeta"><span class="ms">view_agenda</span><span data-i18n>Detalle</span></button><button class="chip" data-l="grid" data-i18n-title title="Cuadrícula: todas las publicaciones seguidas, como antes"><span class="ms">grid_view</span><span data-i18n>Cuadrícula</span></button></span>
+      <button id="summary" data-prio="7" class="btn text"><span class="ms">date_range</span><span data-i18n>Resumen</span></button>
+      <button id="clear" data-prio="8" data-label="Vaciar lista" class="btn text icon-only" data-i18n-title title="Vaciar lista"><span class="ms">delete_sweep</span></button>
     </div>
 
     <div class="split">
@@ -114,26 +115,28 @@
       <aside id="editor" class="editor hidden">
         <div class="ed-bar">
           <button id="ed-close" class="btn text icon-only" data-i18n-title title="Cerrar"><span class="ms">arrow_back</span></button>
+          <button id="ed-media-btn" class="btn text icon-only ed-drawer-btn" aria-pressed="false" aria-controls="ed-media" data-i18n-title title="Fotos y vídeos"><span class="ms">photo_library</span></button>
           <b class="ed-bar-title" id="ed-bar-title">Entrada</b>
-          <span class="hint" id="ed-count"></span>
+          <span class="hint" id="ed-count" data-ov="drop" data-prio="1"></span>
           <span class="spacer"></span>
-          <span class="ed-dev" id="ed-dev" role="group" data-i18n-title title="Cómo se verá en cada dispositivo">
+          <span class="ed-dev" id="ed-dev" data-prio="3" role="group" data-i18n-title title="Cómo se verá en cada dispositivo">
             <button data-dev="desktop" data-i18n-title title="Ordenador"><span class="ms">computer</span></button>
             <button data-dev="tablet" data-i18n-title title="Tablet"><span class="ms">tablet_mac</span></button>
             <button data-dev="mobile" data-i18n-title title="Móvil"><span class="ms">smartphone</span></button>
           </span>
-          <span id="ed-wp" class="ed-wp hidden"></span>
-          <button id="ed-wped" class="btn text icon-only hidden" data-i18n-title title="Abrir en el editor de WordPress: edita esta entrada con el editor oficial de tu web (en una ventana de Ecos) para usar bloques de otros plugins"><span class="ms">edit_square</span></button>
-          <button id="ed-pull" class="btn text" data-i18n-title title="Comprobar en WordPress si la entrada se ha publicado o cambiado allí y traer los cambios"><span class="ms">sync</span><span data-i18n>Actualizar</span></button>
-          <button id="ed-import" class="btn text" data-i18n-title title="Importar una entrada o página exportada de WordPress (.xml) o un archivo .html"><span class="ms">upload_file</span><span data-i18n>Importar</span></button>
-          <button id="ed-history" class="btn text hidden" data-i18n-title title="Ver y recuperar versiones anteriores de esta entrada"><span class="ms">history</span><span data-i18n>Historial</span></button>
-          <button id="ed-notes-btn" class="btn text hidden" aria-pressed="false" aria-controls="ed-notes" data-i18n-title title="Notas internas de revisión: solo las ve tu equipo"><span class="ms">forum</span><span data-i18n>Notas</span></button>
-          <button id="ed-layers-btn" class="btn text" aria-pressed="false" aria-controls="ed-layers" data-i18n-title title="Capas de la entrada"><span class="ms">account_tree</span><span data-i18n>Capas</span></button>
-          <button id="ed-find" class="btn text icon-only" data-i18n-title title="Buscar y reemplazar"><span class="ms">find_replace</span></button>
-          <button id="ed-undo" class="btn text icon-only" data-i18n-title title="Deshacer"><span class="ms">undo</span></button>
-          <button id="ed-redo" class="btn text icon-only" data-i18n-title title="Rehacer"><span class="ms">redo</span></button>
-          <button id="preview" class="btn outlined"><span class="ms">preview</span><span data-i18n>Vista previa</span></button>
-          <button id="send" class="btn filled"><span class="ms">send</span><span data-i18n>Enviar a WordPress</span></button>
+          <span id="ed-wp" class="ed-wp hidden" data-prio="2" data-ov="drop"></span>
+          <button id="ed-wped" data-prio="6" data-label="Editor de WordPress" class="btn text icon-only hidden" data-i18n-title title="Abrir en el editor de WordPress: edita esta entrada con el editor oficial de tu web (en una ventana de Ecos) para usar bloques de otros plugins"><span class="ms">edit_square</span></button>
+          <button id="ed-pull" data-prio="8" class="btn text" data-i18n-title title="Comprobar en WordPress si la entrada se ha publicado o cambiado allí y traer los cambios"><span class="ms">sync</span><span data-i18n>Actualizar</span></button>
+          <button id="ed-import" data-prio="7" class="btn text" data-i18n-title title="Importar una entrada o página exportada de WordPress (.xml) o un archivo .html"><span class="ms">upload_file</span><span data-i18n>Importar</span></button>
+          <button id="ed-history" data-prio="9" class="btn text hidden" data-i18n-title title="Ver y recuperar versiones anteriores de esta entrada"><span class="ms">history</span><span data-i18n>Historial</span></button>
+          <button id="ed-notes-btn" data-prio="10" class="btn text hidden" aria-pressed="false" aria-controls="ed-notes" data-i18n-title title="Notas internas de revisión: solo las ve tu equipo"><span class="ms">forum</span><span data-i18n>Notas</span></button>
+          <button id="ed-layers-btn" data-prio="11" class="btn text" aria-pressed="false" aria-controls="ed-layers" data-i18n-title title="Capas de la entrada"><span class="ms">account_tree</span><span data-i18n>Capas</span></button>
+          <button id="ed-find" data-prio="5" data-label="Buscar y reemplazar" class="btn text icon-only" data-i18n-title title="Buscar y reemplazar"><span class="ms">find_replace</span></button>
+          <button id="ed-undo" data-prio="4" data-label="Deshacer" class="btn text icon-only" data-i18n-title title="Deshacer"><span class="ms">undo</span></button>
+          <button id="ed-redo" data-prio="4" data-label="Rehacer" class="btn text icon-only" data-i18n-title title="Rehacer"><span class="ms">redo</span></button>
+          <button id="ed-side-btn" class="btn text icon-only ed-drawer-btn" aria-pressed="false" aria-controls="ed-side" data-i18n-title title="Ajustes de la entrada"><span class="ms">tune</span></button>
+          <button id="preview" data-prio="90" class="btn outlined"><span class="ms">preview</span><span data-i18n data-short="Vista">Vista previa</span></button>
+          <button id="send" class="btn filled" data-keep-label><span class="ms">send</span><span data-i18n data-short="Enviar">Enviar a WordPress</span></button>
         </div>
         <div id="send-prog" class="send-prog hidden" role="status" aria-live="polite"><span id="send-prog-text"></span><progress id="send-prog-bar" max="100" value="0"></progress></div>
         <div id="ed-lock" class="ed-lock hidden" role="alert"></div>
@@ -141,13 +144,13 @@
         <div id="ed-review" class="ed-review hidden"></div>
         <div class="ed-body">
           <!-- Bandeja de fotos y vídeos: se arrastran al lienzo -->
-          <div class="ed-media">
+          <div class="ed-media" id="ed-media">
             <div class="section-label" data-i18n>Fotos y vídeos</div>
             <div id="d-media" class="media-tray"></div>
-            <button id="d-media-add" class="btn tonal small"><span class="ms">upload</span><span data-i18n>Subir fotos</span></button>
-            <button id="d-media-paste" class="btn tonal small" data-i18n-title title="Pega una imagen copiada (también con Ctrl+V dentro del texto)"><span class="ms">content_paste</span><span data-i18n>Pegar imagen</span></button>
-            <button id="d-media-lib" class="btn tonal small"><span class="ms">photo_library</span><span data-i18n>De la biblioteca</span></button>
-            <button id="d-media-gp" class="btn tonal small"><span class="ms">add_photo_alternate</span><span data-i18n>De Google Fotos</span></button>
+            <button id="d-media-add" class="btn tonal small"><span class="ms">upload</span><span data-i18n data-short="Subir">Subir fotos</span></button>
+            <button id="d-media-paste" class="btn tonal small" data-i18n-title title="Pega una imagen copiada (también con Ctrl+V dentro del texto)"><span class="ms">content_paste</span><span data-i18n data-short="Pegar">Pegar imagen</span></button>
+            <button id="d-media-lib" class="btn tonal small"><span class="ms">photo_library</span><span data-i18n data-short="Biblioteca">De la biblioteca</span></button>
+            <button id="d-media-gp" class="btn tonal small"><span class="ms">add_photo_alternate</span><span data-i18n data-short="G. Fotos">De Google Fotos</span></button>
             <p class="hint tiny" data-i18n>Arrástralas al texto, a una galería o a un carrusel.</p>
           </div>
           <!-- Lienzo -->
@@ -225,7 +228,7 @@
             <div class="ly-list" role="tree" aria-label="Capas de la entrada"></div>
           </aside>
           <!-- Ajustes de la entrada -->
-          <div class="ed-side">
+          <div class="ed-side" id="ed-side">
             <div class="section-label" data-i18n>Revisión</div>
             <div id="d-review" class="review"></div>
             <div class="field"><label data-i18n>Plantilla</label><div class="tpl-sel"><select id="d-template"><option value="" data-i18n>Sin plantilla</option></select><button id="d-tpl-save" class="btn tonal icon-only" data-i18n-title title="Guardar los bloques como plantilla"><span class="ms">bookmark_add</span></button></div><button id="d-tpl-save2" class="btn text small tpl-save2" type="button"><span class="ms">bookmark_add</span><span data-i18n>Guardar como plantilla…</span></button></div>
@@ -339,15 +342,15 @@
     <div class="row b-tabs">
       <div class="seg" id="b-type">
         <button data-type="post" class="active"><span class="ms">article</span><span data-i18n>Entradas</span></button>
-        <button data-type="page"><span class="ms">description</span><span data-i18n>Páginas</span></button>
-        <button data-type="calendar"><span class="ms">calendar_month</span><span data-i18n>Calendario</span></button>
-        <button data-type="media"><span class="ms">photo_library</span><span data-i18n>Medios</span></button>
-        <button data-type="structure"><span class="ms">account_tree</span><span data-i18n>Estructura</span></button>
-        <button data-type="menus"><span class="ms">menu_open</span><span data-i18n>Menús y widgets</span></button>
+        <button data-type="page" data-prio="5"><span class="ms">description</span><span data-i18n>Páginas</span></button>
+        <button data-type="calendar" data-prio="4"><span class="ms">calendar_month</span><span data-i18n>Calendario</span></button>
+        <button data-type="media" data-prio="3"><span class="ms">photo_library</span><span data-i18n>Medios</span></button>
+        <button data-type="structure" data-prio="2"><span class="ms">account_tree</span><span data-i18n>Estructura</span></button>
+        <button data-type="menus" data-prio="1"><span class="ms">menu_open</span><span data-i18n data-short="Menús">Menús y widgets</span></button>
       </div>
     </div>
-    <div class="row b-filters">
-      <select id="b-status">
+    <div class="row b-filters" id="b-bar">
+      <select id="b-status" data-prio="6">
         <option value="any" data-i18n>Todos los estados</option>
         <option value="publish" data-i18n>Publicadas</option>
         <option value="draft" data-i18n>Borradores</option>
@@ -356,11 +359,11 @@
         <option value="private" data-i18n>Privadas</option>
         <option value="trash" data-i18n>Papelera</option>
       </select>
-      <select id="b-ptype" class="hidden" data-i18n-title title="Tipo de contenido" aria-label="Tipo de contenido"></select>
-      <select id="b-lang" class="hidden" data-i18n-title title="Idioma" aria-label="Idioma"></select>
-      <label class="chip b-mine hidden" id="b-mine-wrap" data-i18n-title title="Solo las entradas de las que eres autor"><input type="checkbox" id="b-mine"><span data-i18n>Solo las mías</span></label>
+      <select id="b-ptype" data-prio="5" class="hidden" data-i18n-title title="Tipo de contenido" aria-label="Tipo de contenido"></select>
+      <select id="b-lang" data-prio="5" class="hidden" data-i18n-title title="Idioma" aria-label="Idioma"></select>
+      <label class="chip b-mine hidden" data-prio="4" id="b-mine-wrap" data-i18n-title title="Solo las entradas de las que eres autor"><input type="checkbox" id="b-mine"><span data-i18n>Solo las mías</span></label>
       <div class="field search"><span class="ms">search</span><input id="b-search" type="search" data-i18n-ph placeholder="Buscar…"></div>
-      <div id="b-range" class="b-range">
+      <div id="b-range" class="b-range" data-prio="3">
         <select id="b-preset" data-i18n-title title="Entradas de un periodo">
           <option value="all" data-i18n>Todas las fechas</option>
           <option value="month" data-i18n>Este mes</option>
@@ -375,15 +378,15 @@
         </span>
         <button id="b-range-clear" class="btn text icon-only hidden" data-i18n-title title="Quitar el filtro de fechas"><span class="ms">close</span></button>
       </div>
-      <select id="b-order" data-i18n-title title="Orden por fecha" aria-label="Orden por fecha">
+      <select id="b-order" data-prio="2" data-i18n-title title="Orden por fecha" aria-label="Orden por fecha">
         <option value="desc" data-i18n>Más recientes</option>
         <option value="asc" data-i18n>Más antiguas</option>
       </select>
-      <button id="b-health-btn" class="btn tonal b-health-btn hidden" aria-expanded="false" aria-controls="b-health"><span class="ms">fact_check</span><span data-i18n>Revisión</span><span id="b-health-badge" class="b-badge hidden"></span></button>
-      <button id="b-find" class="btn text icon-only hidden" data-i18n-title title="Buscar y reemplazar"><span class="ms">find_replace</span></button>
-      <button id="b-refresh" class="btn text icon-only" data-i18n-title title="Actualizar"><span class="ms">refresh</span></button>
+      <button id="b-health-btn" data-prio="7" class="btn tonal b-health-btn hidden" aria-expanded="false" aria-controls="b-health"><span class="ms">fact_check</span><span data-i18n>Revisión</span><span id="b-health-badge" class="b-badge hidden"></span></button>
+      <button id="b-find" data-prio="8" data-label="Buscar y reemplazar" class="btn text icon-only hidden" data-i18n-title title="Buscar y reemplazar"><span class="ms">find_replace</span></button>
+      <button id="b-refresh" data-prio="9" data-label="Actualizar" class="btn text icon-only" data-i18n-title title="Actualizar"><span class="ms">refresh</span></button>
       <span class="spacer"></span>
-      <span class="b-new-wrap" id="b-new-wrap"><button id="b-new" class="btn filled"><span class="ms">add</span><span data-i18n>Nueva</span></button>
+      <span class="b-new-wrap" id="b-new-wrap" data-keep-label><button id="b-new" class="btn filled"><span class="ms">add</span><span data-i18n>Nueva</span></button>
         <div id="b-new-menu" class="b-new-menu hidden">
           <button data-new="post"><span class="ms">article</span><span data-i18n>Nueva entrada</span></button>
           <button data-new="page"><span class="ms">description</span><span data-i18n>Nueva página</span></button>
@@ -1131,6 +1134,7 @@
 <div id="toast"></div>
 <div id="bk-chip" class="bk-chip hidden" role="status" aria-live="polite"><span class="ms">backup</span><div class="bk-chip-b"><span id="bk-chip-t"></span><div class="bw-bar"><i></i></div></div><button id="bk-chip-x" class="btn text small" data-i18n>Cancelar</button></div>
 <script src="i18n.js"></script>
+<script src="overflowbar.js"></script>
 <script src="errors.js"></script>
 <script src="diagnose.js"></script>
 <script src="webenv.js"></script>
@@ -1241,6 +1245,7 @@
 <script src="app/sendqueue-ui.js"></script>
 <script src="app/offline.js"></script>
 <script src="app/diagnose-ui.js"></script>
+<script src="app/adapt.js"></script>
 <script src="app/boot.js"></script>
 </body>
 </html>

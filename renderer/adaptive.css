@@ -1,0 +1,102 @@
+/* Adaptación al tamaño de la ventana: barras que se acortan (etiqueta corta → solo icono → menú «⋯»),
+   cajones del editor y rótulos que nunca se parten a mitad. La lógica está en overflowbar.js y app/adapt.js. */
+
+/* ---------------------------------------------------------------- Barra adaptable */
+.ov-bar.ov-bar { flex-wrap: nowrap; position: relative; min-width: 0; max-width: 100%; }
+.ov-bar > * { flex-shrink: 0; }
+.ov-bar > .spacer { flex-shrink: 1; min-width: 0; }
+.ov-bar > .hint { white-space: nowrap; }
+.ov-bar > .field.search { flex: 1 0 150px; min-width: 150px; }
+.ov-gone { display: none !important; }
+.ov-more-wrap { position: relative; display: inline-flex; flex: none; }
+.ov-more-wrap.hidden { display: none; }
+.ov-more.has-active { background: var(--secondary-container); color: var(--on-primary-container); }
+.ov-more:focus-visible, .ov-menu :is(button, select, a):focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+
+/* Etiquetas: 0 completa · 1 corta (data-short) · 2 solo icono */
+.ov-short { display: none; }
+.ov-s1 .ov-full { display: none; }
+.ov-s1 .ov-short { display: inline; }
+.ov-s2 .ov-ic > .ov-lbl { display: none; }
+.ov-s2 [data-keep-label].ov-ic > .ov-short, .ov-s2 [data-keep-label] > .ov-ic > .ov-short,
+.ov-s2 [data-keep-label].ov-ic > .ov-lbl:not(.ov-full), .ov-s2 [data-keep-label] > .ov-ic > .ov-lbl:not(.ov-full) { display: inline; }
+.ov-s2 .btn.ov-ic:not([data-keep-label]):not(.icon-only), .ov-s2 .chip.ov-ic:not([data-keep-label]) { padding-inline: 12px; }
+.ov-s2 .seg button.ov-ic { padding-inline: 12px; }
+.ov-menu-lbl { display: none; }
+
+/* Menú «⋯» */
+.ov-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; min-width: 230px; max-width: min(92vw, 340px); max-height: min(70vh, 520px); overflow: auto;
+  display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 8px; border-radius: var(--r-l);
+  background: var(--surface-c-lowest); color: var(--on-surface); box-shadow: var(--e3), 0 0 0 var(--bw) var(--outline-var); }
+.ov-menu.hidden { display: none !important; }
+.ov-menu > * { flex: none; margin: 0 !important; width: 100% !important; max-width: none; }
+.ov-menu.ov-menu > :is(button, a) { height: auto; min-height: 40px; justify-content: flex-start; text-align: left; white-space: nowrap; padding: 6px 14px; border-radius: var(--r-s); color: var(--on-surface); }
+.ov-menu > button.icon-only { width: 100%; }
+.ov-menu > button .ms { color: var(--on-surface-var); }
+.ov-menu > :is(select, .field, .b-range, .seg, .chips) { width: 100% !important; min-width: 0; }
+.ov-menu select, .ov-menu .b-range select { width: 100% !important; min-width: 0 !important; }
+.ov-menu .b-range { display: flex; flex-wrap: wrap; }
+.ov-menu > :is(.seg, .chips, .b-range, .b-dates, .ed-dev) { flex-wrap: wrap; justify-content: flex-start; }
+.ov-menu > :is(label, .switch, .chip) { height: auto; min-height: 40px; padding: 6px 14px; }
+.ov-menu .ov-lbl { display: inline !important; }
+.ov-menu .ov-short { display: none !important; }
+.ov-menu .ov-menu-lbl { display: inline; }
+.ov-menu > .seg button, .ov-menu > .chips button { width: auto; }
+.ov-menu > .seg { background: var(--surface-c-high); }
+.ov-menu > button:hover { background: color-mix(in srgb, var(--on-surface) 8%, transparent); }
+:root[data-vinyl="on"] .ov-menu { background: #111; color: #fff; box-shadow: 0 10px 30px rgba(0, 0, 0, .6), 0 0 0 var(--bw) #3a3a3a; }
+:root[data-vinyl="on"] .ov-menu > button { color: #fff; }
+:root[data-vinyl="on"] .ov-more.has-active { background: #000; color: #fff; box-shadow: inset 0 0 0 var(--bw) #3a3a3a; }
+
+/* ---------------------------------------------------------------- Barra del editor */
+.ed-bar-title { flex: 0 1 auto; min-width: 56px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-bar > .ed-dev { display: inline-flex; flex: none; }
+.ed-bar .ed-wp { white-space: nowrap; }
+.ed-drawer-btn { display: none; }
+
+/* Panel de fotos: etiquetas cortas cuando la columna es estrecha */
+.ed-media { container-type: inline-size; container-name: edmedia; }
+.ed-media .btn.small { white-space: nowrap; }
+@container edmedia (max-width: 205px) {
+  .ed-media .ov-full { display: none; }
+  .ed-media .ov-short { display: inline; }
+}
+@container edmedia (max-width: 120px) { .ed-media .btn.small .ov-lbl { display: none; } .ed-media .btn.small { justify-content: center; } }
+
+/* ---------------------------------------------------------------- Ventana estrecha: el editor usa cajones */
+@media (max-width: 1000px) {
+  .ed-body { grid-template-columns: minmax(0, 1fr); position: relative; overflow: hidden; }
+  .ed-page { padding: 28px 22px; }
+  .ed-drawer-btn { display: inline-flex; }
+  .ed-media, .ed-side { position: absolute; top: 0; bottom: 0; z-index: 9; width: min(340px, 92%); background: var(--surface); box-shadow: var(--e4);
+    visibility: hidden; transition: transform .28s var(--ease), visibility 0s linear .28s; }
+  .ed-media { left: 0; border-right: var(--bw) solid var(--outline-var); transform: translateX(-104%); }
+  .ed-side { right: 0; transform: translateX(104%); }
+  .editor.media-open .ed-media, .editor.side-open .ed-side { transform: none; visibility: visible; transition: transform .28s var(--ease), visibility 0s; }
+  .ed-layers { z-index: 10; }
+}
+@media (prefers-reduced-motion: reduce) { .ed-media, .ed-side { transition: none !important; } }
+
+/* ---------------------------------------------------------------- Cabecera */
+@media (max-width: 860px) {
+  .appbar { gap: 12px; padding-inline: 14px; }
+  .status .pill:not(.q-ind) { font-size: 0; gap: 0; padding: 0; width: 24px; height: 24px; justify-content: center; }
+  .status .pill:not(.q-ind) .ms { font-size: 16px; }
+  .status .pill.off-ind #off-text { display: none; }
+  .vnav-lbl { display: none; }
+}
+@media (max-width: 1100px) {
+  :root[data-vinyl="on"] .status .pill:not(.q-ind) { font-size: 0; gap: 0; padding: 0; width: 24px; height: 24px; justify-content: center; }
+  :root[data-vinyl="on"] .appbar { gap: 12px; padding-inline: 14px; }
+  :root[data-vinyl="on"] .silk-brand { display: none !important; }
+}
+@media (max-width: 560px) { .brand b { display: none; } }
+
+/* ---------------------------------------------------------------- Rótulos que nunca se parten */
+.chip, .tabs button, .pill, .seg button, .seg label { white-space: nowrap; }
+.ov-bar .btn { white-space: nowrap; }
+.btn .ov-lbl, .chip .ov-lbl { overflow: hidden; text-overflow: ellipsis; }
+.b-filters > select, .filters > select { text-overflow: ellipsis; }
+
+/* Pestañas de arriba: solo iconos desde 1180 px (con tooltip y nombre accesible puestos por adapt.js) */
+@media (max-width: 1180px) { .tabs button span:not(.ms) { display: none; } .tabs button { padding: 9px 14px; } }

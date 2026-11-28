@@ -36,7 +36,7 @@
     // nombre de cada sección de Ajustes para su serigrafía
     $$('.set-body > .card').forEach((c) => { c.dataset.silk = ($('h2', c)?.textContent || c.id).trim(); });
     const ed = $('.ed-bar');
-    if (ed && !$('.silk', ed)) $('.ed-bar-title', ed)?.insertAdjacentHTML('afterend', `<span class="vinyl-only">${silk('ED-01', { jp: '編集' })}</span>`);
+    if (ed && !$('.silk', ed)) $('.ed-bar-title', ed)?.insertAdjacentHTML('afterend', `<span class="vinyl-only" data-prio="1" data-ov="drop">${silk('ED-01', { jp: '編集' })}</span>`);
   }
 
 
