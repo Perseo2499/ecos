@@ -8,6 +8,22 @@
 
   const ENTRIES = [
     {
+      version: '3.10.0', date: '2026-11-28', plugin: '1.8.1',
+      title: c('Rank Math, bordes nítidos y ventanas pequeñas', 'Rank Math, crisp borders and small windows'),
+      fixed: [
+        c('Rank Math se detecta aunque Yoast siga activo (Ecos usa Rank Math y te avisa de que tienes los dos) y ya no se queda con un resultado antiguo: se vuelve a comprobar al reconectar, al actualizar o con «Volver a comprobar».', 'Rank Math is detected even if Yoast is still active (Ecos uses Rank Math and warns you that both are on) and no longer keeps an old result: it is checked again when reconnecting, refreshing or with "Check again".'),
+        c('Con el complemento 1.8.1, el título y la descripción para buscadores se pueden escribir también con Rank Math.', 'With plugin 1.8.1, the search engine title and description can also be written with Rank Math.'),
+        c('Los contornos ya no se cortan ni desaparecen en las curvas con el escalado de pantalla de Windows (125 %, 150 %): son algo más gruesos y se dibujan por encima del contenido.', 'Outlines no longer break or disappear on curves with Windows display scaling (125%, 150%): they are slightly thicker and drawn above the content.'),
+      ],
+      improved: [
+        c('Las barras se adaptan al tamaño de la ventana: primero acortan las etiquetas, luego solo iconos y, si aún no cabe, un menú «⋯» con el resto.', 'Bars adapt to the window size: first shorter labels, then icons only and, if it still does not fit, a "⋯" menu with the rest.'),
+        c('En ventanas estrechas, los paneles de fotos y de ajustes del editor se abren como cajones para dejar sitio a la entrada.', 'In narrow windows, the editor photo and settings panels open as drawers to make room for the post.'),
+      ],
+      web: [
+        c('Actualiza el Complemento de Ecos a la 1.8.1.', 'Update the Ecos plugin to 1.8.1.'),
+      ],
+    },
+    {
       version: '3.9.0', date: '2026-11-28',
       title: c('Fotos destacadas a mano', 'Hand-picked featured photos'),
       new: [
