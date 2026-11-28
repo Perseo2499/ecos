@@ -30,7 +30,7 @@
     const edit = (k, el, plain) => {
       el.contentEditable = 'true'; el.classList.add('rt', 'tp-ed'); el.spellcheck = true;
       let snap = false;
-      el.oninput = () => { if (!snap) { this.snapshot(); snap = true; } P.setText(b, k, plain ? el.textContent : el.innerHTML); this.onChange(); };
+      el.oninput = () => { if (!snap) { this.snapshot(); snap = true; } P.setText(b, k, plain ? el.textContent : el.innerHTML); this.onChange(true); };
       el.onblur = () => { snap = false; };
       el.onkeydown = (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); window.FormatBar?.link(); } else if (e.key === 'Enter') { e.preventDefault(); document.execCommand('insertLineBreak'); } };
       el.onfocus = () => this.setActive?.(b, el, el);

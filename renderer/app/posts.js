@@ -2,11 +2,14 @@
 // (Comparte el ámbito global con los demás archivos de renderer/app, que se cargan en orden desde index.html.)
 
 // ---------------------------------------------------------------- Publicaciones: lista
+// Texto en minúsculas y fecha numérica de cada publicación, calculados una sola vez (no en cada tecla ni en cada comparación del orden)
+const lcOf = (() => { const m = new WeakMap(); return (p) => { let e = m.get(p); if (!e || e.t !== p.text) { e = { t: p.text, l: String(p.text || '').toLowerCase() }; m.set(p, e); } return e.l; }; })();
+const tsOf = (() => { const m = new WeakMap(); return (p) => { let v = m.get(p); if (v === undefined) { v = new Date(p.date).getTime() || 0; m.set(p, v); } return v; }; })();
 function visiblePosts() {
   const q = $('#f-search').value.trim().toLowerCase();
   const show = $('#f-show').value;
   return posts.filter((p) => {
-    if (q && !p.text.toLowerCase().includes(q)) return false;
+    if (q && !lcOf(p).includes(q)) return false;
     const done = !!liveExport(p);
     return show === 'all' || (show === 'done' ? done : !done);
   });
@@ -24,7 +27,7 @@ const postsLane = createDateLane({
   isActive: () => $('#tab-posts').classList.contains('active') && !feedCal.on && $('#editor').classList.contains('hidden') && !document.body.classList.contains('editing'),
   stickyEl: () => $('#tab-posts .row.filters'), padEl: () => $('#tab-posts .feed-col'), list: () => $('#feed'),
   watch: () => [$('#editor'), $('#feed-cal')],
-  jump: async (key, o) => { dlScrollTo($('#feed'), key, () => $('#tab-posts .row.filters'), o.smooth); },
+  jump: async (key, o) => { feedFlush(); dlScrollTo($('#feed'), key, () => $('#tab-posts .row.filters'), o.smooth); },
 });
 function postsLaneUpdate(groups) {
   postsLane.update(groups.map((g) => ({ key: g.key, count: g.count })).filter((g) => g.key !== DateLane.NOKEY), {
@@ -98,19 +101,34 @@ function postDetail(p) {
   };
   return el;
 }
-// «Ver más» solo si el texto recortado de verdad se pasa de 8 líneas (se mide todo junto para no forzar el diseño una y otra vez)
-function pdMeasure(root) {
-  const rows = [...root.querySelectorAll('.pd-text.clamp')];
-  const over = rows.map((x) => x.scrollHeight > x.clientHeight + 1);
-  rows.forEach((x, i) => { const b = x.nextElementSibling; if (b && b.classList.contains('pd-more')) b.hidden = !over[i]; });
-  root.querySelectorAll('.pd-text:not(.clamp) + .pd-more').forEach((b) => (b.hidden = false)); // los desplegados mantienen su botón
+// «Ver más» solo si el texto recortado de verdad se pasa de 8 líneas. Solo se mide en las filas que se ven (o están a punto de verse):
+// medir las 2.000 a la vez obligaría al navegador a maquetarlas todas. Cada medición lee todo junto y escribe después.
+function pdMeasureRows(rows) {
+  const tx = rows.map((r) => r.querySelector('.pd-text.clamp')).filter(Boolean);
+  const over = tx.map((x) => x.scrollHeight > x.clientHeight + 1);
+  tx.forEach((x, i) => { const b = x.nextElementSibling; if (b && b.classList.contains('pd-more')) b.hidden = !over[i]; });
+  rows.forEach((r) => { const b = r.querySelector('.pd-text:not(.clamp) + .pd-more'); if (b) b.hidden = false; }); // los desplegados mantienen su botón
 }
+const pdVisible = new Set();
+let pdIO = null;
+function pdObserve(row) {
+  if (!window.IntersectionObserver) return;
+  if (!pdIO) {
+    pdIO = new IntersectionObserver((es) => {
+      const now = [];
+      for (const e of es) { if (e.isIntersecting) { pdVisible.add(e.target); now.push(e.target); } else pdVisible.delete(e.target); }
+      if (now.length) pdMeasureRows(now);
+    }, { rootMargin: '600px 0px' });
+  }
+  pdIO.observe(row);
+}
+function pdMeasure() { pdMeasureRows([...pdVisible].filter((r) => r.isConnected)); }
 let pdRO = null, pdT = 0;
 function pdWatch(feed) {
   if (pdRO || !window.ResizeObserver) return;
   pdRO = new ResizeObserver(() => {
     clearTimeout(pdT);
-    pdT = setTimeout(() => { const f = $('#feed'); if (!f.classList.contains('detail')) return; f.classList.toggle('pd-narrow', f.clientWidth < PD_NARROW); pdMeasure(f); }, 80);
+    pdT = setTimeout(() => { const f = $('#feed'); if (!f.classList.contains('detail')) return; f.classList.toggle('pd-narrow', f.clientWidth < PD_NARROW); pdMeasure(); }, 80);
   });
   pdRO.observe(feed);
 }
@@ -121,7 +139,14 @@ $('#feed').addEventListener('click', (e) => {
   e.preventDefault();
   if (/^https?:\/\//i.test(a.getAttribute('href'))) window.api.open(a.getAttribute('href'));
 });
+// La lista se pinta por tandas: las primeras filas al momento (lo que se ve) y el resto en trozos de pocos milisegundos,
+// para que 2.000 publicaciones no bloqueen la ventana. Todas acaban en el DOM (selección, teclado y línea temporal igual que antes).
+const FEED_FIRST = 36, FEED_SLICE_MS = 14;
+let feedJob = null;
+function feedFlush() { if (feedJob) feedJob.flush(); } // termina de pintar lo pendiente (antes de saltar a un mes)
 function renderFeed() {
+  if (feedJob) feedJob.cancel();
+  pdIO?.disconnect(); pdVisible.clear();
   const list = visiblePosts();
   const feed = $('#feed');
   feed.classList.toggle('selecting', selected.size > 0);
@@ -136,10 +161,10 @@ function renderFeed() {
   const flat = [];
   for (const g of groups) for (const d of g.days) for (const p of d.items) flat.push({ p, g, d });
   let lastG = null, lastD = null;
-  for (const { p, g, d } of flat) {
+  const addRow = ({ p, g, d }, frag) => {
     // Cuadrícula: la de siempre, seguida y sin encabezados ni línea temporal; Detalle: por meses y días con línea temporal
-    if (detail && g !== lastG) { feed.appendChild(dlMonthHeader(g)); lastG = g; lastD = null; }
-    if (detail && g.showDays && d !== lastD) { feed.appendChild(dlDayHeader(d)); lastD = d; }
+    if (detail && g !== lastG) { frag.appendChild(dlMonthHeader(g)); lastG = g; lastD = null; }
+    if (detail && g.showDays && d !== lastD) { frag.appendChild(dlDayHeader(d)); lastD = d; }
     const key = keyOf(p);
     const ex = exportOf(p);
     const card = document.createElement('div');
@@ -149,7 +174,7 @@ function renderFeed() {
     const thumb = first && (first.url || (first.type === 'image' ? fileUrl(first.path) : null));
     const badges = [p, ...(p.alsoOn || [])].map((x) => `<span class="badge ${x.source}">${x.source === 'instagram' ? 'IG' : 'FB'}</span>`).join(' ');
     card.innerHTML = `
-      ${thumb ? `<img src="${escHtml(thumb)}" loading="lazy" alt="">` : `<div class="noimg">${t('Sin imagen')}</div>`}
+      ${thumb ? `<img src="${escHtml(thumb)}" loading="lazy" decoding="async" alt="">` : `<div class="noimg">${t('Sin imagen')}</div>`}
       ${ex ? (() => { const st = EX_STATUS()[ex.status] || { icon: 'check_circle', label: t('En el blog') };
         return `<span class="done-badge st-${escHtml(ex.status || 'publish')}" title="${t('Abrir la entrada en WordPress')}"><span class="ms fill">${st.icon}</span>${st.label}</span>`; })() : ''}
       <span class="check"><span class="ms">check</span></span>
@@ -172,11 +197,35 @@ function renderFeed() {
       const row = document.createElement('div');
       row.className = 'prow';
       row.append(card, postDetail(p));
-      feed.appendChild(row);
-    } else feed.appendChild(card);
-  }
-  if (detail) { pdWatch(feed); requestAnimationFrame(() => pdMeasure(feed)); }
+      frag.appendChild(row);
+      pdObserve(row);
+    } else frag.appendChild(card);
+  };
+  let at = 0, timer = 0, dead = false;
+  const finish = () => {
+    if (detail) pdWatch(feed);
+    postsLane.bind(); // los encabezados ya están todos: la línea temporal los vuelve a medir
+    feedJob = null;
+  };
+  const slice = (budget, min) => {
+    const t0 = performance.now(), frag = document.createDocumentFragment();
+    let n = 0;
+    while (at < flat.length && (n < min || performance.now() - t0 < budget)) { addRow(flat[at++], frag); n++; }
+    feed.appendChild(frag);
+  };
+  const tick = () => {
+    timer = 0;
+    if (dead) return;
+    slice(FEED_SLICE_MS, 1);
+    if (at < flat.length) timer = setTimeout(tick, 0); else finish();
+  };
+  feedJob = {
+    cancel() { dead = true; clearTimeout(timer); feedJob = null; },
+    flush() { clearTimeout(timer); if (dead) return; slice(Infinity, 0); finish(); },
+  };
+  slice(0, FEED_FIRST); // lo primero se pinta al momento
   postsLaneUpdate(detail ? groups : []);
+  if (at < flat.length) timer = setTimeout(tick, 0); else finish();
 }
 // Rejilla / Detalle (recordado)
 function syncLayoutChips() {
@@ -251,14 +300,14 @@ function updateCount() {
 }
 const relatedToSelection = () => Unify.relatedPosts(posts, posts.filter((p) => selected.has(keyOf(p))), { isExported: liveExport });
 $('#sel-more').onclick = () => { relatedToSelection().forEach((p) => selected.add(keyOf(p))); updateCount(); renderFeed(); renderFeedCal(); };
-$('#sel-clear').onclick = () => { selected.clear(); updateCount(); renderFeed(); };
+$('#sel-clear').onclick = () => { selected.clear(); updateCount(); $$('#feed .post.sel').forEach((c) => c.classList.toggle('sel', false)); $('#feed').classList.toggle('selecting', false); };
 async function addPosts(list, select = false) {
   const have = new Set(rawPosts.map(keyOf));
   for (const p of list) {
     if (!have.has(keyOf(p))) rawPosts.push(p);
     if (select) selected.add(keyOf(p));
   }
-  rawPosts.sort((a, b) => new Date(b.date) - new Date(a.date));
+  rawPosts.sort((a, b) => tsOf(b) - tsOf(a));
   await rebuildView();
 }
 async function rebuildView() {
@@ -274,7 +323,8 @@ async function loadMore() { const r = await window.api.metaPosts($('#page').valu
 $('#load').onclick = (e) => busy(e.target, async () => toast(t('{n} publicaciones cargadas', { n: await loadFirst() })));
 $('#more').onclick = (e) => busy(e.target, loadMore);
 $('#f-merge').onchange = async () => { CFG = await window.api.setConfig({ format: { ...CFG.format, mergeDuplicates: $('#f-merge').checked } }); rebuildView(); };
-$('#f-search').oninput = () => { renderFeed(); renderFeedCal(); };
+let fSearchT = 0;
+$('#f-search').oninput = () => { clearTimeout(fSearchT); fSearchT = setTimeout(() => { renderFeed(); renderFeedCal(); }, 120); };
 $('#f-show').onchange = () => { renderFeed(); renderFeedCal(); };
 $('#clear').onclick = () => { rawPosts = []; posts = []; cursors = null; selected.clear(); $('#more').classList.add('hidden'); updateCount(); renderFeed(); };
 

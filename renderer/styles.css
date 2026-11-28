@@ -3473,3 +3473,13 @@ details.cl-hist > summary:focus-visible { outline: 2px solid var(--primary); out
 .b-meta .st.lang { background: var(--secondary-container); color: var(--on-secondary-container); font-weight: 700; letter-spacing: .03em; }
 .b-meta .st.lang:empty { display: none; }
 #b-ptype, #b-lang { max-width: 180px; }
+
+/* ---- Rendimiento con webs grandes: lo que está fuera de la pantalla no se maqueta ni se pinta hasta que se acerca.
+   overflow-clip-margin deja ver las sombras, la elevación al pasar el ratón y la barra flotante de cada bloque.
+   (En Detalle de Publicaciones no se usa: sus filas son de altura variable y la línea temporal mide los encabezados.) */
+#feed:not(.detail) > .post { content-visibility: auto; overflow-clip-margin: 28px; contain-intrinsic-size: auto 340px; }
+#d-blocks > .blk { content-visibility: auto; contain-intrinsic-size: auto 90px; overflow-clip-margin: 48px; }
+#d-blocks > .blk:focus-within, #d-blocks > .blk.tools-on, #d-blocks > .blk.pinned, #d-blocks > .blk.sty-open { content-visibility: visible; }
+/* Con el editor abierto, la lista de Publicaciones de debajo no se maqueta (conserva su altura, así al cerrar el editor sigue en el mismo sitio) */
+#feed { contain-intrinsic-block-size: auto 3000px; }
+body.editing #feed { content-visibility: hidden; }

@@ -107,12 +107,12 @@ function mediaGrid(host, o = {}) {
       card.dataset.id = m.id;
       const thumb = m.type === 'video'
         ? `<video src="${escHtml(m.url)}#t=0.1" muted preload="metadata"></video><span class="ms fill play">play_circle</span>`
-        : `<img src="${escHtml(m.thumb || m.url)}" alt="${escHtml(m.alt)}" loading="lazy" draggable="false">`;
+        : `<img src="${escHtml(m.thumb || m.url)}" alt="${escHtml(m.alt)}" loading="lazy" decoding="async" draggable="false">`;
       const uses = st.usage ? st.usage[m.id] : null;
       const tag = !o.usage || !st.usage ? '' : uses?.length
         ? `<span class="mg-tag use" title="${escHtml(uses.map((u) => u.title).join('\n'))}">${t('En uso ({n})', { n: uses.length })}</span>`
         : `<span class="mg-tag free">${t('Sin usar')}</span>`;
-      const di = dateInfo(m), isOrig = di.src && di.date.slice(0, 10) !== String(m.date).slice(0, 10);
+      const di = infoOf(m).di, isOrig = di.src && di.date.slice(0, 10) !== String(m.date).slice(0, 10);
       const why = di.src === 'post' ? t('Fecha de la entrada «{x}» · subida el {d}', { x: di.title || '', d: mediaDate(m.date) })
         : di.src === 'parent' ? t('Fecha de la entrada a la que se subió · subida el {d}', { d: mediaDate(m.date) })
         : t('Fecha escrita en el nombre del archivo · subida el {d}', { d: mediaDate(m.date) });
@@ -132,15 +132,26 @@ function mediaGrid(host, o = {}) {
     const all = await window.api.mediaAll(!!force);
     return gen !== st.gen ? null : all;
   }
+  // Con 15.000 fotos, la fecha original (expresión regular del nombre, uso en entradas) y el orden se calculan una sola vez
+  // por medio y por estado del uso, y el texto en minúsculas también: filtrar y paginar solo recorre la lista ya ordenada.
+  const info = new WeakMap();
+  const infoOf = (m) => {
+    let e = info.get(m);
+    if (!e || e.u !== st.usage) { const di = dateInfo(m); e = { u: st.usage, di, ts: new Date(di.date).getTime(), s: `${m.name} ${m.url}`.toLowerCase() }; info.set(m, e); }
+    return e;
+  };
+  let sortedFor = null, sorted = [];
   function filtered() {
-    const { f, tt } = range(), s = st.search.toLowerCase();
-    return st.pool.filter((m) => {
+    if (sortedFor?.pool !== st.pool || sortedFor?.usage !== st.usage) { sorted = st.pool.slice().sort((a, b) => infoOf(b).ts - infoOf(a).ts); sortedFor = { pool: st.pool, usage: st.usage }; }
+    const { f, tt } = range(), s = st.search.toLowerCase(), ft = f ? f.getTime() : null, tt2 = tt ? tt.getTime() : null;
+    if (st.type === 'all' && !s && !st.unused && ft === null && tt2 === null) return sorted;
+    return sorted.filter((m) => {
       if (st.type !== 'all' && m.type !== st.type) return false;
-      if (s && !`${m.name} ${m.url}`.toLowerCase().includes(s)) return false;
+      if (s && !infoOf(m).s.includes(s)) return false;
       if (st.unused && st.usage?.[m.id]?.length) return false;
-      if (f || tt) { const d = new Date(origDate(m)); if ((f && d < f) || (tt && d >= tt)) return false; }
+      if (ft !== null || tt2 !== null) { const d = infoOf(m).ts; if ((ft !== null && d < ft) || (tt2 !== null && d >= tt2)) return false; }
       return true;
-    }).sort((a, b) => new Date(origDate(b)) - new Date(origDate(a)));
+    });
   }
   async function load() {
     const gen = ++st.gen;
