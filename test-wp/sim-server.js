@@ -27,6 +27,10 @@ function start({ user = 'ecostest', pass = 'abcdEFGHijklMNOPqrstUVWX', port = 0 
   const eventoTerms = [{ id: 31, name: 'Música' }];
   const cats = [{ id: 1, name: 'Sin categoría', slug: 'sin-categoria', count: 0, parent: 0 }];
   let origin = '';
+  // plugins SEO (POST /wp/v2/plugins/<plugin> {status}): Yoast activo y Rank Math instalado sin activar, como en test-wp/setup.sh
+  const plug = { yoast: true, rankmath: false };
+  const nsList = () => ['wp/v2', 'ecos/v1', ...(plug.yoast ? ['yoast/v1'] : []), ...(plug.rankmath ? ['rankmath/v1'] : []), 'pll/v1'];
+  const seoPlugin = () => (plug.rankmath ? 'rankmath' : 'yoast');
   // menús, widgets y registro de peticiones de escritura (para contar las que hacen falta)
   const menus = new Map(), menuItems = new Map(), widgetsMap = new Map(), reqs = [];
   const locations = { primary: { name: 'primary', description: 'Primary Menu', menu: 0 }, footer: { name: 'footer', description: 'Footer Menu', menu: 0 } };
@@ -49,6 +53,16 @@ function start({ user = 'ecostest', pass = 'abcdEFGHijklMNOPqrstUVWX', port = 0 
       + `<meta name="robots" content="${sf.noindex ? 'noindex' : 'index'}, ${sf.nofollow ? 'nofollow' : 'follow'}">`
       + `<meta property="og:title" content="${esc(sf.ogTitle || p.title)}">` + (sf.ogDesc ? `<meta property="og:description" content="${esc(sf.ogDesc)}">` : '') + (sf.ogImage ? `<meta property="og:image" content="${esc(sf.ogImage)}">` : '')
       + (sf.twTitle ? `<meta name="twitter:title" content="${esc(sf.twTitle)}">` : '') + (sf.twDesc ? `<meta name="twitter:description" content="${esc(sf.twDesc)}">` : '') + (sf.twImage ? `<meta name="twitter:image" content="${esc(sf.twImage)}">` : '') + '<meta name="twitter:card" content="summary_large_image">';
+    if (plug.rankmath) {
+      const rf = SeoMeta.fromMeta('rankmath', p.meta);
+      const rm = '<!-- Search Engine Optimization by Rank Math - https://rankmath.com/ -->'
+        + (rf.description ? `<meta name="description" content="${esc(rf.description)}">` : '')
+        + `<meta name="robots" content="${rf.noindex ? 'noindex' : 'index'}, ${rf.nofollow ? 'nofollow' : 'follow'}">`
+        + `<link rel="canonical" href="${esc(rf.canonical || origin + '/?p=' + p.id)}">`
+        + `<meta property="og:title" content="${esc(rf.ogTitle || rf.title || p.title)}">` + (rf.ogDesc ? `<meta property="og:description" content="${esc(rf.ogDesc)}">` : '')
+        + (rf.twTitle ? `<meta name="twitter:title" content="${esc(rf.twTitle)}">` : '') + '<!-- /Rank Math WordPress SEO plugin -->';
+      return `<!doctype html><html><head><title>${esc(rf.title || p.title)} - Sim</title>${rm}${assets}</head><body class="ast-theme"><main>${renderContent(c)}</main></body></html>`;
+    }
     return `<!doctype html><html><head><title>${esc(p.title)} - Sim</title>${d}${seo}${assets}</head><body class="ast-theme"><main>${renderContent(c)}${/wp:uagb/.test(c) ? "<div class=\"uagb-image-gallery\"></div>" : ""}</main></body></html>`;
   };
   const menuHtml = (id) => {
@@ -64,8 +78,8 @@ function start({ user = 'ecostest', pass = 'abcdEFGHijklMNOPqrstUVWX', port = 0 
   const postObj = (p) => ({
     id: p.id, link: `${origin}/?p=${p.id}`, status: p.status, date_gmt: p.date_gmt, modified_gmt: p.modified_gmt, slug: p.slug, type: 'post', parent: 0,
     title: { raw: p.title, rendered: esc(p.title) }, content: { raw: p.content, rendered: renderContent(p.content) }, excerpt: { raw: p.excerpt, rendered: esc(p.excerpt) },
-    author: p.author || 1, featured_media: p.featured_media || 0, categories: p.categories, tags: [], lang: p.lang || 'es', translations: p.translations || {}, meta: { [DESC]: p.meta[DESC] || '' },
-    yoast_head_json: { title: p.title + ' - Sim', description: p.meta[DESC] || '' },
+    author: p.author || 1, featured_media: p.featured_media || 0, categories: p.categories, tags: [], lang: p.lang || 'es', translations: p.translations || {}, meta: plug.yoast ? { [DESC]: p.meta[DESC] || '' } : {},
+    ...(plug.yoast ? { yoast_head_json: { title: p.title + ' - Sim', description: p.meta[DESC] || '' } } : {}),
     _embedded: { 'wp:term': [p.categories.map((id) => ({ ...cats.find((c) => c.id === id), taxonomy: 'category' }))] },
   });
   const mediaObj = (m) => ({ id: m.id, date: m.date, source_url: m.url, mime_type: m.mime, media_type: 'image', alt_text: m.alt, title: { rendered: m.file }, media_details: { width: 96, height: 64, sizes: {} }, post: 0 });
@@ -98,7 +112,7 @@ function start({ user = 'ecostest', pass = 'abcdEFGHijklMNOPqrstUVWX', port = 0 
       }
 
       const route = url.pathname.replace(/^\/wp-json/, '') || '/';
-      if (route === '/' && !req.headers.authorization) return send(200, { name: 'Sim WP', home: origin, namespaces: ['wp/v2', 'ecos/v1', 'yoast/v1', 'pll/v1'] });
+      if (route === '/' && !req.headers.authorization) return send(200, { name: 'Sim WP', home: origin, namespaces: nsList() });
       // los comentarios públicos de WordPress: sin sesión y sin notas internas
       if (route === '/wp/v2/comments' && req.method === 'GET') return send(200, [], { 'X-WP-Total': '0', 'X-WP-TotalPages': '1' });
       const auth = req.headers.authorization || '';
@@ -108,9 +122,14 @@ function start({ user = 'ecostest', pass = 'abcdEFGHijklMNOPqrstUVWX', port = 0 
 
       const m = (re) => re.exec(route);
       let r;
-      if (route === '/') return send(200, { name: 'Sim WP', home: origin, namespaces: ['wp/v2', 'ecos/v1', 'yoast/v1', 'pll/v1'] });
+      if (route === '/') return send(200, { name: 'Sim WP', home: origin, namespaces: nsList() });
       if (route === '/wp/v2/users/me') return send(200, { id: me.id, name: me.name, slug: me.slug, roles: [me.role], capabilities: { edit_posts: true, publish_posts: me.publish, upload_files: me.publish, edit_others_posts: me.others }, avatar_urls: {} });
-      if (route === '/wp/v2/plugins') return send(200, [{ plugin: 'ultimate-addons-for-gutenberg/ultimate-addons-for-gutenberg', status: 'active' }, { plugin: 'kadence-blocks/kadence-blocks', status: 'active' }, { plugin: 'generateblocks/plugin', status: 'active' }]);
+      if ((r = m(/^\/wp\/v2\/plugins\/(.+)$/)) && req.method === 'POST') {
+        const slug = decodeURIComponent(r[1]); const k = /rank-math/.test(slug) ? 'rankmath' : /wordpress-seo/.test(slug) ? 'yoast' : null;
+        if (!k) return err(404, 'rest_plugin_not_found', 'Plugin no encontrado.');
+        plug[k] = json.status === 'active'; return send(200, { plugin: slug, status: plug[k] ? 'active' : 'inactive' });
+      }
+      if (route === '/wp/v2/plugins') return send(200, [{ plugin: 'wordpress-seo/wp-seo', status: plug.yoast ? 'active' : 'inactive' }, { plugin: 'seo-by-rank-math/rank-math', status: plug.rankmath ? 'active' : 'inactive' }, { plugin: 'ultimate-addons-for-gutenberg/ultimate-addons-for-gutenberg', status: 'active' }, { plugin: 'kadence-blocks/kadence-blocks', status: 'active' }, { plugin: 'generateblocks/plugin', status: 'active' }]);
       if (route === '/wp/v2/settings') return send(200, { title: 'Sim WP', show_on_front: 'posts', page_on_front: 0, page_for_posts: 0 });
       if (route === '/wp/v2/pages' || route === '/wp/v2/tags') return send(200, [], { 'X-WP-TotalPages': '1', 'X-WP-Total': '0' });
       if (route === '/wp/v2/navigation') return send(200, [], { 'X-WP-TotalPages': '1' });
@@ -175,8 +194,9 @@ function start({ user = 'ecostest', pass = 'abcdEFGHijklMNOPqrstUVWX', port = 0 
       // SEO completo (complemento 1.8.0): solo Yoast en el simulador
       if ((r = m(/^\/ecos\/v1\/seo\/(\d+)$/))) {
         const p = posts.get(+r[1]); if (!p) return err(404, 'rest_post_invalid_id', 'ID no válido.');
-        if (req.method === 'POST') { const meta = SeoMeta.toMeta('yoast', json.fields || {}, { premium: false }); p.meta = { ...p.meta, ...meta }; }
-        return send(200, { plugin: 'yoast', premium: false, version: ECOS_VERSION, writable: true, fields: SeoMeta.fromMeta('yoast', p.meta) });
+        const sp = seoPlugin();
+        if (req.method === 'POST') { const meta = SeoMeta.toMeta(sp, json.fields || {}, { premium: false, current: { robots: p.meta.rank_math_robots } }); p.meta = { ...p.meta, ...meta }; }
+        return send(200, { plugin: sp, premium: sp === 'rankmath', version: ECOS_VERSION, writable: true, fields: SeoMeta.fromMeta(sp, p.meta) });
       }
       if (/^\/wp\/v2\/block-patterns\//.test(route)) return send(200, []);
 
@@ -314,7 +334,7 @@ function start({ user = 'ecostest', pass = 'abcdEFGHijklMNOPqrstUVWX', port = 0 
       }
 
       // --- complemento de Ecos ---
-      if (route === '/ecos/v1/status') return send(200, { plugin: 'ecos', version: ECOS_VERSION, caches: [], seo: 'Yoast SEO', stats: true, lock: true, export: true, theme: true, render: true, editor: true, astra: true });
+      if (route === '/ecos/v1/status') return send(200, { plugin: 'ecos', version: ECOS_VERSION, caches: [], seo: { plugin: seoPlugin(), both: plug.yoast && plug.rankmath, version: '1.0' }, stats: true, lock: true, export: true, theme: true, render: true, editor: true, astra: true });
       if (route === '/ecos/v1/theme') return send(200, { plugin: 'ecos', version: ECOS_VERSION, theme: { name: 'Astra', stylesheet: 'astra', template: 'astra', isAstra: true, isBlock: false }, settings: { color: { palette: { theme: [{ slug: 'ast-global-color-0', name: 'Color 1', color: '#046bd2' }] } } }, astra: {} });
       if (route === '/ecos/v1/export') return send(200, { plugin: 'ecos', version: ECOS_VERSION });
       if (route === '/ecos/v1/notes' || /^\/ecos\/v1\/notes\/\d+$/.test(route)) {

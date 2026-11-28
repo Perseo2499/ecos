@@ -426,6 +426,7 @@ handle('meta:posts', async (pageId, sources, cursors) => {
 handle('wp:login', async () => {
   if (isSelf()) {
     // Web propia: se comprueban el usuario y la contraseña de aplicación
+    wpself.clearSeoCache();
     const r = await wpself.login(cfg);
     cfg.wpSelfOk = true; cfg.wpMe = r.me; store.save(cfg);
     log(`WordPress propio: conectado como ${r.userName} (${r.me?.role || '?'}) a ${r.siteName}`);
@@ -1065,7 +1066,7 @@ handle('draft:importFile', async () => {
 handle('ai:alts', (urls, context) => ai.altTexts(cfg.ai, urls, context));
 handle('ai:alt', (url, context) => ai.altText(cfg.ai, url, context));
 handle('ai:seo', (input) => ai.seoSuggest(cfg.ai, { ...input, extra: cfg.aiInstructions || '' }));
-handle('wp:seoInfo', async () => (isSelf() ? WP().seoInfo(cfg) : { plugin: null, key: null, writable: false }));
+handle('wp:seoInfo', async (force) => (isSelf() ? WP().seoInfo(cfg, { force: !!force }) : { plugin: null, key: null, writable: false }));
 handle('wp:seoGet', async (id) => (isSelf() ? wpCall(() => WP().seoGet(cfg, id)) : { helper: false, plugin: null, premium: null, fields: null }));
 handle('wp:seoSave', async (id, fields) => { needSelf(); return wpCall(() => WP().seoSave(cfg, id, fields)); });
 // Menús (clásicos y de bloques) y widgets: solo WordPress propio, con permiso de administrador

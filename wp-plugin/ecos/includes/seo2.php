@@ -1,6 +1,6 @@
 <?php
 /**
- * SEO completo desde Ecos (complemento 1.8.0): palabra clave, URL canónica, indexación y datos para redes sociales
+ * SEO completo desde Ecos (complemento 1.8.0; título y descripción desde la 1.8.1): palabra clave, URL canónica, indexación y datos para redes sociales
  * de Yoast SEO y Rank Math. Estos metas no suelen estar en la API REST, así que Ecos los lee y escribe aquí:
  *
  *   GET  /ecos/v1/seo/<id>   → { plugin, premium, fields, writable }
@@ -15,16 +15,44 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Plugin SEO activo con campos que Ecos sabe escribir: 'yoast', 'rankmath' o ''.
+ * Plugins SEO activos con campos que Ecos sabe escribir: array( 'yoast' => bool, 'rankmath' => bool ).
+ */
+function ecos_wp_seo2_active() {
+	return array(
+		'yoast'    => defined( 'WPSEO_VERSION' ) || class_exists( 'WPSEO_Options' ),
+		'rankmath' => defined( 'RANK_MATH_VERSION' ) || class_exists( 'RankMath' ),
+	);
+}
+
+/**
+ * Plugin SEO que usa Ecos: 'yoast', 'rankmath' o ''. Si están activos los dos gana Rank Math (es el que se acaba de
+ * instalar y el que importa los datos de Yoast). El mismo criterio está en src/wpself.js detectSeo().
  */
 function ecos_wp_seo2_plugin() {
-	if ( defined( 'WPSEO_VERSION' ) || class_exists( 'WPSEO_Options' ) ) {
-		return 'yoast';
-	}
-	if ( defined( 'RANK_MATH_VERSION' ) || class_exists( 'RankMath' ) ) {
+	$a = ecos_wp_seo2_active();
+	if ( $a['rankmath'] ) {
 		return 'rankmath';
 	}
-	return '';
+	return $a['yoast'] ? 'yoast' : '';
+}
+
+/**
+ * Para ecos/v1/status: { plugin, both, version } (plugin vacío si no hay ninguno de los dos).
+ */
+function ecos_wp_seo2_info() {
+	$a      = ecos_wp_seo2_active();
+	$plugin = ecos_wp_seo2_plugin();
+	$ver    = '';
+	if ( 'rankmath' === $plugin && defined( 'RANK_MATH_VERSION' ) ) {
+		$ver = (string) RANK_MATH_VERSION;
+	} elseif ( 'yoast' === $plugin && defined( 'WPSEO_VERSION' ) ) {
+		$ver = (string) WPSEO_VERSION;
+	}
+	return array(
+		'plugin'  => $plugin,
+		'both'    => $a['yoast'] && $a['rankmath'],
+		'version' => $ver,
+	);
 }
 
 function ecos_wp_seo2_premium() {
@@ -37,6 +65,8 @@ function ecos_wp_seo2_premium() {
 function ecos_wp_seo2_map( $plugin ) {
 	$maps = array(
 		'yoast'    => array(
+			'title'     => '_yoast_wpseo_title',
+			'description' => '_yoast_wpseo_metadesc',
 			'focusKw'   => '_yoast_wpseo_focuskw',
 			'extraKw'   => '_yoast_wpseo_focuskeywords',
 			'canonical' => '_yoast_wpseo_canonical',
@@ -52,6 +82,8 @@ function ecos_wp_seo2_map( $plugin ) {
 			'twImageId' => '_yoast_wpseo_twitter-image-id',
 		),
 		'rankmath' => array(
+			'title'     => 'rank_math_title',
+			'description' => 'rank_math_description',
 			'focusKw'   => 'rank_math_focus_keyword',
 			'extraKw'   => 'rank_math_focus_keyword',
 			'canonical' => 'rank_math_canonical_url',
@@ -92,6 +124,8 @@ function ecos_wp_seo2_read( $id, $plugin ) {
 	$f   = array(
 		'focusKw'   => '',
 		'extraKw'   => array(),
+		'title'       => (string) $g( 'title' ),
+		'description' => (string) $g( 'description' ),
 		'canonical' => (string) $g( 'canonical' ),
 		'noindex'   => false,
 		'nofollow'  => false,
@@ -156,12 +190,12 @@ function ecos_wp_seo2_write( $id, $plugin, $in, $premium ) {
 			$put( $map[ $k ], ecos_wp_seo2_clean_url( $in[ $k ] ) );
 		}
 	}
-	foreach ( array( 'ogTitle', 'twTitle' ) as $k ) {
+	foreach ( array( 'title', 'ogTitle', 'twTitle' ) as $k ) {
 		if ( array_key_exists( $k, $in ) ) {
 			$put( $map[ $k ], ecos_wp_seo2_clean_text( $in[ $k ], 200 ) );
 		}
 	}
-	foreach ( array( 'ogDesc', 'twDesc' ) as $k ) {
+	foreach ( array( 'description', 'ogDesc', 'twDesc' ) as $k ) {
 		if ( array_key_exists( $k, $in ) ) {
 			$put( $map[ $k ], ecos_wp_seo2_clean_text( $in[ $k ], 400 ) );
 		}

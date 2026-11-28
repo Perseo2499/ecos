@@ -8,16 +8,18 @@
   const slugOf = (s) => norm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
   // Campos lógicos de Ecos → clave de meta de cada plugin
-  const TEXT = ['canonical', 'ogTitle', 'ogDesc', 'ogImage', 'twTitle', 'twDesc', 'twImage'];
-  const FIELDS = ['focusKw', 'extraKw', 'canonical', 'noindex', 'nofollow', 'ogTitle', 'ogDesc', 'ogImage', 'ogImageId', 'twTitle', 'twDesc', 'twImage', 'twImageId'];
+  const TEXT = ['title', 'description', 'canonical', 'ogTitle', 'ogDesc', 'ogImage', 'twTitle', 'twDesc', 'twImage'];
+  const FIELDS = ['title', 'description', 'focusKw', 'extraKw', 'canonical', 'noindex', 'nofollow', 'ogTitle', 'ogDesc', 'ogImage', 'ogImageId', 'twTitle', 'twDesc', 'twImage', 'twImageId'];
   const META = {
     yoast: {
+      title: '_yoast_wpseo_title', description: '_yoast_wpseo_metadesc',
       focusKw: '_yoast_wpseo_focuskw', extraKw: '_yoast_wpseo_focuskeywords', canonical: '_yoast_wpseo_canonical',
       noindex: '_yoast_wpseo_meta-robots-noindex', nofollow: '_yoast_wpseo_meta-robots-nofollow',
       ogTitle: '_yoast_wpseo_opengraph-title', ogDesc: '_yoast_wpseo_opengraph-description', ogImage: '_yoast_wpseo_opengraph-image', ogImageId: '_yoast_wpseo_opengraph-image-id',
       twTitle: '_yoast_wpseo_twitter-title', twDesc: '_yoast_wpseo_twitter-description', twImage: '_yoast_wpseo_twitter-image', twImageId: '_yoast_wpseo_twitter-image-id',
     },
     rankmath: {
+      title: 'rank_math_title', description: 'rank_math_description',
       focusKw: 'rank_math_focus_keyword', extraKw: 'rank_math_focus_keyword', canonical: 'rank_math_canonical_url',
       noindex: 'rank_math_robots', nofollow: 'rank_math_robots',
       ogTitle: 'rank_math_facebook_title', ogDesc: 'rank_math_facebook_description', ogImage: 'rank_math_facebook_image', ogImageId: 'rank_math_facebook_image_id',
@@ -47,7 +49,7 @@
       else if (k === 'ogImageId' || k === 'twImageId') o[k] = Math.max(0, parseInt(f[k], 10) || 0);
       else if (k === 'extraKw') o[k] = (Array.isArray(f[k]) ? f[k] : splitKw(f[k])).map(clean).filter(Boolean).slice(0, 10);
       else if (k === 'canonical' || k === 'ogImage' || k === 'twImage') { const u = clean(f[k]); o[k] = !u || isUrl(u) ? u : ''; }
-      else o[k] = clean(f[k]).slice(0, k === 'ogDesc' || k === 'twDesc' ? 400 : 200);
+      else o[k] = clean(f[k]).slice(0, k === 'description' || k === 'ogDesc' || k === 'twDesc' ? 400 : 200);
     }
     return o;
   }
@@ -83,7 +85,7 @@
   function fromMeta(plugin, meta) {
     const m = META[plugin], g = (k) => (meta && meta[k] !== undefined && meta[k] !== null ? meta[k] : '');
     if (!m) return {};
-    const o = { focusKw: '', extraKw: [], canonical: clean(g(m.canonical)), noindex: false, nofollow: false };
+    const o = { title: clean(g(m.title)), description: clean(g(m.description)), focusKw: '', extraKw: [], canonical: clean(g(m.canonical)), noindex: false, nofollow: false };
     if (plugin === 'rankmath') {
       const [main, ...rest] = splitKw(g(m.focusKw)); o.focusKw = main || ''; o.extraKw = rest;
       const r = Array.isArray(g(m.noindex)) ? g(m.noindex) : [];

@@ -49,12 +49,12 @@ test('solo se escriben claves de la lista blanca y se limpian los valores', () =
   assert.deepEqual(S.toMeta('aioseo', { focusKw: 'a' }), {});
 });
 test('metas → campos (ida y vuelta con los dos plugins)', () => {
-  const f = { focusKw: 'rabat', extraKw: ['medina', 'zoco'], canonical: 'https://x.org/r/', noindex: true, nofollow: true, ogTitle: 'a', ogDesc: 'b', ogImage: 'https://x.org/1.jpg', ogImageId: 5, twTitle: 'c', twDesc: 'd', twImage: 'https://x.org/2.jpg', twImageId: 6 };
+  const f = { title: 'T', description: 'D', focusKw: 'rabat', extraKw: ['medina', 'zoco'], canonical: 'https://x.org/r/', noindex: true, nofollow: true, ogTitle: 'a', ogDesc: 'b', ogImage: 'https://x.org/1.jpg', ogImageId: 5, twTitle: 'c', twDesc: 'd', twImage: 'https://x.org/2.jpg', twImageId: 6 };
   for (const [plugin, opts] of [['yoast', { premium: true }], ['rankmath', {}]]) {
     const meta = S.toMeta(plugin, f, opts);
     assert.deepEqual(S.fromMeta(plugin, meta), f, plugin);
   }
-  assert.deepEqual(S.fromMeta('yoast', {}), { focusKw: '', extraKw: [], canonical: '', noindex: false, nofollow: false, ogTitle: '', ogDesc: '', ogImage: '', twTitle: '', twDesc: '', twImage: '', ogImageId: 0, twImageId: 0 });
+  assert.deepEqual(S.fromMeta('yoast', {}), { title: '', description: '', focusKw: '', extraKw: [], canonical: '', noindex: false, nofollow: false, ogTitle: '', ogDesc: '', ogImage: '', twTitle: '', twDesc: '', twImage: '', ogImageId: 0, twImageId: 0 });
   assert.equal(S.fromMeta('yoast', { '_yoast_wpseo_meta-robots-noindex': '2' }).noindex, false); // «2» = forzar indexar
 });
 test('diff: solo lo que cambia', () => {

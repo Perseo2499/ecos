@@ -349,7 +349,7 @@ function syncMine() {
 }
 $('#b-mine').onchange = (e) => { try { localStorage.setItem('ecos-only-mine', e.target.checked ? '1' : '0'); } catch { /* sin almacenamiento */ } blog.page = 1; loadBlog(); };
 let bTimer; $('#b-search').oninput = () => { clearTimeout(bTimer); bTimer = setTimeout(() => { blog.page = 1; loadBlog(); }, 400); };
-$('#b-refresh').onclick = () => { blog.datesFound = -1; blog.fresh = true; loadBlog(); };
+$('#b-refresh').onclick = () => { blog.datesFound = -1; blog.fresh = true; window.api.wpSeoInfo?.(true)?.catch?.(() => {}); loadBlog(); };
 $('#b-prev').onclick = () => { blog.page--; loadBlog(); };
 $('#b-next').onclick = () => { blog.page++; loadBlog(); };
 // «Nueva»: en Entradas, un menú (entrada o página en Ecos, o WordPress); en Páginas, una página nueva directamente

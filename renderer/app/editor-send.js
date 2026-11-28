@@ -14,7 +14,7 @@ const draftPayload = (status) => ({
   status, scheduleAt: status === 'future' ? $('#d-schedule').value : null,
   featuredImageId: draft.featuredImageId, featuredImageUrl: featuredUrl(), keepDate: draft.isNew ? false : $('#d-keepdate').checked, date: draft.date, keys: draftKeys,
   slug: slugify($('#d-slug').value),
-  ...(seoInfo.writable ? { seoKey: seoInfo.key, seoDesc: $('#d-seodesc').value.trim() } : {}),
+  ...(seoInfo.writable && seoInfo.via !== 'helper' ? { seoKey: seoInfo.key, seoDesc: $('#d-seodesc').value.trim() } : {}),
   recreate: !!draft.previewOnly, baseModified: draft.postId && !draft.isNew ? (draft.wpModified || null) : null, offline: !!window.Net?.offline,
   pageBg: PageBg.normalize(draft.pageBg),
   ...(draft.astra && typeof astraAvailable === 'function' && astraAvailable() ? { astra: draft.astra } : {}), // diseño de la página de Astra (metas)
@@ -33,6 +33,7 @@ function renderWpState(st, url) {
 }
 $('#ed-pull').onclick = (e) => busy(e.currentTarget, async () => {
   if (!draft.postId) return toast(isPageDraft() ? t('Esta página todavía no está en WordPress: envíala primero.') : t('Esta entrada todavía no está en WordPress: envíala primero.'), true);
+  window.api.wpSeoInfo(true).catch(() => {}); // «Actualizar» también vuelve a comprobar el plugin SEO (por si se acaba de instalar)
   const r = await window.api.pullPost(draft.postId, draft.type);
   if (r.modified) draft.wpModified = r.modified; // lo que hay ahora en WordPress es lo que se ha visto
   exported = r.exported || exported;

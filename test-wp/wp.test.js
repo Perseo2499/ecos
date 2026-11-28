@@ -253,9 +253,9 @@ test('SEO completo (complemento): escribir y leer canónica, indexación, palabr
   const canon = W.publicBase(cfg).replace(/\/$/, '') + '/canonica-' + TAG.replace(/\s+/g, '-').toLowerCase() + '/';
   const want = { focusKw: 'palabra clave de prueba', canonical: canon, noindex: false, nofollow: false, ogTitle: 'OG ' + TAG, ogDesc: 'Descripción para Facebook', ogImage: S.img.url, ogImageId: S.img.id, twTitle: 'X ' + TAG, twDesc: 'Descripción para X', twImage: S.img.url, twImageId: S.img.id };
   const saved = await W.seoSave(cfg, S.postId, want);
-  assert.deepEqual(SM.diff(want, saved.fields), {}, 'lo guardado vuelve igual');
+  assert.deepEqual(SM.diff(saved.fields, want), {}, 'lo guardado vuelve igual');
   const again = await W.seoGet(cfg, S.postId);
-  assert.deepEqual(SM.diff(want, again.fields), {}, 'y se lee igual al abrir (ida y vuelta)');
+  assert.deepEqual(SM.diff(again.fields, want), {}, 'y se lee igual al abrir (ida y vuelta)');
   // la web pública lleva las etiquetas
   let html = await fetchPublic(S.postUrl);
   const tag = (re) => (re.exec(html) || [])[1]; // Yoast usa el filtro wp_robots: WordPress escribe la etiqueta con comillas simples
@@ -674,6 +674,52 @@ test('idiomas: Polylang se detecta y se crea una traducción enlazada', { skip: 
   const en = await W.listPosts(cfg, { type: 'post', status: 'any', search: TAG, lang: 'en', number: 20 });
   assert.ok(en.items.some((x) => x.id === tr.ID) && !en.items.some((x) => x.id === orig.ID), 'el filtro por idioma separa original y traducción');
   if (helperFields) assert.equal((await W.langBatch(cfg, [orig.ID, tr.ID]))[tr.ID], 'en');
+});
+
+// Rank Math: setup.sh lo instala SIN activar (con wp-cli no se puede activar desde aquí). Si WP_CLI_DOCKER está definida (setup.sh lo exporta en GitHub
+// y en local), el test lo activa por la REST (/wp/v2/plugins), comprueba la detección con Yoast activo a la vez y con solo Rank Math, escribe por el
+// complemento y mira la web pública; al final restaura Yoast y desactiva Rank Math para no afectar al resto de casos.
+test('Rank Math (con Yoast activo a la vez y solo): detección, título, descripción, robots y canónica por el complemento, y etiquetas públicas', { skip: (!process.env.WP_CLI_DOCKER && 'WP_CLI_DOCKER sin definir') || (!EXPECT_YOAST && 'WP_EXPECT_YOAST=0') }, async () => {
+  const RM = 'seo-by-rank-math/rank-math', YO = 'wordpress-seo/wp-seo';
+  const setPlugin = (slug, status) => W.request(cfg, '/wp/v2/plugins/' + slug, { method: 'POST', json: { status } });
+  try {
+    await setPlugin(RM, 'active');
+    W.clearSeoCache();
+    const both = await W.seoInfo(cfg, { force: true });
+    assert.equal(both.plugin, 'rankmath', 'con los dos activos se usa Rank Math');
+    assert.equal(both.both, true, 'se avisa de que están los dos');
+    await setPlugin(YO, 'inactive');
+    const only = await W.seoInfo(cfg, { force: true });
+    assert.equal(only.plugin, 'rankmath'); assert.equal(only.both, false);
+    assert.equal(only.writable, true, 'la descripción se puede escribir (REST o complemento)');
+    const g0 = await W.seoGet(cfg, S.postId);
+    assert.equal(g0.plugin, 'rankmath'); assert.equal(g0.helper, true);
+    const canon = W.publicBase(cfg).replace(/\/$/, '') + '/rm-' + TAG.replace(/\s+/g, '-').toLowerCase() + '/';
+    const want = { title: 'Título RM ' + TAG, description: 'Descripción de Rank Math ' + TAG, canonical: canon, noindex: false, nofollow: false, focusKw: 'clave rm', ogTitle: 'OG RM ' + TAG, ogDesc: 'OG descripción RM' };
+    const saved = await W.seoSave(cfg, S.postId, want);
+    assert.deepEqual(SM.diff(saved.fields, want), {}, 'lo guardado vuelve igual');
+    let html = await fetchPublic(S.postUrl);
+    assert.match(html, /Search Engine Optimization by Rank Math/, 'Rank Math pinta sus etiquetas');
+    const tag = (re) => (re.exec(html) || [])[1];
+    assert.equal(tag(/<meta name="description" content="([^"]*)"/), want.description, 'meta description');
+    assert.equal(tag(/<link rel="canonical" href="([^"]*)"/), canon, 'canonical');
+    assert.equal(tag(/<meta property="og:title" content="([^"]*)"/), want.ogTitle, 'og:title');
+    assert.match(html, /<meta property="og:description" content="OG descripción RM"/);
+    assert.match(html, new RegExp('<title>[^<]*' + want.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), 'título SEO');
+    assert.match(tag(/<meta name="robots" content="([^"]*)"/) || 'index', /^(?!.*noindex)/, 'indexable');
+    // rank_math_robots es una lista: noindex + nofollow
+    await W.seoSave(cfg, S.postId, { noindex: true, nofollow: true });
+    const back = (await W.seoGet(cfg, S.postId)).fields;
+    assert.equal(back.noindex, true); assert.equal(back.nofollow, true);
+    html = await fetchPublic(S.postUrl);
+    assert.match(tag(/<meta name="robots" content="([^"]*)"/), /noindex/, 'robots noindex');
+    assert.match(tag(/<meta name="robots" content="([^"]*)"/), /nofollow/, 'robots nofollow');
+    await W.seoSave(cfg, S.postId, { noindex: false, nofollow: false });
+  } finally {
+    await setPlugin(YO, 'active').catch(() => {});
+    await setPlugin(RM, 'inactive').catch(() => {});
+    W.clearSeoCache();
+  }
 });
 
 test('borrar todo lo creado: no queda nada', async () => {

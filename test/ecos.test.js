@@ -645,10 +645,10 @@ test('Facebook: mensaje con enlace aparte, texto de partida y texto para Instagr
 
 test('SEO de la web: detecta Yoast/Rank Math solo si se puede escribir; la web real no tiene plugin', () => {
   const { detectSeo } = require('../src/wpself');
-  assert.deepEqual(detectSeo({ meta: { _yoast_wpseo_metadesc: '' } }), { plugin: 'yoast', key: '_yoast_wpseo_metadesc', writable: true });
+  assert.deepEqual(detectSeo({ meta: { _yoast_wpseo_metadesc: '' } }), { plugin: 'yoast', key: '_yoast_wpseo_metadesc', writable: true, both: false });
   assert.equal(detectSeo({ meta: { rank_math_description: '' } }).key, 'rank_math_description');
-  assert.deepEqual(detectSeo({ hasYoastHead: true, meta: {} }), { plugin: 'yoast', key: null, writable: false });
-  assert.deepEqual(detectSeo({ namespaces: ['wp/v2', 'astra/v1'], meta: { 'site-sidebar-layout': 'default' } }), { plugin: null, key: null, writable: false });
+  assert.deepEqual(detectSeo({ hasYoastHead: true, meta: {} }), { plugin: 'yoast', key: null, writable: false, both: false });
+  assert.deepEqual(detectSeo({ namespaces: ['wp/v2', 'astra/v1'], meta: { 'site-sidebar-layout': 'default' } }), { plugin: null, key: null, writable: false, both: false });
 });
 
 test('Meta: errores de publicación explican el permiso pages_manage_posts', () => {

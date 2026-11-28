@@ -4,12 +4,12 @@
 const slugify = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
 // Bloque «Cómo se verá»: vista previa en Google y en redes, contadores, avisos, sugerencias de la IA.
 // La lógica pura (cortes, niveles, avisos, mensajes) está en app/seo.js.
-let seoInfo = { plugin: null, key: null, writable: false }; // plugin SEO de la web (si lo hay y deja escribir su campo)
+let seoInfo = { plugin: null, key: null, writable: false, via: null, both: false }; // plugin SEO de la web (si lo hay y deja escribir su campo)
 let wpSt = null, wpUrl = ''; // estado y dirección de la entrada en WordPress
 let shareTab = 'google', seoSugg = null;
-async function loadSeoInfo() {
-  seoInfo = { plugin: null, key: null, writable: false }; seoSugg = null;
-  try { if (CFG.wpMode === 'selfhosted') seoInfo = (await window.api.wpSeoInfo()) || seoInfo; } catch { /* sin conexión: se usa el extracto */ }
+async function loadSeoInfo(force) {
+  seoInfo = { plugin: null, key: null, writable: false, via: null, both: false }; seoSugg = null;
+  try { if (CFG.wpMode === 'selfhosted') seoInfo = (await window.api.wpSeoInfo(!!force)) || seoInfo; } catch { /* sin conexión: se usa el extracto */ }
   $('#seo-desc-field').classList.toggle('hidden', !seoInfo.writable);
   renderShare();
 }
@@ -42,19 +42,20 @@ function renderShare() {
   const plain = window.BlockEditor?.plainText?.() || '';
   const real = seoField().value.trim(); // lo que de verdad se guardará
   const desc = real || Seo.cut(plain, 200);
-  const shownTitle = title || t('Sin título');
-  const warn = seoWarnTexts(Seo.warnings({ title, desc: real, keyword: $('#d-kw').value, hasImage: !!draft.featuredImageId, slug }));
+  const sTitle = window.SeoPanel?.seoTitle?.() || ''; // título para buscadores propio (Yoast / Rank Math), si lo hay
+  const shownTitle = sTitle || title || t('Sin título');
+  const warn = seoWarnTexts(Seo.warnings({ title: sTitle || title, desc: real, keyword: $('#d-kw').value, hasImage: !!draft.featuredImageId, slug }));
   const help = seoInfo.writable ? t('La descripción se guarda en el campo de {p}.', { p: SEO_PLUGIN[seoInfo.plugin] || 'SEO' })
-    : seoInfo.plugin ? t('Tu web tiene {p}, pero no deja escribir su descripción desde Ecos: se usa el extracto de arriba.', { p: SEO_PLUGIN[seoInfo.plugin] })
+    : seoInfo.plugin ? t('Tu web tiene {p}, pero no deja escribir su descripción desde Ecos: se usa el extracto de arriba. Con el Complemento de Ecos 1.8.1 sí se puede (Conexiones → Complemento).', { p: SEO_PLUGIN[seoInfo.plugin] })
       : t('Tu web no tiene un plugin de SEO: la descripción para buscadores es el extracto de arriba.');
   const cnt = (n, lv, max) => `<span class="seo-count ${lv}">${n}/${max}</span>`;
-  const tl = Seo.clean(title).length, dl = Seo.clean(real).length;
+  const tl = Seo.clean(sTitle || title).length, dl = Seo.clean(real).length;
   const sg = seoSugg ? `<div class="seo-sugg"><b>${t('Propuesta de la IA')}</b>
       ${seoSugg.title ? `<div class="seo-sg-row"><div><small>${t('Título')} · ${Seo.clean(seoSugg.title).length}</small><div>${escHtml(seoSugg.title)}</div></div><button class="btn tonal small" data-seo="use-title">${t('Usar')}</button></div>` : ''}
       ${seoSugg.description ? `<div class="seo-sg-row"><div><small>${t('Descripción')} · ${Seo.clean(seoSugg.description).length}</small><div>${escHtml(seoSugg.description)}</div></div><button class="btn tonal small" data-seo="use-desc">${t('Usar')}</button></div>` : ''}
       <button class="btn text small" data-seo="discard">${t('Descartar')}</button></div>` : '';
   const xf = window.SeoPanel?.fields() || {};
-  const soc = SeoMeta.social({ host, title, desc, featured: img?.url || '', ...xf });
+  const soc = SeoMeta.social({ ...xf, host, title, seoTitle: sTitle, desc, featured: img?.url || '' });
   const canShare = wpSt === 'publish' && CFG.metaConnected && wpUrl && CFG.shareFacebook === true;
   box.innerHTML = `<div class="section-label">${t('Cómo se verá')}</div>
     <div class="seo-tabs" role="tablist"><button role="tab" class="${shareTab === 'google' ? 'on' : ''}" data-seo="tab-google">Google</button><button role="tab" class="${shareTab === 'social' ? 'on' : ''}" data-seo="tab-social">Facebook</button><button role="tab" class="${shareTab === 'x' ? 'on' : ''}" data-seo="tab-x">X</button></div>
@@ -65,7 +66,7 @@ function renderShare() {
       <div class="sc-body"><div class="sc-title">${escHtml(soc.x.title || shownTitle)}</div><div class="sc-desc">${escHtml(soc.x.desc)}</div><div class="sc-host">${escHtml(soc.x.host)}</div></div></div>`
       : `<div class="sc-card">${soc.fb.image ? `<img src="${escHtml(soc.fb.image)}" alt="">` : '<div class="sc-noimg"><span class="ms">image</span></div>'}
       <div class="sc-body"><div class="sc-host">${escHtml(soc.fb.host)}</div><div class="sc-title">${escHtml(soc.fb.title || shownTitle)}</div><div class="sc-desc">${escHtml(soc.fb.desc)}</div></div></div>`}
-    <div class="seo-counts"><span>${t('Título')} ${cnt(tl, Seo.titleLevel(title), 60)}</span><span>${t('Descripción')} ${cnt(dl, Seo.descLevel(real), 155)}</span></div>
+    <div class="seo-counts"><span>${t('Título')} ${cnt(tl, Seo.titleLevel(sTitle || title), 60)}</span><span>${t('Descripción')} ${cnt(dl, Seo.descLevel(real), 155)}</span></div>
     <div class="hint seo-help">${escHtml(help)}</div>
     ${warn.length ? `<ul class="seo-warns">${warn.map((x) => `<li><span class="ms">warning</span>${escHtml(x)}</li>`).join('')}</ul>` : `<div class="seo-ok"><span class="ms">check_circle</span>${t('Todo en orden para buscadores.')}</div>`}
     ${sg}

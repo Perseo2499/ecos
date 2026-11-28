@@ -347,6 +347,9 @@
     'Envío a medias: pulsa Continuar': 'Half-finished send: press Continue',
     'Ha cambiado en WordPress': 'Changed in WordPress',
     // 1.2 (editor completo)
+    'Tienes Yoast SEO y Rank Math activos a la vez: Ecos usa Rank Math. Desactiva uno de los dos en wp-admin → Plugins para evitar etiquetas duplicadas.': 'You have Yoast SEO and Rank Math active at the same time: Ecos uses Rank Math. Deactivate one of them in wp-admin → Plugins to avoid duplicate tags.',
+    'Título para buscadores': 'Search engine title', 'Si lo dejas vacío, el de la entrada': 'If left empty, the post title',
+    'Tu web tiene {p}, pero no deja escribir su descripción desde Ecos: se usa el extracto de arriba. Con el Complemento de Ecos 1.8.1 sí se puede (Conexiones → Complemento).': 'Your site has {p}, but it does not allow writing its description from Ecos: the excerpt above is used. With the Ecos plugin 1.8.1 you can (Connections → Plugin).',
     'Vista': 'View', 'Destacadas': 'Featured', 'De entradas': 'From posts', 'Fotos que son la imagen destacada de alguna entrada o página': 'Photos used as the featured image of a post or page',
     'Destacar': 'Add to Featured', 'Quitar de destacadas': 'Remove from Featured', 'Foto añadida a Destacadas': 'Photo added to Featured', 'Foto quitada de Destacadas': 'Photo removed from Featured',
     '{n} foto(s) ya no existen en WordPress y se han quitado de Destacadas': '{n} photo(s) no longer exist in WordPress and were removed from Featured',

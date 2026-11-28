@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Levanta WordPress + MySQL con Docker y lo deja listo para `npm run test:wp`:
-# tema Astra, plugins Spectra, Kadence Blocks, GenerateBlocks, Yoast SEO, ACF y Polylang (con un tipo «evento», un grupo de campos y los idiomas es/en), el Complemento de Ecos (build/ecos-wordpress.zip), un usuario administrador, un colaborador y un editor con sus contraseñas de aplicación.
+# tema Astra, plugins Spectra, Kadence Blocks, GenerateBlocks, Yoast SEO, Rank Math (sin activar), ACF y Polylang (con un tipo «evento», un grupo de campos y los idiomas es/en), el Complemento de Ecos (build/ecos-wordpress.zip), un usuario administrador, un colaborador y un editor con sus contraseñas de aplicación.
 #
 # Antes: `npm run plugin` (genera build/ecos-wordpress.zip). Después: `npm run test:wp` con las variables que se muestran (en GitHub se exportan solas).
 # Códigos de salida: 0 listo · 10 no se pudo descargar algo de internet (imágenes de Docker, wordpress.org: se avisa, no es un fallo de Ecos) · otro: fallo real.
@@ -51,6 +51,8 @@ wp rewrite structure '/%postname%/' --hard || exit 1   # sin enlaces permanentes
 echo "== Tema y plugins (wordpress.org)"
 need_external "instalar el tema Astra" wp theme install astra --activate
 need_external "instalar Spectra, Kadence Blocks, GenerateBlocks y Yoast SEO" wp plugin install ultimate-addons-for-gutenberg kadence-blocks generateblocks wordpress-seo --activate
+# Rank Math: se instala SIN activar (el test lo activa y desactiva por la REST /wp/v2/plugins para no afectar al resto de casos)
+need_external "instalar Rank Math" wp plugin install seo-by-rank-math
 
 # Astra 4 trae «sin barra lateral» por defecto: se activa a la derecha para poder probar los widgets en la web
 wp eval '$o = get_option( "astra-settings", array() ); $o = is_array( $o ) ? $o : array(); foreach ( array( "site-sidebar-layout", "single-post-sidebar-layout", "archive-post-sidebar-layout" ) as $k ) { $o[ $k ] = "right-sidebar"; } update_option( "astra-settings", $o );' || exit 1
@@ -115,11 +117,11 @@ echo "::add-mask::$APP_PASS"
 echo "::add-mask::$CONTRIB_PASS"
 echo "::add-mask::$EDITOR_PASS"
 if [ -n "${GITHUB_ENV:-}" ]; then
-  { echo "WP_URL=$SITE"; echo "WP_USER=$USER_NAME"; echo "WP_APP_PASSWORD=$APP_PASS"; echo "WP_EXPECT_SPECTRA=1"; echo "WP_CONTRIB_USER=ecoscontrib"; echo "WP_CONTRIB_APP_PASSWORD=$CONTRIB_PASS"; echo "WP_EDITOR_USER=ecoseditor"; echo "WP_EDITOR_APP_PASSWORD=$EDITOR_PASS"; echo "WP_EXPECT_CPT=1"; if [ "$LANG_OK" = 1 ]; then echo "WP_EXPECT_LANG=1"; fi; } >> "$GITHUB_ENV"
+  { echo "WP_URL=$SITE"; echo "WP_USER=$USER_NAME"; echo "WP_APP_PASSWORD=$APP_PASS"; echo "WP_EXPECT_SPECTRA=1"; echo "WP_CONTRIB_USER=ecoscontrib"; echo "WP_CONTRIB_APP_PASSWORD=$CONTRIB_PASS"; echo "WP_EDITOR_USER=ecoseditor"; echo "WP_EDITOR_APP_PASSWORD=$EDITOR_PASS"; echo "WP_EXPECT_CPT=1"; echo "WP_CLI_DOCKER=1"; if [ "$LANG_OK" = 1 ]; then echo "WP_EXPECT_LANG=1"; fi; } >> "$GITHUB_ENV"
 else
   echo
   echo "Listo. Ejecuta:"
-  echo "  export WP_URL=$SITE WP_USER=$USER_NAME WP_APP_PASSWORD='$APP_PASS' WP_EXPECT_SPECTRA=1 WP_EXPECT_CPT=1$([ \"$LANG_OK\" = 1 ] && echo ' WP_EXPECT_LANG=1')"
+  echo "  export WP_URL=$SITE WP_USER=$USER_NAME WP_APP_PASSWORD='$APP_PASS' WP_EXPECT_SPECTRA=1 WP_CLI_DOCKER=1 WP_EXPECT_CPT=1$([ \"$LANG_OK\" = 1 ] && echo ' WP_EXPECT_LANG=1')"
   echo "  export WP_CONTRIB_USER=ecoscontrib WP_CONTRIB_APP_PASSWORD='$CONTRIB_PASS' WP_EDITOR_USER=ecoseditor WP_EDITOR_APP_PASSWORD='$EDITOR_PASS'"
   echo "  npm run test:wp"
   echo "Para apagarlo: docker compose -f test-wp/docker-compose.yml down -v"

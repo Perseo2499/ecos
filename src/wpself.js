@@ -412,29 +412,50 @@ async function termIds(cfg, restBase, names, create) {
 // Descripción para buscadores: Yoast SEO y Rank Math la guardan en un campo «meta» de la entrada, y solo
 // se puede escribir desde aquí si el plugin lo publica en el REST. Si no, se usa el extracto.
 const SEO_KEYS = { yoast: '_yoast_wpseo_metadesc', rankmath: 'rank_math_description' };
-function detectSeo({ namespaces = [], meta = {}, hasYoastHead = false } = {}) {
-  for (const [plugin, key] of Object.entries(SEO_KEYS)) if (meta && key in meta) return { plugin, key, writable: true };
-  if (hasYoastHead || namespaces.includes('yoast/v1')) return { plugin: 'yoast', key: null, writable: false };
-  if (namespaces.includes('rankmath/v1')) return { plugin: 'rankmath', key: null, writable: false };
-  return { plugin: null, key: null, writable: false };
+// Si Yoast y Rank Math están activos a la vez (habitual al cambiar de uno a otro) gana Rank Math: es el que se acaba de instalar y
+// el que importa los datos de Yoast. Mismo criterio que el complemento (wp-plugin/ecos/includes/seo2.php). `helperSeo` es el campo
+// «seo» de ecos/v1/status (complemento ≥ 1.8.1): { plugin, both, version }; si viene, es la fuente principal.
+function detectSeo({ namespaces = [], meta = {}, hasYoastHead = false, helperSeo = null } = {}) {
+  const m = meta || {};
+  let yoast = SEO_KEYS.yoast in m || hasYoastHead || namespaces.includes('yoast/v1');
+  let rank = SEO_KEYS.rankmath in m || namespaces.includes('rankmath/v1');
+  let version = '';
+  if (helperSeo && typeof helperSeo === 'object') {
+    yoast = helperSeo.plugin === 'yoast' || (!!helperSeo.both && !!helperSeo.plugin);
+    rank = helperSeo.plugin === 'rankmath';
+    version = String(helperSeo.version || '');
+  }
+  const plugin = rank ? 'rankmath' : yoast ? 'yoast' : null;
+  const key = plugin && SEO_KEYS[plugin] in m ? SEO_KEYS[plugin] : null;
+  return { plugin, key, writable: !!key, both: yoast && rank, ...(version ? { version } : {}) };
 }
+// La caché es corta (un minuto): tras instalar o activar un plugin SEO hay que verlo enseguida. Se vacía al reconectar,
+// al pulsar «Actualizar» y al abrir el panel SEO avanzado.
+const SEO_TTL = 60000;
 let seoCache = null;
-async function seoInfo(cfg) {
-  if (seoCache && seoCache.site === cfg.wpUrl && Date.now() - seoCache.at < 600000) return seoCache.info;
+const clearSeoCache = () => { seoCache = null; helperCache.clear(); };
+async function seoInfo(cfg, { force = false } = {}) {
+  if (!force && seoCache && seoCache.site === cfg.wpUrl && Date.now() - seoCache.at < SEO_TTL) return seoCache.info;
   const root = await req(cfg, '/').catch(() => ({}));
   const [sample] = await req(cfg, '/wp/v2/posts?per_page=1&context=edit&_fields=id,meta,yoast_head_json').catch(() => []);
-  const info = detectSeo({ namespaces: root.namespaces || [], meta: sample?.meta || {}, hasYoastHead: !!sample?.yoast_head_json });
+  const st = await helperStatus(cfg, { force }).catch(() => ({ installed: false }));
+  const hs = st.installed && !versionLess(st.version, SEO_TITLE_MIN) && st.seo ? st.seo : null;
+  const info = detectSeo({ namespaces: root.namespaces || [], meta: sample?.meta || {}, hasYoastHead: !!sample?.yoast_head_json, helperSeo: hs });
+  // El meta no sale en la REST (Rank Math nunca lo publica) pero el complemento puede escribirlo: la descripción se guarda por ecos/v1/seo
+  info.via = info.writable ? 'rest' : hs && info.plugin ? 'helper' : null;
+  if (info.via === 'helper') info.writable = true;
   seoCache = { site: cfg.wpUrl, at: Date.now(), info };
   return info;
 }
 // SEO completo (complemento ≥ 1.8.0): palabra clave, canónica, indexación y redes sociales de Yoast SEO / Rank Math.
 // Sin el complemento esos metas no se pueden leer ni escribir: se devuelve { helper: false } y la pantalla lo explica.
 const SEO2_MIN = '1.8.0';
+const SEO_TITLE_MIN = '1.8.1'; // título y descripción por el complemento, y el campo «seo» del estado
 async function seoGet(cfg, id) {
-  const info = await seoInfo(cfg).catch(() => ({ plugin: null }));
+  const info = await seoInfo(cfg, { force: true }).catch(() => ({ plugin: null }));
   const st = await helperStatus(cfg).catch(() => ({ installed: false }));
   const helper = !!st.installed && !versionLess(st.version, SEO2_MIN);
-  const base = { helper, plugin: info.plugin || null, premium: null, fields: null };
+  const base = { helper, plugin: info.plugin || null, both: !!info.both, via: info.via || null, premium: null, fields: null };
   if (!helper || !info.plugin || !Number(id)) return base;
   try { const r = await req(cfg, `/ecos/v1/seo/${Number(id)}`); return { ...base, plugin: r.plugin || base.plugin, premium: !!r.premium, fields: r.fields || null }; } catch (e) { return { ...base, error: e.message }; }
 }
@@ -629,7 +650,7 @@ async function getPost(cfg, id, type) {
     featuredImg: fm?.source_url ? { id: fm.id, url: fm.source_url, alt: fm.alt_text || '' } : null,
     id: p.id, status: p.status, url: p.link, date: p.date_gmt ? p.date_gmt + 'Z' : p.date, modified: p.modified_gmt ? p.modified_gmt + 'Z' : p.modified,
     title: p.title?.raw ?? '', excerpt: p.excerpt?.raw ?? '', content: p.content?.raw ?? '', featured: p.featured_media || null, slug: p.slug || '',
-    seoDesc: p.meta?.[SEO_KEYS.yoast] || p.meta?.[SEO_KEYS.rankmath] || '',
+    seoDesc: p.meta?.[SEO_KEYS.rankmath] || p.meta?.[SEO_KEYS.yoast] || '',
     astra: TS.astraFromMeta(p.meta),
     type: type === 'page' ? 'page' : custom ? type : 'post', parent: Number(p.parent) || 0,
   };
@@ -829,7 +850,8 @@ const versionLess = (a, b) => {
 function parseHelperStatus(data, bundled = helperBundledVersion()) {
   if (!data || data.plugin !== 'ecos' || !data.version) return { installed: false, version: '', outdated: false, caches: [], bundled };
   const version = String(data.version);
-  return { installed: true, version, outdated: versionLess(version, bundled), caches: Array.isArray(data.caches) ? data.caches.map(String) : [], bundled };
+  const seo = data.seo && typeof data.seo === 'object' && !Array.isArray(data.seo) ? { plugin: String(data.seo.plugin || ''), both: !!data.seo.both, version: String(data.seo.version || '') } : null;
+  return { installed: true, version, outdated: versionLess(version, bundled), caches: Array.isArray(data.caches) ? data.caches.map(String) : [], bundled, seo };
 }
 const helperCache = new Map(); // dirección de la web → { at, st }
 async function helperStatus(cfg, { force = false } = {}) {
@@ -1055,7 +1077,7 @@ async function langSet(cfg, { postId, lang, translationOf = 0, type = 'post', he
 }
 
 
-module.exports = { cptTypes, cptTaxonomies, cptTerms, termIds, helperHasFields, fieldsLoad, fieldsSave, langInfo, langBatch, langSet, setUploadGuard, findMediaByName, helperHasRender, helperRender, themeStyles, getJson, helperHasExport, helperExport, helperHasLock, me, parseMe, postModified, helperLock, helperUnlock, parseHelperLock, helperStats, parseHelperStats, helperSettings, helperSaveSettings, parseHelperSettings, helperStatus, helperPurge, parseHelperStatus, helperBundledVersion, detectSeo, seoInfo, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, mediaMissing, featuredMedia, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, listDates, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText, helperHasReview, parseNote, parseNotes, notesList, noteAdd, noteResolve, noteDelete, parseReview, reviewSummary, postChanges, seoGet, seoSave };
+module.exports = { cptTypes, cptTaxonomies, cptTerms, termIds, helperHasFields, fieldsLoad, fieldsSave, langInfo, langBatch, langSet, setUploadGuard, findMediaByName, helperHasRender, helperRender, themeStyles, getJson, helperHasExport, helperExport, helperHasLock, me, parseMe, postModified, helperLock, helperUnlock, parseHelperLock, helperStats, parseHelperStats, helperSettings, helperSaveSettings, parseHelperSettings, helperStatus, helperPurge, parseHelperStatus, helperBundledVersion, detectSeo, seoInfo, clearSeoCache, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, mediaMissing, featuredMedia, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, listDates, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText, helperHasReview, parseNote, parseNotes, notesList, noteAdd, noteResolve, noteDelete, parseReview, reviewSummary, postChanges, seoGet, seoSave };
 
 // Para módulos propios que hablan con la API (src/wpblocks.js)
 module.exports.request = req;

@@ -15,7 +15,7 @@ contextBridge.exposeInMainWorld('api', {
   metaLight: (pageId, cursors) => call('meta:light', pageId, cursors),
   metaAccounts: () => call('meta:accounts'),
   metaShare: (o) => call('meta:share', o),
-  wpSeoInfo: () => call('wp:seoInfo'),
+  wpSeoInfo: (force) => call('wp:seoInfo', !!force),
   wpSeoGet: (id) => call('wp:seoGet', id),
   wpSeoSave: (id, fields) => call('wp:seoSave', id, fields),
   menusLoad: () => call('menus:load'),

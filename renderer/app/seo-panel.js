@@ -3,8 +3,8 @@
 // (ruta ecos/v1/seo del complemento 1.8.0). La lógica pura está en app/seo-meta.js; sigue a app/editor-share.js.
 const SeoPanel = (() => {
   const SM = window.SeoMeta;
-  const DEF = SM.sanitize({ focusKw: '', extraKw: [], canonical: '', noindex: false, nofollow: false, ogTitle: '', ogDesc: '', ogImage: '', ogImageId: 0, twTitle: '', twDesc: '', twImage: '', twImageId: 0 });
-  let info = { plugin: null, helper: false, premium: null };
+  const DEF = SM.sanitize({ title: '', description: '', focusKw: '', extraKw: [], canonical: '', noindex: false, nofollow: false, ogTitle: '', ogDesc: '', ogImage: '', ogImageId: 0, twTitle: '', twDesc: '', twImage: '', twImageId: 0 });
+  let info = { plugin: null, helper: false, premium: null, both: false, via: null };
   let orig = { ...DEF }, cur = { ...DEF }, token = 0, loadErr = '';
   const box = () => $('#d-seo2');
   const PLUGIN = { yoast: 'Yoast SEO', rankmath: 'Rank Math' };
@@ -20,15 +20,18 @@ const SeoPanel = (() => {
 
   async function load() {
     const my = ++token;
-    info = { plugin: null, helper: false, premium: null }; orig = { ...DEF }; cur = { ...DEF }; loadErr = '';
+    info = { plugin: null, helper: false, premium: null, both: false, via: null }; orig = { ...DEF }; cur = { ...DEF }; loadErr = '';
     const kw = $('#d-kw');
     if (CFG.wpMode === 'selfhosted') {
       try {
         const r = await window.api.wpSeoGet(draft?.postId || 0);
         if (my !== token) return;
-        info = { plugin: r.plugin || null, helper: !!r.helper, premium: r.premium };
+        info = { plugin: r.plugin || null, helper: !!r.helper, premium: r.premium, both: !!r.both, via: r.via || null };
         if (r.error) loadErr = r.error;
         if (r.fields) { orig = { ...DEF, ...SM.sanitize(r.fields) }; cur = { ...orig, extraKw: [...(orig.extraKw || [])] }; if (orig.focusKw) kw.value = orig.focusKw; }
+        // Rank Math no publica su descripción en la REST: se lee y se guarda con el complemento (ecos/v1/seo)
+        const ta = $('#d-seodesc');
+        if (viaHelper() && r.fields && ta && !ta.value.trim() && orig.description) ta.value = orig.description;
       } catch (e) { if (my !== token) return; loadErr = String(e.message || e); }
     }
     cur.focusKw = kw.value.trim();
@@ -36,16 +39,19 @@ const SeoPanel = (() => {
     if (typeof renderShare === 'function') renderShare();
   }
 
-  // Lo que hay ahora (con la palabra clave del campo de arriba)
-  function fields() { cur.focusKw = ($('#d-kw')?.value || '').trim(); return cur; }
+  const viaHelper = () => info.via === 'helper';
+  // Lo que hay ahora (con la palabra clave del campo de arriba y, si va por el complemento, la descripción del editor)
+  function fields() { cur.focusKw = ($('#d-kw')?.value || '').trim(); if (viaHelper()) cur.description = ($('#d-seodesc')?.value || '').trim(); return cur; }
+  // Título para buscadores propio de la entrada (sin las plantillas «%title% %sep%…» de Rank Math, que solo WordPress sabe rellenar)
+  const seoTitle = () => { const v = String(fields().title || ''); return /%[a-z_]+(\([^)]*\))?%/i.test(v) ? '' : v; };
   // Solo lo que cambió y se puede guardar
   function pending() {
     const ok = new Set(cap().fields);
     const d = SM.diff(orig, fields());
-    return Object.fromEntries(Object.entries(d).filter(([k]) => ok.has(k)));
+    return Object.fromEntries(Object.entries(d).filter(([k]) => ok.has(k) && (k !== 'description' || viaHelper())));
   }
   // Lo que no se podrá guardar (hay cambios pero falta plugin o complemento)
-  const blocked = () => (cap().can ? {} : Object.fromEntries(Object.entries(SM.diff(orig, { ...fields(), focusKw: orig.focusKw })).filter(([k]) => k !== 'focusKw')));
+  const blocked = () => (cap().can ? {} : Object.fromEntries(Object.entries(SM.diff(orig, { ...fields(), focusKw: orig.focusKw })).filter(([k]) => k !== 'focusKw' && k !== 'description')));
 
   async function afterSend(postId) {
     if (!postId || CFG.wpMode !== 'selfhosted') return;
@@ -56,7 +62,7 @@ const SeoPanel = (() => {
     }
     try {
       const r = await window.api.wpSeoSave(postId, ch);
-      if (r.fields) { orig = { ...DEF, ...SM.sanitize(r.fields) }; cur = { ...orig, extraKw: [...(orig.extraKw || [])] }; cur.focusKw = ($('#d-kw')?.value || '').trim(); orig.focusKw = r.fields.focusKw || ''; }
+      if (r.fields) { orig = { ...DEF, ...SM.sanitize(r.fields) }; cur = { ...orig, extraKw: [...(orig.extraKw || [])] }; cur.focusKw = ($('#d-kw')?.value || '').trim(); orig.focusKw = r.fields.focusKw || ''; if (viaHelper() && $('#d-seodesc')) $('#d-seodesc').value = orig.description || ''; }
       toast(t('Datos de SEO guardados en {p}.', { p: PLUGIN[info.plugin] || 'SEO' }));
     } catch (e) { toast(t('La entrada se envió, pero no se pudo guardar el SEO avanzado: {m}', { m: String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '') }), true); }
   }
@@ -80,12 +86,14 @@ const SeoPanel = (() => {
   function build() {
     const b = box(); if (!b) return;
     const c = cap();
-    const note = !c.can ? `<div class="sp-note warn"><span class="ms">info</span><span>${esc(seoWhy())}</span></div>`
+    const both = info.both ? `<div class="sp-note warn" id="sp-both"><span class="ms">warning</span><span>${esc(t('Tienes Yoast SEO y Rank Math activos a la vez: Ecos usa Rank Math. Desactiva uno de los dos en wp-admin → Plugins para evitar etiquetas duplicadas.'))}</span></div>` : '';
+    const note = both + (!c.can ? `<div class="sp-note warn"><span class="ms">info</span><span>${esc(seoWhy())}${c.why === 'noPlugin' && CFG.wpMode === 'selfhosted' ? ` <button type="button" class="btn text small" data-sp="recheck"><span class="ms">refresh</span>${t('Volver a comprobar')}</button>` : ''}</span></div>`
       : loadErr ? `<div class="sp-note warn"><span class="ms">info</span><span>${esc(loadErr)}</span></div>`
-        : c.why === 'noPremium' ? `<div class="sp-note"><span class="ms">info</span><span>${t('Las palabras clave secundarias son de Yoast SEO Premium: aquí solo se guarda la principal.')}</span></div>` : '';
+        : c.why === 'noPremium' ? `<div class="sp-note"><span class="ms">info</span><span>${t('Las palabras clave secundarias son de Yoast SEO Premium: aquí solo se guarda la principal.')}</span></div>` : '');
     const open = (k) => (b.querySelector(`details[data-k="${k}"]`)?.open ? ' open' : '');
     b.innerHTML = `<div class="section-label">${t('SEO avanzado')}${info.plugin ? ` <span class="sp-plug">${esc(PLUGIN[info.plugin])}</span>` : ''}</div>
       ${note}
+      ${can('title') ? inp('sp-title', 'title', t('Título para buscadores'), t('Si lo dejas vacío, el de la entrada')) : ''}
       ${can('extraKw') ? `<div class="field"><label for="sp-kw2">${t('Palabras clave secundarias')}</label><input id="sp-kw2" value="${esc((cur.extraKw || []).join(', '))}" placeholder="${esc(t('Separadas por comas'))}" autocomplete="off"></div>` : ''}
       ${inp('sp-canon', 'canonical', t('Dirección canónica (URL)'), t('Solo si esta entrada es copia de otra'))}
       <div class="sp-robots">
@@ -121,7 +129,7 @@ const SeoPanel = (() => {
     const imgs = blocks.flatMap((x) => (x.img ? [x.img] : x.images || []));
     const f = fields();
     return SM.analyze({
-      title: $('#d-title').value, desc: (typeof seoField === 'function' ? seoField().value : '') || '', keyword: f.focusKw, slug: slugify($('#d-slug').value) || slugify($('#d-title').value),
+      title: seoTitle() || $('#d-title').value, desc: (typeof seoField === 'function' ? seoField().value : '') || '', keyword: f.focusKw, slug: slugify($('#d-slug').value) || slugify($('#d-title').value),
       paragraphs: blocks.filter((x) => x.type === 'paragraph').map((x) => txt(x.html)).filter(Boolean), headings: blocks.filter((x) => x.type === 'heading').map((x) => txt(x.html)).filter(Boolean),
       alts: imgs.map((i) => i.alt).filter(Boolean), imgCount: imgs.length, text: window.BlockEditor.plainText(), canonical: f.canonical,
     });
@@ -156,8 +164,13 @@ const SeoPanel = (() => {
     renderShare();
   };
   document.addEventListener('DOMContentLoaded', () => {});
-  const wire = () => { const b = box(); if (b && !b.dataset.wired) { b.dataset.wired = '1'; b.addEventListener('input', fromInput); b.addEventListener('change', fromInput); } };
+  // «Volver a comprobar»: vacía la caché del plugin SEO (por si se acaba de instalar) y vuelve a leer
+  async function recheck(btn) {
+    btn.disabled = true;
+    try { await loadSeoInfo(true); await load(); } finally { btn.disabled = false; }
+  }
+  const wire = () => { const b = box(); if (b && !b.dataset.wired) { b.dataset.wired = '1'; b.addEventListener('input', fromInput); b.addEventListener('change', fromInput); b.addEventListener('click', (e) => { const r = e.target.closest('[data-sp="recheck"]'); if (r) recheck(r); }); } };
   wire();
-  return { load, fields, pending, blocked, afterSend, refresh, info: () => info, wire };
+  return { load, fields, seoTitle, pending, blocked, afterSend, refresh, info: () => info, wire };
 })();
 window.SeoPanel = SeoPanel;
