@@ -8,6 +8,15 @@
 
   const ENTRIES = [
     {
+      version: '3.8.0', date: '2026-11-28',
+      title: c('Más rápida y al día', 'Faster and up to date'),
+      improved: [
+        c('Mucho más fluida con webs grandes: Publicaciones se abre hasta 3 veces más rápido, la biblioteca de medios sin tirones y escribir en entradas muy largas responde al instante.', 'Much smoother with big sites: Posts opens up to 3 times faster, the media library without stutters and typing in very long posts responds instantly.'),
+        c('El Blog pide a WordPress solo los datos que necesita y miniaturas pequeñas en lugar de las fotos originales.', 'The Blog asks WordPress only for the data it needs and small thumbnails instead of the original photos.'),
+        c('Actualizada la base de la aplicación (Electron 45): más segura y al día con Chromium y Node recientes.', 'Updated the app foundation (Electron 45): more secure and up to date with recent Chromium and Node.'),
+      ],
+    },
+    {
       version: '3.7.0', date: '2026-11-28', plugin: '1.8.0',
       title: c('Más compatible con WordPress', 'More compatible with WordPress'),
       new: [
