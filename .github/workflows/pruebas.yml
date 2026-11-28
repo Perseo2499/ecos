@@ -78,16 +78,6 @@ jobs:
           code=$?
           if [ "$code" -eq 3 ]; then echo "::warning::WordPress no respondió: pruebas omitidas."; exit 0; fi
           exit "$code"
-      - name: DEPURACION-TEMPORAL Rank Math
-        if: always() && steps.wp.outputs.ready == 'true'
-        continue-on-error: true
-        run: |
-          cd test-wp
-          wpc() { docker compose --profile tools run --rm -T wpcli wp "$@"; }
-          wpc plugin deactivate wordpress-seo
-          wpc plugin activate seo-by-rank-math
-          docker compose exec -T wordpress sh -c 'cd /var/www/html/wp-content/plugins/seo-by-rank-math; grep -rn "rank_math_robots" --include=*.php includes | head -25; grep -n "function robots" -A40 includes/paper/class-paper.php | head -80'
-          curl -s http://localhost:8080/ | grep -i "rank math\|robots" | head
       - name: Registros de WordPress (si algo falló)
         if: failure()
         run: docker compose -f test-wp/docker-compose.yml logs --tail=120 wordpress db || true

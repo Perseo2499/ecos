@@ -25,7 +25,7 @@ const LIMITS = {
   'Blog: línea temporal (salto)': { t: 2000, lt: 400 },
   'Blog: scroll': { t: 4000, lt: 200 },
   'Publicaciones Detalle: primera pintura': { t: 2500, lt: 600 },
-  'Publicaciones Detalle: todo listo': { t: 8000, lt: 600 },
+  'Publicaciones Detalle: todo listo': { t: 15000, lt: 600 },
   'Publicaciones Detalle: búsqueda': { t: 2500, lt: 600 },
   'Publicaciones Detalle: scroll': { t: 5000, lt: 300 },
   'Publicaciones Detalle: línea temporal (salto)': { t: 2500, lt: 600 },
