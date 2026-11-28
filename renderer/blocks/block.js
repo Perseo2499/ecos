@@ -108,7 +108,7 @@
       el.contentEditable = 'true'; el.className = 'rt' + (opts.cls ? ' ' + opts.cls : ''); el.dataset.ph = placeholder;
       el.innerHTML = html || '';
       let snap = false;
-      el.oninput = () => { if (!snap) { this.snapshot(); snap = true; } onInput(el.innerHTML); this.onChange(); if (opts.block?.type === 'heading') this.refreshToc(); };
+      el.oninput = () => { if (!snap) { this.snapshot(); snap = true; } onInput(el.innerHTML); this.onChange(true); if (opts.block?.type === 'heading') this.refreshToc(); };
       el.onblur = () => { snap = false; };
       el.onfocus = () => { if (opts.block) this.setActive(opts.block, el, opts.styleEl); };
       el.onpaste = (e) => {

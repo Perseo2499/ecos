@@ -76,6 +76,10 @@
     renderMedia() {
       const tray = $('#d-media');
       const used = new Set(JSON.stringify(this.draft.blocks).match(/"id":\d+/g) || []);
+      // Si la bandeja sigue igual (mismas fotos y mismas usadas), no se vuelve a construir
+      const sig = this.media.map((m) => m.id + (used.has(`"id":${m.id}`) ? 'u' : '') + m.type + (m.poster || m.url || '').length).join(',');
+      if (tray.dataset.sig === sig && tray.dataset.sigDraft === String(this.draft.postId || '') && tray.childElementCount === this.media.length) return;
+      tray.dataset.sig = sig; tray.dataset.sigDraft = String(this.draft.postId || '');
       tray.innerHTML = this.media.length ? '' : `<p class="hint">${t('Sin fotos')}</p>`;
       this.media.forEach((m, i) => {
         const it = document.createElement('div');

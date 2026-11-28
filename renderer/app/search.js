@@ -9,6 +9,10 @@ const GS = (() => {
   const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const tokens = (q) => norm(q).split(/\s+/).filter(Boolean);
   const hit = (hay, toks) => { const h = norm(hay); return toks.every((k) => h.includes(k)); };
+  // Con miles de fotos y publicaciones, el texto sin tildes de cada una se calcula una sola vez (no en cada tecla)
+  const nm = new WeakMap();
+  const hitObj = (o, a, b, toks) => { let e = nm.get(o); if (!e || e.a !== a || e.b !== b) { e = { a, b, n: norm(`${a} ${b || ''}`) }; nm.set(o, e); } return toks.every((k) => e.n.includes(k)); };
+  const firstN = (arr, n, pred) => { const out = []; for (let i = 0; i < arr.length && out.length < n; i++) if (pred(arr[i])) out.push(arr[i]); return out; };
   // Texto con la coincidencia resaltada (el resaltado se calcula sobre el texto sin tildes y se traslada al original)
   function hl(text, toks) {
     text = String(text || '');
@@ -86,11 +90,11 @@ const GS = (() => {
     };
     wp('post', t('Entradas'), 'article'); wp('page', t('Páginas'), 'description');
     if (pool) {
-      const l = pool.filter((m) => hit(`${m.name} ${m.alt || ''}`, toks)).slice(0, 6)
+      const l = firstN(pool, 6, (m) => hitObj(m, m.name, m.alt, toks))
         .map((m) => ({ icon: m.type === 'video' ? 'movie' : 'image', thumb: m.tiny || m.thumb || (m.type === 'image' ? m.url : ''), title: m.name, sub: [m.type === 'video' ? t('Vídeo') : t('Foto'), m.width ? `${m.width}×${m.height}` : '', mediaDate(m.date)].filter(Boolean).join(' · '), run: () => openMedia(m) }));
       if (l.length) groups.push({ group: t('Medios'), list: l });
     }
-    const soc = (posts || []).filter((p) => hit(p.text, toks)).slice(0, 5)
+    const soc = firstN(posts || [], 5, (p) => hitObj(p, p.text, '', toks))
       .map((p) => ({ icon: p.source === 'instagram' ? 'photo_camera' : 'groups', thumb: postThumb(p), title: (p.text || t('Sin texto')).replace(/\s+/g, ' ').slice(0, 90), sub: `${p.source === 'instagram' ? 'Instagram' : 'Facebook'} · ${fmtDay(p.date)}${liveExport(p) ? ' · ' + t('Ya en el blog') : ''}`, run: () => openSocial(p) }));
     if (soc.length) groups.push({ group: t('Publicaciones de redes'), list: soc });
     if (cmds.length) groups.push({ group: t('Ajustes y acciones'), list: cmds.slice(0, 6).map((c) => ({ ...c, title: c.label })) });

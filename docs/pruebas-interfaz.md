@@ -13,6 +13,7 @@ Cada archivo de `test-ui/*.test.js` se ejecuta con `node --test`.
 | `timeline.test.js` | Línea temporal de Publicaciones y Blog |
 | `changelog.test.js` | Novedades por versión: diálogo, historial, filtros, inglés |
 | `detail.test.js` | Publicaciones en modo Detalle y Cuadrícula |
+| `perf.test.js` | Rendimiento con webs grandes (3.000 entradas, 15.000 fotos, 2.000 publicaciones, entrada de 250 bloques): ver `docs/rendimiento.md` |
 
 - **Mock compartido**: `test-ui/mock-api.js` → `installMock(page, { theme, config, version, lang, patch })`. `patch(api, H)` se ejecuta dentro de la página
   para cambiar o añadir métodos. Los métodos no definidos devuelven `{}` y los `onXxx` no hacen nada.

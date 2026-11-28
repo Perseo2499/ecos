@@ -152,6 +152,7 @@ function fixDraftShape() {
   if (draft.categories != null) draft.categories = A(draft.categories).map(String);
   if (!draft.blocks.length && window.BlockEditor?.create) draft.blocks = [window.BlockEditor.create('paragraph')];
 }
+let typingT = 0;
 function openEditor() {
   fixDraftShape();
   $('#sent').classList.add('hidden'); $('#send').classList.remove('hidden');
@@ -185,7 +186,18 @@ function openEditor() {
   if (!draft.blocks) draft.blocks = [];
   window.BlockEditor.mount(draft, {
     media: mediaPool(),
-    onChange: () => { window.BlockEditor.renderMedia(); window.FormatBar.review(); autosaveSoon(); renderShare(); renderSpectraNote(); },
+    // Al escribir (typing) solo se programa el guardado; el resto (bandeja, revisión, vista de compartir) se pone al día cuando se
+    // deja de teclear, para que cada letra no recalcule toda la entrada.
+    onChange: (typing) => {
+      if (typing === true) {
+        autosaveSoon();
+        clearTimeout(typingT);
+        typingT = setTimeout(() => { if (!editorOpen()) return; window.FormatBar.review(); renderShare(); renderSpectraNote(); }, 350);
+        return;
+      }
+      clearTimeout(typingT);
+      window.BlockEditor.renderMedia(); window.FormatBar.review(); autosaveSoon(); renderShare(); renderSpectraNote();
+    },
     onOpenMedia: (m) => {
       const pool = mediaPool();
       openLightbox(pool.map((x) => ({ type: x.type, src: x.url, poster: x.poster })), Math.max(0, pool.findIndex((x) => x.id === m.id)));

@@ -150,7 +150,7 @@ function loadBlogDates(found) {
   const sig = JSON.stringify(f);
   if (sig === blog.datesSig && (blog.datesFound === found || blog.datesBusy)) return;
   blog.datesSig = sig; blog.datesBusy = true; blog.datesFound = found;
-  Promise.resolve(window.api.blogDates?.(f)).then((r) => {
+  Promise.resolve(window.api.blogDates?.(blog.freshDates ? { ...f, fresh: true } : f)).then((r) => {
     if (blog.datesSig !== sig) return; // se cambió el filtro mientras llegaban
     blog.datesBusy = false;
     blog.dates = Array.isArray(r) ? r : null;
@@ -163,7 +163,8 @@ async function loadBlog() {
   const list = $('#b-list');
   list.innerHTML = `<p class="hint pad">${t('Cargando…')}</p>`;
   try {
-    const r = await window.api.blogList({ ...blogFilters(), page: blog.page, number: blog.per, order: blog.order });
+    const fresh = blog.fresh; blog.fresh = false; blog.freshDates = fresh; // «Actualizar» salta la caché corta de listas
+    const r = await window.api.blogList({ ...blogFilters(), page: blog.page, number: blog.per, order: blog.order, ...(fresh ? { fresh: true } : {}) });
     blog.loaded = true; blog.found = r.found; syncRange(); syncFindBtn();
     renderBlog(r.items); bhSync();
     if (r.cached) list.insertAdjacentHTML('afterbegin', `<p class="hint pad cache-note"><span class="ms">history</span> ${escHtml(Net.cacheNote(r.cached.at))}</p>`);
@@ -348,7 +349,7 @@ function syncMine() {
 }
 $('#b-mine').onchange = (e) => { try { localStorage.setItem('ecos-only-mine', e.target.checked ? '1' : '0'); } catch { /* sin almacenamiento */ } blog.page = 1; loadBlog(); };
 let bTimer; $('#b-search').oninput = () => { clearTimeout(bTimer); bTimer = setTimeout(() => { blog.page = 1; loadBlog(); }, 400); };
-$('#b-refresh').onclick = () => { blog.datesFound = -1; loadBlog(); };
+$('#b-refresh').onclick = () => { blog.datesFound = -1; blog.fresh = true; loadBlog(); };
 $('#b-prev').onclick = () => { blog.page--; loadBlog(); };
 $('#b-next').onclick = () => { blog.page++; loadBlog(); };
 // «Nueva»: en Entradas, un menú (entrada o página en Ecos, o WordPress); en Páginas, una página nueva directamente

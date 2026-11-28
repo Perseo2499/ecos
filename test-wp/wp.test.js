@@ -135,6 +135,9 @@ test('subir una foto y leerla de vuelta (context=edit)', async () => {
     assert.equal(await W.mediaExists(cfg, up.id), true);
     const found = await W.listMedia(cfg, { search: path.basename(file, '.png').slice(0, 12) });
     assert.ok(JSON.stringify(found).includes(String(up.id)), 'aparece en la biblioteca');
+    // con los campos reducidos (_fields) siguen llegando las medidas, el peso y el tipo para la rejilla
+    const it = found.items.find((x) => x.id === up.id);
+    assert.ok(it && it.url && it.type === 'image' && it.name, 'campos básicos de la biblioteca');
     S.img = { id: up.id, url: up.url, alt: 'Foto de prueba de Ecos' };
   } finally { fs.rmSync(file, { force: true }); }
 });
@@ -585,6 +588,11 @@ test('listados y calendario: Ecos ve la entrada creada', async () => {
   assert.ok(l.items.some((x) => x.id === S.postId), 'aparece en el listado del blog');
   const d = await W.listDates(cfg, { status: 'any', search: TAG });
   assert.ok(d.length >= 1);
+  // la caché corta de listas: la misma petición seguida devuelve lo mismo, `fresh` la salta y una escritura la vacía
+  const again = await W.listPosts(cfg, { status: 'any', search: TAG, number: 20 });
+  assert.deepEqual(again.items.map((x) => x.id), l.items.map((x) => x.id));
+  assert.ok((await W.listPosts(cfg, { status: 'any', search: TAG, number: 20, fresh: true })).items.some((x) => x.id === S.postId));
+  assert.ok(typeof l.items[0].image === 'string' && l.items[0].title, 'la lista trae título e imagen (miniatura) con los campos reducidos');
 });
 
 // ---------------------------------------------------------------------------------------------------------------------

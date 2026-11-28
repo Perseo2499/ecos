@@ -113,7 +113,7 @@ test('Publicaciones: modo Detalle y Cuadrícula', async () => {
   await shot('light-rejilla');
   await p.reload(); await wait(500); await p.click('[data-tab="posts"]'); await p.click('#load'); await wait(600);
   check('tras recargar sigue en Rejilla', await p.locator('#feed .prow').count() === 0 && await p.locator('#f-layout [data-l="grid"].active').count() === 1);
-  await p.click('#f-layout [data-l="detail"]'); await wait(400);
+  await p.click('#f-layout [data-l="detail"]'); await p.waitForFunction(() => document.querySelectorAll('#feed .prow').length >= 427, null, { timeout: 15000 }).catch(() => {});
   check('vuelve a Detalle', await p.locator('#feed .prow').count() === 427);
   // calendario oculta el conmutador
   await p.click('#f-view [data-v="cal"]'); await wait(300); check('calendario: sin conmutador', await p.locator('#f-layout').isHidden());

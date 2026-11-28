@@ -706,8 +706,8 @@ handle('draft:peekCss', () => require('./src/transform').PEEK_CSS);
 handle('spectra:convert', (blocks) => require('./src/spectra').convertSpectra(blocks));
 // Autoguardado del borrador en curso (para recuperarlo si se cierra el editor o la app)
 const autosaveFile = () => path.join(app.getPath('userData'), 'borrador-autoguardado.json');
-handle('draft:autosave', (data) => { fs.writeFileSync(autosaveFile(), store.seal(cfg, { ...data, savedAt: new Date().toISOString() })); return true; });
-handle('draft:autosaved', () => { try { return store.unseal(cfg, fs.readFileSync(autosaveFile(), 'utf8')); } catch { return null; } });
+handle('draft:autosave', async (data) => { await fs.promises.writeFile(autosaveFile(), store.seal(cfg, { ...data, savedAt: new Date().toISOString() })); return true; });
+handle('draft:autosaved', async () => { try { return store.unseal(cfg, await fs.promises.readFile(autosaveFile(), 'utf8')); } catch { return null; } });
 handle('draft:autosaveClear', () => { try { fs.unlinkSync(autosaveFile()); } catch { /* no había */ } return true; });
 // Historial de versiones de una entrada (revisiones de WordPress), ya en bloques de Ecos
 // Copias de Ecos antes de enviar (userData/send-backups): lista y carga en el editor (ya en bloques; no envía nada)
@@ -1242,12 +1242,18 @@ let mediaUsageCache = null; // { at, data }
 // Biblioteca entera guardada en el ordenador: se enseña al momento y luego solo se piden los cambios
 const mediaCacheFile = () => path.join(app.getPath('userData'), 'media-cache.json');
 let mediaPool = null; // { site, at, syncedAt, items }
-function readMediaCache() {
+// La copia puede pesar varios MB con miles de fotos: se lee y se escribe sin bloquear el hilo principal (fs.promises)
+async function readMediaCache() {
   if (mediaPool) return mediaPool;
-  try { const c = JSON.parse(fs.readFileSync(mediaCacheFile(), 'utf8')); if (c.site === cfg.wpUrl) mediaPool = c; } catch { /* sin copia */ }
+  try { const c = JSON.parse(await fs.promises.readFile(mediaCacheFile(), 'utf8')); if (c.site === cfg.wpUrl) mediaPool = c; } catch { /* sin copia */ }
   return mediaPool;
 }
-function saveMediaCache() { try { fs.writeFileSync(mediaCacheFile(), JSON.stringify(mediaPool)); } catch (e) { log('Copia de la biblioteca', e.message); } }
+let mediaSaving = Promise.resolve();
+function saveMediaCache() {
+  const json = JSON.stringify(mediaPool);
+  mediaSaving = mediaSaving.then(() => fs.promises.writeFile(mediaCacheFile(), json)).catch((e) => log('Copia de la biblioteca', e.message));
+  return mediaSaving;
+}
 async function fullMediaList() {
   const items = [];
   const first = await wpCall(() => wpself.listMedia(cfg, { page: 1, perPage: 100, type: 'all' }));
@@ -1268,7 +1274,7 @@ async function fullMediaList() {
 // force: volver a leerla entera (borrados incluidos). Si no, la copia guardada + lo nuevo o cambiado.
 async function mediaAll(force) {
   const now = new Date().toISOString();
-  const c = readMediaCache();
+  const c = await readMediaCache();
   if (!force && c?.items?.length) {
     if (Date.now() - new Date(c.syncedAt).getTime() > 60000) {
       try {

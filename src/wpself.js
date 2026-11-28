@@ -32,7 +32,21 @@ function netCause(e) {
   return txt ? ` (${txt}; ${code})` : (code || c.message) ? ` (${code || c.message})` : '';
 }
 
+// Caché en memoria de las listas del Blog (entradas y fechas) con caducidad corta: repetir la misma petición (volver a un filtro,
+// Inicio y Blog pidiendo lo mismo) no vuelve a ir a la web. Cualquier escritura (POST, PUT, DELETE) la vacía; `fresh: true` la salta.
+const LIST_TTL = 8000, listCache = new Map();
+function cachedList(cfg, kind, opts, fn) {
+  const { fresh, ...rest } = opts || {};
+  const key = kind + '|' + cfg.wpUrl + '|' + JSON.stringify(Object.keys(rest).sort().map((k) => [k, rest[k]]));
+  const hit = listCache.get(key);
+  if (!fresh && hit && Date.now() - hit.at < LIST_TTL) return hit.p;
+  const p = fn(rest).catch((e) => { if (listCache.get(key)?.p === p) listCache.delete(key); throw e; });
+  listCache.set(key, { at: Date.now(), p });
+  if (listCache.size > 40) listCache.delete(listCache.keys().next().value);
+  return p;
+}
 async function req(cfg, route, { method = 'GET', json, body, headers = {}, raw = false } = {}) {
+  if (method !== 'GET') listCache.clear();
   const url = `${base(cfg)}/wp-json${route}`;
   let res;
   try {
@@ -254,7 +268,8 @@ async function uploadFromUrls(cfg, urls) {
 const updateMedia = (cfg, id, fields) => req(cfg, `/wp/v2/media/${id}`, { method: 'POST', json: { alt_text: fields.alt ?? fields.alt_text } });
 
 // --- Biblioteca de medios ------------------------------------------------------------
-const MEDIA_FIELDS = 'id,date,modified_gmt,source_url,mime_type,media_type,alt_text,title,media_details,post';
+// Solo lo que Ecos usa de cada foto: medidas, peso y los tamaños (para las miniaturas); sin el «image_meta» ni el resto de media_details
+const MEDIA_FIELDS = 'id,date,modified_gmt,source_url,mime_type,media_type,alt_text,title,media_details.width,media_details.height,media_details.filesize,media_details.sizes,post';
 const normMedia = (m) => {
   const d = m.media_details || {}, sz = d.sizes || {};
   const file = decodeURIComponent((m.source_url || '').split('?')[0].split('/').pop() || '');
@@ -447,13 +462,22 @@ const prime = async (cfg, type) => { if (type && !['post', 'page'].includes(type
 const createPost = async (cfg, f) => { await prime(cfg, f.type); return savePost(cfg, `/wp/v2/${coll(f.type)}`, f); };
 const updatePost = async (cfg, id, f) => { await prime(cfg, f.type); return savePost(cfg, `/wp/v2/${coll(f.type)}/${id}`, f); };
 
+// Campos de cada entrada de las listas (el resto del JSON, sobre todo el contenido, no se pide)
+const POST_LIST_FIELDS = 'id,status,date_gmt,date,modified_gmt,modified,title,link,featured_media,categories,lang,excerpt,author,_embedded';
+// Miniatura de la imagen destacada incrustada: la mediana (o la pequeña) en vez de la foto original, que puede pesar varios MB
+const embeddedThumb = (p) => {
+  const m = p._embedded?.['wp:featuredmedia']?.[0];
+  const sz = m?.media_details?.sizes || {};
+  return (sz.medium || sz.medium_large || sz.thumbnail || {}).source_url || m?.source_url || '';
+};
 // author: id de una persona de WordPress (para «Solo las mías»)
-async function listPosts(cfg, { type = 'post', status = 'any', search = '', page = 1, number = 20, after, before, orderby = 'date', include, author, order = 'desc', lang } = {}) {
+const listPosts = (cfg, opts) => cachedList(cfg, 'posts', opts, (o) => listPostsNow(cfg, o));
+async function listPostsNow(cfg, { type = 'post', status = 'any', search = '', page = 1, number = 20, after, before, orderby = 'date', include, author, order = 'desc', lang } = {}) {
   if (!['post', 'page'].includes(type)) await cptTypes(cfg).catch(() => []);
   const cl = coll(type);
   const q = new URLSearchParams({
     status: status === 'any' ? 'publish,future,draft,pending,private' : status, per_page: String(number), page: String(page),
-    orderby: orderby === 'modified' ? 'modified' : 'date', order: order === 'asc' ? 'asc' : 'desc', context: 'edit', _embed: 'wp:featuredmedia,author',
+    orderby: orderby === 'modified' ? 'modified' : 'date', order: order === 'asc' ? 'asc' : 'desc', context: 'edit', _embed: 'wp:featuredmedia,author', _fields: POST_LIST_FIELDS,
     ...(Number(author) > 0 ? { author: String(Number(author)) } : {}),
     ...(search ? { search } : {}), ...(after ? { after } : {}), ...(before ? { before } : {}),
     ...(include?.length ? { include: include.join(',') } : {}),
@@ -466,7 +490,7 @@ async function listPosts(cfg, { type = 'post', status = 'any', search = '', page
     items: data.map((p) => ({
       id: p.id, type, status: p.status, date: p.date_gmt ? p.date_gmt + 'Z' : p.date, modified: p.modified_gmt ? p.modified_gmt + 'Z' : p.modified,
       title: p.title?.raw || p.title?.rendered || '(sin título)', url: p.link,
-      image: p._embedded?.['wp:featuredmedia']?.[0]?.source_url || '', featured: p.featured_media || 0,
+      image: embeddedThumb(p), featured: p.featured_media || 0,
       categories: (p.categories || []).map((id) => cats.find((c) => c.id === id)?.name).filter(Boolean),
       ...(typeof p.lang === 'string' && p.lang ? { lang: p.lang } : {}),
       excerpt: (p.excerpt?.raw || p.excerpt?.rendered || '').replace(/<[^>]+>/g, '').trim().slice(0, 160),
@@ -475,24 +499,27 @@ async function listPosts(cfg, { type = 'post', status = 'any', search = '', page
   };
 }
 // Solo las fechas (ligero) de todas las entradas que cumplen los filtros: alimenta la línea temporal del Blog.
-async function listDates(cfg, { type = 'post', status = 'any', search = '', after, before, include, author, max = 5000, lang } = {}) {
+const listDates = (cfg, opts) => cachedList(cfg, 'dates', opts, (o) => listDatesNow(cfg, o));
+async function listDatesNow(cfg, { type = 'post', status = 'any', search = '', after, before, include, author, max = 5000, lang } = {}) {
   if (!['post', 'page'].includes(type)) await cptTypes(cfg).catch(() => []);
   const cl = coll(type);
-  const out = [];
-  for (let page = 1; out.length < max; page++) {
-    const q = new URLSearchParams({
-      status: status === 'any' ? 'publish,future,draft,pending,private' : status, per_page: '100', page: String(page),
-      orderby: 'date', order: 'desc', _fields: 'id,date_gmt,date',
-      ...(Number(author) > 0 ? { author: String(Number(author)) } : {}),
-      ...(search ? { search } : {}), ...(after ? { after } : {}), ...(before ? { before } : {}),
-      ...(include?.length ? { include: include.join(',') } : {}),
-      ...(lang ? { lang: String(lang) } : {}),
-    });
-    const { data, res } = await req(cfg, `/wp/v2/${cl}?${q}`, { raw: true });
-    for (const p of data) out.push(p.date_gmt ? p.date_gmt + 'Z' : p.date);
-    if (data.length < 100 || out.length >= Number(res.headers.get('x-wp-total') || 0)) break;
-  }
-  return out;
+  const url = (page) => `/wp/v2/${cl}?${new URLSearchParams({
+    status: status === 'any' ? 'publish,future,draft,pending,private' : status, per_page: '100', page: String(page),
+    orderby: 'date', order: 'desc', _fields: 'id,date_gmt,date',
+    ...(Number(author) > 0 ? { author: String(Number(author)) } : {}),
+    ...(search ? { search } : {}), ...(after ? { after } : {}), ...(before ? { before } : {}),
+    ...(include?.length ? { include: include.join(',') } : {}),
+    ...(lang ? { lang: String(lang) } : {}),
+  })}`;
+  const dates = (data) => (data || []).map((p) => (p.date_gmt ? p.date_gmt + 'Z' : p.date));
+  // La primera página dice cuántas hay; el resto se pide en paralelo (pocas a la vez, sin saturar la web) y se junta en orden
+  const first = await req(cfg, url(1), { raw: true });
+  const totalPages = Math.min(Math.ceil(max / 100), Number(first.res.headers.get('x-wp-totalpages') || 1));
+  const pages = [dates(first.data)];
+  let next = 2;
+  const work = async () => { while (next <= totalPages) { const p = next++; pages[p - 1] = dates(await req(cfg, url(p))); } };
+  await Promise.all(Array.from({ length: Math.min(4, Math.max(0, totalPages - 1)) }, work));
+  return pages.flat().slice(0, Math.max(max, 100));
 }
 // Autor de una entrada de la lista (con _embed=author): { id, name, avatar }
 function postAuthor(p) {
