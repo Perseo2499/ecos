@@ -53,6 +53,9 @@ need_external "instalar el tema Astra" wp theme install astra --activate
 need_external "instalar Spectra, Kadence Blocks, GenerateBlocks y Yoast SEO" wp plugin install ultimate-addons-for-gutenberg kadence-blocks generateblocks wordpress-seo --activate
 # Rank Math: se instala SIN activar (el test lo activa y desactiva por la REST /wp/v2/plugins para no afectar al resto de casos)
 need_external "instalar Rank Math" wp plugin install seo-by-rank-math
+# Sin conectar la cuenta de Rank Math (o pulsar «Saltar» en su registro) el complemento NO pinta nada en la web (init_frontend sale si is_invalid_registration()):
+# la opción rank_math_registration_skip es la que guarda el botón «Skip Now» del asistente.
+wp option update rank_math_registration_skip 1 || exit 1
 
 # Astra 4 trae «sin barra lateral» por defecto: se activa a la derecha para poder probar los widgets en la web
 wp eval '$o = get_option( "astra-settings", array() ); $o = is_array( $o ) ? $o : array(); foreach ( array( "site-sidebar-layout", "single-post-sidebar-layout", "archive-post-sidebar-layout" ) as $k ) { $o[ $k ] = "right-sidebar"; } update_option( "astra-settings", $o );' || exit 1
