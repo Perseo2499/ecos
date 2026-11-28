@@ -327,18 +327,24 @@ function ecos_wp_rest_review() {
 		}
 		$out['returned'][] = $brief;
 	}
+	// Sin 'perm' => 'editable': con varios tipos y estados WP_Query puede devolver una lista vacía; se filtra por permiso aquí.
 	$recent = get_posts(
 		array(
 			'post_type'      => $types,
 			'post_status'    => array( 'publish', 'future', 'draft', 'pending', 'private' ),
-			'posts_per_page' => 12,
+			'posts_per_page' => 60,
 			'orderby'        => 'modified',
 			'order'          => 'DESC',
-			'perm'           => 'editable',
 			'no_found_rows'  => true,
 		)
 	);
 	foreach ( $recent as $p ) {
+		if ( count( $out['activity'] ) >= 12 ) {
+			break;
+		}
+		if ( ! current_user_can( 'edit_post', $p->ID ) ) {
+			continue;
+		}
 		$brief             = ecos_wp_post_brief( $p );
 		$brief['returned'] = (bool) get_post_meta( $p->ID, '_ecos_returned', true );
 		$out['activity'][] = $brief;
