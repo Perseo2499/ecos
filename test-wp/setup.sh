@@ -112,7 +112,7 @@ echo "::add-mask::$APP_PASS"
 echo "::add-mask::$CONTRIB_PASS"
 echo "::add-mask::$EDITOR_PASS"
 if [ -n "${GITHUB_ENV:-}" ]; then
-  { echo "WP_URL=$SITE"; echo "WP_USER=$USER_NAME"; echo "WP_APP_PASSWORD=$APP_PASS"; echo "WP_EXPECT_SPECTRA=1"; echo "WP_CONTRIB_USER=ecoscontrib"; echo "WP_CONTRIB_APP_PASSWORD=$CONTRIB_PASS"; echo "WP_EDITOR_USER=ecoseditor"; echo "WP_EDITOR_APP_PASSWORD=$EDITOR_PASS"; echo "WP_EXPECT_CPT=1"; [ "$LANG_OK" = 1 ] && echo "WP_EXPECT_LANG=1"; } >> "$GITHUB_ENV"
+  { echo "WP_URL=$SITE"; echo "WP_USER=$USER_NAME"; echo "WP_APP_PASSWORD=$APP_PASS"; echo "WP_EXPECT_SPECTRA=1"; echo "WP_CONTRIB_USER=ecoscontrib"; echo "WP_CONTRIB_APP_PASSWORD=$CONTRIB_PASS"; echo "WP_EDITOR_USER=ecoseditor"; echo "WP_EDITOR_APP_PASSWORD=$EDITOR_PASS"; echo "WP_EXPECT_CPT=1"; if [ "$LANG_OK" = 1 ]; then echo "WP_EXPECT_LANG=1"; fi; } >> "$GITHUB_ENV"
 else
   echo
   echo "Listo. Ejecuta:"
@@ -121,3 +121,4 @@ else
   echo "  npm run test:wp"
   echo "Para apagarlo: docker compose -f test-wp/docker-compose.yml down -v"
 fi
+exit 0
