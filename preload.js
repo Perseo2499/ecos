@@ -144,6 +144,13 @@ contextBridge.exposeInMainWorld('api', {
   // Blog
   blogList: (opts) => call('blog:list', opts),
   blogDates: (opts) => call('blog:dates', opts),
+  cptTypes: () => call('cpt:types'),
+  cptTerms: (type) => call('cpt:terms', type),
+  cptFields: (o) => call('cpt:fields', o),
+  langInfo: (o) => call('lang:info', o),
+  langBatch: (ids) => call('lang:batch', ids),
+  langSet: (o) => call('lang:set', o),
+  aiTranslate: (input) => call('ai:translate', input),
   blogSetStatus: (id, status, type) => call('blog:setStatus', id, status, type),
   blogTrash: (id, type) => call('blog:trash', id, type),
   blogDelete: (id, type) => call('blog:delete', id, type),

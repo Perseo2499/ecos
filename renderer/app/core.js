@@ -168,6 +168,7 @@ new ResizeObserver(([e]) => document.documentElement.style.setProperty('--appbar
 function showTab(name) {
   $$('header nav button, .tab').forEach((x) => x.classList.remove('active'));
   $(`header nav button[data-tab="${name}"]`).classList.add('active'); $('#tab-' + name).classList.add('active');
+  if (name === 'blog' && !blog.typesDone) { blog.typesDone = true; initBlogTypes().catch(() => {}); }
   if (name === 'blog' && !blog.loaded && !['structure', 'calendar', 'menus'].includes(blog.type)) loadBlog();
   if (name === 'posts') refreshExported();
   updateCount();

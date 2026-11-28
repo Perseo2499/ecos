@@ -51,11 +51,11 @@ test('estado del complemento: instalado, desactualizado y ausente', () => {
 test('el .zip del complemento contiene ecos.php y los assets, y es válido', () => {
   const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ecoszip-')), 'ecos.zip');
   const r = B.build(out);
-  assert.deepEqual(r.files.sort(), ['ecos/assets/ecos-anim.js', 'ecos/assets/ecos-carousel.js', 'ecos/assets/ecos-hit.js', 'ecos/assets/ecos-more.js', 'ecos/assets/ecos-videos.js', 'ecos/assets/ecos.css', 'ecos/ecos.php', 'ecos/includes/editor.php', 'ecos/includes/export.php', 'ecos/includes/render.php', 'ecos/includes/review.php', 'ecos/includes/seo.php', 'ecos/includes/seo2.php', 'ecos/includes/stats.php', 'ecos/includes/theme.php', 'ecos/uninstall.php']);
+  assert.deepEqual(r.files.sort(), ['ecos/assets/ecos-anim.js', 'ecos/assets/ecos-carousel.js', 'ecos/assets/ecos-hit.js', 'ecos/assets/ecos-more.js', 'ecos/assets/ecos-videos.js', 'ecos/assets/ecos.css', 'ecos/ecos.php', 'ecos/includes/editor.php', 'ecos/includes/export.php', 'ecos/includes/fields.php', 'ecos/includes/lang.php', 'ecos/includes/render.php', 'ecos/includes/review.php', 'ecos/includes/seo.php', 'ecos/includes/seo2.php', 'ecos/includes/stats.php', 'ecos/includes/theme.php', 'ecos/uninstall.php']);
   const buf = fs.readFileSync(out);
   assert.equal(buf.readUInt32LE(0), 0x04034b50);
   assert.equal(buf.readUInt32LE(buf.length - 22), 0x06054b50);
-  assert.equal(buf.readUInt16LE(buf.length - 22 + 10), 16);
+  assert.equal(buf.readUInt16LE(buf.length - 22 + 10), 18);
   assert.match(fs.readFileSync(path.join(B.PLUGIN, 'assets', 'ecos.css'), 'utf8'), /ecos-zoom/);
   const php = fs.readFileSync(path.join(B.PLUGIN, 'ecos.php'), 'utf8');
   assert.match(php, /Plugin Name:\s+Ecos para WordPress/);

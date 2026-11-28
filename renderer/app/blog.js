@@ -130,7 +130,7 @@ const blog = { loaded: false, type: 'post', page: 1, per: 20, found: 0, problem:
 // al elegir un mes se calcula en qué página cae, se pide esa página a WordPress y se baja hasta su encabezado.
 const blogLane = createDateLane({
   name: 'blog', label: t('Línea temporal del blog'), liveDrag: false,
-  isActive: () => $('#tab-blog').classList.contains('active') && ['post', 'page'].includes(blog.type) && !$('#b-list').classList.contains('hidden') && !document.body.classList.contains('editing'),
+  isActive: () => $('#tab-blog').classList.contains('active') && !['calendar', 'media', 'structure'].includes(blog.type) && !$('#b-list').classList.contains('hidden') && !document.body.classList.contains('editing'),
   stickyEl: () => $('#tab-blog .b-head'), padEl: () => $$('#b-list, #b-listhead, #b-bulk, #b-health'), list: () => $('#b-list'),
   watch: () => [$('#b-list')],
   async jump(key, o) {
@@ -167,7 +167,7 @@ async function loadBlog() {
     blog.loaded = true; blog.found = r.found; syncRange(); syncFindBtn();
     renderBlog(r.items); bhSync();
     if (r.cached) list.insertAdjacentHTML('afterbegin', `<p class="hint pad cache-note"><span class="ms">history</span> ${escHtml(Net.cacheNote(r.cached.at))}</p>`);
-    loadBlogDates(r.found); blogLane.bind();
+    loadBlogDates(r.found); blogLane.bind(); fillRowLangs(r.items);
   } catch (e) { errBox(list, e, loadBlog); }
 }
 // Menú emergente «⋯» (accesible con teclado: flechas, Inicio/Fin, Esc; se cierra al pulsar fuera)
@@ -252,7 +252,7 @@ function renderBlog(items) {
       <label class="b-check"><input type="checkbox"${bsel.has(it.id) ? ' checked' : ''}></label>
       ${it.image ? `<img src="${escHtml(it.image)}" loading="lazy" alt="">` : `<div class="noimg"><span class="ms">image</span></div>`}
       <div><div class="b-title"></div>
-        <div class="b-meta"><span class="st ${escHtml(it.status)}">${STATUS()[it.status] || escHtml(it.status)}</span>${fromEcos ? `<span class="st ecos" title="${t('Entrada creada desde Ecos')}"><img src="assets/logo-mark.svg" alt="">${t('Creada con Ecos')}</span>` : ''}${restored ? `<span class="st restored" title="${t('Recuperada de una copia de seguridad con Ecos')}"><span class="ms">settings_backup_restore</span>${t('Restaurada')}</span>` : ''}${bhChips(it)}${authorHtml(it.author)}${when}${it.categories.length ? ' · ' + escHtml(it.categories.join(', ')) : ''}</div>
+        <div class="b-meta"><span class="st ${escHtml(it.status)}">${STATUS()[it.status] || escHtml(it.status)}</span>${fromEcos ? `<span class="st ecos" title="${t('Entrada creada desde Ecos')}"><img src="assets/logo-mark.svg" alt="">${t('Creada con Ecos')}</span>` : ''}${restored ? `<span class="st restored" title="${t('Recuperada de una copia de seguridad con Ecos')}"><span class="ms">settings_backup_restore</span>${t('Restaurada')}</span>` : ''}${bhChips(it)}${langChipHtml(it)}${authorHtml(it.author)}${when}${it.categories.length ? ' · ' + escHtml(it.categories.join(', ')) : ''}</div>
         <div class="b-ex"></div></div>
       <div class="b-actions"></div>`;
     const title = decodeEntities(it.title);
@@ -273,7 +273,7 @@ function renderBlog(items) {
       b.className = 'btn ' + cls;
       b.textContent = label; b.onclick = () => busy(b, fn); actions.appendChild(b);
     };
-    const kind = it.type === 'page' ? 'page' : 'post';
+    const kind = it.type === 'page' ? 'page' : it.type || 'post';
     const trashed = it.status === 'trash';
     const doStatus = async (st, msg) => { exported = await window.api.blogSetStatus(it.id, st, it.type); toast(msg); loadBlog(); renderFeed(); };
     // A la vista: la acción principal (Editar en Ecos) y «Ver» si está publicada; el resto, en el menú «⋯»
@@ -327,6 +327,7 @@ $$('#b-type button').forEach((b) => b.onclick = async () => {
   $('#b-media').classList.toggle('hidden', !med);
   $('#b-menus').classList.toggle('hidden', !mnu);
   blog.type = b.dataset.type;
+  syncPtype();
   syncFindBtn();
   bsel.clear();
   if (st) return window.SiteStructure.open();
@@ -342,7 +343,7 @@ $('#b-order').onchange = (e) => { blog.order = e.target.value === 'asc' ? 'asc' 
 const mineOn = () => { try { return localStorage.getItem('ecos-only-mine') === '1' && !!CFG.wpMe?.id && CFG.wpMode === 'selfhosted'; } catch { return false; } };
 function syncMine() {
   const show = CFG.wpMode === 'selfhosted' && !!CFG.wpMe?.id;
-  $('#b-mine-wrap').classList.toggle('hidden', !show || blog.type !== 'post' && blog.type !== 'page');
+  $('#b-mine-wrap').classList.toggle('hidden', !show || ['calendar', 'media', 'structure'].includes(blog.type));
   $('#b-mine').checked = mineOn();
 }
 $('#b-mine').onchange = (e) => { try { localStorage.setItem('ecos-only-mine', e.target.checked ? '1' : '0'); } catch { /* sin almacenamiento */ } blog.page = 1; loadBlog(); };
@@ -364,6 +365,60 @@ $$('#b-new-menu [data-new]').forEach((x) => (x.onclick = () => {
   if (x.dataset.new === 'wp') return openNewInWp();
   newDraft({ type: x.dataset.new });
 }));
+// Tipos de contenido propios de la web (eventos, proyectos…) y idiomas (Polylang, WPML): filtros del Blog y «Nueva ▾»
+function syncPtype() {
+  const sel = $('#b-ptype'), types = CPT_TYPES || [];
+  sel.classList.toggle('hidden', !types.length || !(blog.type === 'post' || isCptSlug(blog.type)));
+  if (isCptSlug(blog.type) || blog.type === 'post') sel.value = blog.type;
+  syncLangFilter();
+}
+async function initBlogTypes() {
+  if (CFG.wpMode !== 'selfhosted' || !CFG.wpConnected) return;
+  const types = await cptTypes();
+  const sel = $('#b-ptype');
+  sel.innerHTML = `<option value="post">${escHtml(t('Entradas'))}</option>` + types.map((x) => `<option value="${escHtml(x.slug)}">${escHtml(x.name)}</option>`).join('');
+  $$('#b-new-menu [data-cpt]').forEach((x) => x.parentNode.removeChild(x));
+  const wpItem = newMenu().querySelector('[data-new="wp"]');
+  for (const x of types) {
+    const b = document.createElement('button');
+    b.dataset.new = x.slug; b.dataset.cpt = '1';
+    b.innerHTML = '<span class="ms">event_note</span><span></span>';
+    b.lastChild.textContent = t('Nuevo: {x}', { x: x.singular });
+    b.onclick = () => { closeNewMenu(); newDraft({ type: x.slug }); };
+    newMenu().insertBefore(b, wpItem);
+  }
+  syncPtype();
+  initBlogLangs();
+}
+$('#b-ptype').onchange = (e) => { blog.type = e.target.value; blog.problem = null; bsel.clear(); blog.page = 1; syncFindBtn(); syncPtype(); loadBlog(); };
+let BLOG_LANGS = null;
+async function initBlogLangs() {
+  try { BLOG_LANGS = await window.api.langInfo({}); } catch { BLOG_LANGS = null; }
+  const sel = $('#b-lang');
+  if (!BLOG_LANGS?.plugin || !(BLOG_LANGS.languages || []).length) { sel.classList.add('hidden'); return; }
+  sel.innerHTML = `<option value="">${escHtml(t('Todos los idiomas'))}</option>` + BLOG_LANGS.languages.map((l) => `<option value="${escHtml(l.code)}">${escHtml(l.name)}</option>`).join('');
+  syncLangFilter();
+}
+function syncLangFilter() { $('#b-lang').classList.toggle('hidden', !BLOG_LANGS?.plugin || ['calendar', 'media', 'structure'].includes(blog.type)); }
+$('#b-lang').onchange = () => { blog.page = 1; loadBlog(); };
+// Chip de idioma de cada fila: lo trae la API (Polylang) o se pide al complemento por lotes
+const langChipHtml = (it) => {
+  if (!BLOG_LANGS?.plugin) return '';
+  const c = it.lang ? Cpt.langChip(BLOG_LANGS, it.lang) : null;
+  return `<span class="st lang" data-lang-id="${it.id}" title="${escHtml(c ? c.name : '')}">${c ? escHtml(c.label) : ''}</span>`;
+};
+async function fillRowLangs(items) {
+  if (!BLOG_LANGS?.plugin) return;
+  const need = (items || []).filter((it) => !it.lang).map((it) => it.id);
+  let map = {};
+  if (need.length) { try { map = (await window.api.langBatch(need)) || {}; } catch { map = {}; } }
+  $$('#b-list .st.lang').forEach((el) => {
+    const code = map[el.dataset.langId];
+    if (!code) { if (!el.textContent) el.parentNode.removeChild(el); return; }
+    const c = Cpt.langChip(BLOG_LANGS, code);
+    if (c) { el.textContent = c.label; el.title = c.name; }
+  });
+}
 function openNewInWp() {
   if (CFG.wpMode === 'selfhosted') {
     const base = (CFG.wpUrl || '').replace(/\/$/, '');
@@ -376,7 +431,7 @@ function openNewInWp() {
 async function duplicateItems(items) {
   const done = [], errors = [];
   for (const it of items) {
-    try { done.push(await window.api.blogDuplicate(it.id, it.type === 'page' ? 'page' : 'post')); }
+    try { done.push(await window.api.blogDuplicate(it.id, it.type || 'post')); }
     catch (e) { errors.push(`«${decodeEntities(it.title)}»: ${friendlyError(e).text}`); }
   }
   loadBlog();
@@ -392,7 +447,7 @@ const bsel = new Map(); // id → entrada (se mantiene al cambiar de página)
 let bItems = [], bLast = -1;
 function renderBulk() {
   const n = bsel.size, bar = $('#b-bulk');
-  const listView = blog.type === 'post' || blog.type === 'page'; // la selección solo tiene sentido en la lista de entradas o páginas
+  const listView = !['calendar', 'media', 'structure'].includes(blog.type); // la selección solo tiene sentido en la lista de entradas o páginas
   bar.classList.toggle('hidden', !listView || !n); // la barra flotante solo sale con algo seleccionado
   $('#b-listhead').classList.toggle('hidden', !listView || !bItems.length);
   bar.classList.toggle('on', n > 0);
@@ -408,10 +463,10 @@ function renderBulk() {
     if (has((i) => ['draft', 'pending', 'private', 'trash'].includes(i.status))) acts.push(['publish', 'public', t('Publicar')]);
     if (has((i) => ['publish', 'future', 'pending', 'private'].includes(i.status))) acts.push(['draft', 'edit_note', t('Pasar a borrador')]);
     if (has((i) => i.status === 'trash')) acts.push(['restore', 'restore_from_trash', t('Restaurar como borrador')]);
-    if (blog.type !== 'page' && CFG.wpMode === 'selfhosted') acts.push(['cat-add', 'new_label', t('Añadir categoría')], ['cat-del', 'label_off', t('Quitar categoría')]);
+    if (blog.type === 'post' && CFG.wpMode === 'selfhosted') acts.push(['cat-add', 'new_label', t('Añadir categoría')], ['cat-del', 'label_off', t('Quitar categoría')]);
     if (CFG.wpMode === 'selfhosted' && has((i) => i.status !== 'trash')) acts.push(['links', 'link', t('Revisar enlaces')]);
-    if (blog.type !== 'page' && has((i) => i.status !== 'trash')) acts.push(['normalize', 'format_paint', t('Normalizar formato')]);
-    if (blog.type !== 'page' && CFG.wpMode === 'selfhosted' && has((i) => i.status !== 'trash')) acts.push(['origimg', 'high_quality', t('Recuperar fotos originales')]);
+    if (blog.type === 'post' && has((i) => i.status !== 'trash')) acts.push(['normalize', 'format_paint', t('Normalizar formato')]);
+    if (blog.type === 'post' && CFG.wpMode === 'selfhosted' && has((i) => i.status !== 'trash')) acts.push(['origimg', 'high_quality', t('Recuperar fotos originales')]);
     if (CFG.wpMode === 'selfhosted' && has((i) => i.status !== 'trash')) acts.push(['duplicate', 'content_copy', t('Duplicar')]);
     if (has((i) => i.status !== 'trash')) acts.push(['trash', 'delete', t('Papelera')]);
     acts.push(['delete', 'delete_forever', t('Borrar definitivamente')]);
@@ -587,6 +642,7 @@ $('#bfr-apply').onclick = (e) => busy(e.currentTarget, async () => {
 // Los filtros actuales de la lista (estado, búsqueda y periodo) para pedírselos a WordPress
 function blogFilters() {
   const f = { type: blog.type, status: $('#b-status').value, search: $('#b-search').value.trim() };
+  if (!$('#b-lang').classList.contains('hidden') && $('#b-lang').value) f.lang = $('#b-lang').value;
   if (mineOn() && CFG.wpMe?.id) f.author = CFG.wpMe.id; // «Solo las mías»
   if (blog.problem && blog.type === 'post') f.include = blog.problem.ids;
   const from = $('#b-from').value, to = $('#b-to').value;

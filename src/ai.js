@@ -553,6 +553,30 @@ ${html}
   return askStructured(aiCfg, [{ type: 'text', text: prompt }], Rewrite).then((r) => r.html);
 }
 
+
+// --- Traducción de una entrada (títulos, extracto y textos de bloques; la estructura y las fotos no se tocan) ---
+const Translate = z.object({
+  title: z.string().describe('Título traducido'),
+  excerpt: z.string().describe('Extracto traducido (vacío si no había)'),
+  items: z.array(z.object({ id: z.string().describe('El mismo id recibido'), html: z.string().describe('El texto traducido, con el mismo HTML en línea') })),
+});
+// items: [{ id, html }]; lang: nombre del idioma de destino. Devuelve los mismos ids con el texto traducido.
+async function translate(aiCfg, { title = '', excerpt = '', items = [], lang = 'inglés', extra = '' }) {
+  const prompt = `Eres traductor editorial. Traduce al idioma «${lang}» el título, el extracto y cada uno de los textos de una entrada de blog.
+Reglas:
+- Conserva exactamente las etiquetas HTML en línea (<a href>, <strong>, <em>, <br>…) y los enlaces; traduce solo el texto.
+- No añadas ni quites contenido, no resumas, no cambies nombres propios, cifras ni citas.
+- Devuelve todos los ids recibidos, cada uno con su texto traducido.
+${extra ? `- Indicaciones generales: ${extra}\n` : ''}
+Título: ${title}
+Extracto: ${excerpt}
+
+Textos (JSON):
+${JSON.stringify(items.map((x) => ({ id: x.id, html: x.html }))).slice(0, 60000)}`;
+  const r = await askStructured(aiCfg, [{ type: 'text', text: prompt }], Translate, { maxTokens: 32000 });
+  return { title: r.title.trim(), excerpt: r.excerpt.trim(), items: r.items };
+}
+
 const isCli = (aiCfg) => !!PROVIDERS[aiCfg?.active]?.cli;
 
-module.exports = { altText, cleanAlt, suggestCategories, refineTopics, isCli, research, rewrite, setCliLog, PROVIDERS, askStructured, listModels, testConnection, improveArticle, altTexts, seoSuggest };
+module.exports = { translate, altText, cleanAlt, suggestCategories, refineTopics, isCli, research, rewrite, setCliLog, PROVIDERS, askStructured, listModels, testConnection, improveArticle, altTexts, seoSuggest };

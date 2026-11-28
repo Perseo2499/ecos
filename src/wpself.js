@@ -5,6 +5,9 @@ const fs = require('fs');
 const path = require('path');
 const { AuthError } = require('./wpcom');
 const TS = require('./themestyles');
+const CPT = require('../renderer/cpt');
+const typesCache = { site: '', at: 0, list: [] };
+const taxCache = new Map();
 
 const base = (cfg) => {
   const raw = (cfg.wpUrl || '').trim();
@@ -94,7 +97,8 @@ function parseMe(d) {
 async function me(cfg) { return parseMe(await req(cfg, '/wp/v2/users/me?context=edit')); }
 // Fecha de última modificación de una entrada en WordPress (para avisar si alguien la cambió después de abrirla)
 async function postModified(cfg, id, type) {
-  const p = await req(cfg, `/wp/v2/${type === 'page' ? 'pages' : 'posts'}/${Number(id)}?context=edit&_fields=id,modified_gmt,status`);
+  await prime(cfg, type);
+  const p = await req(cfg, `/wp/v2/${coll(type)}/${Number(id)}?context=edit&_fields=id,modified_gmt,status`);
   return { id: p.id, status: p.status, modified: p.modified_gmt ? p.modified_gmt + 'Z' : null };
 }
 
@@ -341,15 +345,38 @@ function metaOf(f) {
 async function toRest(cfg, f) {
   const split = (s) => String(s || '').split(',').map((x) => x.trim()).filter(Boolean);
   const isPage = f.type === 'page'; // las páginas no tienen categorías ni etiquetas
+  const custom = !!f.type && !['post', 'page'].includes(f.type); // tipo de contenido propio: sus taxonomías son las suyas
+  const tax = custom ? await cptTaxonomies(cfg, f.type).catch(() => CPT.mapTaxonomies([])) : null;
+  const terms = {};
+  if (custom) {
+    if (tax.category && split(f.categories).length) terms[tax.category.restBase] = await termIds(cfg, tax.category.restBase, split(f.categories), !!f.createCategories);
+    if (tax.tag && split(f.tags).length) terms[tax.tag.restBase] = await termIds(cfg, tax.tag.restBase, split(f.tags), true);
+  }
+  const metaExtra = f.meta && typeof f.meta === 'object' ? f.meta : null;
+  const m = metaOf(f);
   return {
     title: f.title, content: f.content, status: f.status, excerpt: f.excerpt || '',
     ...(f.slug ? { slug: f.slug } : {}),
-    ...metaOf(f),
+    ...(metaExtra ? { meta: { ...(m.meta || {}), ...metaExtra } } : m),
+    ...(f.acf && typeof f.acf === 'object' && Object.keys(f.acf).length ? { acf: f.acf } : {}),
     ...(f.featured_image ? { featured_media: f.featured_image } : {}),
-    ...(isPage && f.parent !== undefined ? { parent: Number(f.parent) || 0 } : {}),
+    ...((isPage || custom) && f.parent !== undefined ? { parent: Number(f.parent) || 0 } : {}),
     ...(f.date ? { date_gmt: new Date(f.date).toISOString().slice(0, 19) } : {}),
-    ...(isPage ? {} : { categories: await categoryIds(cfg, split(f.categories), !!f.createCategories), tags: await tagIds(cfg, split(f.tags)) }),
+    ...(f.lang ? { lang: String(f.lang) } : {}),
+    ...(isPage || custom ? terms : { categories: await categoryIds(cfg, split(f.categories), !!f.createCategories), tags: await tagIds(cfg, split(f.tags)) }),
   };
+}
+// Términos (por nombre) de cualquier taxonomía: los que no existen se crean si create
+async function termIds(cfg, restBase, names, create) {
+  const ids = [];
+  for (const name of names) {
+    const found = await req(cfg, `/wp/v2/${restBase}?search=${encodeURIComponent(name)}&per_page=20&_fields=id,name`).catch(() => []);
+    const hit = found.find((x) => decode(x.name).toLowerCase() === name.toLowerCase());
+    if (hit) { ids.push(hit.id); continue; }
+    if (!create) continue;
+    try { ids.push((await req(cfg, `/wp/v2/${restBase}`, { method: 'POST', json: { name } })).id); } catch (e) { if (!/term_exists/.test(e.message)) throw e; }
+  }
+  return ids;
 }
 // Descripción para buscadores: Yoast SEO y Rank Math la guardan en un campo «meta» de la entrada, y solo
 // se puede escribir desde aquí si el plugin lo publica en el REST. Si no, se usa el extracto.
@@ -391,7 +418,7 @@ const fromRest = (p) => ({ ID: p.id, URL: p.link, status: p.status, date: p.date
 async function savePost(cfg, route, f) {
   const body = await toRest(cfg, f);
   let p = await req(cfg, route, { method: 'POST', json: body });
-  if (body.date_gmt) p = await ensureDate(cfg, f.type === 'page' ? 'pages' : 'posts', p, body.date_gmt);
+  if (body.date_gmt) p = await ensureDate(cfg, coll(f.type), p, body.date_gmt);
   return fromRest(p);
 }
 // Si la fecha guardada no coincide con la pedida (UTC, «AAAA-MM-DDTHH:MM:SS»), la envía de nuevo con la hora local de la web
@@ -410,25 +437,29 @@ async function setPostDate(cfg, id, iso, status, type) {
   const d = new Date(iso);
   if (isNaN(d)) throw new Error('Fecha no válida.');
   const dateGmt = d.toISOString().slice(0, 19);
-  const coll = type === 'page' ? 'pages' : 'posts';
-  let p = await req(cfg, `/wp/v2/${coll}/${id}`, { method: 'POST', json: { date_gmt: dateGmt, ...(status ? { status } : {}) } });
-  p = await ensureDate(cfg, coll, p, dateGmt);
+  const cl = coll(type);
+  let p = await req(cfg, `/wp/v2/${cl}/${id}`, { method: 'POST', json: { date_gmt: dateGmt, ...(status ? { status } : {}) } });
+  p = await ensureDate(cfg, cl, p, dateGmt);
   return { id: p.id, status: p.status, date: p.date_gmt ? p.date_gmt + 'Z' : p.date };
 }
-const createPost = (cfg, f) => savePost(cfg, `/wp/v2/${f.type === 'page' ? 'pages' : 'posts'}`, f);
-const updatePost = (cfg, id, f) => savePost(cfg, `/wp/v2/${f.type === 'page' ? 'pages' : 'posts'}/${id}`, f);
+// Los tipos propios necesitan conocer su ruta (rest_base) antes de usarse
+const prime = async (cfg, type) => { if (type && !['post', 'page'].includes(type)) await cptTypes(cfg).catch(() => []); };
+const createPost = async (cfg, f) => { await prime(cfg, f.type); return savePost(cfg, `/wp/v2/${coll(f.type)}`, f); };
+const updatePost = async (cfg, id, f) => { await prime(cfg, f.type); return savePost(cfg, `/wp/v2/${coll(f.type)}/${id}`, f); };
 
 // author: id de una persona de WordPress (para «Solo las mías»)
-async function listPosts(cfg, { type = 'post', status = 'any', search = '', page = 1, number = 20, after, before, orderby = 'date', include, author, order = 'desc' } = {}) {
-  const coll = type === 'page' ? 'pages' : 'posts';
+async function listPosts(cfg, { type = 'post', status = 'any', search = '', page = 1, number = 20, after, before, orderby = 'date', include, author, order = 'desc', lang } = {}) {
+  if (!['post', 'page'].includes(type)) await cptTypes(cfg).catch(() => []);
+  const cl = coll(type);
   const q = new URLSearchParams({
     status: status === 'any' ? 'publish,future,draft,pending,private' : status, per_page: String(number), page: String(page),
     orderby: orderby === 'modified' ? 'modified' : 'date', order: order === 'asc' ? 'asc' : 'desc', context: 'edit', _embed: 'wp:featuredmedia,author',
     ...(Number(author) > 0 ? { author: String(Number(author)) } : {}),
     ...(search ? { search } : {}), ...(after ? { after } : {}), ...(before ? { before } : {}),
     ...(include?.length ? { include: include.join(',') } : {}),
+    ...(lang ? { lang: String(lang) } : {}),
   });
-  const { data, res } = await req(cfg, `/wp/v2/${coll}?${q}`, { raw: true });
+  const { data, res } = await req(cfg, `/wp/v2/${cl}?${q}`, { raw: true });
   const cats = catCache || (await categories(cfg).catch(() => []));
   return {
     found: Number(res.headers.get('x-wp-total') || data.length),
@@ -437,14 +468,16 @@ async function listPosts(cfg, { type = 'post', status = 'any', search = '', page
       title: p.title?.raw || p.title?.rendered || '(sin título)', url: p.link,
       image: p._embedded?.['wp:featuredmedia']?.[0]?.source_url || '', featured: p.featured_media || 0,
       categories: (p.categories || []).map((id) => cats.find((c) => c.id === id)?.name).filter(Boolean),
+      ...(typeof p.lang === 'string' && p.lang ? { lang: p.lang } : {}),
       excerpt: (p.excerpt?.raw || p.excerpt?.rendered || '').replace(/<[^>]+>/g, '').trim().slice(0, 160),
       author: postAuthor(p),
     })),
   };
 }
 // Solo las fechas (ligero) de todas las entradas que cumplen los filtros: alimenta la línea temporal del Blog.
-async function listDates(cfg, { type = 'post', status = 'any', search = '', after, before, include, author, max = 5000 } = {}) {
-  const coll = type === 'page' ? 'pages' : 'posts';
+async function listDates(cfg, { type = 'post', status = 'any', search = '', after, before, include, author, max = 5000, lang } = {}) {
+  if (!['post', 'page'].includes(type)) await cptTypes(cfg).catch(() => []);
+  const cl = coll(type);
   const out = [];
   for (let page = 1; out.length < max; page++) {
     const q = new URLSearchParams({
@@ -453,8 +486,9 @@ async function listDates(cfg, { type = 'post', status = 'any', search = '', afte
       ...(Number(author) > 0 ? { author: String(Number(author)) } : {}),
       ...(search ? { search } : {}), ...(after ? { after } : {}), ...(before ? { before } : {}),
       ...(include?.length ? { include: include.join(',') } : {}),
+      ...(lang ? { lang: String(lang) } : {}),
     });
-    const { data, res } = await req(cfg, `/wp/v2/${coll}?${q}`, { raw: true });
+    const { data, res } = await req(cfg, `/wp/v2/${cl}?${q}`, { raw: true });
     for (const p of data) out.push(p.date_gmt ? p.date_gmt + 'Z' : p.date);
     if (data.length < 100 || out.length >= Number(res.headers.get('x-wp-total') || 0)) break;
   }
@@ -524,31 +558,37 @@ async function listPagesLite(cfg) {
 async function duplicatePost(cfg, id, type) {
   const p = await getPost(cfg, id, type);
   const isPage = type === 'page';
+  const ty = isPage ? 'page' : p.type || 'post';
   const created = await createPost(cfg, {
-    type: isPage ? 'page' : 'post', title: '(copia) ' + p.title, content: p.content, excerpt: p.excerpt, status: 'draft',
+    type: ty, title: '(copia) ' + p.title, content: p.content, excerpt: p.excerpt, status: 'draft',
     ...(isPage ? { parent: p.parent } : { categories: p.categories.join(','), tags: p.tags.join(',') }),
     ...(p.featured ? { featured_image: p.featured } : {}),
   });
-  return { id: created.ID, type: isPage ? 'page' : 'post', url: created.URL };
+  return { id: created.ID, type: ty, url: created.URL };
 }
 // type: la pestaña Blog indica si es entrada o página
-const coll = (type) => (type === 'page' ? 'pages' : 'posts');
-const setPostStatus = (cfg, id, status, type) => req(cfg, `/wp/v2/${coll(type)}/${id}`, { method: 'POST', json: { status } });
-const trashPost = (cfg, id, type) => req(cfg, `/wp/v2/${coll(type)}/${id}`, { method: 'DELETE' });
+const coll = (type) => CPT.collOf(type, typesCache.list);
+const setPostStatus = async (cfg, id, status, type) => { await prime(cfg, type); return req(cfg, `/wp/v2/${coll(type)}/${id}`, { method: 'POST', json: { status } }); };
+const trashPost = async (cfg, id, type) => { await prime(cfg, type); return req(cfg, `/wp/v2/${coll(type)}/${id}`, { method: 'DELETE' }); };
 // Entrada completa (contenido en bruto, para traer al editor los cambios hechos en WordPress)
 async function getPost(cfg, id, type) {
+  await prime(cfg, type);
   const p = await req(cfg, `/wp/v2/${coll(type)}/${id}?context=edit&_embed=wp:term,wp:featuredmedia`);
   const terms = (p._embedded?.['wp:term'] || []).flat();
   const fm = p._embedded?.['wp:featuredmedia']?.[0];
+  const custom = !!type && !['post', 'page'].includes(type);
+  const tax = custom ? await cptTaxonomies(cfg, type).catch(() => CPT.mapTaxonomies([])) : null;
   return {
-    categories: terms.filter((x) => x.taxonomy === 'category').map((x) => x.name),
-    tags: terms.filter((x) => x.taxonomy === 'post_tag').map((x) => x.name),
+    categories: terms.filter((x) => x.taxonomy === (tax?.category?.slug || 'category')).map((x) => decode(x.name)),
+    tags: terms.filter((x) => x.taxonomy === (tax?.tag?.slug || 'post_tag')).map((x) => decode(x.name)),
+    ...(custom ? { acf: p.acf && !Array.isArray(p.acf) ? p.acf : null, metaAll: p.meta && !Array.isArray(p.meta) ? p.meta : null } : {}),
+    ...(typeof p.lang === 'string' && p.lang ? { lang: p.lang } : {}),
     featuredImg: fm?.source_url ? { id: fm.id, url: fm.source_url, alt: fm.alt_text || '' } : null,
     id: p.id, status: p.status, url: p.link, date: p.date_gmt ? p.date_gmt + 'Z' : p.date, modified: p.modified_gmt ? p.modified_gmt + 'Z' : p.modified,
     title: p.title?.raw ?? '', excerpt: p.excerpt?.raw ?? '', content: p.content?.raw ?? '', featured: p.featured_media || null, slug: p.slug || '',
     seoDesc: p.meta?.[SEO_KEYS.yoast] || p.meta?.[SEO_KEYS.rankmath] || '',
     astra: TS.astraFromMeta(p.meta),
-    type: type === 'page' ? 'page' : 'post', parent: Number(p.parent) || 0,
+    type: type === 'page' ? 'page' : custom ? type : 'post', parent: Number(p.parent) || 0,
   };
 }
 // Versiones anteriores que WordPress ha guardado de una entrada (las más recientes primero)
@@ -581,7 +621,7 @@ async function allRaw(cfg, type, ids) {
   return out;
 }
 // Borrado definitivo (solo para el borrador de la vista previa, que Ecos vuelve a crear al enviar)
-const deletePost = (cfg, id, type) => req(cfg, `/wp/v2/${coll(type)}/${id}?force=true`, { method: 'DELETE' });
+const deletePost = async (cfg, id, type) => { await prime(cfg, type); return req(cfg, `/wp/v2/${coll(type)}/${id}?force=true`, { method: 'DELETE' }); };
 
 // Estado actual de varias entradas: { id: 'publish' | 'draft' | 'trash' | … | 'deleted' }
 async function postStatuses(cfg, ids) {
@@ -883,7 +923,96 @@ async function helperRender(cfg, payload) {
 }
 const themeStyles = (cfg, helperVersion) => TS.fetchTheme((route) => req(cfg, route), helperVersion);
 
-module.exports = { helperHasReview, parseNote, parseNotes, notesList, noteAdd, noteResolve, noteDelete, parseReview, reviewSummary, postChanges, setUploadGuard, findMediaByName, helperHasRender, helperRender, themeStyles, getJson, helperHasExport, helperExport, helperHasLock, me, parseMe, postModified, helperLock, helperUnlock, parseHelperLock, helperStats, parseHelperStats, helperSettings, helperSaveSettings, parseHelperSettings, helperStatus, helperPurge, parseHelperStatus, helperBundledVersion, detectSeo, seoInfo, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, listDates, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText, seoGet, seoSave };
+// --- Tipos de contenido propios, campos personalizados e idiomas (complemento 1.8.0 para lo que la API no da) ---
+// Tipos públicos con show_in_rest (menos entradas, páginas, internos y tiendas); se recuerdan 10 minutos
+async function cptTypes(cfg, { force = false } = {}) {
+  const site = base(cfg);
+  if (!force && typesCache.site === site && Date.now() - typesCache.at < 600000) return typesCache.list;
+  const raw = await req(cfg, '/wp/v2/types?context=edit').catch(() => req(cfg, '/wp/v2/types'));
+  typesCache.site = site; typesCache.at = Date.now(); typesCache.list = CPT.mapTypes(raw);
+  return typesCache.list;
+}
+async function cptTaxonomies(cfg, type) {
+  const key = base(cfg) + '|' + type;
+  if (taxCache.has(key)) return taxCache.get(key);
+  const raw = await req(cfg, `/wp/v2/taxonomies?type=${encodeURIComponent(type)}&context=edit`).catch(() => req(cfg, `/wp/v2/taxonomies?type=${encodeURIComponent(type)}`)).catch(() => ({}));
+  const m = CPT.mapTaxonomies(raw);
+  taxCache.set(key, m);
+  return m;
+}
+// Términos de la taxonomía «categoría» de un tipo (nombres) para el selector del editor; la etiqueta se escribe a mano
+async function cptTerms(cfg, type) {
+  const tax = await cptTaxonomies(cfg, type);
+  if (!tax.category) return { taxonomy: null, terms: [], hasTag: !!tax.tag };
+  if (tax.category.slug === 'category') return { taxonomy: tax.category, hasTag: !!tax.tag, terms: (catCache || await categories(cfg)).map((c) => ({ id: c.id, name: c.name })) };
+  const list = await req(cfg, `/wp/v2/${tax.category.restBase}?per_page=100&_fields=id,name`).catch(() => []);
+  return { taxonomy: tax.category, hasTag: !!tax.tag, terms: list.map((c) => ({ id: c.id, name: decode(c.name) })) };
+}
+const helperHasFields = (version) => !!version && !versionLess(version, '1.8.0');
+// Campos de una entrada (o de un tipo, sin id): con el complemento vienen sus definiciones y valores; sin él se deducen de `acf` y `meta` de la API
+async function fieldsLoad(cfg, { type = 'post', postId = 0, helper = false } = {}) {
+  if (helper) {
+    const q = new URLSearchParams({ type, ...(postId ? { post: String(postId) } : {}) });
+    const d = await req(cfg, `/ecos/v1/fields?${q}`);
+    const out = { ...CPT.fromHelper(d), via: 'helper' };
+    out.thumbs = await imageThumbs(cfg, out.fields, out.values);
+    return out;
+  }
+  if (!postId) return { fields: [], values: {}, acfRest: false, plugins: {}, via: 'rest' };
+  const p = await req(cfg, `/wp/v2/${coll(type)}/${Number(postId)}?context=edit&_fields=id,acf,meta`);
+  const fields = CPT.inferFields(p.acf, p.meta);
+  const values = {};
+  for (const f of fields) values[f.id] = f.source === 'acf' ? p.acf[f.name] : p.meta[f.name];
+  return { fields, values, acfRest: !!p.acf && !Array.isArray(p.acf), plugins: {}, via: 'rest', thumbs: {} };
+}
+// Miniaturas de los campos de imagen: { idFoto: url }
+async function imageThumbs(cfg, fields, values) {
+  const ids = [...new Set(fields.filter((f) => f.kind === 'image').map((f) => Number(CPT.toInput(f, values[f.id]))).filter((n) => n > 0))];
+  if (!ids.length) return {};
+  const list = await req(cfg, `/wp/v2/media?include=${ids.join(',')}&per_page=${ids.length}&_fields=id,source_url,media_details`).catch(() => []);
+  return Object.fromEntries(list.map((m) => [m.id, m.media_details?.sizes?.thumbnail?.source_url || m.source_url]));
+}
+// Guarda lo que la API no puede (ACF sin «Mostrar en REST» y Meta Box) por el complemento
+async function fieldsSave(cfg, postId, helperPart) {
+  if (!helperPart || (!helperPart.acf && !helperPart.metabox)) return [];
+  const r = await req(cfg, '/ecos/v1/fields', { method: 'POST', json: { post: Number(postId), ...helperPart } });
+  return Array.isArray(r?.saved) ? r.saved : [];
+}
+// Idiomas (Polylang o WPML). Con el complemento: ecos/v1/lang; sin él solo Polylang (pll/v1) y lo que traiga la propia entrada
+async function langInfo(cfg, { helper = false, postId = 0 } = {}) {
+  if (helper) {
+    const d = await req(cfg, '/ecos/v1/lang' + (postId ? `?post=${Number(postId)}` : ''));
+    return { ...CPT.normalizeLangs(d), post: postId ? CPT.normalizePostLang(d, postId) : null, via: 'helper' };
+  }
+  const root = await req(cfg, '/').catch(() => ({}));
+  const plugin = CPT.detectLangPlugin(root.namespaces || []);
+  if (plugin !== 'polylang') return { plugin, languages: [], default: '', post: null, via: 'rest' };
+  const rows = await req(cfg, '/pll/v1/languages').catch(() => []);
+  return { ...CPT.normalizeLangs({ plugin, languages: (rows || []).map((l) => ({ code: l.slug, name: l.name, locale: l.locale, flag: l.flag_url, default: !!l.is_default })) }), post: null, via: 'rest' };
+}
+// Idioma de cada entrada de la lista del Blog → { id: código }
+async function langBatch(cfg, ids) {
+  const d = await req(cfg, `/ecos/v1/lang?ids=${(ids || []).map(Number).filter(Boolean).slice(0, 200).join(',')}`);
+  return d?.langs && !Array.isArray(d.langs) ? d.langs : {};
+}
+// Pone el idioma de una entrada y, con translationOf, la enlaza como traducción de otra
+async function langSet(cfg, { postId, lang, translationOf = 0, type = 'post', helper = false }) {
+  if (helper) {
+    const r = await req(cfg, '/ecos/v1/lang', { method: 'POST', json: { post: Number(postId), lang, ...(translationOf ? { translation_of: Number(translationOf) } : {}) } });
+    return CPT.normalizePostLang(r, postId);
+  }
+  // Polylang gratuito: los campos `lang` y `translations` de la propia API
+  const body = { lang };
+  if (translationOf) {
+    const o = await req(cfg, `/wp/v2/${coll(type)}/${Number(translationOf)}?context=edit&_fields=lang,translations`);
+    body.translations = { ...(o.translations || {}), ...(o.lang ? { [o.lang]: Number(translationOf) } : {}), [lang]: Number(postId) };
+  }
+  const p = await req(cfg, `/wp/v2/${coll(type)}/${Number(postId)}`, { method: 'POST', json: body });
+  return CPT.normalizePostLang({ lang: p.lang, translations: p.translations }, postId);
+}
+
+
+module.exports = { cptTypes, cptTaxonomies, cptTerms, termIds, helperHasFields, fieldsLoad, fieldsSave, langInfo, langBatch, langSet, setUploadGuard, findMediaByName, helperHasRender, helperRender, themeStyles, getJson, helperHasExport, helperExport, helperHasLock, me, parseMe, postModified, helperLock, helperUnlock, parseHelperLock, helperStats, parseHelperStats, helperSettings, helperSaveSettings, parseHelperSettings, helperStatus, helperPurge, parseHelperStatus, helperBundledVersion, detectSeo, seoInfo, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, listDates, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText, helperHasReview, parseNote, parseNotes, notesList, noteAdd, noteResolve, noteDelete, parseReview, reviewSummary, postChanges, seoGet, seoSave };
 
 // Para módulos propios que hablan con la API (src/wpblocks.js)
 module.exports.request = req;

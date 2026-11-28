@@ -6,10 +6,11 @@ function featuredUrl() {
 }
 // Datos de la entrada para enviar o previsualizar
 const draftPayload = (status) => ({
-  postId: draft.postId, type: draft.type === 'page' ? 'page' : 'post', parent: isPageDraft() ? Number($('#d-parent').value) || 0 : 0,
+  postId: draft.postId, type: draft.type || 'post', parent: isPageDraft() || (isCptDraft() && !$('#d-parent-field').classList.contains('hidden')) ? Number($('#d-parent').value) || 0 : 0,
+  fields: cfPayload(), lang: draft.lang || '', translationOf: draft.translationOf || 0, noEditor: !!draft.noEditor,
   title: $('#d-title').value.trim(), excerpt: $('#d-excerpt').value.trim(), blocks: draft.blocks,
-  tags: isPageDraft() ? [] : $('#d-tags').value.split(',').map((x) => x.trim()).filter(Boolean),
-  categories: isPageDraft() ? [] : $$('#d-cats input:checked').map((i) => i.value),
+  tags: isPageDraft() || $('#d-tags-field').classList.contains('hidden') ? [] : $('#d-tags').value.split(',').map((x) => x.trim()).filter(Boolean),
+  categories: isPageDraft() || $('#d-cats').classList.contains('hidden') ? [] : $$('#d-cats input:checked').map((i) => i.value),
   status, scheduleAt: status === 'future' ? $('#d-schedule').value : null,
   featuredImageId: draft.featuredImageId, featuredImageUrl: featuredUrl(), keepDate: draft.isNew ? false : $('#d-keepdate').checked, date: draft.date, keys: draftKeys,
   slug: slugify($('#d-slug').value),
@@ -69,6 +70,7 @@ $('#ed-pull').onclick = (e) => busy(e.currentTarget, async () => {
 $('#send').onclick = (e) => busy(e.target, async () => {
   const when = $('input[name="d-when"]:checked').value;
   if (!$('#d-title').value.trim()) throw new Error(t('Escribe un título'));
+  cfValidate();
   if (when === 'publish') {
     const ac = window.A11yUI ? await window.A11yUI.beforePublish() : { ok: true, asked: false, line: '' };
     if (!ac.ok) return;
@@ -83,7 +85,7 @@ $('#send').onclick = (e) => busy(e.target, async () => {
     draftDirty = false; return;
   }
   window.Net?.sendDone();
-  exported = res.exported; lastSent = res; draft.postId = res.postId || draft.postId; draft.wpModified = res.modified || draft.wpModified; draft.previewOnly = false; window.api.autosaveClear().catch(() => {}); draftDirty = false; renderWpState(res.status, res.url);
+  exported = res.exported; lastSent = res; draft.postId = res.postId || draft.postId; draft.wpModified = res.modified || draft.wpModified; draft.previewOnly = false; cfSent(); if (res.fieldsError) toast(t('La entrada se guardó, pero algunos campos no: {e}', { e: res.fieldsError }), true); window.api.autosaveClear().catch(() => {}); draftDirty = false; renderWpState(res.status, res.url);
   await window.SeoPanel?.afterSend(res.postId || draft.postId);
   const pg = isPageDraft();
   $('#sent-text').textContent = res.status === 'publish' ? (pg ? t('¡Página publicada!') : t('¡Entrada publicada!'))
