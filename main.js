@@ -1333,6 +1333,15 @@ handle('media:setDates', async (list) => {
   if (mediaPool) { const m = new Map((list || []).map((x) => [x.id, x.date])); for (const it of mediaPool.items) if (m.has(it.id)) it.date = String(m.get(it.id)).slice(0, 19); saveMediaCache(); }
   return { done, failed };
 });
+let mediaFeaturedCache = null; // { at, data }
+handle('media:featured', async (force) => {
+  needSelfMedia();
+  if (!force && mediaFeaturedCache && Date.now() - mediaFeaturedCache.at < 2 * 60000) return mediaFeaturedCache.data;
+  const data = await wpCall(() => wpself.featuredMedia(cfg));
+  mediaFeaturedCache = { at: Date.now(), data };
+  return data;
+});
+handle('media:missing', async (ids) => { needSelfMedia(); return wpCall(() => wpself.mediaMissing(cfg, (ids || []).slice(0, 50))); });
 handle('media:usage', async (force) => {
   needSelfMedia();
   if (!force && mediaUsageCache && Date.now() - mediaUsageCache.at < 5 * 60000) return mediaUsageCache.data;

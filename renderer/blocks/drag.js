@@ -183,6 +183,15 @@
       box.innerHTML = img
         ? `<img src="${esc(img.url)}" alt=""><span class="cover-tag"><span class="ms fill">star</span>${t('Imagen destacada')}</span><button class="cover-del" title="${t('Quitar imagen destacada')}"><span class="ms">close</span></button>`
         : `<span class="ms">add_photo_alternate</span>${t('Arrastra aquí la imagen destacada (se quita del cuerpo)')}`;
+      // Elegirla de la biblioteca (abre en «Destacadas»), solo con WordPress propio
+      if (window.featuredPickerAvailable?.()) {
+        const pick = document.createElement('button');
+        pick.type = 'button'; pick.className = 'btn tonal small cover-pick';
+        pick.innerHTML = `<span class="ms">star</span>${img ? t('Cambiar…') : t('Elegir de la biblioteca…')}`;
+        pick.title = t('Elegir la imagen destacada entre tus fotos destacadas y la biblioteca');
+        pick.onclick = (e) => { e.stopPropagation(); window.openFeaturedPicker(); };
+        box.appendChild(pick);
+      }
       $('.cover-del', box)?.addEventListener('click', () => this.change(() => { this.draft.featuredImageId = null; this.draft.noAutoFeatured = true; }));
       if (!box.dataset.wired) {
         box.dataset.wired = '1';
@@ -194,7 +203,7 @@
           if (!this.isPhoto(K.drag)) return;
           e.preventDefault();
           const d = K.drag; K.drag = null; endDrag();
-          this.change(() => { const img = this.take(d); if (img) { this.draft.featuredImageId = img.id; this.draft.keepFeaturedInBody = false; this.liftFeatured(); } });
+          this.change(() => { const img = this.take(d); if (img) { window.recordRecentMedia?.([img]); this.draft.featuredImageId = img.id; this.draft.keepFeaturedInBody = false; this.liftFeatured(); } });
         });
       }
     },

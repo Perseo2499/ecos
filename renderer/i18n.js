@@ -347,6 +347,15 @@
     'Envío a medias: pulsa Continuar': 'Half-finished send: press Continue',
     'Ha cambiado en WordPress': 'Changed in WordPress',
     // 1.2 (editor completo)
+    'Vista': 'View', 'Destacadas': 'Featured', 'De entradas': 'From posts', 'Fotos que son la imagen destacada de alguna entrada o página': 'Photos used as the featured image of a post or page',
+    'Destacar': 'Add to Featured', 'Quitar de destacadas': 'Remove from Featured', 'Foto añadida a Destacadas': 'Photo added to Featured', 'Foto quitada de Destacadas': 'Photo removed from Featured',
+    '{n} foto(s) ya no existen en WordPress y se han quitado de Destacadas': '{n} photo(s) no longer exist in WordPress and were removed from Featured',
+    '{n} destacadas': '{n} featured', 'Usadas recientemente': 'Recently used', 'Ver todas': 'See all',
+    'De entrada': 'From a post', 'Imagen destacada de: {x}': 'Featured image of: {x}',
+    'Todavía no hay fotos destacadas. Pulsa la estrella de una foto para tenerla aquí.': 'No featured photos yet. Press the star on a photo to keep it here.',
+    'Ninguna foto es la imagen destacada de una entrada.': 'No photo is the featured image of a post.',
+    'Usar como imagen destacada': 'Use as featured image', 'Elegir de la biblioteca…': 'Choose from the library…', 'Cambiar…': 'Change…',
+    'Elegir la imagen destacada entre tus fotos destacadas y la biblioteca': 'Choose the featured image from your featured photos and the library',
     'Subtítulo': 'Subtitle', 'Antetítulo': 'Pre-title', 'Pie de foto': 'Caption', 'Título sobre la imagen': 'Title over the image', 'Enlace «saber más»': '«Read more» link',
     'Bloque de otro plugin': 'Block from another plugin', 'Bloque de {n}: se conserva tal cual y se edita lo seguro': '{n} block: kept as is, only the safe parts are editable', 'Contenedor': 'Container', 'Título avanzado': 'Advanced heading', 'Botones': 'Buttons', 'Botón': 'Button', 'Caja de información': 'Info box', 'Lista con iconos': 'Icon list', 'Elemento de lista': 'List item', 'Fila': 'Row', 'Columna': 'Column', 'Cuadrícula': 'Grid', 'Elemento': 'Element', 'Texto': 'Text', 'Dirección del enlace': 'Link address', 'Escribe una dirección que empiece por https://': 'Type an address starting with https://', 'Al pulsar': 'On click', 'Misma pestaña': 'Same tab', 'Nueva pestaña': 'New tab', 'Nivel del título': 'Heading level', 'Como está': 'As is', 'Justificada': 'Justified', 'Color del título': 'Title color', 'Color del texto': 'Text color', 'Color del botón': 'Button color', 'Cambiar imagen…': 'Change image…', 'Editar con el editor de WordPress': 'Edit with the WordPress editor', 'Bloque actualizado con el editor de WordPress.': 'Block updated with the WordPress editor.',
     // SEO completo, menús y widgets

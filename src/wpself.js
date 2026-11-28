@@ -67,7 +67,7 @@ async function req(cfg, route, { method = 'GET', json, body, headers = {}, raw =
     }
     if (res.status === 403) throw Object.assign(new AuthError(`WordPress: tu usuario no tiene permiso para esto (${msg})`), { code });
     if (res.status === 404 && code === 'rest_no_route') throw new Error('Esta web no tiene activada la API de WordPress (wp-json)');
-    throw new Error(`WordPress: ${msg}`);
+    throw Object.assign(new Error(`WordPress: ${msg}`), { status: res.status, code });
   }
   if (data === null && !raw) throw new Error(`WordPress: respuesta inesperada de ${url}. ¿Es la dirección correcta?`);
   return raw ? { data, res } : data;
@@ -217,6 +217,22 @@ async function uploadFile(cfg, filePath) {
   return uploadBuffer(cfg, fs.readFileSync(filePath), path.basename(filePath), MIME[ext] || 'application/octet-stream');
 }
 // ¿Existe este medio en la biblioteca?
+// Qué medios de la lista ya no existen en WordPress (solo los que responden 404; un fallo de red no cuenta)
+async function mediaMissing(cfg, ids) {
+  const missing = [];
+  for (const id of ids || []) {
+    try { await req(cfg, `/wp/v2/media/${Number(id)}?_fields=id`); } catch (e) { if (e.status === 404) missing.push(Number(id)); }
+  }
+  return missing;
+}
+// Qué fotos son la imagen destacada de alguna entrada o página → { [idMedio]: [{id, title}] }
+async function featuredMedia(cfg) {
+  const posts = [];
+  for (const coll of ['posts', 'pages']) {
+    posts.push(...(await allParallel(cfg, `/wp/v2/${coll}?context=edit&status=publish,draft,private,pending,future&_fields=id,title,featured_media`)));
+  }
+  return require('../renderer/favmedia').featuredMap(posts);
+}
 const mediaExists = (cfg, id) => req(cfg, `/wp/v2/media/${id}?_fields=id`).then((m) => !!m?.id, () => false);
 // Busca en la biblioteca un medio por su dirección (también por la de alguno de sus tamaños)
 async function findMediaByUrl(cfg, url) {
@@ -1039,7 +1055,7 @@ async function langSet(cfg, { postId, lang, translationOf = 0, type = 'post', he
 }
 
 
-module.exports = { cptTypes, cptTaxonomies, cptTerms, termIds, helperHasFields, fieldsLoad, fieldsSave, langInfo, langBatch, langSet, setUploadGuard, findMediaByName, helperHasRender, helperRender, themeStyles, getJson, helperHasExport, helperExport, helperHasLock, me, parseMe, postModified, helperLock, helperUnlock, parseHelperLock, helperStats, parseHelperStats, helperSettings, helperSaveSettings, parseHelperSettings, helperStatus, helperPurge, parseHelperStatus, helperBundledVersion, detectSeo, seoInfo, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, listDates, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText, helperHasReview, parseNote, parseNotes, notesList, noteAdd, noteResolve, noteDelete, parseReview, reviewSummary, postChanges, seoGet, seoSave };
+module.exports = { cptTypes, cptTaxonomies, cptTerms, termIds, helperHasFields, fieldsLoad, fieldsSave, langInfo, langBatch, langSet, setUploadGuard, findMediaByName, helperHasRender, helperRender, themeStyles, getJson, helperHasExport, helperExport, helperHasLock, me, parseMe, postModified, helperLock, helperUnlock, parseHelperLock, helperStats, parseHelperStats, helperSettings, helperSaveSettings, parseHelperSettings, helperStatus, helperPurge, parseHelperStatus, helperBundledVersion, detectSeo, seoInfo, allParallel, setMediaDate, postIndex, matchExisting, normTitle, listMedia, getMedia, deleteMedia, usedMediaIds, mediaUsage, mediaMissing, featuredMedia, changeCategory, mediaExists, findMediaByUrl, siteStructure, categoryPosts, saveStructure, createPage, createCategory, trashPage, deleteCategory, findExisting, uploadNamed, postStatuses, login, siteInfo, categories, uploadFile, uploadFromUrls, updateMedia, createPost, updatePost, listPosts, listDates, setPostDate, setPostStatus, trashPost, deletePost, getPost, listRevisions, updateContent, publicBase, publicUrl, updateFields, allRaw, toRest, listPagesLite, duplicatePost, blogHealth, postsText, helperHasReview, parseNote, parseNotes, notesList, noteAdd, noteResolve, noteDelete, parseReview, reviewSummary, postChanges, seoGet, seoSave };
 
 // Para módulos propios que hablan con la API (src/wpblocks.js)
 module.exports.request = req;

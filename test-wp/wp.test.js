@@ -194,6 +194,15 @@ test('entrada con muestras de TODOS los tipos de bloque: se crea y vuelve igual'
   if (cat) created.cats.push(cat.id);
 });
 
+test('fotos destacadas: Ecos ve qué foto es la imagen destacada de la entrada y detecta las que ya no existen (404)', async () => {
+  const map = await W.featuredMedia(cfg);
+  const mine = (map[S.img.id] || []).find((x) => x.id === S.postId);
+  assert.ok(mine, 'la foto aparece como imagen destacada de la entrada de prueba');
+  assert.equal(mine.title, TAG + ' · todos los bloques');
+  // una foto que existe no sale como «perdida»; una que no existe, sí (y un fallo de red no cuenta)
+  assert.deepEqual(await W.mediaMissing(cfg, [S.img.id, 999999991]), [999999991]);
+});
+
 // Yoast guarda su descripción en un campo «meta»; solo se puede escribir si el plugin lo publica en la API REST
 async function seoFields(desc) {
   if (!EXPECT_YOAST) return {};

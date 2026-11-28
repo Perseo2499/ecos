@@ -11,20 +11,65 @@ function dateFromFileName(name) {
 const fmtBytes = (n) => (!n ? '' : n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
 const mediaDate = (d) => { try { return new Date(d).toLocaleDateString(prefs().lang === 'en' ? 'en-GB' : 'es-ES', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return ''; } };
 
+// --- Fotos destacadas a mano (★) y usadas recientemente: guardadas en la configuración local, por web ----------
+const FM = window.FavMedia;
+const favList = () => FM.favs(CFG.mediaFavs, CFG.wpUrl);
+const recentList = () => FM.recents(CFG.mediaFavs, CFG.wpUrl);
+const isFavMedia = (id) => FM.isFav(CFG.mediaFavs, CFG.wpUrl, id);
+const saveFavs = () => window.api.setConfig({ mediaFavs: CFG.mediaFavs }).catch(() => {});
+const favsChanged = () => document.dispatchEvent(new CustomEvent('ecos-favs'));
+async function toggleFavMedia(m) {
+  const r = FM.toggleFav(CFG.mediaFavs, CFG.wpUrl, m);
+  CFG.mediaFavs = r.store; saveFavs(); favsChanged();
+  toast(r.on ? t('Foto añadida a Destacadas') : t('Foto quitada de Destacadas'));
+  return r.on;
+}
+// Anota las fotos que se acaban de añadir a una entrada («Usadas recientemente»)
+function recordRecentMedia(items) {
+  if (CFG.wpMode !== 'selfhosted') return;
+  CFG.mediaFavs = FM.addRecent(CFG.mediaFavs, CFG.wpUrl, items);
+  saveFavs(); favsChanged();
+}
+window.recordRecentMedia = recordRecentMedia;
+// Quita de las listas las fotos que ya no existen en WordPress (404) y avisa. Devuelve las que siguen existiendo.
+async function dropMissingFavs(items) {
+  const known = new Set([...favList(), ...recentList()].map((m) => m.id));
+  const ids = items.filter((m) => known.has(m.id)).map((m) => m.id);
+  if (!ids.length) return items;
+  let gone = [];
+  try { gone = (await window.api.mediaMissing(ids)) || []; } catch { return items; }
+  if (!gone.length) return items;
+  for (const id of gone) CFG.mediaFavs = FM.removeMissing(CFG.mediaFavs, CFG.wpUrl, id);
+  saveFavs(); favsChanged();
+  toast(t('{n} foto(s) ya no existen en WordPress y se han quitado de Destacadas', { n: gone.length }), true);
+  return items.filter((m) => !gone.includes(m.id));
+}
+const setStar = (b, on) => {
+  b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  const l = on ? t('Quitar de destacadas') : t('Destacar'); b.title = l; b.setAttribute('aria-label', l);
+  b.classList.toggle('on', on); const ic = b.querySelector('.ms'); if (ic) ic.classList.toggle('fill', on);
+};
+
 // Rejilla de medios con filtros (tipo, nombre, fechas, «Sin usar»), páginas y selección.
-// o = { usage: boolean (biblioteca: etiquetas de uso, fecha original y filtro «Sin usar»), onChange() }
+// o = { usage: boolean (biblioteca: etiquetas de uso, fecha original y filtro «Sin usar»), onChange(),
+//       shelves: filas «Destacadas» y «Usadas recientemente» arriba (selector), single: solo una selección,
+//       view: 'fav' | 'feat' (vista inicial), type: 'image' | 'video' (tipo inicial) }
 // En la biblioteca se lee la lista entera una vez (es ligera) y se filtra y pagina aquí, para poder filtrar por
 // la fecha original (la de la entrada donde se usa cada foto) y por «Sin usar». En el selector del editor se
 // piden las páginas a WordPress.
 function mediaGrid(host, o = {}) {
-  const st = { type: 'all', search: '', unused: false, from: '', to: '', page: 1, per: 40, total: 0, items: [], pool: null,
+  const st = { type: o.type || 'all', view: o.view || '', fpool: null, featMap: null, search: '', unused: false, from: '', to: '', page: 1, per: 40, total: 0, items: [], pool: null,
     sel: new Map(), usage: null, usageErr: false, loading: false, err: '', gen: 0 };
   const yearOpts = (() => { const y = new Date().getFullYear(); let h = ''; for (let k = y; k >= 2005; k--) h += `<option value="y${k}">${k}</option>`; return h; })();
   host.innerHTML = `<div class="mg-tools">
       <div class="seg mg-type">
-        <button data-t="all" class="active">${t('Todo')}</button>
-        <button data-t="image"><span class="ms">image</span>${t('Fotos')}</button>
-        <button data-t="video"><span class="ms">movie</span>${t('Vídeos')}</button>
+        <button data-t="all" class="${st.type === 'all' ? 'active' : ''}">${t('Todo')}</button>
+        <button data-t="image" class="${st.type === 'image' ? 'active' : ''}"><span class="ms">image</span>${t('Fotos')}</button>
+        <button data-t="video" class="${st.type === 'video' ? 'active' : ''}"><span class="ms">movie</span>${t('Vídeos')}</button>
+      </div>
+      <div class="seg mg-view" role="group" aria-label="${escHtml(t('Vista'))}">
+        <button data-v="fav" aria-pressed="${st.view === 'fav'}" class="${st.view === 'fav' ? 'active' : ''}"><span class="ms fill">star</span>${t('Destacadas')}</button>
+        <button data-v="feat" aria-pressed="${st.view === 'feat'}" class="${st.view === 'feat' ? 'active' : ''}" title="${escHtml(t('Fotos que son la imagen destacada de alguna entrada o página'))}"><span class="ms">article</span>${t('De entradas')}</button>
       </div>
       <div class="field search"><span class="ms">search</span><input type="search" class="mg-search" placeholder="${escHtml(t('Buscar por nombre…'))}"></div>
       ${o.usage ? `<label class="switch mg-unused"><input type="checkbox"><span>${t('Sin usar')}</span></label>` : ''}
@@ -43,6 +88,7 @@ function mediaGrid(host, o = {}) {
       <button class="btn text icon-only mg-range-clear hidden" title="${escHtml(t('Quitar el filtro de fechas'))}"><span class="ms">close</span></button>
       ${o.usage ? `<span class="spacer"></span><button class="btn tonal mg-selall"><span class="ms">select_all</span><span class="mg-selall-l"></span></button>` : ''}
     </div>
+    ${o.shelves ? '<div class="mg-shelves"></div>' : ''}
     <div class="mg-slot"></div>
     <div class="pager mg-pager">
       <button class="btn text icon-only" data-pg="first" title="${escHtml(t('Primera página'))}"><span class="ms">first_page</span></button>
@@ -79,7 +125,7 @@ function mediaGrid(host, o = {}) {
   };
 
   function render() {
-    q('.mg-count').textContent = st.total ? (st.unused ? t('{n} sin usar', { n: st.total }) : t('{n} archivos', { n: st.total })) : '';
+    q('.mg-count').textContent = st.total ? (st.view === 'fav' ? t('{n} destacadas', { n: st.total }) : st.unused ? t('{n} sin usar', { n: st.total }) : t('{n} archivos', { n: st.total })) : '';
     q('.mg-info').textContent = st.total ? t('página {p} de {t}', { p: st.page, t: pages() }) : '';
     q('[data-pg="first"]').disabled = q('[data-pg="prev"]').disabled = st.page <= 1 || st.loading;
     q('[data-pg="next"]').disabled = q('[data-pg="last"]').disabled = st.page >= pages() || st.loading;
@@ -88,6 +134,8 @@ function mediaGrid(host, o = {}) {
     const dated = !!(st.from || st.to);
     if (q('.mg-selall')) { q('.mg-selall-l').textContent = st.total ? t('Seleccionar las {n}', { n: st.total }) : t('Seleccionar todas'); q('.mg-selall').disabled = !st.total || !st.pool; }
     q('.mg-range').classList.toggle('active', dated); q('.mg-range-clear').classList.toggle('hidden', !dated);
+    renderShelves();
+    q('.mg-range').classList.toggle('nodate', !!st.view);
     if (st.loading && !st.items.length) { slot.innerHTML = `<p class="hint pad">${t('Cargando…')}</p>`; return; }
     if (st.err && !st.items.length) {
       slot.innerHTML = `<div class="mg-empty"><span class="ms">error</span><p></p><button class="btn tonal small mg-retry">${t('Reintentar')}</button></div>`;
@@ -96,35 +144,91 @@ function mediaGrid(host, o = {}) {
       return;
     }
     if (!st.items.length) {
-      slot.innerHTML = `<div class="mg-empty"><span class="ms">photo_library</span><p>${st.unused ? t('No hay medios sin usar. ¡Todo está en alguna entrada!') : st.search || dated ? t('No hay nada con estos filtros.') : t('Todavía no hay fotos ni vídeos en la biblioteca.')}</p></div>`;
+      slot.innerHTML = `<div class="mg-empty"><span class="ms">photo_library</span><p>${st.view === 'fav' ? t('Todavía no hay fotos destacadas. Pulsa la estrella de una foto para tenerla aquí.') : st.view === 'feat' ? t('Ninguna foto es la imagen destacada de una entrada.') : st.unused ? t('No hay medios sin usar. ¡Todo está en alguna entrada!') : st.search || dated ? t('No hay nada con estos filtros.') : t('Todavía no hay fotos ni vídeos en la biblioteca.')}</p></div>`;
       return;
     }
     slot.innerHTML = '<div class="mg-grid"></div>';
     const grid = slot.firstChild;
-    st.items.forEach((m, i) => {
-      const card = document.createElement('div');
-      card.className = 'mg-card' + (st.sel.has(m.id) ? ' sel' : '');
-      card.dataset.id = m.id;
-      const thumb = m.type === 'video'
-        ? `<video src="${escHtml(m.url)}#t=0.1" muted preload="metadata"></video><span class="ms fill play">play_circle</span>`
-        : `<img src="${escHtml(m.thumb || m.url)}" alt="${escHtml(m.alt)}" loading="lazy" decoding="async" draggable="false">`;
-      const uses = st.usage ? st.usage[m.id] : null;
-      const tag = !o.usage || !st.usage ? '' : uses?.length
+    st.items.forEach((m, i) => grid.appendChild(buildCard(m, st.items, i)));
+  }
+
+  // Selección (compartida por la rejilla y las filas de arriba)
+  const syncSel = () => $$('[data-id]', host).forEach((c) => { const on = st.sel.has(Number(c.dataset.id)); c.classList.toggle('sel', on); const i = c.querySelector('.mg-check input'); if (i) i.checked = on; });
+  const toggleSel = (m) => {
+    if (st.sel.has(m.id)) st.sel.delete(m.id);
+    else { if (o.single) st.sel.clear(); st.sel.set(m.id, m); }
+    syncSel(); changed();
+  };
+  // Tarjeta de un medio: miniatura, casilla, estrella, etiqueta y datos (las de las filas de arriba son solo miniatura)
+  function buildCard(m, list, i, mini = false) {
+    const card = document.createElement('div');
+    card.className = 'mg-card' + (mini ? ' mini' : '') + (st.sel.has(m.id) ? ' sel' : '');
+    card.dataset.id = m.id; card.tabIndex = 0;
+    const thumb = m.type === 'video'
+      ? `<video src="${escHtml(m.url)}#t=0.1" muted preload="metadata"></video><span class="ms fill play">play_circle</span>`
+      : `<img src="${escHtml(m.thumb || m.url)}" alt="${escHtml(m.alt)}" loading="lazy" decoding="async" draggable="false">`;
+    const star = `<button type="button" class="mg-star" aria-pressed="false"><span class="ms">star</span></button>`;
+    const feats = st.view === 'feat' ? st.featMap?.[m.id] : null;
+    const uses = st.usage ? st.usage[m.id] : null;
+    const tag = mini ? '' : feats?.length ? `<span class="mg-tag feat">${t('De entrada')}${feats.length > 1 ? ` (${feats.length})` : ''}</span>`
+      : !o.usage || !st.usage ? '' : uses?.length
         ? `<span class="mg-tag use" title="${escHtml(uses.map((u) => u.title).join('\n'))}">${t('En uso ({n})', { n: uses.length })}</span>`
         : `<span class="mg-tag free">${t('Sin usar')}</span>`;
+    if (feats?.length) card.title = t('Imagen destacada de: {x}', { x: feats.map((f) => f.title).join(' · ') });
+    let meta = '';
+    if (!mini) {
       const di = infoOf(m).di, isOrig = di.src && di.date.slice(0, 10) !== String(m.date).slice(0, 10);
       const why = di.src === 'post' ? t('Fecha de la entrada «{x}» · subida el {d}', { x: di.title || '', d: mediaDate(m.date) })
         : di.src === 'parent' ? t('Fecha de la entrada a la que se subió · subida el {d}', { d: mediaDate(m.date) })
         : t('Fecha escrita en el nombre del archivo · subida el {d}', { d: mediaDate(m.date) });
-      const dateTxt = isOrig ? `<span class="mg-orig" title="${escHtml(why)}"><span class="ms">event</span>${escHtml(mediaDate(di.date))}</span>` : escHtml(mediaDate(m.date));
-      const meta = [m.width ? `${m.width}×${m.height}` : '', fmtBytes(m.size)].filter(Boolean).join(' · ');
-      card.innerHTML = `<div class="mg-th">${thumb}</div><label class="mg-check"><input type="checkbox" ${st.sel.has(m.id) ? 'checked' : ''}></label>${tag}
-        <div class="mg-meta"><b title="${escHtml(m.name)}">${escHtml(m.name)}</b><span>${dateTxt}${meta ? ' · ' + escHtml(meta) : ''}</span></div>`;
-      const toggle = () => { st.sel.has(m.id) ? st.sel.delete(m.id) : st.sel.set(m.id, m); card.classList.toggle('sel', st.sel.has(m.id)); card.querySelector('input').checked = st.sel.has(m.id); changed(); };
-      card.onclick = (e) => { if (e.target.closest('.mg-check')) { e.preventDefault(); } toggle(); };
-      card.ondblclick = () => openLightbox(st.items.map((x) => ({ type: x.type, src: x.url, poster: x.thumb })), i);
-      grid.appendChild(card);
-    });
+      const dateTxt = isOrig ? `<span class="mg-orig" title="${escHtml(why)}"><span class="ms">event</span>${escHtml(mediaDate(di.date))}</span>` : m.date ? escHtml(mediaDate(m.date)) : '';
+      const info = [m.width ? `${m.width}×${m.height}` : '', fmtBytes(m.size)].filter(Boolean).join(' · ');
+      meta = `<div class="mg-meta"><b title="${escHtml(m.name || '')}">${escHtml(m.name || '')}</b><span>${dateTxt}${info ? (dateTxt ? ' · ' : '') + escHtml(info) : ''}</span></div>`;
+    }
+    card.innerHTML = `<div class="mg-th">${thumb}${star}</div><label class="mg-check"><input type="checkbox" tabindex="-1" ${st.sel.has(m.id) ? 'checked' : ''}></label>${tag}${meta}`;
+    const sb = card.querySelector('.mg-star');
+    setStar(sb, isFavMedia(m.id));
+    sb.onclick = (e) => { e.stopPropagation(); e.preventDefault(); toggleFavMedia(m); };
+    sb.ondblclick = (e) => e.stopPropagation();
+    card.onclick = (e) => { if (e.target.closest('.mg-check')) e.preventDefault(); toggleSel(m); };
+    card.onkeydown = (e) => {
+      if (e.target !== card) return;
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSel(m); }
+      else if (e.key === 'f' || e.key === 'F') { e.preventDefault(); toggleFavMedia(m); }
+    };
+    card.ondblclick = () => openLightbox(list.map((x) => ({ type: x.type, src: x.url, poster: x.thumb, fav: x })), i);
+    return card;
+  }
+  // Las estrellas de todas las tarjetas siguen a la lista de destacadas (también cuando cambia desde el visor u otra rejilla)
+  const syncStars = () => $$('.mg-card', host).forEach((c) => setStar(c.querySelector('.mg-star'), isFavMedia(Number(c.dataset.id))));
+  const onFavs = () => {
+    if (!host.isConnected) { document.removeEventListener('ecos-favs', onFavs); return; }
+    if (st.view === 'fav') load(); else { syncStars(); renderShelves(); }
+  };
+  document.addEventListener('ecos-favs', onFavs);
+  // Filas de arriba del selector: «Destacadas» y «Usadas recientemente» (solo sin filtros y en la primera página)
+  function renderShelves() {
+    const box = q('.mg-shelves'); if (!box) return;
+    const idle = !st.view && !st.search && !st.from && !st.to && st.page === 1;
+    const want = (l) => (st.type === 'all' ? l : l.filter((m) => m.type === st.type));
+    const rows = idle ? [['fav', t('Destacadas'), want(favList()), 'star'], ['recent', t('Usadas recientemente'), want(recentList()), 'history']].filter((r) => r[2].length) : [];
+    box.classList.toggle('hidden', !rows.length);
+    box.innerHTML = '';
+    for (const [k, title, all, ic] of rows) {
+      const items = k === 'fav' ? all.slice(0, 12) : all;
+      const row = document.createElement('section');
+      row.className = 'mg-shelf'; row.dataset.shelf = k;
+      row.innerHTML = `<h3><span class="ms${k === 'fav' ? ' fill' : ''}">${ic}</span>${escHtml(title)}${all.length > items.length ? `<button type="button" class="btn text small mg-shelf-all">${t('Ver todas')}</button>` : ''}</h3><div class="mg-strip"></div>`;
+      const strip = row.querySelector('.mg-strip');
+      items.forEach((m, i) => strip.appendChild(buildCard(m, items, i, true)));
+      row.querySelector('.mg-shelf-all')?.addEventListener('click', () => setView('fav'));
+      box.appendChild(row);
+    }
+  }
+  function setView(v) {
+    st.view = st.view === v ? '' : v;
+    $$('.mg-view button', host).forEach((b) => { const on = b.dataset.v === st.view; b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); });
+    refilter();
   }
 
   // Biblioteca: toda la lista una vez (ligera) → filtros y páginas aquí
@@ -153,11 +257,35 @@ function mediaGrid(host, o = {}) {
       return true;
     });
   }
+  // Vistas «Destacadas» y «De entradas»: la lista se arma aquí (copias guardadas, o la biblioteca entera y las entradas)
+  async function viewList(gen) {
+    const s = st.search.toLowerCase(), force = st.force; st.force = false;
+    const pool = async () => {
+      if (o.usage) { if (!st.pool) { const p = await loadPool(gen, force); if (!p) return null; st.pool = p; } return st.pool; }
+      return (st.fpool ||= await window.api.mediaAll(false));
+    };
+    let list;
+    if (st.view === 'fav') {
+      list = favList().map((m) => ({ name: '', ...m }));
+      if (o.usage) { const p = await pool(); if (!p) return []; const by = new Map(p.map((x) => [x.id, x])); list = list.map((m) => by.get(m.id) || m); }
+    } else {
+      const [p, map] = await Promise.all([pool(), st.featMap ? st.featMap : window.api.mediaFeatured(!!force)]);
+      if (!p) return [];
+      st.featMap = map || {};
+      list = FM.featuredItems(p, st.featMap);
+    }
+    return list.filter((m) => (st.type === 'all' || m.type === st.type) && (!s || `${m.name || ''} ${m.url}`.toLowerCase().includes(s)));
+  }
   async function load() {
     const gen = ++st.gen;
     st.loading = true; st.err = ''; render();
     try {
-      if (o.usage) {
+      if (st.view) {
+        const list = await viewList(gen);
+        if (gen !== st.gen) return;
+        st.total = list.length; st.page = Math.min(st.page, pages());
+        st.items = list.slice((st.page - 1) * st.per, st.page * st.per);
+      } else if (o.usage) {
         if (!st.pool) { st.items = []; render(); const p = await loadPool(gen, st.force); st.force = false; if (!p) return; st.pool = p; }
         if (gen !== st.gen) return;
         const list = filtered();
@@ -182,12 +310,14 @@ function mediaGrid(host, o = {}) {
     return window.api.mediaUsage(!!force).then((u) => { st.usage = u || {}; st.usageErr = false; }).catch((e) => { st.usage = null; st.usageErr = true; toast(t('No se pudo comprobar qué fotos se usan: {e}', { e: friendlyError(e).text }), true); });
   }
   async function reload(force) {
-    st.pool = null; st.force = !!force;
+    st.pool = null; st.fpool = null; st.featMap = null; st.force = !!force;
     if (o.usage) { st.usage = null; const p = usageReady(force).then(() => load()); if (st.unused || st.from || st.to) await p; else load(); return p; }
     return load();
   }
-  const refilter = () => { st.page = 1; return (o.usage && !st.usage && (st.unused || st.from || st.to)) ? usageReady().then(load) : load(); };
+  const refilter = () => { if (st.view) { st.page = 1; return load(); }
+    st.page = 1; return (o.usage && !st.usage && (st.unused || st.from || st.to)) ? usageReady().then(load) : load(); };
 
+  q('.mg-view').onclick = (e) => { const b = e.target.closest('button'); if (b) setView(b.dataset.v); };
   q('.mg-type').onclick = (e) => {
     const b = e.target.closest('button'); if (!b) return;
     $$('.mg-type button', host).forEach((x) => x.classList.toggle('active', x === b));
@@ -319,32 +449,67 @@ function askText(title, value = '', hint = '') {
 }
 
 // --- Selector «De la biblioteca» del editor ------------------------------------------
-function openMediaPicker() {
+// opts = { single, view, type, title, okLabel, onPick(foto) } · sin opts: añade fotos a la bandeja de la entrada
+function openMediaPicker(opts = {}) {
   if (CFG.wpMode !== 'selfhosted') return toast(t('La biblioteca de medios solo está disponible con «Mi web (wp-admin)» en Conexiones → WordPress.'), true);
   const m = document.createElement('div');
   m.className = 'modal mg-modal';
-  m.innerHTML = `<div class="modal-box wide"><h2><span class="ms fill modal-icon">photo_library</span>${t('De la biblioteca')}</h2>
+  m.innerHTML = `<div class="modal-box wide" role="dialog" aria-modal="true"><h2><span class="ms fill modal-icon">${opts.single ? 'star' : 'photo_library'}</span>${escHtml(opts.title || t('De la biblioteca'))}</h2>
     <div class="mg-host"></div>
-    <div class="modal-actions"><span class="hint mg-picked"></span><span class="spacer"></span><button class="btn text" data-r="0">${t('Cancelar')}</button><button class="btn filled" data-r="1" disabled><span class="ms">add</span>${t('Añadir a la entrada')}</button></div></div>`;
+    <div class="modal-actions"><span class="hint mg-picked"></span><span class="spacer"></span><button class="btn text" data-r="0">${t('Cancelar')}</button><button class="btn filled" data-r="1" disabled><span class="ms">${opts.single ? 'check' : 'add'}</span>${escHtml(opts.okLabel || t('Añadir a la entrada'))}</button></div></div>`;
   const add = m.querySelector('[data-r="1"]');
   const sync = () => { const n = g.sel.size; add.disabled = !n; m.querySelector('.mg-picked').textContent = n ? t('{n} seleccionadas', { n }) : ''; };
-  const g = mediaGrid(m.querySelector('.mg-host'), { usage: false, onChange: sync });
+  const g = mediaGrid(m.querySelector('.mg-host'), { usage: false, onChange: sync, shelves: !opts.single, single: !!opts.single, view: opts.view || '', type: opts.type });
   const close = () => { m.remove(); document.removeEventListener('keydown', key, true); };
   const key = (e) => { if (e.key === 'Escape' && !$('#lightbox:not(.hidden)')) { e.stopPropagation(); close(); } };
   document.addEventListener('keydown', key, true);
   m.querySelector('[data-r="0"]').onclick = close;
   m.addEventListener('mousedown', (e) => { if (e.target === m) close(); });
-  add.onclick = () => {
-    const picked = [...g.sel.values()].map((x) => ({ id: x.id, url: x.type === 'video' ? x.url : (x.large || x.url), type: x.type, alt: x.alt || '' }));
+  add.onclick = async () => {
+    add.disabled = true;
+    // las que vienen de Destacadas o Recientes pueden haberse borrado de WordPress: se comprueba antes de usarlas
+    const got = await dropMissingFavs([...g.sel.values()]);
+    if (!got.length) { g.clear(); return; }
+    const picked = got.map((x) => ({ id: x.id, url: x.type === 'video' ? x.url : (x.large || x.url), type: x.type, alt: x.alt || '', thumb: x.thumb || '', name: x.name || '' }));
+    recordRecentMedia(got);
+    close();
+    if (opts.onPick) return opts.onPick(picked[0]);
     draft.extraMedia = [...(draft.extraMedia || []), ...picked.filter((p) => !(draft.extraMedia || []).some((e) => e.id === p.id))];
     window.BlockEditor.media = mediaPool(); window.BlockEditor.renderMedia();
     toast(t('{n} archivo(s) añadidos a la bandeja', { n: picked.length }));
-    close();
   };
   document.body.appendChild(m);
   g.reload();
+  return g;
 }
-$('#d-media-lib')?.addEventListener('click', openMediaPicker);
+// Elegir la imagen destacada de la entrada desde la biblioteca, abriendo directamente en «Destacadas» si hay alguna
+function openFeaturedPicker() {
+  const E = window.BlockEditor;
+  openMediaPicker({
+    single: true, type: 'image', view: favList().some((f) => f.type !== 'video') ? 'fav' : '',
+    title: t('Imagen destacada'), okLabel: t('Usar como imagen destacada'),
+    onPick: (img) => {
+      const one = { id: img.id, url: img.url, type: 'image', alt: img.alt || '', thumb: img.thumb };
+      if (!(draft.extraMedia || []).some((e) => e.id === one.id)) draft.extraMedia = [...(draft.extraMedia || []), one];
+      E.media = mediaPool();
+      E.change(() => { draft.featuredImageId = one.id; draft.keepFeaturedInBody = false; draft.noAutoFeatured = false; E.liftFeatured(); });
+      E.renderMedia?.();
+    },
+  });
+}
+window.openFeaturedPicker = openFeaturedPicker;
+window.featuredPickerAvailable = () => CFG.wpMode === 'selfhosted';
+// Estrella del visor de fotos (solo en las fotos de la biblioteca)
+{
+  const lbFav = () => $('#lightbox .lb-fav');
+  const lbItem = () => (typeof lb !== 'undefined' ? lb.items[lb.i] : null);
+  const sync = () => { const b = lbFav(), it = lbItem(); if (!b) return; b.classList.toggle('hidden', !it?.fav); if (it?.fav) setStar(b, isFavMedia(it.fav.id)); };
+  window.syncLightboxFav = sync;
+  if (lbFav()) lbFav().onclick = (e) => { e.stopPropagation(); const it = lbItem(); if (it?.fav) toggleFavMedia(it.fav).then(sync); };
+  document.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F') && !$('#lightbox').classList.contains('hidden') && lbItem()?.fav) { e.preventDefault(); lbFav().click(); } });
+  document.addEventListener('ecos-favs', sync);
+}
+$('#d-media-lib')?.addEventListener('click', () => openMediaPicker());
 
 // --- Mejorar fotos con IA (Real-ESRGAN en este ordenador) -----------------------------
 const aiIsWindows = () => navigator.userAgent.includes('Windows');

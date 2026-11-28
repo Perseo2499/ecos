@@ -8,6 +8,16 @@
 
   const ENTRIES = [
     {
+      version: '3.9.0', date: '2026-11-28',
+      title: c('Fotos destacadas a mano', 'Hand-picked featured photos'),
+      new: [
+        c('Marca fotos y vídeos con una estrella (al pasar el ratón, con la tecla F o en el visor) y tenlos a mano en «Destacadas», en la Biblioteca de medios y en el selector «De la biblioteca», sin tener que buscarlos.', 'Mark photos and videos with a star (on hover, with the F key or in the viewer) and keep them at hand in "Featured", in the Media library and in the "From the library" picker, with no need to search for them.'),
+        c('El selector del editor muestra arriba tus Destacadas y las fotos «Usadas recientemente» (las últimas 24 que añadiste a entradas). Cada web tiene sus propias listas y, si una foto ya no existe en WordPress, se quita sola con un aviso.', 'The editor picker shows your Featured photos and the ones "Recently used" (the last 24 you added to posts) at the top. Each site has its own lists and, if a photo no longer exists in WordPress, it is removed automatically with a notice.'),
+        c('Nuevo filtro «De entradas»: las fotos que son la imagen destacada de alguna entrada o página, con el título de la entrada al pasar el ratón.', 'New "From posts" filter: the photos used as the featured image of a post or page, with the post title on hover.'),
+        c('En la imagen destacada de la entrada, «Elegir de la biblioteca…» abre el selector directamente en tus Destacadas.', 'On a post\'s featured image, "Choose from the library…" opens the picker straight on your Featured photos.'),
+      ],
+    },
+    {
       version: '3.8.1', date: '2026-11-28',
       title: c('Describir fotos con Claude Code', 'Describing photos with Claude Code'),
       fixed: [

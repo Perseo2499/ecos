@@ -67,7 +67,7 @@
       lbl.style.opacity = a;
       const ic = $('.vnav-ic', it);
       ic.style.transform = `scale(${0.7 + 0.3 * a})`;
-      ic.style.opacity = 0.3 + 0.7 * a;
+      ic.style.opacity = 0.55 + 0.45 * a; // sobre la franja gris clara, los iconos sin elegir siguen viéndose
       it.style.transform = `translateX(${cx}px) translateX(-50%)`;
     });
     pages();

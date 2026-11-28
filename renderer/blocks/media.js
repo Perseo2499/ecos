@@ -18,7 +18,7 @@
         <input class="alt" placeholder="${t('Descripción (alt)')}" draggable="false">`;
       $('.alt', fig).value = img.alt || '';
       $('.alt', fig).oninput = (e) => { img.alt = e.target.value; this.onChange(); };
-      $('.star', fig).onclick = () => this.change(() => { this.draft.featuredImageId = img.id; this.draft.keepFeaturedInBody = false; this.liftFeatured(); });
+      $('.star', fig).onclick = () => { window.recordRecentMedia?.([img]); this.change(() => { this.draft.featuredImageId = img.id; this.draft.keepFeaturedInBody = false; this.liftFeatured(); }); };
       $('.del', fig).onclick = remove;
       $(isVid ? 'video' : 'img', fig).onclick = () => this.onOpenMedia(img);
       if (isVid) {

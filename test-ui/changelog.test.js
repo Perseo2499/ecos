@@ -91,14 +91,14 @@ test('novedades y registro de cambios (diálogo tras actualizar, Ajustes, filtro
   await g.close();
 
   // 4) actualización de una versión que esta app no conoce: notas de la release o enlace
-  const h = await open(b, { version: '3.5.0', lastSeen: '3.5.0', update: { state: 'ready', version: '3.9.0', notes: '<h2>Novedades</h2><ul><li>Algo nuevo de la 3.9</li><li>Otra cosa</li></ul>' } });
+  const h = await open(b, { version: '3.5.0', lastSeen: '3.5.0', update: { state: 'ready', version: '9.9.0', notes: '<h2>Novedades</h2><ul><li>Algo nuevo de la 9.9</li><li>Otra cosa</li></ul>' } });
   await goUpdates(h);
   const it = await h.locator('#cl-incoming').innerText();
-  assert.ok(it.includes('Qué trae la 3.9.0') && it.includes('Algo nuevo de la 3.9'));
-  await h.click('#cl-rel'); assert.ok((await h.evaluate(() => window.__opened)).endsWith('/v3.9.0'));
+  assert.ok(it.includes('Qué trae la 9.9.0') && it.includes('Algo nuevo de la 9.9'));
+  await h.click('#cl-rel'); assert.ok((await h.evaluate(() => window.__opened)).endsWith('/v9.9.0'));
   await shot(h, 'cl-light-desconocida');
   await h.close();
-  const h2 = await open(b, { version: '3.5.0', lastSeen: '3.5.0', update: { state: 'downloading', version: '3.9.0', percent: 10 } });
+  const h2 = await open(b, { version: '3.5.0', lastSeen: '3.5.0', update: { state: 'downloading', version: '9.9.0', percent: 10 } });
   await goUpdates(h2); assert.ok((await h2.locator('#cl-incoming').innerText()).includes('Todavía no tenemos'));
   await h2.close();
 

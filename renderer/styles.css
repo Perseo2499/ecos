@@ -1025,9 +1025,9 @@ img.gl-copy { object-fit: contain; }
 /* ---- Barra Vinilo (en la cabecera) ---- */
 .vnav { display: none; }
 :root[data-vinyl="on"] .vnav { display: block; position: relative; flex: none; margin: 0 auto;
-  height: 46px; padding: 5px; border-radius: 28px; background: #1c1c1c;
+  height: 46px; padding: 5px; border-radius: 28px; background: #3b3b3b; /* más claro que la píldora negra: se ve dónde estás */
   touch-action: none; user-select: none; cursor: pointer; }
-.vnav-pill { position: absolute; left: 5px; top: 5px; height: 36px; border-radius: 22px; background: #000; }
+.vnav-pill { position: absolute; left: 5px; top: 5px; height: 36px; border-radius: 22px; background: #000; box-shadow: 0 1px 4px rgba(0, 0, 0, .45); }
 .vnav-item { position: absolute; left: 5px; top: 5px; height: 36px; display: flex; align-items: center; color: #fff; pointer-events: none; }
 .vnav-ic { display: grid; place-items: center; width: 20px; height: 20px; }
 .vnav-ic svg { fill: currentColor; width: 20px; height: 20px; }
@@ -1447,6 +1447,34 @@ body.locked > *:not(#lock):not(#toast):not(.dlg-scrim) { visibility: hidden; }
 .mg-modal .modal-box.wide { width: min(900px, 94vw); }
 .mg-modal .modal-actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
 .mg-modal .mg-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+/* Fotos destacadas a mano: estrella, filas de arriba y vista «De entradas» */
+.mg-view button[aria-pressed="true"] .ms { color: var(--primary); font-variation-settings: 'FILL' 1; }
+.mg-range.nodate > :not(.spacer):not(.mg-selall) { display: none; }
+.mg-modal .mg-range.nodate { display: none; }
+.mg-card:focus-visible { outline-color: var(--primary); outline-style: dashed; }
+.mg-star { position: absolute; right: 6px; bottom: 6px; z-index: 2; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%;
+  background: rgba(0,0,0,.55); color: #fff; cursor: pointer; opacity: 0; transition: opacity .15s, transform .15s, background .15s; }
+.mg-star .ms { font-size: 20px; }
+.mg-card:hover .mg-star, .mg-card:focus-within .mg-star, .mg-star:focus-visible, .mg-star.on { opacity: 1; }
+.mg-star.on { color: #ffd54a; }
+.mg-star:hover { transform: scale(1.12); background: rgba(0,0,0,.75); }
+.mg-star:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+@media (hover: none) { .mg-star { opacity: 1; } }
+.mg-tag.feat { max-width: calc(100% - 44px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: var(--primary-container); color: var(--on-primary-container, var(--on-surface)); }
+.mg-shelves { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; padding: 10px 12px 12px; border-radius: var(--r-l); background: var(--surface-c); }
+.mg-shelf h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--on-surface-var); }
+.mg-shelf h3 .ms { font-size: 18px; color: var(--primary); }
+.mg-shelf h3 .btn.small { width: auto; margin: 0 0 0 auto; height: 28px; min-height: 0; padding: 0 10px; }
+.mg-strip { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px; scrollbar-width: thin; }
+.mg-strip .mg-card { flex: 0 0 84px; width: 84px; }
+.mg-strip .mg-star { width: 24px; height: 24px; right: 4px; bottom: 4px; }
+.mg-strip .mg-star .ms { font-size: 16px; }
+.mg-strip .mg-check { top: 4px; left: 4px; width: 22px; height: 22px; }
+.lb-fav { position: absolute; top: 18px; right: 84px; }
+.lb-fav.on .ms { color: #ffd54a; }
+.cover .cover-pick { width: auto; margin: 0; flex: 0 0 auto; }
+.cover.has .cover-pick { position: absolute; left: 12px; bottom: 12px; opacity: 0; transition: opacity .2s; }
+.cover.has:hover .cover-pick, .cover.has .cover-pick:focus-visible { opacity: 1; }
 .mg-dlg { align-items: stretch; text-align: left; }
 .mg-dlg .dlg-ic { align-self: center; }
 .mg-dlg .dlg-title { text-align: center; }

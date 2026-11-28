@@ -106,6 +106,8 @@ contextBridge.exposeInMainWorld('api', {
   mediaList: (opts) => call('media:list', opts),
   mediaUsage: (force) => call('media:usage', force),
   mediaAll: (force) => call('media:all', force),
+  mediaFeatured: (force) => call('media:featured', force),
+  mediaMissing: (ids) => call('media:missing', ids),
   mediaSetDates: (list) => call('media:setDates', list),
   mediaExifDates: (items) => call('media:exifDates', items),
   mediaDuplicates: () => call('media:duplicates'),
