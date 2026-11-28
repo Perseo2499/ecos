@@ -16,6 +16,9 @@
         c('Nuevo filtro «De entradas»: las fotos que son la imagen destacada de alguna entrada o página, con el título de la entrada al pasar el ratón.', 'New "From posts" filter: the photos used as the featured image of a post or page, with the post title on hover.'),
         c('En la imagen destacada de la entrada, «Elegir de la biblioteca…» abre el selector directamente en tus Destacadas.', 'On a post\'s featured image, "Choose from the library…" opens the picker straight on your Featured photos.'),
       ],
+      improved: [
+        c('Tema vinilo: la barra de navegación tiene el fondo más claro y la sección en la que estás se ve en negro, para saber de un vistazo dónde estás.', 'Vinyl theme: the navigation bar has a lighter background and the current section is shown in black, so you can see at a glance where you are.'),
+      ],
     },
     {
       version: '3.8.1', date: '2026-11-28',
