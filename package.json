@@ -15,8 +15,8 @@
   "devDependencies": {
     "@wordpress/block-library": "^12.2.0",
     "@wordpress/blocks": "^17.2.0",
-    "electron": "^33.2.0",
-    "electron-builder": "^25.1.8",
+    "electron": "45.3.2",
+    "electron-builder": "^26.18.1",
     "jsdom": "^31.0.1",
     "playwright": "~1.63.0"
   },

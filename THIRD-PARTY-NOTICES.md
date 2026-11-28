@@ -15,7 +15,7 @@ Este archivo lo genera `node scripts/third-party.js` a partir de `package-lock.j
 
 ### Electron y Chromium
 
-- Ecos se ejecuta sobre **Electron** ^33.2.0 (<https://www.electronjs.org>, licencia MIT, © GitHub Inc. y colaboradores), que incluye **Chromium** y **Node.js**.
+- Ecos se ejecuta sobre **Electron** 45.3.2 (<https://www.electronjs.org>, licencia MIT, © GitHub Inc. y colaboradores), que incluye **Chromium** y **Node.js**.
 - Chromium incluye numerosos componentes con licencias BSD, MIT, Apache-2.0, MPL, LGPL y otras. Sus avisos completos están en los archivos `LICENSE` y `LICENSES.chromium.html` que acompañan a Electron en la carpeta de instalación de Ecos (y en <https://github.com/electron/electron/blob/main/LICENSE>).
 - Código fuente: Electron <https://github.com/electron/electron>, Chromium <https://chromium.googlesource.com/chromium/src>, Node.js <https://github.com/nodejs/node>.
 
