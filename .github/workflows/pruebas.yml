@@ -86,15 +86,8 @@ jobs:
           wpc() { docker compose --profile tools run --rm -T wpcli wp "$@"; }
           wpc plugin deactivate wordpress-seo
           wpc plugin activate seo-by-rank-math
-          wpc plugin list
-          wpc option list --search='rank*' --format=table | cut -c1-200
-          wpc option list --search='rank_math*' --fields=option_name --format=csv
-          wpc eval 'var_dump( defined("RANK_MATH_VERSION") ? RANK_MATH_VERSION : null, function_exists("rank_math") );'
-          docker compose exec -T wordpress sh -c 'cd /var/www/html/wp-content/plugins/seo-by-rank-math; grep -rn "Search Engine Optimization by" --include=*.php . | head; grep -rn "is_setup_mode\|rank_math_is_configured\|wizard_completed" --include=*.php . | head -30'
-          docker compose exec -T wordpress sh -c 'cd /var/www/html/wp-content/plugins/seo-by-rank-math; sed -n 1,400p includes/frontend/class-head.php | head -150'
+          docker compose exec -T wordpress sh -c 'cd /var/www/html/wp-content/plugins/seo-by-rank-math; grep -rn "Head\b" --include=*.php includes/class-frontend.php includes/class-rank-math.php includes/frontend/class-frontend.php 2>/dev/null | head -20; grep -rln "new Head\|Frontend\\\\Head" --include=*.php . | head; echo ---; grep -n "frontend\|Frontend" includes/class-rank-math.php | head -30'
           curl -s http://localhost:8080/ | grep -i "rank math\|robots" | head
-          wpc option update rank_math_wizard_completed 1 || true
-          wpc rank-math --help || true
       - name: Registros de WordPress (si algo falló)
         if: failure()
         run: docker compose -f test-wp/docker-compose.yml logs --tail=120 wordpress db || true
