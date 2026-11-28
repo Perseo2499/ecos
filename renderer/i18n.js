@@ -347,6 +347,7 @@
     'Envío a medias: pulsa Continuar': 'Half-finished send: press Continue',
     'Ha cambiado en WordPress': 'Changed in WordPress',
     // 1.2 (editor completo)
+    'Más opciones': 'More options', 'Ajustes de la entrada': 'Post settings', 'Enviar': 'Send', 'Duplicados': 'Duplicates', 'ZIP': 'ZIP', 'Capturas': 'Screenshots', 'Meta': 'Meta', 'Menús': 'Menus', 'G. Fotos': 'G. Photos', 'Editor de WordPress': 'WordPress editor',
     'Vista': 'View', 'Destacadas': 'Featured', 'De entradas': 'From posts', 'Fotos que son la imagen destacada de alguna entrada o página': 'Photos used as the featured image of a post or page',
     'Destacar': 'Add to Featured', 'Quitar de destacadas': 'Remove from Featured', 'Foto añadida a Destacadas': 'Photo added to Featured', 'Foto quitada de Destacadas': 'Photo removed from Featured',
     '{n} foto(s) ya no existen en WordPress y se han quitado de Destacadas': '{n} photo(s) no longer exist in WordPress and were removed from Featured',
