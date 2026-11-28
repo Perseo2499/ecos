@@ -86,7 +86,7 @@ jobs:
           wpc() { docker compose --profile tools run --rm -T wpcli wp "$@"; }
           wpc plugin deactivate wordpress-seo
           wpc plugin activate seo-by-rank-math
-          docker compose exec -T wordpress sh -c 'cd /var/www/html/wp-content/plugins/seo-by-rank-math; sed -n 385,400p rank-math.php; grep -n "function head" -A45 includes/frontend/class-head.php | head -90; grep -n "function is_enabled\|function is_seo_enabled" -B3 -A20 includes/frontend/class-head.php | head -5'
+          docker compose exec -T wordpress sh -c 'cd /var/www/html/wp-content/plugins/seo-by-rank-math; grep -n "invalid" -B6 -A6 includes/admin/class-registration.php | head -150; grep -n "function is_connected\|function is_registered" -A25 includes/admin/class-registration.php | head -80'
           curl -s http://localhost:8080/ | grep -i "rank math\|robots" | head
       - name: Registros de WordPress (si algo falló)
         if: failure()
